@@ -29,7 +29,25 @@ import os
 /// 3. Five seconds later, switch to screen B — the user changing conversation.
 ///    The keyboard should find the same reading superseded, and that transition
 ///    is the thing being proved.
-final class CaptureChannelProbe {
+///
+/// **Two queues, because the real producer has two.** `SampleHandler` writes
+/// `status.bin` from ReplayKit's delivery queue and from a 1 Hz heartbeat timer on
+/// `.global(qos: .utility)`, so the shared page takes concurrent writes and the
+/// seqlock alone does not survive them. An earlier version of this probe drove
+/// both from one main-thread `Timer`, which made every write serial by
+/// construction — the proof script then could not observe the multi-writer bug
+/// even in principle, which is how it shipped. The frame side keeps a serial queue
+/// of its own, as a delivery callback is, and the heartbeat is on the same global
+/// queue the extension uses.
+///
+/// That makes the shape right; it does not make this a test for it. At 4 Hz and
+/// 1 Hz against a collision window of a few tens of nanoseconds, a fourteen-second
+/// run will essentially never land two writes on top of each other. The thing with
+/// the power to catch that is
+/// `CaptureChannelTests.testTwoWriterThreadsCannotTearOrWedgeThePage`, which
+/// drives the same two-queue shape at 20,000 writes a side. What this file
+/// contributes is that the proof no longer *excludes* the case by construction.
+final class CaptureChannelProbe: @unchecked Sendable {
 
     static let shared = CaptureChannelProbe()
 
@@ -43,8 +61,15 @@ final class CaptureChannelProbe {
     private let width = 320
     private let height = 640
 
+    /// Stands in for ReplayKit's delivery queue: serial, and — because the timers
+    /// are only resumed once `start()` has written everything they read — the only
+    /// thread that ever touches this object's own state. That is what the
+    /// `@unchecked Sendable` above is claiming.
+    private let frameQueue = DispatchQueue(label: "com.nitai.aikeyboard.channel-probe.frames")
+
     private var writer: CaptureChannelWriter?
-    private var timer: Timer?
+    private var frameTimer: DispatchSourceTimer?
+    private var heartbeatTimer: DispatchSourceTimer?
     private var tick = 0
     private var screen = 0
     private var keyboardFirstSeenAt: Date?
@@ -54,7 +79,7 @@ final class CaptureChannelProbe {
     private init() {}
 
     func start() {
-        guard timer == nil else { return }
+        guard frameTimer == nil else { return }
         guard let writer = CaptureChannelWriter() else {
             Self.log.error("channel-probe could not reach the App Group container")
             return
@@ -63,12 +88,25 @@ final class CaptureChannelProbe {
         sessionStartedAt = CaptureClock.now()
         session = writer.begin(now: sessionStartedAt)
 
-        let timer = Timer(timeInterval: Self.tickInterval, repeats: true) { [weak self] _ in
-            self?.step()
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
-        step()
+        // Frames. The first tick fires on the frame queue rather than inline, so
+        // this object's state has exactly one thread from here on.
+        let frames = DispatchSource.makeTimerSource(queue: frameQueue)
+        frames.schedule(deadline: .now(), repeating: Self.tickInterval, leeway: .milliseconds(20))
+        frames.setEventHandler { [weak self] in self?.step() }
+        frameTimer = frames
+
+        // The heartbeat, on the queue and at the interval `SampleHandler` uses.
+        // It writes `heartbeatAt` and nothing else, and it writes it while a frame
+        // write may be in flight on the other queue.
+        let heartbeats = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        heartbeats.schedule(deadline: .now() + 1, repeating: 1.0, leeway: .milliseconds(200))
+        heartbeats.setEventHandler { writer.heartbeat() }
+        heartbeatTimer = heartbeats
+
+        // Both resumed last, so every field either timer's handler can reach is
+        // already written and this object is single-threaded from here.
+        frames.resume()
+        heartbeats.resume()
     }
 
     private func step() {
@@ -86,7 +124,6 @@ final class CaptureChannelProbe {
 
         let fingerprint = frame(screen: screen, chrome: tick)
         writer.recordFrame(fingerprint)
-        if tick % 4 == 0 { writer.heartbeat() }
 
         // `keyboardVisible` is only believed when it was written during this
         // session. The keyboard extension is killed rather than dismissed often

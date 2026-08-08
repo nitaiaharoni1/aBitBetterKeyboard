@@ -85,6 +85,25 @@ final class CaptureFreshnessTests: XCTestCase {
     func testNoStatusAtAllIsNoSession() {
         XCTAssertEqual(CaptureFreshness.evaluate(status: nil, now: now), .noSession)
         XCTAssertEqual(CaptureFreshness.evaluate(status: CaptureStatus(), now: now), .noSession)
+        XCTAssertEqual(CaptureFreshness.evaluate(reading: .absent, now: now), .noSession)
+        XCTAssertEqual(
+            CaptureFreshness.evaluate(reading: .settled(liveStatus()), now: now), .offerable)
+    }
+
+    /// A page that exists and will not settle is a producer that was killed
+    /// between `begin_write` and `end_write`: the sequence is odd and no later
+    /// event will ever close it, so every read fails for the rest of the session.
+    ///
+    /// It used to read as `.noSession`, so the strip said "screen context is off"
+    /// and offered no way back while the user's broadcast was still switched on.
+    /// A jetsam kill is an ending with a restart (§8.2), which is what the
+    /// heartbeat-window case above already reports.
+    func testAPageThatWillNotSettleIsAnEndingRatherThanNoSession() {
+        XCTAssertEqual(CaptureFreshness.evaluate(reading: .unsettled, now: now), .ended(.lost))
+        XCTAssertEqual(
+            CaptureFreshness.evaluate(record: record(), reading: .unsettled, now: now),
+            .ended(.lost),
+            "a reading cannot be offered against a page nobody can read")
     }
 
     // MARK: 2 — delivery is alive

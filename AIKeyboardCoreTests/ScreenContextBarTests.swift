@@ -338,7 +338,19 @@ private struct RoutedRow: Encodable {
     let message: String?
     let detectedScript: String?
     let detectedLanguage: String?
+    /// How long this frame took, for the timing line at the end of the run.
+    /// **Not encoded** — see `CodingKeys`.
     let seconds: Double
+
+    /// `seconds` is left out of the file on purpose. `routed_outputs.json` is
+    /// checked in and `score_cloud.py` never reads a duration, so persisting one
+    /// meant every unit-test run rewrote a tracked file with a wall-clock
+    /// measurement and produced a diff that says nothing about the product. The
+    /// number is still measured and still reported; it is just not a fact about
+    /// the corpus.
+    private enum CodingKeys: String, CodingKey {
+        case id, language, config, engine, sender, message, detectedScript, detectedLanguage
+    }
 }
 
 /// Drives all thirty bar frames through the shipping path.
@@ -601,6 +613,9 @@ final class ScreenContextBarTests: XCTestCase {
 
     // MARK: - Reporting
 
+    /// Writes the file `score_cloud.py` grades. Every field in it is a fact about
+    /// the corpus, so a run that changes nothing rewrites the same bytes; see
+    /// `RoutedRow.CodingKeys` for the one field that is deliberately absent.
     private func write(_ rows: [RoutedRow]) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]

@@ -65,13 +65,48 @@ public enum CaptureFreshness {
         /// Condition 4 or 5. There is a live session but this reading is not
         /// about what is on screen now. The strip shows the pre-tap offer.
         case superseded
-        /// There is no channel, or no session has ever run.
+        /// There is no channel, or no session has ever run. **Not** the verdict
+        /// for a page that exists and will not settle: that is `.ended(.lost)`,
+        /// because a page nobody will ever close is a producer that died holding
+        /// it, and the user needs a restart rather than "screen context is off".
         case noSession
+    }
+
+    /// The producer half of the gate, from what the reader actually found.
+    ///
+    /// This overload exists for the one case the `CaptureStatus?` one cannot see.
+    /// A page that will not settle is not an absent page: the producer opened a
+    /// seqlock transaction and never closed it, which is what a jetsam kill
+    /// between `begin_write` and `end_write` leaves behind, and there is no later
+    /// event that will fix it — only a new session's `begin()`. Reported as
+    /// `.noSession` it renders as "screen context is off" and offers no restart,
+    /// while the user's broadcast is still switched on. §8.2 says a kill reads as
+    /// stopped unexpectedly, so it does.
+    public static func evaluate(
+        reading: CaptureStatusReading, now: UInt64 = CaptureClock.now()
+    ) -> Verdict {
+        if reading == .unsettled { return .ended(.lost) }
+        return evaluate(status: reading.status, now: now)
+    }
+
+    /// The whole gate, from what the reader actually found. See the overload
+    /// above for why the unsettled page is not `.noSession`.
+    public static func evaluate(
+        record: ScreenReadingRecord,
+        reading: CaptureStatusReading,
+        now: UInt64 = CaptureClock.now()
+    ) -> Verdict {
+        if reading == .unsettled { return .ended(.lost) }
+        return evaluate(record: record, status: reading.status, now: now)
     }
 
     /// The producer half of the gate: conditions 1 and 2, which do not need a
     /// record. Used by the strip before any reading exists, so it can tell
     /// "watching" from "stopped".
+    ///
+    /// A nil `status` here means *no page*. A page that exists and will not
+    /// settle is a different verdict and reaches the gate through the
+    /// `CaptureStatusReading` overload above.
     public static func evaluate(
         status: CaptureStatus?, now: UInt64 = CaptureClock.now()
     )

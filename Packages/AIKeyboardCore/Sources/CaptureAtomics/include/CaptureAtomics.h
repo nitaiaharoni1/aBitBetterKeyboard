@@ -36,9 +36,17 @@
 /// Opens a write. Publishes an odd sequence, so any reader that starts now knows
 /// to retry, and returns the value the matching `capture_seq_end_write` needs.
 ///
-/// Single writer by construction: the broadcast extension is the only process
-/// that writes `status.bin` and the keyboard the only one that writes
-/// `intent.bin`. Two writers on one page would need a lock, not a seqlock.
+/// **These four functions admit exactly one writer at a time, and enforcing that
+/// is the caller's job.** One *process* writes each page — the broadcast extension
+/// writes `status.bin`, the keyboard writes `intent.bin` — but that process writes
+/// from several threads: `status.bin` is written from ReplayKit's delivery queue,
+/// from the heartbeat timer's queue, and from the lifecycle callbacks. Two
+/// overlapping transactions do not merely tear, they can settle the sequence
+/// *even* over a half-written body, lose a whole update through a
+/// read-modify-write, and flip the sequence's parity so that every later read
+/// fails. `SharedPage` therefore holds an ordinary in-process lock across
+/// `begin_write`/`end_write`; readers take nothing and stay lock-free, which is
+/// the point of the sequence number.
 static inline uint32_t capture_seq_begin_write(void *page) {
     _Atomic uint32_t *sequence = (_Atomic uint32_t *)page;
     uint32_t opened = atomic_load_explicit(sequence, memory_order_relaxed) + 1u;

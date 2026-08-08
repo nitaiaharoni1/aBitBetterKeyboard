@@ -37,7 +37,10 @@ microphone, or screen capture.
   writes `channel/status.bin`; the keyboard maps the same page read-only at 4 Hz
   through `ScreenContextChannel` and runs `CaptureFreshness` over it. Both pages
   are `mmap(MAP_SHARED)` behind a seqlock, so a write is a memcpy inside a 60 fps
-  callback and a half-written page is a retry rather than a wrong answer. Only
+  callback and a half-written page is a retry rather than a wrong answer. A
+  seqlock admits one writer at a time and the producing process writes from three
+  threads (delivery queue, heartbeat timer, lifecycle callbacks), so `SharedPage`
+  also holds an in-process lock across each transaction; readers take nothing. Only
   text and hashes cross: the pages hold timestamps, counters and a SHA-256, and
   `ScreenReadingRecord` has no image field by construction.
 

@@ -53,9 +53,18 @@ final class SampleHandler: RPBroadcastSampleHandler {
     //
     // Left unsynchronised deliberately, and only because of what these are: no
     // frame is delivered before `broadcastStarted` or while paused, and the
-    // values are read solely to log. The counters the *keyboard* reads do not
-    // live here — they live in the shared page behind a seqlock, so a torn read
-    // is a retry rather than a wrong number shown to the user.
+    // values are read solely to log.
+    //
+    // The counters the *keyboard* reads do not live here — they live in the
+    // shared page, which this class writes from three threads: the delivery
+    // queue through `recordFrame` and `recordDelivery`, the heartbeat timer's
+    // `.utility` queue through `heartbeat()`, and the lifecycle callbacks
+    // through `setPaused` and `end`. A seqlock alone would not have made that
+    // safe: two overlapping transactions can settle the sequence even over a
+    // half-written body, lose an update and move the published frame identity
+    // backwards, or flip the sequence's parity and wedge the channel for the
+    // rest of the session. `SharedPage` serialises the three with a lock, and
+    // the sequence number is what keeps the *reading* process lock-free.
     private var lastSampledAt: ContinuousClock.Instant?
     private var framesDelivered = 0
     private var framesSampled = 0

@@ -7,7 +7,6 @@
     "id" : "wa-01",
     "language" : "hebrew",
     "message" : "מעולה. אז אנחנו סוגרים על פגישה ביום שלישי ב-10:30 במשרד?",
-    "seconds" : 1.59,
     "sender" : "שרה כהן - עבודה"
   },
   {
@@ -18,7 +17,6 @@
     "id" : "wa-02",
     "language" : "hebrew",
     "message" : "נכון?! שלחתי לך את כולם בדרייב",
-    "seconds" : 1.54,
     "sender" : "מאיה"
   },
   {
@@ -29,7 +27,6 @@
     "id" : "wa-03",
     "language" : "mixed",
     "message" : "יש bug ב-onboarding, המסך השני נתקע כשבוחרים עברית. אפשר fix לפני ה-release מחר?",
-    "seconds" : 1.72,
     "sender" : "דניאל כהן"
   },
   {
@@ -40,7 +37,6 @@
     "id" : "wa-04",
     "language" : "english",
     "message" : "Can you sanity check the numbers before I reply to them on Thursday?",
-    "seconds" : 1.41,
     "sender" : "James Whitfield"
   },
   {
@@ -51,7 +47,6 @@
     "id" : "wa-05",
     "language" : "hebrew",
     "message" : "אתה מגיע לארוחת ערב בשישי? אמא שואלת",
-    "seconds" : 1.17,
     "sender" : "אבא"
   },
   {
@@ -62,7 +57,6 @@
     "id" : "wa-06",
     "language" : "hebrew",
     "message" : "בצע שיכון בחומרואות בחודש הבא. העבודות יתחילו ביום שלישי ה-3 בספטמבר ויימשכו כשלושה שבועות, אולי קצת יותר אם יתגלו בעיות רטיבות בקיר המערבי כמו שקרה בבניין הסמוך בשנה שעברה. בזמן העבודות המעלית תהיה מושבתת בכל יום בין 8:00 ל-16:00, אז מי שצריך להוריד או להעלות דברים כבדים מתבקש לעשות את זה בשעות הערב או בסופי שבוע. גם הכניסה הראשית תיחסם לסירוגין, ובימים האלה ניכנס דרך החניון התחתון. בנוסף, צריך לאסוף 450 שקל מכל דירה עד סוף החודש כדי לשלם לקבלן את המקדמה. אפשר להעביר לי בביט או במזומן לתיבת הדואר בקומת הכניסה. מי שמשלם במזומן שירשום את מספר הדירה על המעטפה. תעדכנו אותי בהקדם אם יש בעיה עם התאריכים או עם הסכום, ואם מישהו רוצה להצטרף לוועד השיפוץ שיכתוב לי בפרטי.",
-    "seconds" : 1.46,
     "sender" : "רותם - ועד הבית"
   },
   {
@@ -73,7 +67,6 @@
     "id" : "wa-07",
     "language" : "english",
     "message" : "hey are you around? 13:40",
-    "seconds" : 1.06,
     "sender" : "Priya Raman"
   },
   {
@@ -84,7 +77,6 @@
     "id" : "wa-08",
     "language" : "mixed",
     "message" : "קראתי. על שאלה 2 אני חושב שכדאי ללכת על server-side, זה יחסוך לנו את כל ה-sync logic",
-    "seconds" : 1.18,
     "sender" : "תומר בר-און"
   },
   {
@@ -95,7 +87,6 @@
     "id" : "sl-01",
     "language" : "english",
     "message" : "Can you take the standup tomorrow? I have a conflict at 9.",
-    "seconds" : 1.06,
     "sender" : "Daniel Cohen"
   },
   {
@@ -106,7 +97,6 @@
     "id" : "sl-02",
     "language" : "english",
     "message" : "Almost certainly. Can you check the Sentry numbers after the release goes out at 2?",
-    "seconds" : 1.12,
     "sender" : "Marcus Reeve"
   },
   {
@@ -117,7 +107,6 @@
     "id" : "sl-03",
     "language" : "english",
     "message" : "Wrote the postmortem draft. Can you add the customer impact section before the review at 4?",
-    "seconds" : 1.26,
     "sender" : "Priya Raman"
   },
   {
@@ -128,7 +117,6 @@
     "id" : "sl-04",
     "language" : "mixed",
     "message" : "תיקנתי את ה-RTL בטבלה, אפשר לעשות review לפני שאני מעלה ל-production?",
-    "seconds" : 1.19,
     "sender" : "נועה לוי"
   },
   {
@@ -139,7 +127,6 @@
     "id" : "sl-05",
     "language" : "english",
     "message" : "X n m C V Z",
-    "seconds" : 1.19,
     "sender" : "b"
   },
   {
@@ -150,7 +137,6 @@
     "id" : "sl-06",
     "language" : "english",
     "message" : "T Can someone own the 1.4.1 hotfix list? I can start it after lunch if nobody else has it.",
-    "seconds" : 1.2,
     "sender" : "Tom Aldridge"
   },
   {
@@ -161,7 +147,6 @@
     "id" : "im-01",
     "language" : "english",
     "message" : "Perfect. Bringing my sister, hope that's ok.",
-    "seconds" : 0.97,
     "sender" : "Nadia"
   },
   {
@@ -172,7 +157,6 @@
     "id" : "im-02",
     "language" : "hebrew",
     "message" : "שתי דקות לסיום, גול ממחצית המגרש ⚽️🤯 אני עדיין בהלם, אתה חייב לראות את החזרה",
-    "seconds" : 1.07,
     "sender" : "יעל"
   },
   {
@@ -183,7 +167,6 @@
     "id" : "im-03",
     "language" : "hebrew",
     "message" : "תודה, ובאיזו קומה החניה?",
-    "seconds" : 1.39,
     "sender" : "אורי"
   },
   {
@@ -194,7 +177,6 @@
     "id" : "im-04",
     "language" : "mixed",
     "message" : "מעולה. אחרי שזה עובר תוכל לעשות rebase ל-feature/keyboard-rtl? יש conflict שם ב-Package.resolved",
-    "seconds" : 1.08,
     "sender" : "Ilan"
   },
   {
@@ -205,7 +187,6 @@
     "id" : "im-05",
     "language" : "hebrew",
     "message" : "מצוין. אם צריך לבטל, אפשר להשיב לכאן עד 20:00 היום.",
-    "seconds" : 1.13,
     "sender" : "מרפאת שיניים - ד\"ר לוין"
   },
   {
@@ -216,7 +197,6 @@
     "id" : "im-06",
     "language" : "english",
     "message" : "The section on Hebrew line detection is the part you'll care about. Worth five minutes.",
-    "seconds" : 1.06,
     "sender" : "Greg"
   },
   {
@@ -227,7 +207,6 @@
     "id" : "im-07",
     "language" : "mixed",
     "message" : "רוצה שאדפיס לך אחד? תגיד לי איזה size ואני מזמינה מחר",
-    "seconds" : 1.16,
     "sender" : "מיכל"
   },
   {
@@ -238,7 +217,6 @@
     "id" : "tg-01",
     "language" : "hebrew",
     "message" : "אתה זוכר איפה שמנו את המפתחות של... במגירה השנייה במטבח, מתחת לספר הטלפונים. אם הם לא שם תשאל את יוסי, הוא לקח אותם בשבת",
-    "seconds" : 1.33,
     "sender" : "אלכס"
   },
   {
@@ -249,7 +227,6 @@
     "id" : "tg-02",
     "language" : "mixed",
     "message" : "נכון, אבל רק ב-27 iOS. אנחנו עדיין צריכים את ה-App Group fallback לשנתיים הקרובות, לא? 👍 1",
-    "seconds" : 1.11,
     "sender" : "Dana Kessler"
   },
   {
@@ -260,7 +237,6 @@
     "id" : "tg-03",
     "language" : "english",
     "message" : "Did the invoice for June ever get paid? Accounting is asking.",
-    "seconds" : 1.26,
     "sender" : "Yusuf"
   },
   {
@@ -271,7 +247,6 @@
     "id" : "tg-04",
     "language" : "hebrew",
     "message" : "מה השעה שחוזרים? צריך לארגן הסעות לילדים שההורים עובדים",
-    "seconds" : 1.55,
     "sender" : "יוסי מזרחי"
   },
   {
@@ -282,7 +257,6 @@
     "id" : "tg-05",
     "language" : "mixed",
     "message" : "Same here on English. Only issue is the number row disappears in landscape.",
-    "seconds" : 1.12,
     "sender" : "Marta K."
   },
   {
@@ -293,7 +267,6 @@
     "id" : "ml-01",
     "language" : "english",
     "message" : "On Tue, 5 Aug, Nitai Aharoni wrote: > Sending over the redlines this afternoon.",
-    "seconds" : 1.41,
     "sender" : "0"
   },
   {
@@ -304,7 +277,6 @@
     "id" : "ml-02",
     "language" : "hebrew",
     "message" : "שלום ניתאי, קיבלנו את ההמלצה עליך מצוות המוצר. אנחנו מחפשים ספק לפיתוח מקלדת עברית מותאמת לארגון, כולל תמיכה בהכתבה ובתרגום פנימי. אשמח לקבל הצעת מחיר ראשונית עד סוף השבוע, ולתאם שיחה קצרה בשבוע הבא. האם יום שני בעשר בבוקר מתאים לך? רונית שגב מנהלת רכש, אלפא טכנולוגיות 03-6412200",
-    "seconds" : 1.26,
     "sender" : "רונית שגב"
   },
   {
@@ -315,7 +287,6 @@
     "id" : "ml-03",
     "language" : "mixed",
     "message" : "תודה על הפירוט. שתי הערות: ראשית, ה-bidi algorithm של iOS כבר מטפל ברוב המקרים, אז אני לא בטוח שצריך override ידני. שנית, ה-NSAttributedString שאתה בונה מאבד את ה-writing direction כשהוא עובר דרך ה-App .Group אפשר לקבוע פגישה מחר ב-14:00?",
-    "seconds" : 1.33,
     "sender" : "Ehud Barzilai"
   },
   {
@@ -326,7 +297,6 @@
     "id" : "ml-04",
     "language" : "english",
     "message" : "Hi, I went through the onboarding screens. Screens one and three are clear. Screen two asks for keyboard access before it has explained why, and three testers backed out there. Suggested rewrite is in the shared doc. Can you take a look before Thursday's build?",
-    "seconds" : 1.04,
     "sender" : "Marta Kowalski"
   }
 ]

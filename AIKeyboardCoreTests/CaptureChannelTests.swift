@@ -155,6 +155,126 @@ final class CaptureChannelTests: XCTestCase {
         XCTAssertGreaterThan(reads, 0)
     }
 
+    /// The same page, written from **two** threads, which is what the shipping
+    /// producer actually does.
+    ///
+    /// `SampleHandler` writes `status.bin` from three threads inside one process:
+    /// ReplayKit's delivery queue through `recordFrame`, the 1 Hz heartbeat timer
+    /// on `.global(qos: .utility)`, and whatever queue ReplayKit calls the
+    /// lifecycle methods on through `setPaused` and `end`. A seqlock does not make
+    /// that safe on its own and the three ways it breaks are all measurable:
+    ///
+    /// 1. **Torn settled bytes.** Two overlapping `begin_write`s can leave the
+    ///    sequence *even* while the body is half-written, so `read_valid` returns
+    ///    true over bytes that are not a snapshot of anything — and every bit
+    ///    pattern this struct can hold is a legal value, so nothing crashes.
+    /// 2. **Lost update**, which is the product failure the design exists to
+    ///    prevent. The heartbeat's read-modify-write writes back a body it
+    ///    snapshotted before a frame write, so `currentFrameIdentity` moves
+    ///    *backwards* and a reading already retired as `.superseded` becomes
+    ///    `.offerable` again: a reply in the user's own voice about the
+    ///    conversation they just left.
+    /// 3. **A permanent wedge.** Interleaved `end_write`s flip the sequence's
+    ///    parity; from then on every settled state is odd, `load()` never passes
+    ///    its `opened & 1 == 0` guard, and `status()` returns nil for the rest of
+    ///    the session.
+    ///
+    /// So the four assertions are one per failure mode plus the reader's own
+    /// liveness: zero torn snapshots, an identity that never goes backwards, an
+    /// even raw sequence once the writers stop, and a page that still loads.
+    ///
+    /// Measured against the unfixed `SharedPage` on this destination, and the two
+    /// runs hit different subsets of the three, which is what a race looks like:
+    /// run 1 wedged the sequence odd after 5,766 reads with 168 tears and 1,000 of
+    /// 1,000 quiescent loads nil; run 2 stayed even and scored 150 tears in 399,094
+    /// reads plus one backwards step. With the writer lock the four counts are 0,
+    /// 0, even, 0 — not statistically small, but excluded.
+    func testTwoWriterThreadsCannotTearOrWedgeThePage() throws {
+        let file = url("status.bin")
+        let writer = try XCTUnwrap(
+            SharedPage<CaptureStatus>(
+                url: file, bytes: CaptureChannel.statusPageBytes, writable: true))
+        writer.store(CaptureStatus())
+        let reader = try XCTUnwrap(
+            SharedPage<CaptureStatus>(
+                url: file, bytes: CaptureChannel.statusPageBytes, writable: false))
+
+        let writes = 20_000
+        let frames = expectation(description: "frame writer finished")
+        let heartbeats = expectation(description: "heartbeat writer finished")
+
+        // The delivery queue's write: the counter, the sampled timestamp and the
+        // identity all move together, exactly as `recordFrame` moves them.
+        DispatchQueue.global(qos: .userInitiated).async {
+            for step in 1...writes {
+                writer.mutate {
+                    $0.framesDelivered &+= 1
+                    $0.framesSampled = UInt32(step)
+                    $0.lastFrameAt = UInt64(step)
+                    $0.currentFrameSampledAt = UInt64(step)
+                    $0.currentFrameIdentity = FrameIdentity(
+                        w0: UInt64(step), w1: UInt64(step), w2: UInt64(step), w3: UInt64(step))
+                }
+            }
+            frames.fulfill()
+        }
+
+        // The heartbeat's write: one field, and it is a read-modify-write of the
+        // whole 256-byte body, which is what makes it able to lose a frame.
+        DispatchQueue.global(qos: .utility).async {
+            for step in 1...writes {
+                writer.mutate { $0.heartbeatAt = UInt64(step) }
+            }
+            heartbeats.fulfill()
+        }
+
+        var reads = 0
+        var torn = 0
+        var backwards = 0
+        var highest: UInt32 = 0
+        // Bounded rather than "until the last write lands": a wedged sequence
+        // makes every load nil forever, and a test that hangs reports nothing.
+        for _ in 0..<400_000 {
+            guard let status = reader.load() else { continue }
+            reads += 1
+            if UInt64(status.framesSampled) != status.currentFrameSampledAt
+                || status.currentFrameIdentity.w0 != UInt64(status.framesSampled)
+                || status.currentFrameIdentity.w3 != UInt64(status.framesSampled)
+            {
+                torn += 1
+            }
+            if status.framesSampled < highest { backwards += 1 }
+            highest = max(highest, status.framesSampled)
+        }
+
+        wait(for: [frames, heartbeats], timeout: 60)
+
+        // Quiescent: nobody is writing, so every load must settle. This is the
+        // one that catches the permanent wedge, which is invisible to the tear
+        // count because a wedged page hands out no snapshots at all.
+        var nilLoads = 0
+        for _ in 0..<1_000 where reader.load() == nil { nilLoads += 1 }
+
+        XCTAssertEqual(torn, 0, "the reader saw \(torn) torn snapshots in \(reads) reads")
+        XCTAssertEqual(
+            backwards, 0,
+            "the frame identity went backwards \(backwards) times: a retired reading became offerable")
+        XCTAssertEqual(
+            try Self.rawSequence(of: file) % 2, 0,
+            "the sequence settled odd, so every future load() returns nil")
+        XCTAssertEqual(
+            nilLoads, 0, "\(nilLoads) of 1000 loads found no settled page after the writers stopped")
+        XCTAssertGreaterThan(reads, 0)
+    }
+
+    /// The seqlock's own counter, read the way the other process's kernel sees it
+    /// rather than through `SharedPage`: the mapping is `MAP_SHARED` over this
+    /// inode, so the first four bytes of the file *are* the sequence.
+    private static func rawSequence(of file: URL) throws -> UInt32 {
+        let head = try Data(contentsOf: file).prefix(4)
+        return head.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
+    }
+
     // MARK: - The intent page
 
     func testRaisingAReadRequestIsMonotonic() throws {

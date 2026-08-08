@@ -1041,3 +1041,88 @@ proof is the containing app driving the same writer and the same fingerprint.
 `broadcastStarted`, the heartbeat, `processSampleBuffer`, the pixel-buffer
 lock/reduce/unlock path and `broadcastFinished` are compiled, unit-tested in
 pieces, and have never run.
+
+### P3 critic — **GAP.** The seqlock is single-writer and the producer has three.
+
+`CaptureAtomics.h` asserts "single writer by construction: the broadcast
+extension is the only process that writes". That is a claim about *processes*.
+Three threads inside that one process write the page, and the extra two are this
+code's own choice rather than ReplayKit's: the delivery queue via `recordFrame`,
+the heartbeat timer on a global queue, and the lifecycle callbacks via
+`setPaused`/`end`.
+
+The critic compiled `SharedPage` and `CaptureAtomics` unmodified and drove the
+real `mutate` bodies from those queues:
+
+```
+reads = 36,902,721
+  torn snapshots (one frame's identity beside another's timestamp) = 2,518,998
+  identity went BACKWARDS (a retired reading becomes offerable)    =   180,312
+final raw sequence ODD -> every future load() returns nil
+quiescent loads returning nil: 1000/1000  -> WEDGED, 3 runs of 3
+```
+
+Three failure modes, and the middle one is the exact thing the design exists to
+prevent: the heartbeat's read-modify-write writes back a body snapshotted before
+a frame write, so `status.currentFrameIdentity` moves backwards, and freshness
+condition 4 then promotes a reading already retired as `.superseded` back to
+`.offerable`. That is a reply in the user's voice about the conversation they
+just left. The third mode is permanent: interleaved `end_write`s flip the
+sequence parity, after which the keyboard renders "Screen context is off" while
+capture is running fine, so the user is not even offered a restart.
+
+Rate at desk speed is low (90 s at 60 Hz produced zero tears; the window is
+~13 ns). That is not a reason to leave it: a preemption between `begin_write` and
+`end_write` under jetsam pressure stretches the window to a scheduling quantum,
+and mode 3 is permanent and misreported.
+
+Nothing in the repo could catch it: the unit test uses one writer thread, and
+`CaptureChannelProbe` drives frames and heartbeat from the *same* main-thread
+timer, so the proof script structurally could not see it.
+
+**Everything else on the bar held**, and the critic checked hard. The fences are
+correct and emitted (`dmb ish` after the odd store, `dmb ishld` in both reader
+halves: the canonical formulation). The retry loop is bounded at 16, so a writer
+SIGKILLed mid-update returns nil rather than spinning. The proof script is
+discriminating: broken three ways, it failed at exactly the right check each
+time. Privacy holds: the container after a run holds only a 256 B status page, a
+64 B intent page and the settings plist; the 32x64 reduction never leaves
+`withUnsafeTemporaryAllocation`; the producer copies no frame and unlocks on
+every path via `defer`.
+
+### P3 round 2 — seqlock fixed, and the test failed first
+
+`SharedPage` gains an `OSAllocatedUnfairLock` taken by `store`, `mutate` and
+`reset`. Readers are untouched and still take nothing, which is the textbook
+multi-writer seqlock. `reset()` became a real transaction: it zeroes only the
+body between `begin_write`/`end_write` instead of memsetting the sequence, since
+a reader whose open sequence was 0 could otherwise validate a half-zeroed struct
+against the zero `reset` had just written.
+
+**The new test failed against the unfixed code before it passed**, which is the
+only thing that makes it evidence:
+
+| run | torn | backwards | sequence | quiescent nil |
+|---|---|---|---|---|
+| unfixed, 1 | 168 / 5,766 reads | 0 | odd | **1000/1000 (wedged)** |
+| unfixed, 2 | 150 / 399,094 reads | **1 (lost update)** | even | 0 |
+| fixed | 0 | 0 | even | 0 |
+
+Two unfixed runs hitting different subsets is what a race looks like. 161 tests
+to **163**.
+
+`CaptureFreshness` now distinguishes `absent` from `unsettled`: a page that
+exists but will not settle reads as `.ended(.lost)` — "stopped unexpectedly,
+restart" — instead of `.noSession`, which rendered "Screen context is off" while
+capture was running fine and offered the user no way back.
+
+Also fixed the test suite rewriting a checked-in file: `RoutedRow.seconds` is
+measured and printed but no longer encoded, so `routed_outputs.json` is now
+byte-identical across runs.
+
+Honestly noted by the builder rather than hidden: the probe now has
+`SampleHandler`'s two-queue *shape* but not the power to catch the bug at 4 Hz
+over 14 s. The unit test is what has the power, and the probe's doc comment says
+so rather than implying the proof script covers it.
+
+**Verified independently:** build, 163 tests, all three proof scripts, exit 0.

@@ -86,19 +86,22 @@ public final class ScreenContextChannel: ObservableObject {
         }
 
         let now = CaptureClock.now()
-        let status = reader.status()
-        self.status = status
+        // Three answers, not two: a page that will not settle is a producer that
+        // died holding a seqlock transaction open, and it is reported as an ending
+        // with a restart rather than as no session at all.
+        let statusReading = reader.status()
+        status = statusReading.status
 
         let record = reader.reading()
         reading = record
 
         if let record {
-            verdict = CaptureFreshness.evaluate(record: record, status: status, now: now)
+            verdict = CaptureFreshness.evaluate(record: record, reading: statusReading, now: now)
         } else {
-            verdict = CaptureFreshness.evaluate(status: status, now: now)
+            verdict = CaptureFreshness.evaluate(reading: statusReading, now: now)
         }
 
-        report(status: status, record: record)
+        report(status: statusReading.status, record: record)
     }
 
     /// One log line per change of what this process can see.
