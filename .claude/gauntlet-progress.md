@@ -1168,3 +1168,44 @@ independently, unit and UI run separately.
 **Known and stated:** on a device today a Reply tap will **time out**. The
 broadcast extension publishes status but runs no reader; that piece was deferred
 by constraint, not overlooked.
+
+### P4 critic — **GAP, closed.** A cancelled Reply span the CPU.
+
+`contextForReply` swallowed cancellation with `try?`, so once the task was
+cancelled `Task.sleep` returned immediately and nothing paced the loop but the
+deadline. Each iteration is a file read, a JSON decode and a SwiftUI
+invalidation on the main actor, in a process capped near 48 MB, for up to 12
+seconds.
+
+Reproduced by me independently: **16,077 polls in one second** against the
+unfixed code (the critic measured ~15,800/s), versus 6 in the healthy case. Test
+added, verified failing first, then passing. 184 to **185**.
+
+It is reached in two taps and is the *ordinary* path, not an unlucky one:
+`beginWork` cancels the previous task on every action, the strip's Reply button
+stays hittable while a result panel is up, and while the capture process runs no
+reader every Reply times out — so "nothing happened, tap it again" is exactly
+what a user does.
+
+**The central privacy claim HOLDS**, and the critic proved it by enumeration
+rather than assertion. `intent.readNow` is raised in exactly one place, whose
+only caller chain terminates at two tap handlers. No timer, no `onAppear`, no
+frame-arrival hook, no keyboard-visible hook touches it. The producer never even
+reads the intent page. The other upload path is gated on a `reader` that only
+tests ever assign. The three claimed deletions all check out with nothing
+dangling, and the red-dot rule is consistent in all three places it appears.
+
+## Open, found by the P4 critic, not yet fixed
+
+1. `ScreenContextChannel.requestRead()` is not role-gated, so an app-side Reply
+   tap in the playground writes the intent page while `Role.observer`'s contract
+   says the app "writes nothing". Still a tap, so the product promise survives;
+   the code's own contract does not.
+2. A real session that is `.paused`, or `.ended` inside the decay window,
+   silently kills the scripted sample within one poll, so "Play a sample
+   conversation" appears to do nothing.
+3. The app UI never says what `README`'s "Not built" says. The failure a user
+   actually gets on a device is rendered as "the last reading is not what's on
+   screen now", which misattributes the cause: there is no reader at all yet.
+4. Design §3.3.1's secure-field guard is unimplemented. `CaptureStatus` carries
+   `refusedSecure` fields nothing writes, and it is absent from "Not built".

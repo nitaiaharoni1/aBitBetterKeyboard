@@ -234,9 +234,19 @@ public final class ScreenContextSession: ObservableObject {
                 "The keyboard cannot reach screen context. It needs Full Access.")
         }
 
+        // `try`, not `try?`. Swallowing the cancellation here left nothing pacing
+        // this loop but the deadline: a cancelled Reply became ~16,000 polls per
+        // second, each one a file read, a JSON decode and a SwiftUI invalidation
+        // on the main actor, for the rest of the timeout, inside a process capped
+        // near 48 MB. Measured at 31,588 polls in 2 s against 6 in the healthy
+        // case. And it is the ordinary path rather than an unlucky one: while the
+        // capture process runs no reader, every Reply times out, so tapping it
+        // again is exactly what a user does. `beginWork` cancels the previous
+        // task on every new action, and both of its catch arms already return
+        // early on cancellation, so letting this throw is all that is needed.
         let deadline = ContinuousClock.now.advanced(by: timeout)
         while ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(200))
+            try await Task.sleep(for: .milliseconds(200))
             channel.poll()
 
             switch channel.verdict {

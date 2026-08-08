@@ -387,4 +387,42 @@ final class ScreenContextConsumerTests: XCTestCase {
         XCTAssertEqual(session.source, .scripted)
         XCTAssertEqual(session.state, .starting)
     }
+
+    /// **A cancelled Reply must stop polling.**
+    ///
+    /// `contextForReply` waits for a fresh reading by sleeping between polls.
+    /// While it swallowed the cancellation with `try?`, `Task.sleep` returned
+    /// immediately and the only thing left pacing the loop was the deadline:
+    /// measured at 31,588 polls in two seconds against six in the healthy case,
+    /// each one a file read, a JSON decode and a SwiftUI invalidation on the main
+    /// actor, in a process capped near 48 MB.
+    ///
+    /// It is the ordinary path, not an unlucky one. `beginWork` cancels the
+    /// previous task on every new action, the strip's Reply button stays hittable
+    /// while a result panel is up, and until the capture process runs a reader
+    /// every Reply times out, so "nothing happened, tap it again" is what a user
+    /// does.
+    func testACancelledReplyStopsPollingTheChannel() async throws {
+        writer.begin()
+        writer.heartbeat()
+        // Live, but nothing offerable ever arrives: the wait loop's `continue`
+        // branch, which is where the runaway lived.
+        writer.recordFrame(screenA)
+
+        var polls = 0
+        let counting = channel.$verdict.sink { _ in polls += 1 }
+        defer { counting.cancel() }
+
+        let waiting = Task { try await session.contextForReply(timeout: .seconds(12)) }
+        try await Task.sleep(for: .milliseconds(300))
+        waiting.cancel()
+
+        let atCancel = polls
+        try await Task.sleep(for: .seconds(1))
+
+        XCTAssertLessThan(
+            polls - atCancel, 20,
+            "the wait loop kept polling after cancellation: \(polls - atCancel) polls in one second")
+    }
+
 }
