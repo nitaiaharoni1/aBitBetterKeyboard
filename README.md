@@ -153,7 +153,7 @@ audience this keyboard is built for, "optional" is the wrong word.
 | `MockSuggestionEngine` | local autocorrect + a small next-word model |
 | ~~`MockAI`~~ — now `RoutedIntelligence` | **Done.** Apple Foundation Models on device for the languages it lists, a cloud LLM behind it for the rest. Hebrew is not one of Apple's supported languages, so it needs the cloud path. The cloud provider sits behind a protocol; a shipped app cannot hold cloud credentials, so it must point at your own backend. The direct-to-Vertex client used to score `Bar/ai-text/` lives in the harness and is deliberately not in the app target. |
 | `MockDictation` | Runs in the main app. **`SpeechTranscriber` cannot do Hebrew** — measured, 30 locales, none of them `he`. Legacy `SFSpeechRecognizer` has `he-IL` but reports no on-device support here, so Hebrew dictation means cloud STT (Deepgram Nova-3 is the candidate `plan.md` names). |
-| `MockScreenContext` | **Reading a frame is done and measured** — `RoutedScreenReader`, scored against `Bar/screen-context/`. **Getting** a frame is not: ScreenCaptureKit is `iOS 27.0+` and absent from the iOS 26.2 SDK this project compiles against, and the ReplayKit route needs a broadcast upload extension target that does not exist yet. `ScreenContextSession.submit(_:appName:appIcon:)` is the seam both plug into. |
+| `MockScreenContext` | **Reading a frame is done and measured** — `RoutedScreenReader`, scored against `Bar/screen-context/`. **Getting** one is not. ScreenCaptureKit is `iOS 27.0+` and absent from the iOS 26.2 SDK this project compiles against. The ReplayKit route is now half built: `AIKeyboardBroadcast` exists, fingerprints every sampled frame and publishes a `CaptureStatus` page the keyboard reads, but it runs no reader, and no broadcast session can start on this machine at all — the iOS Simulator ships no `replayd`, so nothing in that target has ever been executed. `ScreenContextSession.submit(_:appName:appIcon:)` is the seam both plug into. |
 | ~~`SharedStore`~~ | **Done.** Both targets carry the App Group entitlement and share one suite. |
 | `MockTextTarget` | `UITextDocumentProxy`, already wired via `ProxyTextTarget` |
 
@@ -167,6 +167,21 @@ the last one — it turns English off in the app, brings the keyboard up in a re
 text field, and confirms the extension process, which iOS runs separately,
 rendered Hebrew because of it. A unit test cannot show this: a process always
 sees its own writes.
+
+The capture channel rides the same container and is proved the same way, by
+`Scripts/prove-capture-channel.sh`. Two fixed-layout pages are `mmap`'d
+`MAP_SHARED` behind a seqlock — 256 bytes of status from the capture process,
+64 bytes of intent back from the keyboard — and one JSON file carries the
+reading. **Only text and hashes cross.** The pages hold timestamps, counters and
+a 32-byte SHA-256 of a greyscale reduction; `ScreenReadingRecord` has a sender, a
+message and a language and no field an image could go in. The script drives two
+real processes and takes its verdict from the keyboard extension's own log
+lines: it read a session identifier and a live sequence of frame identities
+written by another process, found a reading of the frame on screen offerable,
+and retired it the moment that frame changed. What it explicitly does **not**
+prove is that the producing process is the broadcast extension. There is no
+`replayd` here, so the producer in that run is the app driving the same writer
+over synthetic frames, and ReplayKit's half is untested on any hardware.
 
 ## Testing
 
@@ -186,8 +201,11 @@ xcodebuild test -project AIKeyboard.xcodeproj -scheme AIKeyboard \
 xcrun xccov view --report /tmp/AIKeyboard.xcresult
 ```
 
-Four tests live in `AIKeyboardUITests/DemoWalkthroughTests.swift`. There are no
-unit tests yet; see `.claude/docs/testing.md`.
+Four tests live in `AIKeyboardUITests/DemoWalkthroughTests.swift`, and 160 unit
+tests in `AIKeyboardCoreTests`. The two cross-process suites,
+`AppGroupCrossProcessTests` and `CaptureChannelCrossProcessTests`, are driven by
+the `Scripts/prove-*.sh` scripts rather than judged by their own assertions; see
+`.claude/docs/testing.md`.
 
 ## Not built
 

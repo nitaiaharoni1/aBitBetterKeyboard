@@ -22,6 +22,13 @@ struct AIKeyboardApp: App {
         if arguments.contains("-uiTestSkipOnboarding") {
             SharedStore.shared.hasCompletedOnboarding = true
         }
+
+        // Stands in for the broadcast extension, which cannot run on this
+        // destination at all. Only `Scripts/prove-capture-channel.sh` passes
+        // this; see `CaptureChannelProbe` for what it does and does not show.
+        if arguments.contains("-uiTestCaptureChannel") {
+            CaptureChannelProbe.shared.start()
+        }
     }
 
     var body: some Scene {

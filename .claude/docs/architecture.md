@@ -10,9 +10,13 @@ microphone, or screen capture.
 
 | Directory | Purpose |
 |---|---|
-| `Packages/AIKeyboardCore/` | The whole keyboard, the design system, and the mock engines. Both app targets link it. |
+| `Packages/AIKeyboardCore/Sources/AIKeyboardCore/` | The whole keyboard, the design system, and the engines. The app and the keyboard extension link it. Imports SwiftUI and UIKit throughout. |
+| `Packages/AIKeyboardCore/Sources/AIKeyboardShared/` | Foundation-only: the capture channel, the frame fingerprint, `ScreenReadingRecord`, the end reasons. Its whole reason to exist is that the broadcast extension needs these types and must not link `AIKeyboardCore`. Re-exported from `AIKeyboardCore` by `SharedExports.swift`, so nothing above has to know about the split. |
+| `Packages/AIKeyboardCore/Sources/CaptureAtomics/` | Four static inline C functions: the seqlock fences. C because Swift 5.9 has none — `Synchronization.Atomic` is iOS 18, `<stdatomic.h>` does not import, and `OSAtomic` has been deprecated since iOS 10. |
 | `AIKeyboardExtension/` | Extension host only. `KeyboardViewController` installs `KeyboardView` and owns the height constraint; no UI is authored here. |
-| `AIKeyboardUITests/` | Screenshot walkthrough, not assertions. Each test writes a numbered PNG per screen. |
+| `AIKeyboardBroadcast/` | The ReplayKit broadcast upload extension. Links `AIKeyboardShared` and nothing else of ours. Never runs on the Simulator: that runtime ships no `replayd`. |
+| `AIKeyboardCoreTests/` | Host-less unit tests over `AIKeyboardCore`. |
+| `AIKeyboardUITests/` | Screenshot walkthrough, plus the two cross-process proofs, which drive both processes and leave the verdict to a log line. |
 
 ## Data Flow
 
@@ -28,6 +32,14 @@ microphone, or screen capture.
 - Screen context flows one way: `ScreenContextSession` publishes state,
   `KeyboardController` mirrors it via Combine, and the strip and Reply panel read
   only the controller.
+- The capture channel is the one place two *processes* exchange state, and it is
+  not `UserDefaults`. `AIKeyboardBroadcast` fingerprints each sampled frame and
+  writes `channel/status.bin`; the keyboard maps the same page read-only at 4 Hz
+  through `ScreenContextChannel` and runs `CaptureFreshness` over it. Both pages
+  are `mmap(MAP_SHARED)` behind a seqlock, so a write is a memcpy inside a 60 fps
+  callback and a half-written page is a retry rather than a wrong answer. Only
+  text and hashes cross: the pages hold timestamps, counters and a SHA-256, and
+  `ScreenReadingRecord` has no image field by construction.
 
 ## Key Patterns
 
@@ -48,6 +60,14 @@ microphone, or screen capture.
 ## Dependencies Between Modules
 
 `AIKeyboard` (app) → `AIKeyboardCore`. `AIKeyboardExtension` → `AIKeyboardCore`.
-The app also embeds the extension. `AIKeyboardCore` depends on nothing but Apple
-frameworks, and must not import either app target — that direction is what keeps
-the keyboard renderable from both sides.
+`AIKeyboardBroadcast` → `AIKeyboardShared` **only**. `AIKeyboardCore` →
+`AIKeyboardShared` → `CaptureAtomics`. The app embeds both extensions.
+`AIKeyboardCore` depends on nothing but Apple frameworks, and must not import
+either app target — that direction is what keeps the keyboard renderable from
+both sides.
+
+The one arrow that is a hard rule rather than a preference is the missing one:
+**`AIKeyboardBroadcast` must never link `AIKeyboardCore`.** A broadcast upload
+extension is killed at ~50 MB and `AIKeyboardCore` pulls in SwiftUI and UIKit for
+nothing there. `Scripts/prove-capture-channel.sh` check 1 reads the Mach-O and
+fails if either appears.

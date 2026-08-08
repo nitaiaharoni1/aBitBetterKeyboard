@@ -1001,3 +1001,43 @@ The secure-field guard is now fail-closed, with `isSecureTextEntry` proven to be
 
 **Everything green:** build, 125 tests, `prove-app-group.sh`,
 `prove-broadcast-extension.sh`, all exit 0.
+
+### P3 — capture channel: built and **proved across processes**
+
+`AIKeyboardShared` (Foundation + CryptoKit only) plus a small C target for
+seqlock fences, because Swift 5.9 has no atomics on this deployment target:
+`Synchronization.Atomic` is iOS 18, `<stdatomic.h>` does not import, and
+`OSAtomic` has been deprecated since iOS 10. Plain loads and stores on arm64 are
+not a seqlock.
+
+`Scripts/prove-capture-channel.sh`, verified by me, exit 0. The verdict comes
+from the **keyboard extension's own log lines**: it reports `storage=appGroup`,
+reads a session UUID written by a different process, observes two distinct frame
+identities (so it is reading a live mapping rather than a snapshot), and its
+freshness gate moves `verdict=offerable` to `verdict=superseded` when the
+producer changes the frame identity underneath it. That last transition is the
+whole safety property, demonstrated rather than asserted.
+
+The shipping Swift fingerprint scores **0/29 misses and 0/30 false
+invalidations** over the 120 rendered corpus frames, matching the JS harness.
+The 64-bit settle hash misses 8/29, which is why it is confined to settle
+detection and is not the identity.
+
+**A bug the proof caught, not the builder:** `keyboardVisible = 1` outlived the
+extension that wrote it, so the producer believed a keyboard that was not there.
+A flag without a timestamp is the same mistake §6.1 names for the frame identity.
+
+**A number I got wrong and it corrected.** I reported the appex as 56 KB. That
+is the Debug *stub*; it is unchanged because it is a stub. Measured properly
+against a baseline built from `c8b6069`: the Release arm64 slice goes 217,024 to
+487,456 bytes, and `__TEXT` vmsize 48 KB to 112 KB. `otool -L` gains exactly
+CoreVideo and CryptoKit, no SwiftUI, no `AIKeyboardCore`. 64 KB of file-backed
+`__TEXT` against a 50 MB cap is immaterial, but it is the real number.
+
+Tests 125 to **161**, all green. All three proof scripts exit 0.
+
+**Still unproven:** `AIKeyboardBroadcast` has never executed. The producer in the
+proof is the containing app driving the same writer and the same fingerprint.
+`broadcastStarted`, the heartbeat, `processSampleBuffer`, the pixel-buffer
+lock/reduce/unlock path and `broadcastFinished` are compiled, unit-tested in
+pieces, and have never run.

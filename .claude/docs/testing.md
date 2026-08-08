@@ -4,9 +4,16 @@
 
 XCTest via `xcodebuild test`, in two shapes:
 
-- **`AIKeyboardCoreTests`** — unit tests over `AIKeyboardCore` (42 at last count):
-  routing, language detection, `OutputGuard`, `EditScope`. Fast, no simulator UI.
-- **`AIKeyboardUITests`** — UI walkthroughs that drive the app in the simulator.
+- **`AIKeyboardCoreTests`** — unit tests over `AIKeyboardCore` (160 at last
+  count): routing, language detection, `OutputGuard`, `EditScope`, the capture
+  channel's seqlock and layouts, the frame fingerprint's crop band, the freshness
+  gate. Fast, no simulator UI.
+- **`AIKeyboardUITests`** — UI walkthroughs that drive the app in the simulator,
+  plus the two cross-process suites. Those two assert almost nothing themselves;
+  they get both processes running and the verdict is read out of the log by
+  `Scripts/prove-app-group.sh` and `Scripts/prove-capture-channel.sh`. That is
+  deliberate: a process always sees its own writes, so the only honest evidence
+  is a line the *other* process emitted, stamped with its name by the OS.
 
 **Target the simulator by UDID, not by name.** Two devices are commonly booted here
 and `name=iPhone 17 Pro` is ambiguous between `iPhone 17 Pro` and `iPhone 17 Pro
@@ -46,8 +53,13 @@ TEST_RUNNER_SHOT_DIR=/tmp/shots xcodebuild test -project AIKeyboard.xcodeproj \
 
 ## Test Structure
 
-- `AIKeyboardUITests/` — one file, `DemoWalkthroughTests.swift`, with four tests
-  split by area: onboarding, keyboard panels, screen context, companion screens.
+- `AIKeyboardUITests/` — `DemoWalkthroughTests.swift` has four tests split by
+  area: onboarding, keyboard panels, screen context, companion screens.
+  `KeyboardExtensionTestCase` holds the setup every cross-process test needs
+  (install the keyboard, grant Full Access, focus a real text field, switch to
+  our keyboard) and `AppGroupCrossProcessTests` and
+  `CaptureChannelCrossProcessTests` inherit it. Steps that cannot be completed
+  `throw XCTSkip`; the assertions come after setup has genuinely succeeded.
 - `AIKeyboardCoreTests/` — unit tests for the AI engines, in a host-less
   unit-test target that links `AIKeyboardCore`. Like the other targets it is a
   `PBXFileSystemSynchronizedRootGroup`, so a new file in that folder is compiled

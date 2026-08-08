@@ -12,6 +12,7 @@
 		AA000000000000000000A5 /* AIKeyboardCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA000000000000000000A6 /* AIKeyboardCore */; };
 		AA000000000000000000A3 /* AIKeyboardCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA000000000000000000A1 /* AIKeyboardCore */; };
 		AA000000000000000000A4 /* AIKeyboardCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA000000000000000000A2 /* AIKeyboardCore */; };
+		AA000000000000000000A8 /* AIKeyboardShared in Frameworks */ = {isa = PBXBuildFile; productRef = AA000000000000000000A7 /* AIKeyboardShared */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -140,6 +141,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA000000000000000000A8 /* AIKeyboardShared in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -246,6 +248,7 @@
 			);
 			name = AIKeyboardBroadcast;
 			packageProductDependencies = (
+				AA000000000000000000A7 /* AIKeyboardShared */,
 			);
 			productName = AIKeyboardBroadcast;
 			productReference = AA00000000000000000024 /* AIKeyboardBroadcast.appex */;
@@ -779,6 +782,10 @@
 		AA000000000000000000A6 /* AIKeyboardCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AIKeyboardCore;
+		};
+		AA000000000000000000A7 /* AIKeyboardShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AIKeyboardShared;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -15,3 +15,6 @@ TestResults/
 
 # macOS
 .DS_Store
+
+# Rendered by Bar/screen-context/harness/frame-hash.mjs with KEEP=1 (30 MB)
+Bar/screen-context/harness/frame-hash-out/

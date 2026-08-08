@@ -64,6 +64,20 @@ final class KeyboardViewController: UIInputViewController {
         updateKeyboardHeight()
     }
 
+    /// The keyboard is the consuming end of the capture channel, and it only
+    /// consumes while it is on screen: polling a shared page from a keyboard the
+    /// user cannot see would cost battery to learn something nobody is looking
+    /// at, and `intent.keyboardVisible` would be a lie.
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        ScreenContextChannel.shared.startWatching()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        ScreenContextChannel.shared.stopWatching()
+    }
+
     /// The host app decides how tall the keyboard is only if we tell it. The
     /// priority is below required so the constraint never fights the system
     /// during rotation.

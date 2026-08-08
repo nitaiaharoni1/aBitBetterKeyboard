@@ -1,17 +1,25 @@
+import AIKeyboardShared
 import CoreMedia
+import CoreVideo
 import ImageIO
 import ReplayKit
 import os
 
-/// The capture shutter. It receives frames and reads nothing.
+/// The capture shutter. It fingerprints frames and reads nothing.
 ///
 /// ReplayKit kills a broadcast upload extension at roughly 50 MB and one BGRA
 /// frame at this device's resolution is about 12.6 MB
 /// (`.claude/docs/replaykit-contract.md`), so the rule this class is built around
-/// is that no frame outlives the callback it arrived in. Nothing here fetches the
-/// `CVPixelBuffer` at all: the only things read off a sample are its format
-/// description and its orientation attachment, and the only state kept between
-/// callbacks is counters.
+/// is that no frame outlives the callback it arrived in and no frame is ever
+/// copied. The pixel buffer is locked read-only, reduced in place to 2,048
+/// greyscale samples, and unlocked before the callback returns; the 2 KB
+/// reduction lives on the stack for the length of `FrameFingerprint.make` and is
+/// never written anywhere, because at 32x64 it is a bad picture but it is still a
+/// picture.
+///
+/// This target links `AIKeyboardShared` and **must never link `AIKeyboardCore`**:
+/// that target imports SwiftUI and UIKit from a dozen files, and dragging both
+/// into a process with a ~50 MB ceiling buys nothing.
 ///
 /// Nothing in this file can be exercised in the iOS Simulator. That runtime ships
 /// no `replayd`, so the extension compiles, links and embeds there and is never
@@ -30,6 +38,13 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     private let clock = ContinuousClock()
 
+    /// The App Group half. Nil when the container is out of reach, and the
+    /// extension keeps running rather than failing: capture with nobody
+    /// listening is useless but it is not a crash, and the keyboard's own
+    /// `storage=processLocal` is where the user-visible diagnosis belongs.
+    private let channel = CaptureChannelWriter()
+    private var heartbeat: DispatchSourceTimer?
+
     // Mutated from ReplayKit's delivery queue by `processSampleBuffer`, and from
     // whatever queue ReplayKit uses for the lifecycle callbacks by
     // `broadcastStarted`, `broadcastResumed` and `broadcastFinished`. ReplayKit
@@ -38,10 +53,9 @@ final class SampleHandler: RPBroadcastSampleHandler {
     //
     // Left unsynchronised deliberately, and only because of what these are: no
     // frame is delivered before `broadcastStarted` or while paused, and the
-    // values are read solely to log. The moment anything publishes them —
-    // `CaptureStatus` is the planned consumer — they need real synchronisation,
-    // and a torn counter would then be a wrong number shown to the user rather
-    // than a wrong number in a log line.
+    // values are read solely to log. The counters the *keyboard* reads do not
+    // live here — they live in the shared page behind a seqlock, so a torn read
+    // is a retry rather than a wrong number shown to the user.
     private var lastSampledAt: ContinuousClock.Instant?
     private var framesDelivered = 0
     private var framesSampled = 0
@@ -56,12 +70,21 @@ final class SampleHandler: RPBroadcastSampleHandler {
         framesSampled = 0
         lastOrientation = nil
         hasLoggedFormat = false
+
+        let session = channel?.begin()
+        startHeartbeat()
+
         Self.log.notice(
-            "broadcast started intervalMs=\(Self.sampleIntervalMilliseconds, privacy: .public)"
+            """
+            broadcast started intervalMs=\(Self.sampleIntervalMilliseconds, privacy: .public) \
+            channel=\(self.channel == nil ? "unreachable" : "open", privacy: .public) \
+            session=\(session?.uuidString ?? "none", privacy: .public)
+            """
         )
     }
 
     override func broadcastPaused() {
+        channel?.setPaused(true)
         Self.log.notice("broadcast paused")
     }
 
@@ -69,10 +92,13 @@ final class SampleHandler: RPBroadcastSampleHandler {
         // Delivery restarts from a cold gate: the next frame is always sampled
         // rather than measured against an instant from before the pause.
         lastSampledAt = nil
+        channel?.setPaused(false)
         Self.log.notice("broadcast resumed")
     }
 
     override func broadcastFinished() {
+        stopHeartbeat()
+        channel?.end(.userStopped)
         Self.log.notice(
             """
             broadcast finished delivered=\(self.framesDelivered, privacy: .public) \
@@ -88,6 +114,29 @@ final class SampleHandler: RPBroadcastSampleHandler {
     override func broadcastAnnotated(withApplicationInfo applicationInfo: [AnyHashable: Any]) {
         let bundleID = applicationInfo[RPApplicationInfoBundleIdentifierKey] as? String
         Self.log.notice("broadcast annotated firstApp=\(bundleID ?? "unknown", privacy: .public)")
+    }
+
+    // MARK: - Heartbeat
+
+    /// 1 Hz, on its own queue, and it writes `heartbeatAt` and nothing else.
+    ///
+    /// Separate from frame delivery because they are separate failures: a wedged
+    /// handler keeps the process alive while frames stop, and a keyboard that
+    /// could not tell those apart would show a live-looking strip over a dead
+    /// pipeline. `CaptureFreshness` conditions 1 and 2 are the two halves.
+    private func startHeartbeat() {
+        stopHeartbeat()
+        guard let channel else { return }
+        let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        timer.schedule(deadline: .now() + 1, repeating: 1.0, leeway: .milliseconds(200))
+        timer.setEventHandler { channel.heartbeat() }
+        timer.resume()
+        heartbeat = timer
+    }
+
+    private func stopHeartbeat() {
+        heartbeat?.cancel()
+        heartbeat = nil
     }
 
     // MARK: - Delivery
@@ -115,7 +164,12 @@ final class SampleHandler: RPBroadcastSampleHandler {
         framesDelivered &+= 1
 
         let now = clock.now
-        if let last = lastSampledAt, now - last < Self.sampleInterval { return }
+        if let last = lastSampledAt, now - last < Self.sampleInterval {
+            // Not sampled, but delivery is alive and the keyboard's second
+            // liveness condition is watching for exactly that.
+            channel?.recordDelivery()
+            return
+        }
         lastSampledAt = now
         framesSampled &+= 1
 
@@ -142,17 +196,77 @@ final class SampleHandler: RPBroadcastSampleHandler {
             )
         }
 
+        let fingerprint = Self.fingerprint(of: sampleBuffer)
+        if let fingerprint {
+            channel?.recordFrame(fingerprint)
+        } else {
+            // A frame we could not fingerprint is a frame the freshness gate
+            // must not treat as evidence, so delivery is recorded and the
+            // identity is left alone rather than being cleared or guessed.
+            channel?.recordDelivery()
+        }
+
         if framesSampled % Self.logEvery == 0 {
             Self.log.notice(
                 """
                 video progress delivered=\(self.framesDelivered, privacy: .public) \
-                sampled=\(self.framesSampled, privacy: .public)
+                sampled=\(self.framesSampled, privacy: .public) \
+                fingerprinted=\(fingerprint != nil, privacy: .public)
                 """
             )
         }
     }
 
     // MARK: - Reading a sample without holding it
+
+    /// Reduces the frame to its fingerprint while it is locked, and returns
+    /// having copied nothing.
+    ///
+    /// `CVPixelBufferLockBaseAddress(.readOnly)` maps the frame that already
+    /// exists rather than allocating one, and the unlock is paired on every exit
+    /// including the failures. Nothing survives this function except 40 bytes of
+    /// hash.
+    private static func fingerprint(of sampleBuffer: CMSampleBuffer) -> FrameFingerprint? {
+        guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return nil }
+
+        let format: FrameReduction.PixelFormat
+        switch CVPixelBufferGetPixelFormatType(buffer) {
+        case kCVPixelFormatType_32BGRA: format = .bgra8888
+        case kCVPixelFormatType_32ARGB: format = .argb8888
+        case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+            kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
+            // The luma plane on its own. Chroma is not read at all: the
+            // reduction is greyscale, so the 1.6 MB of CbCr is work nobody
+            // needs.
+            format = .luminance8
+        default:
+            return nil
+        }
+
+        guard CVPixelBufferLockBaseAddress(buffer, .readOnly) == kCVReturnSuccess else {
+            return nil
+        }
+        defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+
+        let planar = CVPixelBufferIsPlanar(buffer)
+        let base =
+            planar
+            ? CVPixelBufferGetBaseAddressOfPlane(buffer, 0)
+            : CVPixelBufferGetBaseAddress(buffer)
+        guard let base else { return nil }
+
+        let width = planar ? CVPixelBufferGetWidthOfPlane(buffer, 0) : CVPixelBufferGetWidth(buffer)
+        let height =
+            planar ? CVPixelBufferGetHeightOfPlane(buffer, 0) : CVPixelBufferGetHeight(buffer)
+        let bytesPerRow =
+            planar
+            ? CVPixelBufferGetBytesPerRowOfPlane(buffer, 0)
+            : CVPixelBufferGetBytesPerRow(buffer)
+
+        return FrameFingerprint.make(
+            base: UnsafeRawPointer(base), width: width, height: height,
+            bytesPerRow: bytesPerRow, format: format)
+    }
 
     private static func orientation(of sampleBuffer: CMSampleBuffer) -> CGImagePropertyOrientation? {
         let attachment = CMGetAttachment(
