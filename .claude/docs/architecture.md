@@ -2,9 +2,17 @@
 
 ## Overview
 
-A SwiftUI iOS app plus a keyboard extension, sharing one local Swift package that
-holds the entire keyboard. All intelligence is mocked: no network, model,
-microphone, or screen capture.
+A SwiftUI iOS app, a keyboard extension and a ReplayKit broadcast extension,
+sharing local Swift packages that hold the entire keyboard.
+
+**The intelligence is not mocked, and this line used to say it was.** The text
+actions run for real through `RoutedIntelligence`, which picks between
+`FoundationModelsEngine` on device and `CloudIntelligence` over the network, and
+screen context runs for real through `RoutedScreenReader` over frames a broadcast
+extension captures. What is still mocked is narrower and named in `README.md`'s
+mock-to-real table: suggestions (`MockSuggestionEngine`), dictation
+(`MockDictation`) and the scripted screen-context demo (`MockScreenContext`) the
+app plays when no broadcast is running.
 
 ## Directory Map
 
@@ -26,9 +34,10 @@ microphone, or screen capture.
   `ProxyTextTarget` wraps the real `UITextDocumentProxy` in the extension,
   `MockTextTarget` is an in-memory string used by the app's playground and
   onboarding.
-- AI actions read `aiTargetText` (the selection, else the current sentence), run a
-  mock through `beginWork`, and write back by deleting exactly the characters
-  that were sent before inserting the replacement.
+- AI actions read `aiTargetText` (the selection, else the current sentence), run
+  `RoutedIntelligence` through `beginWork`, and write back by deleting exactly
+  the characters that were sent before inserting the replacement. `MockAI` is
+  gone; the engine behind `beginWork` is real.
 - Screen context flows one way: `ScreenContextSession` publishes state,
   `KeyboardController` mirrors it via Combine, and the strip and Reply panel read
   only the controller. The session has two sources and they are not equals — a

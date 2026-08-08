@@ -9,7 +9,7 @@
     "detectedScript": "latin",
     "detectedLanguage": "english",
     "bytes": 66461,
-    "seconds": 4.99
+    "seconds": 4.65
   },
   {
     "id": "im-02",
@@ -21,7 +21,7 @@
     "detectedScript": "mixed",
     "detectedLanguage": "hebrew",
     "bytes": 52795,
-    "seconds": 5.44
+    "seconds": 5.5
   },
   {
     "id": "im-03",
@@ -33,7 +33,7 @@
     "detectedScript": "hebrew",
     "detectedLanguage": "hebrew",
     "bytes": 53141,
-    "seconds": 5.21
+    "seconds": 5.77
   },
   {
     "id": "im-04",
@@ -45,7 +45,7 @@
     "detectedScript": "mixed",
     "detectedLanguage": "hebrew",
     "bytes": 57621,
-    "seconds": 4.09
+    "seconds": 4.12
   },
   {
     "id": "im-05",
@@ -57,7 +57,7 @@
     "detectedScript": "hebrew",
     "detectedLanguage": "hebrew",
     "bytes": 54204,
-    "seconds": 3.78
+    "seconds": 3.6
   },
   {
     "id": "im-06",
@@ -69,7 +69,7 @@
     "detectedScript": "latin",
     "detectedLanguage": "english",
     "bytes": 64678,
-    "seconds": 4.6
+    "seconds": 4.63
   },
   {
     "id": "im-07",
@@ -81,7 +81,7 @@
     "detectedScript": "mixed",
     "detectedLanguage": "hebrew",
     "bytes": 46822,
-    "seconds": 5.39
+    "seconds": 5.89
   },
   {
     "id": "ml-01",
@@ -93,7 +93,7 @@
     "detectedScript": "latin",
     "detectedLanguage": "english",
     "bytes": 64224,
-    "seconds": 4.86
+    "seconds": 4.5
   },
   {
     "id": "ml-02",
@@ -105,7 +105,7 @@
     "detectedScript": "mixed",
     "detectedLanguage": "hebrew",
     "bytes": 63108,
-    "seconds": 5.05
+    "seconds": 5.37
   },
   {
     "id": "ml-03",
@@ -117,7 +117,7 @@
     "detectedScript": "mixed",
     "detectedLanguage": "hebrew",
     "bytes": 104011,
-    "seconds": 5.04
+    "seconds": 5.17
   },
   {
     "id": "ml-04",
@@ -129,7 +129,7 @@
     "detectedScript": "latin",
     "detectedLanguage": "english",
     "bytes": 66762,
-    "seconds": 4.24
+    "seconds": 4.52
   },
   {
     "id": "sl-01",
@@ -141,7 +141,7 @@
     "detectedScript": "latin",
     "detectedLanguage": "english",
     "bytes": 72784,
-    "seconds": 5.21
+    "seconds": 5.08
   },
   {
     "id": "sl-02",
@@ -153,7 +153,7 @@
     "detectedScript": "latin",
     "detectedLanguage": "english",
     "bytes": 70257,
-    "seconds": 4.6
+    "seconds": 4.36
   },
   {
     "id": "sl-03",
@@ -165,7 +165,7 @@
     "detectedScript": "latin",
     "detectedLanguage": "english",
     "bytes": 105747,
-    "seconds": 5.46
+    "seconds": 5.62
   },
   {
     "id": "sl-04",
@@ -177,7 +177,7 @@
     "detectedScript": "mixed",
     "detectedLanguage": "hebrew",
     "bytes": 66793,
-    "seconds": 5.29
+    "seconds": 5.54
   },
   {
     "id": "sl-05",
@@ -189,7 +189,7 @@
     "detectedScript": "latin",
     "detectedLanguage": "english",
     "bytes": 84029,
-    "seconds": 3.61
+    "seconds": 3.9
   },
   {
     "id": "sl-06",
@@ -201,7 +201,7 @@
     "detectedScript": "latin",
     "detectedLanguage": "english",
     "bytes": 63776,
-    "seconds": 3.81
+    "seconds": 4.25
   },
   {
     "id": "tg-01",
@@ -213,7 +213,7 @@
     "detectedScript": "hebrew",
     "detectedLanguage": "hebrew",
     "bytes": 61931,
-    "seconds": 5.72
+    "seconds": 5.47
   },
   {
     "id": "tg-02",
@@ -225,7 +225,7 @@
     "detectedScript": "mixed",
     "detectedLanguage": "hebrew",
     "bytes": 72508,
-    "seconds": 5.35
+    "seconds": 4.94
   },
   {
     "id": "tg-03",
@@ -237,7 +237,7 @@
     "detectedScript": "latin",
     "detectedLanguage": "english",
     "bytes": 72642,
-    "seconds": 4.53
+    "seconds": 4.07
   },
   {
     "id": "tg-04",
@@ -249,7 +249,7 @@
     "detectedScript": "hebrew",
     "detectedLanguage": "hebrew",
     "bytes": 71962,
-    "seconds": 4.05
+    "seconds": 4.26
   },
   {
     "id": "tg-05",
@@ -261,7 +261,7 @@
     "detectedScript": "mixed",
     "detectedLanguage": "hebrew",
     "bytes": 54495,
-    "seconds": 4.69
+    "seconds": 4.45
   },
   {
     "id": "wa-01",
@@ -273,7 +273,7 @@
     "detectedScript": "hebrew",
     "detectedLanguage": "hebrew",
     "bytes": 69029,
-    "seconds": 4.28
+    "seconds": 4.06
   },
   {
     "id": "wa-02",
@@ -285,7 +285,7 @@
     "detectedScript": "mixed",
     "detectedLanguage": "hebrew",
     "bytes": 65870,
-    "seconds": 6.18
+    "seconds": 5.4
   },
   {
     "id": "wa-03",
@@ -297,7 +297,7 @@
     "detectedScript": "mixed",
     "detectedLanguage": "hebrew",
     "bytes": 71410,
-    "seconds": 4.59
+    "seconds": 4.37
   },
   {
     "id": "wa-04",
@@ -309,7 +309,7 @@
     "detectedScript": "latin",
     "detectedLanguage": "english",
     "bytes": 99929,
-    "seconds": 4.47
+    "seconds": 5.89
   },
   {
     "id": "wa-05",
@@ -321,19 +321,19 @@
     "detectedScript": "hebrew",
     "detectedLanguage": "hebrew",
     "bytes": 67459,
-    "seconds": 4.13
+    "seconds": 4.09
   },
   {
     "id": "wa-06",
     "language": "hebrew",
     "config": "gemini-2.5-flash scale=2 jpeg 2026-08-08",
-    "sender": "רותם - ועד הבית",
-    "message": "העבודות יתחילו ביום שלישי ה-3 בספטמבר ויימשכו כשלושה שבועות, אולי קצת יותר אם יתגלו בעיות רטיבות בקיר המערבי כמו שקרה בבניין הסמוך בשנה שעברה. בזמן העבודות המעלית תהיה מושבתת בכל יום בין 8:00 ל-16:00, אז מי שצריך להוריד או להעלות דברים כבדים מתבקש לעשות את זה בשעות הערב או בסופי שבוע. גם הכניסה הראשית תיחסם לסירוגין, ובימים האלה ניכנס דרך החניון התחתון. בנוסף, צריך לאסוף 450 שקל מכל דירה עד סוף החודש כדי לשלם לקבלן את המקדמה. אפשר להעביר לי בביט או במזומן לתיבת הדואר בקומת הכניסה. מי שמשלם במזומן שירשום את מספר הדירה על המעטפה. תעדכנו אותי בהקדם אם יש בעיה עם התאריכים או עם הסכום, ואם מישהו רוצה להצטרף לוועד השיפוץ שיכתוב לי בפרטי.",
-    "messages": "[{\"from\": \"them\", \"kind\": \"text\", \"sender\": \"רותם - ועד הבית\", \"text\": \"העבודות יתחילו ביום שלישי ה-3 בספטמבר ויימשכו כשלושה שבועות, אולי קצת יותר אם יתגלו בעיות רטיבות בקיר המערבי כמו שקרה בבניין הסמוך בשנה שעברה. בזמן העבודות המעלית תהיה מושבתת בכל יום בין 8:00 ל-16:00, אז מי שצריך להוריד או להעלות דברים כבדים מתבקש לעשות את זה בשעות הערב או בסופי שבוע. גם הכניסה הראשית תיחסם לסירוגין, ובימים האלה ניכנס דרך החניון התחתון. בנוסף, צריך לאסוף 450 שקל מכל דירה עד סוף החודש כדי לשלם לקבלן את המקדמה. אפשר להעביר לי בביט או במזומן לתיבת הדואר בקומת הכניסה. מי שמשלם במזומן שירשום את מספר הדירה על המעטפה. תעדכנו אותי בהקדם אם יש בעיה עם התאריכים או עם הסכום, ואם מישהו רוצה להצטרף לוועד השיפוץ שיכתוב לי בפרטי.\"}]",
+    "sender": "ר",
+    "message": "בצע שיכון ברוב ובאות בחודש הבא. העבודות יתחילו ביום שלישי ה-3 בספטמבר ויימשכו כשלושה שבועות, אולי קצת יותר אם יתגלו בעיות רטיבות בקיר המערבי כמו שקרה בבניין הסמוך בשנה שעברה. בזמן העבודות המעלית תהיה מושבתת בכל יום בין 8:00 ל-16:00, אז מי שצריך להוריד או להעלות דברים כבדים מתבקש לעשות את זה בשעות הערב או בסופי שבוע. גם הכניסה הראשית תיחסם לסירוגין, ובימים האלה ניכנס דרך החניון התחתון. בנוסף, צריך לאסוף 450 שקל מכל דירה עד סוף החודש כדי לשלם לקבלן את המקדמה. אפשר להעביר לי בביט או במזומן לתיבת הדואר בקומת הכניסה. מי שמשלם במזומן שירשום את מספר הדירה על המעטפה. תעדכנו אותי בהקדם אם יש בעיה עם התאריכים או עם הסכום, ואם מישהו רוצה להצטרף לוועד השיפוץ שיכתוב לי בפרטי.",
+    "messages": "[{\"from\": \"them\", \"kind\": \"text\", \"sender\": \"ר\", \"text\": \"בצע שיכון ברוב ובאות בחודש הבא. העבודות יתחילו ביום שלישי ה-3 בספטמבר ויימשכו כשלושה שבועות, אולי קצת יותר אם יתגלו בעיות רטיבות בקיר המערבי כמו שקרה בבניין הסמוך בשנה שעברה. בזמן העבודות המעלית תהיה מושבתת בכל יום בין 8:00 ל-16:00, אז מי שצריך להוריד או להעלות דברים כבדים מתבקש לעשות את זה בשעות הערב או בסופי שבוע. גם הכניסה הראשית תיחסם לסירוגין, ובימים האלה ניכנס דרך החניון התחתון. בנוסף, צריך לאסוף 450 שקל מכל דירה עד סוף החודש כדי לשלם לקבלן את המקדמה. אפשר להעביר לי בביט או במזומן לתיבת הדואר בקומת הכניסה. מי שמשלם במזומן שירשום את מספר הדירה על המעטפה. תעדכנו אותי בהקדם אם יש בעיה עם התאריכים או עם הסכום, ואם מישהו רוצה להצטרף לוועד השיפוץ שיכתוב לי בפרטי.\"}]",
     "detectedScript": "mixed",
     "detectedLanguage": "hebrew",
     "bytes": 91392,
-    "seconds": 6.31
+    "seconds": 5.99
   },
   {
     "id": "wa-07",
@@ -345,18 +345,18 @@
     "detectedScript": null,
     "detectedLanguage": null,
     "bytes": 75999,
-    "seconds": 4.75
+    "seconds": 5.21
   },
   {
     "id": "wa-08",
     "language": "mixed",
     "config": "gemini-2.5-flash scale=2 jpeg 2026-08-08",
     "sender": "תומר בר-און",
-    "message": "קראתי. על שאלה 2 אני חושב שכדאי ללכת על server-side, זה יחסוך לנו את כל ה-sync logic",
-    "messages": "[{\"from\": \"them\", \"kind\": \"text\", \"sender\": \"תומר בר-און\", \"text\": \"בוקר טוב, סיימתי לקרוא את ה-RFC\"}, {\"from\": \"me\", \"kind\": \"text\", \"sender\": null, \"text\": \"ומה דעתך?\"}, {\"from\": \"them\", \"kind\": \"text\", \"sender\": \"תומר בר-און\", \"text\": \"בגדול מסכים. יש כמה דברים שכדאי לחדד\"}, {\"from\": \"me\", \"kind\": \"text\", \"sender\": null, \"text\": \"אשמח לשמוע\"}, {\"from\": \"them\", \"kind\": \"text\", \"sender\": \"תומר בר-און\", \"text\": \"היי, יש לך דקה אחר כך?\"}, {\"from\": \"me\", \"kind\": \"text\", \"sender\": null, \"text\": \"כן, אחרי 3 אני פנוי\"}, {\"from\": \"them\", \"kind\": \"text\", \"sender\": \"תומר בר-און\", \"text\": \"מעולה. רוצה לעבור על ה-architecture לפני שאנחנו מתחילים\"}, {\"from\": \"me\", \"kind\": \"text\", \"sender\": null, \"text\": \"בדיוק על זה חשבתי\"}, {\"from\": \"me\", \"kind\": \"text\", \"sender\": null, \"text\": \"העליתי את ה-spec ל-Notion, יש שם 3 open questions\"}, {\"from\": \"them\", \"kind\": \"text\", \"sender\": \"תומר בר-און\", \"text\": \"קראתי. על שאלה 2 אני חושב שכדאי ללכת על server-side, זה יחסוך לנו את כל ה-sync logic\"}]",
+    "message": "קראתי. על שאלה 2 אני חושב שכדאי ללכת על ה-server-side, זה יחסוך לנו את כל ה-sync logic",
+    "messages": "[{\"from\": \"them\", \"kind\": \"text\", \"sender\": \"תומר בר-און\", \"text\": \"בוקר טוב, סיימתי לקרוא את ה-RFC\"}, {\"from\": \"me\", \"kind\": \"text\", \"sender\": null, \"text\": \"ומה דעתך?\"}, {\"from\": \"them\", \"kind\": \"text\", \"sender\": \"תומר בר-און\", \"text\": \"בגדול מסכים. יש כמה דברים שכדאי לחדד\"}, {\"from\": \"me\", \"kind\": \"text\", \"sender\": null, \"text\": \"אשמח לשמוע\"}, {\"from\": \"them\", \"kind\": \"text\", \"sender\": \"תומר בר-און\", \"text\": \"היי, יש לך דקה אחר כך?\"}, {\"from\": \"me\", \"kind\": \"text\", \"sender\": null, \"text\": \"כן, אחרי 3 אני פנוי\"}, {\"from\": \"them\", \"kind\": \"text\", \"sender\": \"תומר בר-און\", \"text\": \"מעולה. רוצה לעבור על ה-architecture לפני שאנחנו מתחילים\"}, {\"from\": \"me\", \"kind\": \"text\", \"sender\": null, \"text\": \"בדיוק על זה חשבתי\"}, {\"from\": \"me\", \"kind\": \"text\", \"sender\": null, \"text\": \"העליתי את ה-spec ל-Notion, יש שם 3 open questions\"}, {\"from\": \"them\", \"kind\": \"text\", \"sender\": \"תומר בר-און\", \"text\": \"קראתי. על שאלה 2 אני חושב שכדאי ללכת על ה-server-side, זה יחסוך לנו את כל ה-sync logic\"}]",
     "detectedScript": "mixed",
     "detectedLanguage": "hebrew",
     "bytes": 68428,
-    "seconds": 5.71
+    "seconds": 5.55
   }
 ]

@@ -540,6 +540,84 @@ final class CaptureChannelTests: XCTestCase {
         }
     }
 
+    /// The mirror image of the test above, on the consumer's side.
+    ///
+    /// `CaptureChannelReader.statusPage` carried the identical unsynchronised
+    /// lazy assignment, in a class that is likewise `@unchecked Sendable`. Every
+    /// caller today arrives on the main actor through `ScreenContextChannel`, so
+    /// this hazard was unreachable in the shipping call graph — which is an
+    /// argument for leaving the bug in only if you also delete the
+    /// `@unchecked Sendable`, because that annotation is a promise to callers who
+    /// do not exist yet.
+    ///
+    /// Same caveat as the writer's: the failure is a read through a `munmap`'d
+    /// mapping, so it would arrive as a signal rather than an assertion, and this
+    /// passing proves nothing by itself. The lock is the argument.
+    func testStatusCanBeOpenedFromTwoQueuesAtOnce() throws {
+        for _ in 0..<50 {
+            let scratch = directory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+            let writer = try XCTUnwrap(CaptureChannelWriter(directory: scratch))
+            let session = writer.begin()
+            let reader = CaptureChannelReader(directory: scratch)
+
+            let group = DispatchGroup()
+            let seen = OSAllocatedUnfairLock(initialState: [UUID?]())
+            for _ in 0..<8 {
+                DispatchQueue.global(qos: .userInitiated).async(group: group) {
+                    let identity = reader.status().status?.sessionID
+                    seen.withLock { $0.append(identity) }
+                }
+            }
+            group.wait()
+
+            XCTAssertTrue(
+                seen.withLock { $0.allSatisfy { $0 == session } },
+                "every caller sees the same page, or one of them read through a freed mapping")
+        }
+    }
+
+    // MARK: The keyboard sweeps for itself
+
+    /// **The containing app's once-per-launch sweep is not enough, and this is
+    /// the user it fails.** Onboarding runs the app once; after that a user who
+    /// only types on the keyboard may never open it again. A producer killed by
+    /// jetsam fires no callback, so `reading.json` — a sender's name and the text
+    /// of their message, in a container that is backed up — survives with nobody
+    /// left to remove it.
+    func testTheKeyboardUnlinksAReadingWhoseProducerIsGone() throws {
+        let live = try liveChannelDirectory()
+        let writer = try XCTUnwrap(CaptureChannelWriter(directory: live))
+        let session = writer.begin(now: CaptureClock.now() - CaptureClock.nanoseconds(3_600))
+        try writer.publish(record(session: session))
+
+        let reader = CaptureChannelReader(directory: live)
+        XCTAssertNotNil(reader.reading(), "the text is on disk before the keyboard arrives")
+
+        XCTAssertTrue(reader.discardReadingOfADeadSession())
+
+        XCTAssertNil(reader.reading())
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: live.appendingPathComponent("reading.json").path),
+            "the file itself has to go, not just the decode")
+    }
+
+    /// …and it must not take a reading out from under a broadcast that is still
+    /// running. The keyboard appearing mid-session is the ordinary case, not the
+    /// exception: that is exactly when the user taps Reply.
+    func testTheKeyboardLeavesALiveSessionsReadingAlone() throws {
+        let live = try liveChannelDirectory()
+        let writer = try XCTUnwrap(CaptureChannelWriter(directory: live))
+        let session = writer.begin()
+        writer.heartbeat()
+        try writer.publish(record(session: session))
+
+        let reader = CaptureChannelReader(directory: live)
+        XCTAssertFalse(reader.discardReadingOfADeadSession())
+        XCTAssertNotNil(reader.reading())
+    }
+
     /// `channel/` under the scratch container, created — the writer opens
     /// `status.bin` with `O_CREAT` but will not make the directory holding it.
     private func liveChannelDirectory() throws -> URL {

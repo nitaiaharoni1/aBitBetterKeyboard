@@ -8,7 +8,7 @@
 # does NOT behave identically on both platforms: measured over these 30 images,
 # this script accepts 9 screens and answers 5, all 5 right, while the same
 # sources run on the simulator by AIKeyboardCoreTests/ScreenContextBarTests
-# accept 10 and answer 7, three of them wrong. Treat what follows as the macOS
+# accept 10 and answer 8, three of them wrong. Treat what follows as the macOS
 # reading of the reader; the shipping number is the one from the simulator.
 # VisionLanguageTests pins the iOS language list separately.
 set -euo pipefail

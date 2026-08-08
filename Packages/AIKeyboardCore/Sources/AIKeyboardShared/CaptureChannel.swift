@@ -85,6 +85,16 @@ public enum CaptureChannel {
     /// latency budget. **Never call it from `AIKeyboardBroadcast`**: a directory
     /// enumeration inside a process capped at ~50 MB buys nothing, and the
     /// producer's own `begin()` already clears what it owns.
+    ///
+    /// **This is not the only place the reading half runs, and it must not be.**
+    /// The containing app is launched once during onboarding and then, for a user
+    /// who only ever types on the keyboard, possibly never again — so a sweep
+    /// that lives only here leaves the last message anyone read on disk
+    /// indefinitely. The keyboard runs the narrow half itself, every time it
+    /// starts watching, through `CaptureChannelReader.discardReadingOfADeadSession`.
+    /// The two halves are split by cost, not by owner: unlinking one file whose
+    /// producer is provably gone is cheap enough for any process, enumerating a
+    /// directory is not.
     public static func sweep(now: UInt64 = CaptureClock.now()) {
         guard let container = SharedContainer.url else { return }
         let removed = sweep(container: container, now: now)
@@ -116,14 +126,22 @@ public enum CaptureChannel {
         }
 
         let live = container.appendingPathComponent("channel", isDirectory: true)
-        if removeReadingOfADeadSession(in: live, now: now) { removed.append("channel/reading.json") }
+        if discardReadingOfADeadSession(in: live, now: now) { removed.append("channel/reading.json") }
         return removed
     }
 
-    /// True when a reading was removed. Private because "is the producer alive"
-    /// is `CaptureFreshness`'s question everywhere else, and this is the one
-    /// caller that has to ask it with no record to judge.
-    private static func removeReadingOfADeadSession(in directory: URL, now: UInt64) -> Bool {
+    /// True when a reading was removed.
+    ///
+    /// "Is the producer alive" is `CaptureFreshness`'s question everywhere else;
+    /// this is the one caller that has to ask it with no record to judge. Public
+    /// because the keyboard needs the narrow half of the sweep on its own — see
+    /// `CaptureChannelReader.discardReadingOfADeadSession` for why the containing
+    /// app's once-per-launch call was not enough.
+    public static func discardReadingOfADeadSession(
+        in directory: URL, now: UInt64 = CaptureClock.now()
+    )
+        -> Bool
+    {
         let readingURL = directory.appendingPathComponent("reading.json")
         guard FileManager.default.fileExists(atPath: readingURL.path) else { return false }
 
@@ -571,11 +589,26 @@ public enum CaptureStatusReading: Equatable, Sendable {
 /// `intent.bin`.
 public final class CaptureChannelReader: @unchecked Sendable {
 
+    private let directory: URL
     private let statusURL: URL
     private let readingURL: URL
     private let intentPage: SharedPage<CaptureIntent>?
-    /// Opened on demand, because the file belongs to the other process.
-    private var statusPage: SharedPage<CaptureStatus>?
+
+    /// Opened on demand, because the file belongs to the other process, and
+    /// **behind a lock for exactly the reason `CaptureChannelWriter.intentPage`
+    /// is.** This class is declared `@unchecked Sendable`, which is a promise to
+    /// every caller that two threads may be inside it at once; an unsynchronised
+    /// lazy assignment of a class reference is not a wasted mapping but a torn
+    /// store, and the loser's `SharedPage` can `munmap` and `close` while the
+    /// winner is still reading through a pointer that came from it.
+    ///
+    /// Nothing exercises it today — every caller arrives on the main actor
+    /// through `ScreenContextChannel` — and that is not the point. The writer
+    /// side carried the identical pattern, was found to be wrong for the identical
+    /// reason, and was fixed; leaving the mirror image unlocked means the promise
+    /// in `@unchecked Sendable` is true only by accident of the current call
+    /// graph.
+    private let statusPage = OSAllocatedUnfairLock<SharedPage<CaptureStatus>?>(initialState: nil)
 
     /// Nil only when there is no App Group container: no entitlement, or a
     /// keyboard the user has not granted Full Access. That is a state to report
@@ -592,6 +625,7 @@ public final class CaptureChannelReader: @unchecked Sendable {
     /// Roots the channel somewhere other than the App Group container. See the
     /// writer's overload for why it exists.
     public init(directory: URL) {
+        self.directory = directory
         self.statusURL = directory.appendingPathComponent("status.bin")
         self.readingURL = directory.appendingPathComponent("reading.json")
         self.intentPage = SharedPage<CaptureIntent>(
@@ -599,16 +633,48 @@ public final class CaptureChannelReader: @unchecked Sendable {
             bytes: CaptureChannel.intentPageBytes, writable: true)
     }
 
+    /// Unlinks a reading whose producer is gone, and says whether it took one.
+    ///
+    /// **The keyboard has to do this, because for most users nothing else will.**
+    /// `reading.json` holds a sender's name and the text of their message, in a
+    /// container that is backed up with the app. The producer deletes it in
+    /// `begin()` and `end()`, neither of which a jetsam kill fires, and the full
+    /// `CaptureChannel.sweep()` that covers that case runs once per cold launch
+    /// of the *containing app* — which a user who only ever types on the keyboard
+    /// may not open for weeks, or ever again after onboarding. That left the last
+    /// message anyone read sitting on disk indefinitely.
+    ///
+    /// This is the narrow half of the sweep and deliberately not the whole of it:
+    /// one `fileExists`, one page load, no directory enumeration. `sweep()` still
+    /// owns the orphaned-directory half, which is genuinely the containing app's
+    /// job — it has no memory cap and no latency budget, and the directories it
+    /// removes are leftovers from an experiment rather than anything a live
+    /// session can produce.
+    ///
+    /// `CaptureFreshness` is what stops a dead session's reading being *shown*;
+    /// this is a separate obligation, and it holds whether or not anything would
+    /// have believed the text.
+    @discardableResult
+    public func discardReadingOfADeadSession(now: UInt64 = CaptureClock.now()) -> Bool {
+        CaptureChannel.discardReadingOfADeadSession(in: directory, now: now)
+    }
+
     /// Retries the mapping until it succeeds, so a broadcast started while the
     /// keyboard is already up is picked up on the next 250 ms poll rather than
     /// the next time the keyboard is dismissed and shown again.
     public func status() -> CaptureStatusReading {
-        if statusPage == nil {
-            statusPage = SharedPage<CaptureStatus>(
-                url: statusURL, bytes: CaptureChannel.statusPageBytes, writable: false)
+        // Mapped inside the lock, read outside it: the returned reference is a
+        // strong one, so the page cannot be unmapped underneath the load, and a
+        // seqlock read has no business holding a mutex.
+        let page = statusPage.withLock { page -> SharedPage<CaptureStatus>? in
+            if page == nil {
+                page = SharedPage<CaptureStatus>(
+                    url: statusURL, bytes: CaptureChannel.statusPageBytes, writable: false)
+            }
+            return page
         }
-        guard let statusPage else { return .absent }
-        guard let status = statusPage.load() else { return .unsettled }
+        guard let page else { return .absent }
+        guard let status = page.load() else { return .unsettled }
         return .settled(status)
     }
 

@@ -532,7 +532,7 @@ final class ScreenContextBarTests: XCTestCase {
         // **Deviation 1: iOS and the macOS harness do not read the same screens
         // the same way.** `harness/run-reader.sh` compiles the very same reader
         // sources, and on macOS it accepts 9 of 30 and answers 5, all 5 right.
-        // Run on the simulator it accepts 10 and answers 7, and the two extra
+        // Run on the simulator it accepts 10 and answers 8, and the two extra
         // answers plus `ml-01` are wrong. `ml-01` is a gate difference (macOS
         // measures mean confidence 0.896, just under the 0.90 threshold; the
         // simulator clears it); `wa-07` and `sl-05` pass the gate on both and

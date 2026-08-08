@@ -284,13 +284,18 @@ exact and 5/5 within 90%, no traps, no off-screen text. It answers only when it
 is right.
 
 **The same reader on iOS does not do that.** Run on the simulator by
-`ScreenContextBarTests` it accepts **10** and answers **7**, and three of those
+`ScreenContextBarTests` it accepts **10** and answers **8**, and three of those
 answers are wrong. Same source files, same pixels, same thresholds:
 
 | | accepts | answers | wrong |
 |---|---|---|---|
 | macOS (`run-reader.sh`) | 9 / 30 | 5 | 0 |
-| iOS Simulator (`ScreenContextBarTests`) | 10 / 30 | 7 | 3 |
+| iOS Simulator (`ScreenContextBarTests`) | 10 / 30 | 8 | 3 |
+
+(The gap between accepting 10 and answering 8 is `sl-01` and `sl-03`: the gate
+lets them through, then the one-sided layout leaves no geometry to say who sent
+what, so they throw and become cloud calls. `ScreenContextBarTests` asserts the
+8 directly; an earlier version of this page said 7 and disagreed with it.)
 
 - `ml-01` is a **gate** difference. macOS measures mean confidence 0.896, just
   under the 0.90 threshold, and refuses. The simulator clears it and returns the
@@ -307,12 +312,19 @@ is still safe; it is the "answers only when it is right" half that is macOS-only
 `run-reader.sh` says in its header that "Vision ships the same recognition models
 on both platforms". Measured over these 30 images, it does not.
 
-**`CloudScreenReader`** — all 30 screens: sender 29/30, keyboard language 29/30,
-message 19/30 exact and 26/30 within 90%. No traps, no off-screen text. Median
-5.3s, p90 6.4s. (`script` is 25/30 against the current `cloud_outputs.json`, not
-the 29/30 this line used to claim; `score_cloud.py` computes the column but does
-not print it, so the number went stale unnoticed. The four misses are all the
-model calling a Hebrew message `mixed` because it contains digits.)
+**`CloudScreenReader`** — all 30 screens, against the `cloud_outputs.json`
+recorded 2026-08-08 at the configuration the product actually sends (602x1310
+JPEG q70): sender 30/30, keyboard language 30/30, message 18/30 exact and 25/30
+within 90%. No traps, no off-screen text. Median 4.9s, p90 5.7s, 66 KB median on
+the wire. (`score_cloud.py` computes a `script` column but does not print it, so
+it went stale unnoticed once already — read it out of the table, not from here.)
+
+Every one of those figures carries the recording's date for a reason. The model
+is served behind a moving alias with no dated version to pin to, so a second run
+of this identical configuration minutes later disagreed on 2 of 30 frames and
+scored 29/30 sender; that run is committed as `cloud_outputs_repeat.json`, and
+the spread between the two files *is* the error bar. Runs a day apart move far
+more than that.
 
 **Read that line with two qualifiers, both settled in the next section.** It was
 measured at the corpus's native **1206x2622**, as a **PNG** — and the product
@@ -415,15 +427,23 @@ pixel-for-pixel identical content** (median 383 KB instead of 250 KB). All 30
 answers matched the original run exactly. Different bytes, same pixels, same
 answer: there is no byte cache, and `temperature: 0` is doing the work.
 
-Against the committed file it is a different story. A fresh run of the bar's own
-configuration disagrees with the stored `cloud_outputs.json` on **9 of 30**, and
-scores 26/30 sender and 28/30 language where the file scores 29 and 29. Nothing
-in this repo changed. So the protocol for this bar is narrower than "two runs":
-**run both sides together**, and treat any number quoted from a committed
-`*_outputs.json` as a historical reading rather than a current one.
-`cloud_outputs.json` is left as it is on purpose — `ScreenContextBarTests`
-replays it, and regenerating it would move every routed number on this page at
-the same time as the thing being measured.
+Against a file recorded on another day it is a different story, and the drift has
+a shape worth knowing. Two full runs of one configuration minutes apart disagree
+on **2 of 30** frames and move sender by one; those two runs are committed as
+`cloud_outputs.json` and `cloud_outputs_repeat.json`, and the difference between
+them *is* the error bar for anything measured in a single sitting. Runs a day
+apart move roughly a third of the corpus with nothing in the repo changed.
+
+The obvious fix is to name a model version instead of an alias, and it does not
+exist: `gemini-2.5-flash-001`, `-002`, `-preview-05-20` and `-preview-04-17` all
+404, and a successful call reports its `modelVersion` as `gemini-2.5-flash` —
+the alias echoing itself. So the protocol for this bar is narrower than "two
+runs": **run both sides together, in one sitting**, and treat any number quoted
+from a committed `*_outputs.json` as a reading with a date on it.
+`cloud_outputs.json` was last re-recorded on 2026-08-08, deliberately and
+together with the routed thresholds `ScreenContextBarTests` pins, because
+regenerating it moves every routed number on this page at the same moment as the
+thing being measured.
 
 ### The shipping path — the only number the product delivers
 
@@ -434,25 +454,29 @@ scored by `score_cloud.py routed_outputs.json`:
 
 | | n | message | +near | sender | language |
 |---|---|---|---|---|---|
-| english | 12 | 6 | 1 | 7 | 9 |
-| mixed | 8 | 3 | 4 | 7 | 7 |
-| hebrew | 10 | 5 | 3 | 10 | 10 |
-| **ALL** | **30** | **14** | **8** | **24** | **26** |
+| english | 12 | 8 | 1 | 9 | 11 |
+| mixed | 8 | 4 | 3 | 8 | 8 |
+| hebrew | 10 | 4 | 4 | 10 | 10 |
+| **ALL** | **30** | **16** | **8** | **27** | **29** |
 
-Exact message 47%, exact-or-near 73%. Split by which engine answered:
+Exact message 53%, exact-or-near 80%. Split by which engine answered:
 
 | engine | frames | message | +near | sender | language |
 |---|---|---|---|---|---|
-| `VisionScreenReader` | 10 | 4 | 1 | 5 | 7 |
-| `CloudScreenReader` | 20 | 10 | 7 | 19 | 19 |
+| `VisionScreenReader` | 8 | 4 | 1 | 5 | 7 |
+| `CloudScreenReader` | 22 | 12 | 7 | 22 | 22 |
 
-On device: `wa-04 wa-07 sl-01 sl-03 sl-05 sl-06 im-01 im-06 tg-03 ml-01`, median
-0.94s, p90 1.06s. Everything else goes to the cloud, which is every Hebrew and
-every mixed screen plus three English ones.
+On device: `wa-04 wa-07 sl-05 sl-06 im-01 im-06 tg-03 ml-01`, median 0.94s, p90
+1.06s. Everything else goes to the cloud, which is every Hebrew and every mixed
+screen plus five English ones — including `sl-01` and `sl-03`, which the gate
+accepts and the geometry then refuses.
 
-**This is 5 points of sender, 3 of keyboard language and 5 of exact message below
+**This is 3 points of sender, 1 of keyboard language and 2 of exact message below
 the cloud reader on its own**, and none of it is the cloud reader getting worse.
-Two separate defects account for all of it, and each has a test named after it:
+Two separate defects accounted for a wider gap than that, and **both are now
+fixed** — the numbers above are what is left after them. Each has a test named
+after it, and the descriptions below are kept because the reasoning is the useful
+part:
 
 1. **`RoutedScreenReader` only falls back on a thrown error.**
    `VisionScreenReader` declines two different ways: it *throws*

@@ -204,6 +204,68 @@ final class ScreenReadServiceTests: XCTestCase {
         XCTAssertEqual(try status().refusedInFlight, 1)
     }
 
+    /// **The same second tap, one conversation later, must not be swallowed.**
+    ///
+    /// The fold above is right because both taps are about one screen: the answer
+    /// already coming back answers both. It is wrong the moment the user leaves
+    /// that conversation, and five seconds of cloud latency is plenty of time to.
+    /// The running read will publish a record describing the screen they walked
+    /// away from, `CaptureFreshness` will refuse it, and the tap has to survive
+    /// that and be served for real.
+    ///
+    /// It used to die there instead. `claim` marked every request seen before it
+    /// checked whether it could serve one, so once the fold had bumped `seen`
+    /// past this tap no later frame could satisfy `readNow > seen`. The read
+    /// finished, the gate refused it, and the keyboard sat out its full twelve
+    /// seconds while frames of the new conversation went by unread — a Reply that
+    /// did nothing, recoverable only by tapping a third time.
+    func testATapAboutADifferentScreenIsServedAfterTheRunningReadRatherThanFolded()
+        async throws
+    {
+        let transport = FakeTransport(answer: ["sender": "Maya", "message": "hi"])
+        transport.holdOpen = true
+        let service = service(transport)
+
+        let first = tapReply()
+        XCTAssertNotNil(sample(service, showing: screen))
+        try await transport.waitUntilCalled()
+
+        // The user leaves that conversation and taps Reply on another one.
+        let second = tapReply()
+        XCTAssertNil(
+            sample(service, showing: otherScreen),
+            "a read is still in flight, so this frame must not start a second one")
+        XCTAssertEqual(transport.calls, 1)
+        XCTAssertEqual(
+            try status().refusedInFlight, 0,
+            "this is not a fold: nothing running answers a tap about another screen")
+
+        transport.holdOpen = false
+        await transport.release()
+
+        // Waiting on the *first* sequence is what makes this deterministic: the
+        // record only exists once `finish` has run, which is what clears the flag
+        // the next claim depends on. It also pins the other half of the fix —
+        // the running read stamps its own sequence, not the newer tap's, so the
+        // keyboard is never handed a record it has to refuse.
+        let stale = try await record(answering: first)
+        XCTAssertEqual(stale.frameIdentity, screen.identity)
+
+        // The next frame of the new conversation serves the tap that was waiting.
+        let ticket = try XCTUnwrap(
+            sample(service, showing: otherScreen),
+            "the deferred tap has to be claimable once the running read finishes")
+        XCTAssertEqual(ticket.sequence, second)
+        XCTAssertEqual(ticket.identity, otherScreen.identity)
+
+        let record = try await record(answering: second)
+        XCTAssertEqual(record.requestSequence, second)
+        XCTAssertEqual(
+            record.frameIdentity, otherScreen.identity,
+            "the answer describes the screen the user is actually looking at")
+        XCTAssertEqual(transport.calls, 2, "two screens, two reads")
+    }
+
     /// A request left in the page by a keyboard that stopped waiting a long time
     /// ago is not a request. Without this, a session starting an hour later reads
     /// whatever happens to be on screen and spends a cloud call on it.

@@ -97,6 +97,14 @@ public final class ScreenContextChannel: ObservableObject {
         guard timer == nil else { return }
         self.role = role
         if reader == nil { reader = CaptureChannelReader() }
+        // Before anything is read: unlink a reading whose producer is gone. The
+        // containing app's `CaptureChannel.sweep()` covers the same case but runs
+        // once per cold launch of an app a keyboard-only user may never open
+        // again, which left somebody's message sitting in a backed-up container
+        // for as long as they kept typing. One file check and one page load, so it
+        // is affordable here; the directory half of the sweep is not and stays in
+        // the app.
+        reader?.discardReadingOfADeadSession()
         if role.claimsKeyboardVisible {
             reader?.setKeyboardVisible(true, ownUIHeightFraction: ownUIHeightFraction)
         }

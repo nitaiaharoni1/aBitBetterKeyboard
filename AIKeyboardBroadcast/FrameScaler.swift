@@ -48,16 +48,32 @@ import Foundation
 ///
 /// Two caveats the bar's own README carries in full. The totals hide churn —
 /// eleven of thirty frames change verdict between the two PNG sizes, four of
-/// them for the better — so re-measure per entry rather than by total. And a
-/// fresh run of the bar's own configuration disagrees with the committed
-/// `cloud_outputs.json` on nine of thirty with nothing in the repo changed,
-/// which is why the table above was taken with all four cells in one sitting.
+/// them for the better — so re-measure per entry rather than by total. And the
+/// served model moves between days: two runs of one configuration minutes apart
+/// disagree on two of thirty, runs a day apart on roughly a third, and there is
+/// no dated version to pin against. Which is why the table above was taken with
+/// all four cells in one sitting.
 ///
 /// **Landscape is unhandled and that is deliberate rather than forgotten.**
 /// Orientation rides as a sample attachment, `SampleHandler` logs it, and nothing
 /// here rotates. What ReplayKit actually delivers — format, size, orientation and
 /// rate — is R1 in the capture design and has no device measurement, so a
 /// rotation written against a guess would be a second guess on top of the first.
+///
+/// **It costs more than a sideways JPEG, and that half was undocumented.** The
+/// same untouched orientation reaches `FrameFingerprint`, whose crop band assumes
+/// row 0 of the buffer is the physical top of the screen. If a rotated buffer's
+/// rows do not run that way, the band that is supposed to hold the status bar and
+/// exclude our own keyboard holds neither — which can reintroduce the exact
+/// failure the own-UI exclusion was built to fix (our shimmer moving the identity
+/// on every frame, so the freshness gate discards the reading the user paid for),
+/// or crop real message content into the discarded region. `ownUIHeightFraction`
+/// compounds it: the keyboard measures it once when it appears and never again,
+/// so a rotation while a read is in flight leaves the record's band and the next
+/// frame's band disagreeing, which reads as a screen change that never happened.
+/// Neither is guesswork worth writing blind; both are on the device checklist in
+/// `Scripts/measure-on-device.sh`, and a rotated frame is the first thing to look
+/// at once frames exist at all.
 final class FrameScaler {
 
     /// The divisor applied to both dimensions before the frame is encoded.

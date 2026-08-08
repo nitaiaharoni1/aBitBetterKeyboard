@@ -26,7 +26,7 @@ AIKeyboard.xcodeproj
 ```
 
 The entire keyboard lives in `AIKeyboardCore`, not in the extension target. The
-extension is ~70 lines that host `KeyboardView`. That split is deliberate: it
+extension is a thin host for `KeyboardView`. That split is deliberate: it
 lets the companion app render the *real* keyboard in onboarding and in the
 playground, so the product can be felt before iOS has been talked into
 installing anything.
@@ -153,25 +153,29 @@ Hebrew screen produces a confident wrong reply in the user's name, while an
 unnecessary cloud call costs five seconds.
 
 **The on-device half is not currently earning its place, and the honest numbers
-say so.** Measured end to end on iOS: routed scores sender 26/30 and message
-24/30 within 90%, while asking the cloud for every frame scores 29/30 and 26/30.
-Vision behaves differently on iOS than on macOS — it answers three frames there
-that it correctly refuses on macOS, including the one whose only right answer is
-silence.
+say so.** Measured end to end on iOS against one recording taken 2026-08-08:
+routed scores sender 27/30 and message 24/30 within 90%, while asking the cloud
+for every frame scores 30/30 and 25/30. Vision behaves differently on iOS than on
+macOS — it answers three frames there that it correctly refuses on macOS,
+including the one whose only right answer is silence.
 
-**Both of those cloud figures were taken at the corpus's full 1206x2622, as a
-PNG, and the capture process uploads 602x1310 as a JPEG.** That gap has now been
-measured rather than assumed: same prompt, same schema, same model, four
-combinations of size and encoder, two to three runs each in one sitting. Halving
-costs nothing — at the encoding that ships, the half-size frame scores sender
-29-30/30 and keyboard language 30/30 against 28/30 and 28/30 at full size,
-message is level, and it is 74% fewer bytes (66 KB median against 250 KB). The
-best of its three runs matches the published 19/30 exact, 26/30 within 90% and
-29/30 sender outright, at a quarter of the payload. The per-frame
-diff and the caveats are in `Bar/screen-context/README.md`; the shortest one is
-that the model is reproducible within a sitting and not across one, so a fresh
-run of the *full*-size configuration now disagrees with the committed
-`cloud_outputs.json` on 9 of 30 with nothing changed.
+**Both figures are now taken at the size and encoding the capture process
+actually uploads**, 602x1310 as a JPEG, rather than the corpus's full 1206x2622
+PNG that every earlier reading used. That gap was measured rather than assumed:
+same prompt, same schema, same model, four combinations of size and encoder, two
+to three runs each in one sitting. Halving costs nothing and saves 74% of the
+bytes (66 KB median against 250 KB), so the smaller frame is what ships and what
+the bar now scores.
+
+**Read every absolute number above as a reading with a date on it.** The model is
+served behind a moving alias and there is no dated version to pin to — every
+dated handle 404s, and the API answers by echoing the alias back as its own
+version. Within one sitting it is nearly reproducible: a second full run minutes
+later disagreed on 2 of 30 frames and moved sender by one, and that run is
+committed as `cloud_outputs_repeat.json` so the spread stays a measured quantity.
+Across days it moves far more. What survives is the comparison, because both
+sides are scored against the same recording: the on-device path is not free
+accuracy that happens to be private, it costs about three points of sender.
 
 **So in the ReplayKit capture flow every screen read goes to the cloud, English
 included, and it goes only when you tap Reply.** The order of the two open
@@ -186,8 +190,11 @@ nothing in the code read it.
 
 The memory question is still open and is stranger than it looked. Over the 30
 screens in `Bar/screen-context/`, in one process, `VNDetectTextRectanglesRequest`
-alone peaks at 9.9-11.3 MB on the iOS Simulator and 66.7-72.6 MB on macOS 26.5.1,
-and `.fast` recognition at 18.1-22.9 MB against 84.6-95.1 MB. Both platforms ship
+alone peaks at roughly 10-11 MB on the iOS Simulator and 67-75 MB on macOS
+26.5.1, and `.fast` recognition at 21-25 MB against 85-95 MB. Those are ranges
+over four runs, and they were quoted a couple of megabytes tighter until a fifth
+run landed outside them on two of the four cells — so read them as the order of
+magnitude they establish, not as bounds. Both platforms ship
 the same Vision model assets and both report the same compute device for these
 two requests: `[cpu]`. The gap is where the kernel charges the memory, not what
 runs — macOS puts ~63 MB on the footprint ledger jetsam reads, while the iOS

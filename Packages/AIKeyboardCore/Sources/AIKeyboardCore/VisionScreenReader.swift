@@ -22,7 +22,7 @@ import Vision
 /// measure this path on the simulator and treat `harness/run-reader.sh` as the
 /// macOS reading of it. Same sources, same pixels, same thresholds, measured
 /// 2026-08-08: macOS accepts 9 of the 30 bar images and answers 5, all 5 right;
-/// iOS accepts 10 and answers 7, and three of those are wrong — `ml-01` because
+/// iOS accepts 10 and answers 8, and three of those are wrong — `ml-01` because
 /// macOS puts its mean confidence at 0.896, just under the gate, and `wa-07` and
 /// `sl-05` because the recogniser puts different lines on the page. `wa-07` is
 /// the screen whose only correct answer is silence and iOS answers it; `sl-05`

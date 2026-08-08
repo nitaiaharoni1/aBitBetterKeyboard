@@ -25,9 +25,11 @@ import UniformTypeIdentifiers
 /// bytes than the PNG above and no worse on any axis — sender 29-30/30,
 /// keyboard language 30/30, message 18-19/30 exact and 25-26/30 within 90%, no
 /// traps, over three runs at 66 KB median instead of 250 KB. It
-/// also records that the line above is a *stored* reading: rerunning its exact
-/// configuration today disagrees with `cloud_outputs.json` on 9 of 30 with
-/// nothing changed, so treat it as history and re-measure both sides together.
+/// also records that the line above is a *stored* reading, and that no dated
+/// model version exists to pin it to: two runs of this exact configuration
+/// minutes apart disagree on 2 of 30 and move sender by one — that pair is
+/// committed as `cloud_outputs.json` and `cloud_outputs_repeat.json` — while runs
+/// a day apart move far more. Re-measure both sides together, in one sitting.
 ///
 /// **In `AIKeyboardShared` because the capture process is now a caller.** The
 /// broadcast upload extension performs the read, and it must never link

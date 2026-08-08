@@ -82,16 +82,18 @@ cloud harness is scored against:
 
 | | routed through Vision | cloud for every frame |
 |---|---|---|
-| sender | 26/30 | **29/30** |
-| keyboard language | 28/30 | **29/30** |
-| message, exact | 16/30 | **19/30** |
-| message, within 90% | 24/30 | **26/30** |
+| sender | 27/30 | **30/30** |
+| keyboard language | 29/30 | **30/30** |
+| message, exact | 16/30 | **18/30** |
+| message, within 90% | 24/30 | **25/30** |
 
-The right-hand column comes from the committed `cloud_outputs.json`, captured at
-1206x2622 as a PNG. §2.2.1 measures the size and encoding the product actually sends and
-finds them no worse — but it also finds that a fresh run of that same 1206x2622 PNG
-configuration now scores 26/30 sender, so read the column as the reading it was, not as a
-number the model will hand back today.
+Both columns are scored against the same `cloud_outputs.json`, re-recorded 2026-08-08 at
+602x1310 JPEG q70 — the size and encoding the product actually sends, rather than the
+full-size PNG every earlier reading in this document used. The comparison is what this
+table is for and it is apples to apples: the on-device path costs about three points of
+sender. The absolute figures are a reading with a date on it, because the model is served
+behind a moving alias with no dated version to pin to; a repeat run minutes later scored
+29/30 sender and is committed as `cloud_outputs_repeat.json` so the spread stays measured.
 
 Routing costs three points of sender and three of exact message. And the eight frames the
 on-device gate accepts (`byEngine["vision"]?.n == 8`) include **three it answers wrongly**:
@@ -258,11 +260,13 @@ Three things this run turned up that are worth more than the decision itself:
 3. **The model reproduces itself and does not reproduce the committed file.** Repeat runs
    of a cell returned byte-identical answers on all 30 frames across 45 minutes, with two
    single-frame exceptions — and re-encoding the corpus to a different PNG byte stream with
-   identical pixels reproduced the first run exactly, which rules out a response cache. But
-   a fresh run of the bar's own configuration disagrees with the committed
-   `cloud_outputs.json` on **9 of 30**, scoring 26/30 sender against its 29/30, with nothing
-   in the repo changed. Any comparison on this bar has to have both sides run together, and
-   any number quoted from a committed `*_outputs.json` is a historical reading.
+   identical pixels reproduced the first run exactly, which rules out a response cache. The
+   drift is between days, not between calls: two runs of one configuration minutes apart
+   disagree on **2 of 30** and move sender by one, while runs a day apart moved roughly a
+   third of the corpus with nothing in the repo changed. And there is no dated model version
+   to pin to — every dated handle 404s, and the API echoes the alias back as its own
+   `modelVersion`. So any comparison on this bar has to have both sides run in one sitting,
+   and any number quoted from a committed `*_outputs.json` is a reading with a date on it.
 
 Latency moved 5.9s -> 5.0s median, which is real but not the point: this ran over a laptop
 uplink where 184 KB of saved payload is under 200 ms. The bytes are the figure that

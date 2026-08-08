@@ -74,6 +74,10 @@ public final class ScreenReadService: @unchecked Sendable {
         /// The sequence the in-flight read will stamp its record with. Raised by
         /// a request that arrives while it runs.
         var answering: UInt64 = 0
+        /// The screen the in-flight read is *about*. A second tap can only be
+        /// folded into a read whose answer would actually answer it, and that is
+        /// exactly the question this settles — see `claim`.
+        var readingIdentity: FrameIdentity = .absent
     }
 
     private let channel: CaptureChannelWriter
@@ -136,6 +140,10 @@ public final class ScreenReadService: @unchecked Sendable {
             case stale
             case notConfigured
             case inFlight
+            /// A tap about a screen the running read is not about. Deliberately
+            /// left unclaimed and unmarked, so the next frame after that read
+            /// finishes serves it for real.
+            case supersedes
             case read
         }
 
@@ -143,17 +151,49 @@ public final class ScreenReadService: @unchecked Sendable {
         let outcome: Outcome = state.withLock { state in
             guard intent.readNow > state.seen else { return .ignore }
             sequence = intent.readNow
-            state.seen = intent.readNow
 
             guard CaptureClock.elapsed(since: intent.readRequestedAt, now: now) <= Self.requestWindow
-            else { return .stale }
-            guard reader != nil else { return .notConfigured }
+            else {
+                state.seen = intent.readNow
+                return .stale
+            }
+            guard reader != nil else {
+                state.seen = intent.readNow
+                return .notConfigured
+            }
             guard !state.isReading else {
+                // **A tap is folded into the running read only when that read is
+                // about the same screen.** Folding is right when the user taps
+                // twice on one conversation: the answer already coming back
+                // answers both, and a second cloud call would be waste.
+                //
+                // It is wrong the moment the screen has moved on. A cloud read
+                // takes about five seconds, which is long enough to leave one
+                // conversation and open another, and the record the running read
+                // publishes carries the *old* frame's identity. `CaptureFreshness`
+                // refuses it — correctly, it describes a screen the user is no
+                // longer looking at — so the tap produces nothing.
+                //
+                // Advancing `seen` here is what made that permanent: no later
+                // frame could satisfy `readNow > seen`, so the request could never
+                // be picked up once the read finished, and the keyboard sat out
+                // its full twelve seconds while frames of the new conversation
+                // went by unread. Only a third tap recovered it. So `seen` is left
+                // alone on a changed screen, and the first frame sampled after
+                // this read completes claims it properly.
+                // `answering` is raised only on the fold. A read of the previous
+                // screen is not answering this tap, and stamping its record with
+                // this sequence would hand the waiting keyboard a record it has
+                // to refuse before the real answer arrives.
+                guard identity == state.readingIdentity else { return .supersedes }
                 state.answering = intent.readNow
+                state.seen = intent.readNow
                 return .inFlight
             }
+            state.seen = intent.readNow
             state.isReading = true
             state.answering = intent.readNow
+            state.readingIdentity = identity
             return .read
         }
 
@@ -177,6 +217,17 @@ public final class ScreenReadService: @unchecked Sendable {
             channel.count(\.refusedInFlight)
             Self.log.notice(
                 "read folded: request \(sequence, privacy: .public) into the read already running")
+            return nil
+        case .supersedes:
+            // Counted nowhere yet, on purpose: this request has not been served
+            // and will come back through this same path once the running read
+            // releases `isReading`. Counting it here would report two requests
+            // for the user's one tap.
+            Self.log.notice(
+                """
+                read deferred: request \(sequence, privacy: .public) is about a different \
+                screen than the read already running
+                """)
             return nil
         case .read:
             channel.count(\.readsRequested)
@@ -242,6 +293,10 @@ public final class ScreenReadService: @unchecked Sendable {
         // record has to carry the number the keyboard is waiting on.
         let sequence = state.withLock { state -> UInt64 in
             state.isReading = false
+            // Cleared with the flag it belongs to: a stale identity left here
+            // would let the *next* read fold a tap against the screen this one
+            // was about.
+            state.readingIdentity = .absent
             return max(state.answering, ticket.sequence)
         }
 

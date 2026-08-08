@@ -60,8 +60,10 @@ TEST_RUNNER_SHOT_DIR=/tmp/shots xcodebuild test -project AIKeyboard.xcodeproj \
   `KeyboardExtensionTestCase` holds the setup every cross-process test needs
   (install the keyboard, grant Full Access, focus a real text field, switch to
   our keyboard) and `AppGroupCrossProcessTests` and
-  `CaptureChannelCrossProcessTests` inherit it. Steps that cannot be completed
-  `throw XCTSkip`; the assertions come after setup has genuinely succeeded.
+  `CaptureChannelCrossProcessTests` inherit it. `StockKeyboardReferenceTests`
+  also lives here and skips unless `Bar/typing/capture.sh` has been run. Steps
+  that cannot be completed `throw XCTSkip`; the assertions come after setup has
+  genuinely succeeded.
 - `AIKeyboardCoreTests/` — unit tests for the AI engines, in a host-less
   unit-test target that links `AIKeyboardCore`. Like the other targets it is a
   `PBXFileSystemSynchronizedRootGroup`, so a new file in that folder is compiled
