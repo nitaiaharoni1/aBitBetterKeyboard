@@ -2,23 +2,47 @@
 
 Design for turning `ScreenContextSession.submit(_:appName:appIcon:)` from a seam into
 a live pipeline. Written 2026-08-08 against Xcode 26.2 (17C52), iPhoneOS26.2.sdk,
-macOS 26.5.1 (25F80). Revised the same day after an independent review found the
-memory argument inverted and the privacy argument missing.
+macOS 26.5.1 (25F80).
 
-Three rules this document holds itself to, because the first version broke all three:
+Revised twice the same day. The first revision fixed an inverted memory argument and a
+missing privacy argument. **This one retracts the explanation that revision put in its
+place.** §1 and §2.3 claimed the macOS/Simulator gap was the Apple Neural Engine and that
+a phone, being an ANE configuration, would look like macOS. One line falsifies it:
+
+```swift
+try request.supportedComputeStageDevices
+```
+
+| Request | macOS 26.5.1 | iOS Simulator 26.2 |
+|---|---|---|
+| `VNDetectTextRectanglesRequest` | `[cpu]` | `[cpu]` |
+| `VNRecognizeTextRequest(.fast)` | `[cpu]` | `[cpu]` |
+| `VNRecognizeTextRequest(.accurate)` | `[ane, cpu, gpu]` | `[cpu, gpu]` |
+
+The Neural Engine is not in the picture for the shape detector or for `.fast`, which are
+the only two configurations an on-device path would use. It appears in exactly one row,
+and that row is the configuration this design rejects for other reasons. Every claim built
+on "a phone is an ANE configuration, so the Simulator is the optimistic deployment" is
+withdrawn, and the on-device path that claim was used to close is **reopened as undecided**.
+§2.3 now says what was actually measured instead, which is a difference in memory
+*accounting*, not in computation, with no way to tell from here which side a phone falls on.
+
+Three rules this document holds itself to, because the first version broke all three and
+the second version broke the third:
 
 1. **Every number says which deployment produced it.** `iOS Simulator`, `macOS`, or
-   `iOS device`. There is no such thing as an unlabelled megabyte here: the same code
-   over the same 30 images differs by 8x between the two deployments this machine can
-   reach.
+   `iOS device`.
 2. **No device number appears anywhere, because none exists.** The paired iPhone is
    offline. Everything that needs a device is labelled **unproven** and named as such.
 3. **Every API claim is quoted from a header on this machine, with the path**, or
-   marked **unverified** with the experiment that would settle it.
+   marked **unverified** with the experiment that would settle it. A claim about *why* a
+   number is what it is is an API claim and needs the same standard. That is the rule the
+   second version broke: it explained a measurement with a mechanism it never measured.
 
-The probe behind §2 is `Bar/screen-context/harness/memory.swift`, driven by
-`Bar/screen-context/harness/run-memory.sh`. Both exist in the repo. The script fails
-rather than skips when it cannot measure, in the manner of `Scripts/prove-app-group.sh`.
+The probes behind §2 and §6 are `Bar/screen-context/harness/memory.swift` (driven by
+`run-memory.sh`) and `Bar/screen-context/harness/frame-hash.mjs`. Both exist in the repo
+and both fail rather than skip when they cannot measure, in the manner of
+`Scripts/prove-app-group.sh`.
 
 ---
 
@@ -26,11 +50,12 @@ rather than skips when it cannot measure, in the manner of `Scripts/prove-app-gr
 
 | Section | Status |
 |---|---|
-| §1 recommendation | **PROVISIONAL.** Rests on §2, which has no device measurement. |
-| §2 memory | **PROVISIONAL.** Measured on two deployments, neither of which is an iPhone. |
+| §1 recommendation | **Decided, and it does not rest on §2.** It rests on an on-iOS end-to-end accuracy measurement (`AIKeyboardCoreTests/ScreenContextBarTests.swift`). §2 is a second, weaker argument that is currently unresolved. |
+| §2 memory | **UNRESOLVED.** Measured on two deployments that disagree by 6x, with the disagreement traced to memory accounting and not to computation. Neither is an iPhone. |
+| §1.3 on-device path | **UNDECIDED.** The threshold this document set for itself is cleared on the only deployment that runs iOS Vision code and missed by 2x on the one that does not. A device settles it; nothing here does. |
 | §3 data flow, §4 files | Design. Sized by §2, so provisional with it. |
 | §5 privacy | Decided. Does not depend on §2 except to *raise* the stakes. |
-| §6 freshness | Design. Independent of §2. |
+| §5.5, §6 freshness | **Measured**, `Bar/screen-context/harness/frame-hash.mjs`, and the measurement changed the design: the previous crop band and the 64-bit hash both failed it. |
 | §7 which app is on screen | **Verified** against `RPBroadcastExtension.h`. |
 | §8 teardown | **Verified** against `RPError.h` and `RPBroadcast.h`. |
 
@@ -43,52 +68,102 @@ itself.** It throttles 60 fps down to a 4 Hz fingerprint, keeps exactly one reus
 downscaled buffer, and — only when the user taps Reply — encodes one JPEG and hands it
 to `CloudScreenReader` over `BackendTransport`. Only text crosses the App Group:
 a `ScreenReadingRecord` (sender, message, language) and a fixed-layout `CaptureStatus`
-page (heartbeat, 64-bit frame hash, counters).
+page (heartbeat, frame identity, counters).
 
-**Screen reading in the shipping capture flow is cloud-only.** That is the conclusion the
-evidence supports, and it is not a preference. Three facts force it:
+**Screen reading in the shipping capture flow is cloud-only. That is the safe default, and
+the argument for it is accuracy, measured on the deployment that matters.**
 
-1. **Every process that could read the screen while the user is in another app is
-   memory-capped.** The broadcast upload extension at ~50 MB and the keyboard extension
-   at ~48 MB. The containing app has no such cap and is not running when the user is in
-   WhatsApp, so it is not a candidate. (Neither cap is in any header on this machine;
-   see §2.1 for exactly what each one rests on.)
-2. **Vision's text recogniser costs more than that in every ANE-equipped measurement
-   available.** On macOS 26.5.1, which maps `AppleNeuralEngine.framework`,
-   `ANEServices.framework` and `ANECompiler.framework`, peak physical footprint over the
-   30 bar screens in one process is **199.8 MB** at `.accurate` and **84.7 MB** at
-   `.fast`. Even `VNDetectTextRectanglesRequest` on its own — the language-agnostic shape
-   detector that `VisionScreenReader`'s whole routing gate depends on — peaks at
-   **67.9 MB**. Nothing in the Vision text stack fits in 48 MB on that deployment.
-3. **The simulator is the optimistic deployment, not the pessimistic one.** The iOS
-   Simulator maps *no* ANE framework (the probe checks and reports this), and on it
-   `.fast` peaks at 18.1 MB, which would fit. That number is the reason the previous
-   version of this document kept an on-device escape hatch. It is not evidence about a
-   phone: **a physical iPhone is an ANE configuration**, so the only ANE-equipped
-   measurement obtainable here is 4.7x *higher* than the simulator's, not lower. The
-   previous version's risk register said device numbers "could be lower again"; that
-   inference is backwards and the escape hatch built on it has been deleted.
+### 1.1 The measurement that carries the recommendation
 
-**Resolution is not a knob.** At 301x655 — 1/16 of the original pixel count — `.accurate`
-still peaks at 171.7 MB (macOS) / 157.3 MB (iOS Simulator) and `.fast` at 71.5 MB
-(macOS). The cost is model weights, not activations, and no downscale reaches it.
+`AIKeyboardCoreTests/ScreenContextBarTests.swift` runs the whole path — one
+`ScreenContextSession`, all 30 corpus frames, `RoutedScreenReader` deciding per frame,
+only the network replaced — **on iOS**, and scores it against the same ground truth the
+cloud harness is scored against:
 
-The accuracy case for on-device reading has also collapsed independently of memory.
-`.claude/CLAUDE.md` records that on iOS, routing through Vision scores *worse* than
-asking the cloud: sender 26/30 vs 29/30, exact message 16/30 vs 19/30. So the on-device
-path would cost memory it does not have, to buy accuracy it does not deliver. The only
-thing it buys is privacy, and §5 is where that is paid for instead.
+| | routed through Vision | cloud for every frame |
+|---|---|---|
+| sender | 26/30 | **29/30** |
+| keyboard language | 28/30 | **29/30** |
+| message, exact | 16/30 | **19/30** |
+| message, within 90% | 24/30 | **26/30** |
 
-`VisionScreenReader` is not deleted. It stays as the bar-scored reference and as the
-in-app playground path, where the containing app is frontmost and has no extension cap.
+Routing costs three points of sender and three of exact message. And the eight frames the
+on-device gate accepts (`byEngine["vision"]?.n == 8`) include **three it answers wrongly**:
+`wa-07`, whose only correct answer is silence, comes back as a message the user already
+replied to with the bubble timestamp glued on; `sl-05` comes back as keyboard key caps;
+`ml-01` returns the user's own quoted history. The same sources on macOS accept 9 and
+answer 5, all 5 right — which is why a macOS reading of this must never be quoted as the
+product's, and why this table is the one that counts.
 
-**What would reverse this, and it requires the device.** Run
-`Bar/screen-context/harness/memory.swift` as a device unit test (it compiles for
-`arm64-apple-ios` unchanged and reports `deployment = iOS device`). If peak footprint for
-`.fast` + rectangles over all 30 images comes in under ~30 MB on an iPhone, an on-device
-path is affordable and §5.4 is the checklist for putting it back. Anywhere near the macOS
-figure confirms this design. Nothing short of that measurement moves it — in particular,
-no simulator run does, and that is the whole lesson of this revision.
+**That measurement is on iOS, end to end, and it carries the recommendation on its own.**
+The on-device path is not free accuracy that happens to be private. On this bar it is
+worse accuracy, and three of its eight answers are wrong in the user's name. Even if
+memory turned out to be free, this would have to be re-won before an on-device path
+shipped.
+
+### 1.2 The memory argument, which is a second argument and is currently unresolved
+
+Every process that could read the screen while the user is in another app is memory-capped:
+the broadcast upload extension at ~50 MB and the keyboard extension at ~48 MB. The
+containing app has no cap and is not running when the user is in WhatsApp, so it is not a
+candidate in this flow. (Neither cap is in any header on this machine; §2.1 says what each
+rests on.)
+
+Against those caps, §2.3 measures the same Vision code costing **6x more on macOS than on
+the iOS Simulator**, and the reason is not computation:
+
+- The detector and `.fast` are `[cpu]` on both deployments, and neither deployment is
+  running a bigger model than the other: `Vision.framework` ships the same Espresso model
+  assets under the same names and sizes on macOS 26.5.1 and in the iOS 26.2 simulator
+  runtime (spot-checked on `mrcdetector.espresso.weights_nonane`, 3,967,936 bytes on both,
+  a name whose `_nonane` suffix agrees with the compute-device table).
+- What differs is where the kernel charges the bytes. Running the detector over 30 frames
+  moves `phys_footprint` by **+63.2 MB on macOS** (of which `TASK_VM_INFO` itemises
+  32.7 MB as `ledger_tag_graphics_footprint` and ~14 MB as anonymous `internal`; the rest
+  is unitemised, and `vmmap -summary` does not attribute it to any region either) and by
+  **+4.5 MB on the iOS Simulator**, where the growth instead lands in `external` — clean,
+  file-backed resident memory, +10.7 MB, which the footprint ledger does not charge.
+- Neural ledgers are 0.0 on both deployments for the detector and `.fast`. Even for
+  `.accurate` on macOS, where the ANE is genuinely used, the kernel puts 113-171 MB on
+  `ledger_tag_neural_nofootprint` and **0.0 on `ledger_tag_neural_footprint`** — that is,
+  the ANE's memory is explicitly not charged to the number jetsam reads.
+
+**We do not know which of those two accounting behaviours a device does**, and nothing on
+this machine can find out. So the memory argument does not currently point anywhere. It is
+not evidence for cloud-only and it is not evidence against it.
+
+### 1.3 The on-device path is undecided, not closed
+
+This document set its own reversal threshold in its previous revision: peak footprint
+under **~30 MB** for `.fast` + rectangles over all 30 images in one process. Measured:
+
+| Configuration | iOS Simulator 26.2 | macOS 26.5.1 |
+|---|---|---|
+| `VNDetectTextRectanglesRequest` alone | 9.9 / 10.3 / 11.3 | 66.7 / 67.0 / 72.6 |
+| `.fast` + rectangles | 18.1 / 20.7 / 22.9 | 84.6 / 88.2 / 93.4 |
+
+The iOS Simulator is the only deployment on this machine that runs the iOS build of
+Vision, and it clears the threshold on every run. macOS misses it by 2-3x. **"Unknown
+pending a device measurement" is the honest state**, and it is the state this section is
+in. `VisionScreenReader` is not deleted, is not deprecated, and stays as the bar-scored
+reference and as the in-app playground path.
+
+What is *not* undecided: §1.1. If the device measurement comes back cheap, the memory
+objection falls and the accuracy objection is untouched.
+
+**Resolution is not a knob**, on either deployment. At 301x655 — 1/16 of the original
+pixel count — `.accurate` still peaks at 171.7 MB (macOS) / 157.3 MB (iOS Simulator) and
+`.fast` at 71.5 MB (macOS) / 19.9 MB (iOS Simulator). The cost is not activations and no
+downscale reaches it.
+
+### 1.4 What settles it
+
+Run `Bar/screen-context/harness/memory.swift` as a device unit test. It compiles for
+`arm64-apple-ios` unchanged, reports `deployment = iOS device`, and now also reports
+`supportedComputeStageDevices` and the ledger breakdown, so a device run says not just how
+much but *where charged* — which is the quantity actually in dispute. Under ~30 MB for
+`.fast` + rectangles and the memory objection is gone; near the macOS figure and it stands.
+Nothing short of that moves it, and in particular no further simulator or macOS run does.
 
 ---
 
@@ -106,11 +181,11 @@ Neither cap is in a header. I grepped `ReplayKit.framework/Headers/` and
 | Process | Cap | What it rests on |
 |---|---|---|
 | Broadcast upload extension | **~50 MB** | Apple's stated guidance from the ReplayKit sessions, universally reproduced, and the jetsam behaviour in the forum threads `.claude/docs/replaykit-contract.md` cites. Unverified on device here (R2). |
-| Keyboard extension | **~48 MB** | Reported by the independent review that produced this revision, 2026-08-08. Not re-derived here and not in any header. Unverified on device here (R2b). |
+| Keyboard extension | **~48 MB** | Reported by the independent review that produced the first revision, 2026-08-08. Not re-derived here and not in any header. Unverified on device here (R2b). |
 | Containing app | none | But it is not running when the user is in WhatsApp, so it cannot be the reader in the capture flow. It *is* the reader in the in-app playground. |
 
-The two caps are close enough that they do not change any decision below: both are under
-50 MB, and every Vision configuration measured on an ANE deployment is over 67 MB.
+The two caps are close enough that they do not change any decision below. What does change
+decisions is which side of §2.3's 6x accounting gap a phone lands on, and that is unknown.
 
 ### 2.2 Frame arithmetic at 1206x2622
 
@@ -136,7 +211,8 @@ resample, **macOS host** — CoreGraphics will differ slightly):
 | 804x1748 | 96 | 142 | 151 |
 | 603x1311 | **66** | **98** | **104** |
 
-Fingerprint thumbnail: 32x64 greyscale = 2,048 bytes. Negligible.
+Fingerprint reduction: 32x64 greyscale = 2,048 bytes. Negligible, and §5.5 is where the
+band it is taken over is decided.
 
 ### 2.3 Vision, measured on two deployments, neither of them a phone
 
@@ -147,20 +223,17 @@ time. One reused request object per process, which is the shape a long-lived ext
 would have.
 
 **Peak** is the number that decides the design, because an extension dies at its ceiling
-rather than degrading. Base footprint is 2.3-2.4 MB (macOS) and 10.3-11.0 MB (iOS
+rather than degrading. Base footprint is 2.3-4.0 MB (macOS) and 5.5-11.0 MB (iOS
 Simulator); the tables are absolute peaks, so subtract the base for a delta.
 
 | Configuration, 1206x2622 | iOS Simulator 26.2, arm64 — peak MB | macOS 26.5.1 — peak MB |
 |---|---|---|
-| decode only (the floor) | 10.3 | 4.5 |
+| decode only (the floor) | 8.9 / 10.3 | 4.5 / 5.8 |
 | decode + JPEG encode q0.70 | 10.5 | 4.2 |
-| `VNDetectTextRectanglesRequest` alone | 10.3 / 11.1 / 10.4 | 67.9 / 66.7 / 69.2 |
-| `.fast` + rectangles | 18.1 / 22.8 / 22.9 | 84.7 / 91.1 / 95.1 |
-| `.accurate` + rectangles | 174.8 / 174.8 / 176.5 | 194.1 / 198.2 / 206.9 |
-| `.accurate`, no language correction, pinned `en-US`, no auto-detect | 100.4 | 111.8 |
-
-Three runs per cell where three were taken. Spread is a few MB; nothing here is inside the
-noise floor, and nothing here is close to 48 MB except on the deployment with no ANE.
+| `VNDetectTextRectanglesRequest` alone | 9.9 / 10.3 / 11.0 / 11.1 / 11.3 | 66.7 / 67.0 / 69.2 / 72.5 / 72.6 |
+| `.fast` + rectangles | 18.1 / 20.7 / 22.8 / 22.9 | 84.6 / 84.7 / 88.2 / 91.1 / 93.4 / 95.1 |
+| `.accurate` + rectangles | 174.8 / 174.8 / 176.5 | 194.1 / 198.0 / 198.2 / 206.9 |
+| `.accurate` as a *stock* request (no auto-detect, no correction, `en-US`) | 100.4 | 111.8 |
 
 Resolution sweep, same probe, same 30 images:
 
@@ -171,30 +244,132 @@ Resolution sweep, same probe, same 30 images:
 | `.accurate`, iOS Simulator | 174.8 | 177.8 | 157.3 |
 | `.accurate`, macOS | 199.8 | 184.5 | 171.7 |
 
-Four things this says, and they decide the architecture:
+#### 2.3.1 The 6x gap is accounting, not computation
 
-1. **The ANE frameworks are the variable.** The probe enumerates loaded images and
-   reports which Neural Engine frameworks are mapped. macOS maps `ANECompiler`,
-   `ANEServices`, `AppleNeuralEngine` and `Espresso`. The iOS Simulator maps `Espresso`
-   only. `run-memory.sh` asserts this both ways and fails if it ever stops being true,
-   because it is the control that makes the two columns mean anything.
-2. **Resolution is not a knob.** 1/16 of the pixels moves `.accurate` by 10-14% and
-   `.fast` on macOS by 16%. Neither crosses 48 MB from the wrong side. The previous
-   version's "halving resolution buys 14 MB" was a single-image reading and is not a
-   finding; over 30 images at half scale `.accurate` is *higher* in the simulator, not
-   lower.
-3. **It does not come back.** Simulator `.accurate` climbs 89.4 (image 1) -> 116.9 ->
-   126.8 -> 141.5 (image 10) -> 162.4 (image 20) -> 173.9 (image 28) and finishes at
-   154.2 after a drained `autoreleasepool`. It never returns near the 10.4 MB base. The
-   independent review's probe did not reproduce this climb (it saw 84 -> 104 over the
-   same 30 screens). Two independent probes disagreeing on the *shape* of the climb is
-   worth knowing; what both agree on, and what the design depends on, is that peak is
-   multiples of the ceiling and the process never returns to base.
-4. **The cheap half is not cheap where it counts.** The previous version rested an
-   on-device path on `VNDetectTextRectanglesRequest` costing +3.1 MB. That is a
-   simulator number. On the ANE deployment the same request peaks at 67.9 MB — over the
-   cap on its own, before any recognition runs. The routing gate that
-   `VisionScreenReader` is built on does not fit either.
+The probe now asks `supportedComputeStageDevices` before it runs anything, and prints the
+ledger tags `TASK_VM_INFO` breaks the footprint into. Measured 2026-08-08:
+
+| | macOS 26.5.1 | iOS Simulator 26.2 |
+|---|---|---|
+| `VNDetectTextRectanglesRequest` | `main=[cpu]` | `main=[cpu]` |
+| `VNRecognizeTextRequest(.fast)` | `main=[cpu]` | `main=[cpu]` |
+| `VNRecognizeTextRequest(.accurate)` | `main=[ane, cpu, gpu]` | `main=[cpu, gpu]` |
+
+Three consequences, and the first two retract earlier text:
+
+1. **The Neural Engine is irrelevant to the two configurations that matter.** The detector
+   and `.fast` are cpu-only on both deployments. Pinning them to the CPU explicitly with
+   `setComputeDevice(_:for:)` changes nothing, as it should not: macOS `rects` peaks at
+   73.3 MB pinned against 72.5 MB unpinned, and `.fast` at 88.2 MB pinned against 93.4 MB
+   unpinned, both inside run-to-run spread.
+2. **It is not a bigger model on one side.** `Vision.framework` ships the same Espresso
+   model assets under the same names and sizes on macOS 26.5.1 and in the iOS 26.2
+   simulator runtime; spot-checked on `mrcdetector.espresso.weights_nonane`, 3,967,936
+   bytes on both. That file's `_nonane` suffix and the compute-device table agree with each
+   other. (Which asset the text detector loads is *not* verified here; the claim is only
+   that the two deployments are not shipping different weights.)
+3. **The two deployments charge the same work to different ledgers.** Detector alone, over
+   30 frames, in MB:
+
+   | | macOS base -> end | iOS Simulator base -> end |
+   |---|---|---|
+   | `phys_footprint` (what jetsam reads) | 3.9 -> **67.0** | 5.8 -> **10.3** |
+   | `resident_size` | 13.4 -> 31.3 | 37.7 -> 53.1 |
+   | `internal` (anonymous, dirty) | 3.4 -> 17.4 | 4.2 -> 8.6 |
+   | `external` (file-backed, clean) | 10.0 -> 13.8 | 33.4 -> **44.1** |
+   | `ledger_tag_graphics_footprint` | 0.0 -> **32.7** | 0.0 -> 0.0 |
+   | `ledger_tag_neural_footprint` | 0.0 -> 0.0 | 0.0 -> 0.0 |
+
+   macOS adds 63.2 MB of footprint for a cpu-only request. About 32.7 MB of it is itemised
+   as *graphics*, about 14 MB as anonymous `internal`, and the remainder is unitemised:
+   `vmmap -summary` on the same process reports its dirty total equal to the footprint
+   while the itemised region rows sum to roughly a third of it, and its
+   `IOAccelerator (graphics)` region is 720 KB — three orders of magnitude below the
+   graphics ledger. A decode-only control leaves the graphics ledger at 0.0 on macOS, so
+   the allocation is created by the first Vision request and by nothing else.
+
+   The iOS Simulator adds 4.5 MB of footprint for the same request and grows `external` by
+   10.7 MB, which is file-backed clean memory: charged to resident, not to footprint, and
+   evictable without swap. On macOS the same process has **no** `.espresso.weights` file
+   mapped or open at that point — `vmmap` lists no such region and `lsof` no such
+   descriptor — so whatever the weights cost there is anonymous and dirty. Same work, two
+   ways of getting it into memory, and only one of them is charged to the ledger jetsam
+   reads.
+
+   **A device runs the iOS build.** That does not prove it does what the Simulator does —
+   the Simulator is an x86-lineage sandbox running on this Mac's kernel, and its VM
+   behaviour is not a phone's. But it does mean the Simulator is no longer, on this
+   evidence, obviously the optimistic side. It may be the representative one. Neither
+   direction is established and this document takes neither.
+
+   Even for `.accurate` on macOS, where the ANE is really used, the kernel puts 113.1 MB
+   (after one call) rising to 170.7 MB on `ledger_tag_neural_nofootprint` and **0.0 on
+   `ledger_tag_neural_footprint`**. Where the Neural Engine appears at all, its memory is
+   explicitly outside the ledger jetsam kills on.
+
+#### 2.3.2 `.accurate` has no peak, it has a slope
+
+The 199.8 MB this document used to quote as `.accurate`'s peak is not a ceiling. It is a
+reading of one point on a curve, and the curve is a function of how many *distinct* images
+the process has seen:
+
+| macOS 26.5.1, `.accurate` | sampled peak | final | kernel `ledger_phys_footprint_peak` |
+|---|---|---|---|
+| 30 calls, 30 distinct images | 198.0 | 177.1 | 225.2 |
+| 60 calls, 30 distinct images (two passes) | 206.6 | 194.1 | 232.5 |
+| 30 calls, 1 distinct image | 124.2 | 124.2 | 150.4 |
+
+| iOS Simulator 26.2, `.accurate` | sampled peak | final | kernel peak |
+|---|---|---|---|
+| 30 calls, 30 distinct images | 174.8 | 155.0 | 204.6 |
+| 60 calls, 30 distinct images | 179.5 | 158.6 | 219.3 |
+| 30 calls, 1 distinct image | 95.7 | 95.7 | 118.5 |
+
+Repeating one image costs 60-80 MB less than thirty different ones, and a second pass over
+the same thirty still climbs rather than plateauing. So the cost accumulates with the
+variety of content seen, not with the number of calls, and the corpus is thirty screens —
+a phone in a day sees thousands. **There is no measured ceiling for `.accurate` in a
+long-lived process, and this document does not have one to quote.** Any figure for it is a
+lower bound tagged with the call count and the distinct-image count that produced it.
+`PASSES=` and `SAME_IMAGE=` on `memory.swift` re-take the table.
+
+The two cheap configurations do not do this. Over 60 calls the iOS Simulator plateaus:
+rects 11.0 MB (against 9.9-11.3 at 30 calls) and `.fast` 22.8 MB (against 18.1-22.9). If
+an on-device path is ever revisited, that difference is a reason to keep it away from
+`.accurate` independently of everything else.
+
+#### 2.3.3 The two probes never disagreed
+
+The previous revision recorded that "the independent review's probe did not reproduce this
+climb (it saw 84 -> 104 over the same 30 screens)" and filed it as two probes disagreeing
+about the shape of a curve. They were measuring two different requests.
+
+The earlier probe used a stock `VNRecognizeTextRequest` — `.accurate` by default, with
+`automaticallyDetectsLanguage` never set and `usesLanguageCorrection` left alone. That is
+this document's `accurate-en` row: **100.4 MB (iOS Simulator) / 111.8 MB (macOS)**, which
+brackets its 104/114 exactly.
+
+The configuration this product ships is `VisionScreenReader.swift:101-105`:
+
+```swift
+recognizeText.recognitionLevel = .accurate
+recognizeText.usesLanguageCorrection = true
+recognizeText.automaticallyDetectsLanguage = true
+```
+
+which is the `accurate` row, 174.8 / 198.0. **The `accurate` row is the one to quote as the
+product's cost.** Automatic language detection is not a free flag: it is most of the
+difference between 100 MB and 175 MB, and it is also, per §2.3.2, the plausible mechanism
+for the climb — each newly detected language brings its own state into a process that never
+lets go of it.
+
+#### 2.3.4 What the routing gate costs on its own
+
+`VisionScreenReader`'s whole routing decision depends on `VNDetectTextRectanglesRequest`
+running alongside recognition. On the iOS Simulator that request is 9.9-11.3 MB peak and
+plateaus. On macOS it is 66.7-72.6 MB peak — over both extension caps before any
+recognition runs. Which of those a phone does is the same open question as everything else
+in this section, and it is R3.
 
 ### 2.4 The extension's budget, assembled — and what is still unmeasured
 
@@ -218,11 +393,10 @@ The honest reading: the only line this document has measured is the one that tur
 to cost nothing. The frame and the buffer are arithmetic. The baseline and the network
 stack are guesses, and together they are 24-28 MB of a 39-44 MB total. A design whose
 headroom against a ~50 MB cap is 6-11 MB, and 24-28 MB of whose total is guessed, is not
-proven to fit. **Phase 3 is the
-gate**: build the shutter with no reading in it, run it on a device against WhatsApp for
-ten minutes with a memory graph attached, and read the real baseline. If baseline + frame
-+ downscale exceeds 30 MB, there is no room for TLS and the design changes before any
-reading code is written.
+proven to fit. **Phase 3 is the gate**: build the shutter with no reading in it, run it on
+a device against WhatsApp for ten minutes with a memory graph attached, and read the real
+baseline. If baseline + frame + downscale exceeds 30 MB, there is no room for TLS and the
+design changes before any reading code is written.
 
 Two consequences that must be in the code, not in a comment:
 
@@ -253,9 +427,9 @@ Three processes, one shared container, no pixels between them.
   |                                                  |
   |  processSampleBuffer     -- never blocks --      |
   |    -> monotonic gate: drop unless >= 250 ms      |  ~microseconds, 56 of 60 frames
-  |    -> lock base addr, scale to 32x64 grey        |  2 KB
-  |    -> FrameFingerprint: dHash64 + changeScore    |
-  |    -> publish hash + sampledAt to status.bin     |  every sampled frame, always
+  |    -> lock base addr, reduce to 32x64 grey       |  2 KB, conversation band only
+  |    -> FrameFingerprint: identity + changeScore   |
+  |    -> publish identity + sampledAt to status.bin |  every sampled frame, always
   |    -> CaptureLoop.shouldRead(...) ?              |
   |         no  -> return                            |
   |         yes -> scale to 603x1311 (reused buf)    |  3.0 MB, overwritten in place
@@ -269,7 +443,7 @@ Three processes, one shared container, no pixels between them.
   +--------------------+-----------------------------+
                        |
         group.com.nitai.aikeyboard container
-        +-- channel/status.bin    fixed 128 B, mmap MAP_SHARED, 1 Hz + every sample
+        +-- channel/status.bin    fixed 256 B, mmap MAP_SHARED, 1 Hz + every sample
         +-- channel/intent.bin    fixed  64 B, mmap MAP_SHARED
         +-- channel/reading.json  text only, atomic write, rare
                        |
@@ -280,7 +454,8 @@ Three processes, one shared container, no pixels between them.
   |  4 Hz while visible: read status.bin             |
   |    -> the five-condition freshness gate, §6      |
   |    -> ScreenContextSession.state                 |
-  |  Reply tapped -> intent.readNow = seq+1          |
+  |  Reply tapped -> secure-field guard, §3.3        |
+  |               -> intent.readNow = seq+1          |
   |               -> await reading.json, seq match   |
   +--------------------------------------------------+
 
@@ -321,10 +496,10 @@ rename, and no notification machinery. Torn reads are handled with a seqlock: wr
 sequence, write the body, write the next even sequence; the reader retries while the two
 sequences disagree or the low bit is set.
 
-Both pages are timestamps, counters and a 64-bit hash. Both stay at the container default
-`.completeUntilFirstUserAuthentication` on purpose: an mmap'd file marked `.complete`
-becomes unreadable when the device locks, and touching it then is a SIGBUS, not an error
-return.
+Both pages are timestamps, counters and fixed-width hashes. Both stay at the container
+default `.completeUntilFirstUserAuthentication` on purpose: an mmap'd file marked
+`.complete` becomes unreadable when the device locks, and touching it then is a SIGBUS, not
+an error return.
 
 Darwin notifications (`CFNotificationCenterGetDarwinNotifyCenter`) are deliberately **not**
 in the design. Polling at 4 Hz costs a page load and adds at most 250 ms to a 5.3 s
@@ -350,17 +525,75 @@ Subject to four refusals, all of which publish a counter rather than failing sil
 - A read is already in flight.
 - The session or daily read budget is exhausted.
 
-Plus one that is a privacy rule rather than a resource rule, and belongs in code next to
-the others: **never fire a read while the focused field is a secure text entry field.**
-`UITextDocumentProxy` conforms to `UIKeyInput` (`UIInputViewController.h:20`), which
-conforms to `UITextInputTraits` (`UITextInput.h:24`), which declares
-`isSecureTextEntry` (`UITextInputTraits.h:257`). Whether a host app reliably propagates
-that trait through the proxy is **unverified** and is R14; the guard is cheap and belongs
-there regardless of how often it fires.
-
 **There is no speculative trigger.** The previous version had one — T2, default on, firing
 whenever the keyboard was visible and the screen had settled. It is deleted. §5.1 is the
 argument, and it is not a close call.
+
+#### 3.3.1 The secure-field guard fails closed, and the naive spelling of it fails open
+
+One more refusal, a privacy rule rather than a resource rule: **never fire a read while the
+focused field is a secure text entry field.**
+
+The protocol chain is real. `UITextDocumentProxy` conforms to `UIKeyInput`
+(`UIInputViewController.h:19`), which conforms to `UITextInputTraits`
+(`UITextInput.h:24`), which declares `isSecureTextEntry` (`UITextInputTraits.h:257`).
+
+**But that declaration is inside an `@optional` block.** `UITextInputTraits.h:237` opens
+the protocol, `:239` is `@optional`, and every property from there down — including
+`secureTextEntry` at `:257`, `textContentType` at `:260` and `keyboardType` at `:253` — is
+optional. Verified by compiling against `iPhoneSimulator26.2.sdk`:
+
+```
+error: cannot convert value of type 'Bool?' to specified type 'Never'      // isSecureTextEntry
+error: cannot convert value of type 'UITextContentType??' ...              // textContentType
+error: cannot convert value of type 'UIKeyboardType?' ...                  // keyboardType
+```
+
+So in Swift `proxy.isSecureTextEntry` is `Bool?`, and the obvious guard
+
+```swift
+if proxy.isSecureTextEntry == true { refuse() }   // WRONG: nil permits
+```
+
+**permits the read on every host that does not implement the trait.** A guard whose default
+on an unknown host is "allow" is not a guard; it is a comment. The design requires the
+opposite default:
+
+```swift
+/// Fails closed. `nil` is a host that did not answer, and an unanswered question
+/// about whether this is a password field is answered "yes" here.
+enum SecureField {
+    static func permitsRead(secure: Bool?, contentType: UITextContentType??) -> Bool {
+        guard secure == false else { return false }          // true or nil -> refuse
+        guard let inner = contentType, let type = inner else { return true }
+        return !sensitive.contains(type)
+    }
+
+    static let sensitive: Set<UITextContentType> = [
+        .password, .newPassword, .oneTimeCode, .creditCardNumber, .creditCardSecurityCode,
+    ]
+}
+```
+
+Three rules that follow, and they are the design, not an implementation detail:
+
+1. **`nil` refuses.** Only a positive `false` permits.
+2. **`textContentType` is a second, independent refusal, never a permission.** It is
+   `UITextContentType??`; the outer `nil` means the host did not implement the property and
+   the inner `nil` means it implemented it and set nothing. Neither is evidence of safety,
+   so both fall through to whatever `isSecureTextEntry` said, and a value in the sensitive
+   set refuses on its own. The five constants are verified in `UITextInputTraits.h:305-309`
+   and `:324`.
+3. **A refusal for this reason is counted and named**, as `CaptureStatus.refusedSecure` and
+   `refusedSecureUnknown` separately. This is what turns R14 from folklore into a number: if
+   the field is genuinely never populated through the proxy, the second counter will be
+   equal to the tap count on the first device run and the guard as written will have
+   disabled the feature. That is a thing to discover from a counter in Phase 7, not from a
+   silent hole in shipping code — and the resolution is then to find a different signal, not
+   to flip the default.
+
+This guard is not a substitute for §5.1. It narrows one case; §5.1 is why there is no
+speculative upload to narrow in the first place.
 
 Neither trigger ever fires on frame arrival, screen change alone, or a timer, because
 there is only one trigger and it is a tap.
@@ -402,8 +635,9 @@ do here beyond not regressing it.
 
 | Path | Contents |
 |---|---|
-| `Bar/screen-context/harness/memory.swift` | The §2.3 probe. `phys_footprint` via `task_info(TASK_VM_INFO)` over all 30 bar images in one process, one image alive at a time, one reused request. Reports its own deployment and which ANE frameworks are mapped. Exits non-zero on a missing image, a failed Vision call or a `task_info` that will not answer: a probe that cannot measure prints no number. Compiles unchanged for `arm64-apple-ios`, which is how it becomes the device measurement §1 asks for. |
-| `Bar/screen-context/harness/run-memory.sh` | Builds both deployments, requires a booted simulator, asserts that macOS maps `AppleNeuralEngine` and the simulator does not, and prints the labelled peak table. Fails rather than skips at every step. `SCALES="1.0 0.5 0.25"` runs the resolution sweep, `CONFIGS=fast` narrows it. Verified to fail, not skip: an absent simulator exits 1, an absent image directory exits 3. |
+| `Bar/screen-context/harness/memory.swift` | The §2.3 probe. `phys_footprint` via `task_info(TASK_VM_INFO)` over all 30 bar images in one process, one image alive at a time, one reused request. Reports its deployment, `supportedComputeStageDevices` per request, and the ledger breakdown (`internal`, `external`, `graphics`, `neural`, `neural-nofootprint`, kernel footprint peak) — which is what §2.3.1 needed and the first version of the probe could not answer. `PASSES=` and `SAME_IMAGE=` produce the §2.3.2 growth table. Exits non-zero on a missing image, a failed Vision call, a `supportedComputeStageDevices` that errors, or a `task_info` that will not answer. Compiles unchanged for `arm64-apple-ios`, which is how it becomes the device measurement §1.4 asks for. |
+| `Bar/screen-context/harness/run-memory.sh` | Builds both deployments, requires a booted simulator, prints the compute-device table and **asserts that `VNDetectTextRectanglesRequest` is cpu-only on both**, and prints the labelled peak table. That assertion replaced the previous ANE-framework assertion, which asserted a true fact that explained nothing. Fails rather than skips at every step. `SCALES="1.0 0.5 0.25"` runs the resolution sweep, `CONFIGS=fast` narrows it. |
+| `Bar/screen-context/harness/frame-hash.mjs` | The §5.5/§6 probe. Renders every corpus scene four times — as-is, with every message's glyphs substituted inside its own script, with only the newest message's glyphs substituted, and with only the status-bar clock and the header presence line changed — then reports, per crop band and per fingerprint value, how many near pairs it fails to separate and how many chrome-only changes it wrongly separates. Both columns must be zero and exactly one configuration reaches that. `KEEP=1` leaves the rendered frames. |
 
 ### Create
 
@@ -412,13 +646,14 @@ do here beyond not regressing it.
 | `AIKeyboardBroadcast/Info.plist` | `NSExtensionPointIdentifier = com.apple.broadcast-services-upload`, `RPBroadcastProcessMode = RPBroadcastProcessModeSampleBuffer`, `NSExtensionPrincipalClass = $(PRODUCT_MODULE_NAME).SampleHandler`. Verified against Xcode's own template at `iPhoneOS.platform/.../Broadcast Upload Extension.xctemplate/TemplateInfo.plist`. Needs a `membershipExceptions` entry, as `AIKeyboardExtension/Info.plist` has. |
 | `AIKeyboardBroadcast/AIKeyboardBroadcast.entitlements` | `com.apple.security.application-groups` = `group.com.nitai.aikeyboard` |
 | `AIKeyboardBroadcast/SampleHandler.swift` | `final class SampleHandler: RPBroadcastSampleHandler`. Overrides `broadcastStarted(withSetupInfo:)`, `broadcastPaused()`, `broadcastResumed()`, `broadcastFinished()`, `broadcastAnnotatedWithApplicationInfo(_:)`, `processSampleBuffer(_:with:)`. Owns a `CaptureLoop`, the heartbeat timer and the serial read queue, and nothing else. Under 150 lines. |
-| `AIKeyboardBroadcast/CaptureLoop.swift` | `final class CaptureLoop` — the throttle/settle/budget state machine. Its API takes `(hash: UInt64, changeScore: Double, now: ContinuousClock.Instant, intent: CaptureIntent)` and returns `CaptureDecision`. No ReplayKit or CoreVideo types cross its boundary, so every trigger rule is unit-testable off-device. |
+| `AIKeyboardBroadcast/CaptureLoop.swift` | `final class CaptureLoop` — the throttle/settle/budget state machine. Its API takes `(identity: FrameIdentity, changeScore: Double, now: ContinuousClock.Instant, intent: CaptureIntent)` and returns `CaptureDecision`. No ReplayKit or CoreVideo types cross its boundary, so every trigger rule is unit-testable off-device. |
 | `AIKeyboardBroadcast/FrameScaler.swift` | `struct FrameScaler` — vImage. One preallocated `vImage_Buffer` per output size, created at `broadcastStarted` and reused. Scales planes *before* colour conversion when the source is 420f, so no full-size ARGB intermediate is ever allocated. |
 | `AIKeyboardBroadcast/MemoryGovernor.swift` | `enum MemoryGovernor { static func footprintMB() -> Double }` over `task_info(TASK_VM_INFO)`, plus the read watermark. Share the implementation with `memory.swift` by eye, not by import: the probe must stay outside every target. |
-| `Packages/AIKeyboardCore/Sources/AIKeyboardShared/CaptureChannel.swift` | `enum CaptureChannel` (container URLs), `struct CaptureStatus` and `struct CaptureIntent` (fixed C layouts), `final class SharedPage<T>` (the mmap + seqlock wrapper). `CaptureStatus` carries `currentFrameHash` **and** `currentFrameSampledAt` **and** `lastFrameAt` **and** `paused` — §6 needs all four and a design that ships three of them has the stale-reading bug. |
-| `Packages/AIKeyboardCore/Sources/AIKeyboardShared/FrameFingerprint.swift` | `struct FrameFingerprint { let hash: UInt64; let changeScore: Double }` and the 32x64 greyscale reduction, with the crop bands. |
-| `Packages/AIKeyboardCore/Sources/AIKeyboardShared/ScreenReadingRecord.swift` | `struct ScreenReadingRecord: Codable, Sendable` — `sessionID`, `requestSequence`, `frameHash`, `capturedAt`, `readAt`, `provenance`, and the `ScreenReading` fields. Text only, by construction. |
+| `Packages/AIKeyboardCore/Sources/AIKeyboardShared/CaptureChannel.swift` | `enum CaptureChannel` (container URLs), `struct CaptureStatus` and `struct CaptureIntent` (fixed C layouts), `final class SharedPage<T>` (the mmap + seqlock wrapper). `CaptureStatus` is **256 bytes**, not 128: §6's identity value is a 32-byte SHA-256 alongside the session UUID, the three timestamps and the counters. It carries `currentFrameIdentity` **and** `currentFrameSampledAt` **and** `lastFrameAt` **and** `paused` — §6 needs all four and a design that ships three of them has the stale-reading bug. |
+| `Packages/AIKeyboardCore/Sources/AIKeyboardShared/FrameFingerprint.swift` | `struct FrameFingerprint { let identity: FrameIdentity; let changeScore: Double }`, the 32x64 greyscale reduction, and the crop band. **Two values from one reduction and they have different jobs**: `identity` is `SHA256` of the 2,048 bytes and answers "is this the same screen" for §6 condition 4; `changeScore` is a perceptual distance over a 64-bit difference hash of the same bytes and answers "has it stopped moving" for the settle gate, and nothing else. §5.5 has the measurement that forced the split. |
+| `Packages/AIKeyboardCore/Sources/AIKeyboardShared/ScreenReadingRecord.swift` | `struct ScreenReadingRecord: Codable, Sendable` — `sessionID`, `requestSequence`, `frameIdentity`, `capturedAt`, `readAt`, `provenance`, and the `ScreenReading` fields. Text and hashes only, by construction; no reduction, no thumbnail, nothing that renders. |
 | `Packages/AIKeyboardCore/Sources/AIKeyboardShared/ScreenContextEndReason.swift` | `enum ScreenContextEndReason: UInt8` — `.userStopped`, `.deviceLocked`, `.phoneCall`, `.interrupted`, `.contentResized`, `.carPlay`, `.overBudget`, `.lost`. The middle five map from `RPRecordingErrorCode` (verified, `RPError.h`); `.lost` is the inferred one, from a stale heartbeat with no recorded end. |
+| `Packages/AIKeyboardCore/Sources/AIKeyboardCore/SecureField.swift` | The §3.3.1 guard. Takes `(secure: Bool?, contentType: UITextContentType??)` rather than the proxy, so its whole truth table is unit-testable without a host app, including the two cases the naive spelling gets wrong. |
 
 ### Modify
 
@@ -431,12 +666,12 @@ do here beyond not regressing it.
 | `.../AIKeyboardCore/ScreenContextSession.swift` | The scripted timeline goes. It becomes a consumer: poll `CaptureStatus` at 4 Hz while the keyboard is visible, apply the §6 gate, publish `.off/.starting/.watching/.ready/.ended`. `submit(_:appName:appIcon:)` stays for the in-app playground and the UI tests, and is the only path that still runs `RoutedScreenReader` locally. Fix the doc comment at lines 90-96, which promises the frame never leaves. |
 | `.../AIKeyboardCore/Models.swift` (`ScreenContextState`) | Add `case ended(ScreenContextEndReason)`. `isLive` stays false for it. |
 | `.../AIKeyboardCore/ScreenContextStrip.swift` | Render `.ended` with the reason and the restart affordance. Render the pre-tap offer state (§3.4). Stop labelling the app (§7). `ScreenContext.appName`/`appIcon` become optional. |
-| `.../AIKeyboardCore/KeyboardController.swift` | `requestScreenRead()` bumps `intent.readNow` after checking `textDocumentProxy.isSecureTextEntry`; Reply awaits a record with a matching sequence, with a 12 s timeout mapping to a new `AIActionError` case. `viewDidAppear`/`viewWillDisappear` drive `intent.keyboardVisible`. |
+| `.../AIKeyboardCore/KeyboardController.swift` | `requestScreenRead()` consults `SecureField.permitsRead(secure:contentType:)` (§3.3.1) and then bumps `intent.readNow`; Reply awaits a record with a matching sequence, with a 12 s timeout mapping to a new `AIActionError` case. `viewDidAppear`/`viewWillDisappear` drive `intent.keyboardVisible`. |
 | `.../AIKeyboardCore/SharedStore.swift` | Add `screenContextDailyReadBudget: Int`. **Do not** add a speculative-reads flag. Fix the doc comment at line 144, which says only text leaves the device (§5.2). |
 | `AIKeyboard/Main/ScreenContextView.swift` | Rewrite step 2 at line 205 and check step 3 at line 210 (§5.2). Host `RPSystemBroadcastPickerView` with `preferredExtension` set to the broadcast bundle ID and `showsMicrophoneButton = false` (both verified, `RPBroadcast.h`). Show live `CaptureStatus`, the budget, and the restart button. |
 | `AIKeyboard.xcodeproj/project.pbxproj` | New target. Files inside `AIKeyboardBroadcast/` are picked up by `PBXFileSystemSynchronizedRootGroup` once the group exists, but the target itself is a real `.pbxproj` edit. |
 | `Scripts/prove-app-group.sh` | Add check 5: two processes mmap `channel/status.bin` and each observes the other's write. |
-| `README.md` | **Add** a paragraph; do not replace the existing one (§5.3). |
+| `README.md` | **Add** a paragraph; do not replace the existing measured ones (§5.3). |
 
 ---
 
@@ -462,7 +697,9 @@ will propose it again. "Only fire when our keyboard is visible" sounds like it r
 capture to conversations. It does not: a keyboard is up in a password field, in a banking
 transfer form, in a medical intake form, in a 2FA prompt. Keyboard-visible is not a
 proxy for *safe to upload*; if anything it correlates with the most sensitive screens on
-the phone.
+the phone. §3.3.1's guard narrows the password-field case a little and, because the trait
+is optional and may be `nil` everywhere, may narrow nothing at all — which is exactly why
+it is not allowed to be the argument.
 
 And the narrowing that *would* work is circular. To decide whether it is safe to upload
 this screen, you would have to know what is on it. Knowing what is on it is the read.
@@ -471,7 +708,8 @@ There is no cheaper signal available on this deployment:
 - `broadcastAnnotatedWithApplicationInfo:` gives the **first** app only, and only from a
   Control Center start (§7, verified). Not a live signal.
 - There is no public API on iOS for the frontmost bundle identifier from any extension.
-- The 64-bit dHash of a 32x64 greyscale reduction cannot classify a screen.
+- The frame fingerprint cannot classify a screen. §5.5 measures what it *can* do, which is
+  tell one screen from another, and that is all it can do.
 - Protected content blacking itself out under ReplayKit is **unverified** (R13), so the
   OS cannot be relied on to redact what we failed to exclude.
 
@@ -489,7 +727,7 @@ exist on iOS 26.2. Until it does, this section is settled.
 ### 5.2 The promises in the product, and which ones are now false
 
 The previous version claimed a `README.md` sentence was "already false". That was wrong
-on the facts: `README.md` lines 110-121 are accurate today and are the most carefully
+on the facts: `README.md` lines 116-127 are accurate today and are the most carefully
 measured paragraph in the file. The claim that needs fixing lives in three other places,
 and two of them are about to become false for a new reason.
 
@@ -511,18 +749,23 @@ The accurate claim, which each clause maps to code:
 The buffer is a `vImage_Buffer` preallocated at `broadcastStarted`; the container holds
 two fixed-layout binary pages and one JSON file whose type has no image field; the frame
 leaves only inside `CloudScreenReader.read`, only on the serial read queue, only with a
-matching `intent.readNow` sequence.
+matching `intent.readNow` sequence. The 2,048-byte greyscale reduction §5.5 needs is
+computed, hashed and dropped inside `processSampleBuffer`; it is never written to the
+container, because at 32x64 it is a bad picture but it is still a picture, and the sentence
+above says nothing on disk contains one.
 
 ### 5.3 What the README needs, and what it must keep
 
-`README.md` lines 110-121 stay. They are the on-device/cloud split earned with measured
+`README.md` lines 116-127 stay. They are the on-device/cloud split earned with measured
 numbers (30 languages, 100% English recall, 13% Hebrew, the coverage/confidence gate), and
 that split is still true of `RoutedScreenReader` and still true of the in-app playground
-path, where the containing app holds the frame and no extension cap applies. Replacing
-them with a vaguer sentence would trade measured content for nothing.
+path, where the containing app holds the frame and no extension cap applies.
 
-What needs rewriting is the paragraph that follows, lines 123-132, which currently poses
-this document's question as open:
+Lines 129-133 stay too, and they are now the load-bearing paragraph rather than a caveat:
+they are §1.1, already written and already correct.
+
+What needs rewriting is lines 134-138, which pose this document's question as open and
+frame it as *memory first*:
 
 > Two things are still open and are being measured rather than argued: whether Vision can
 > run at all inside the ~48 MB a keyboard extension gets or the 50 MB a broadcast
@@ -530,50 +773,123 @@ this document's question as open:
 > device is worth three points of accuracy. If the answer to the first is no, the second
 > is moot and every screen read goes to the cloud.
 
-§2.3 answers the first, on two deployments and not yet on a phone. Lines 123-127 stay as
-written; lines 128-132 become:
+They become:
 
-> The first of those is now measured, though not yet on a phone. Over the 30 screens in
-> `Bar/screen-context/`, in one process, peak physical footprint is 199.8 MB at
-> `.accurate` and 84.7 MB at `.fast` on macOS 26.5.1 — and even
-> `VNDetectTextRectanglesRequest` on its own, the shape detector the routing depends on,
-> is 67.9 MB. All three are over both extension budgets. The iOS Simulator is far cheaper
-> (174.8 / 18.1 / 10.3 MB) and is not the phone: it maps no Apple Neural Engine framework
-> and macOS maps four, so the simulator is the optimistic deployment rather than the
-> pessimistic one. Downscaling does not rescue it; 1/16 of the pixels moves `.accurate` by
-> 10-14%. So in the ReplayKit capture flow every screen read goes to the cloud, English
-> included, and it goes only when you tap Reply. `Bar/screen-context/harness/run-memory.sh`
-> re-takes those numbers. A device measurement would settle it and there is not one yet.
+> The order of those questions was backwards. The accuracy one is answered above and it is
+> answered on iOS, so in the ReplayKit capture flow every screen read goes to the cloud,
+> English included, and it goes only when you tap Reply. The memory question is still open
+> and is stranger than it looked. Over the 30 screens in `Bar/screen-context/`, in one
+> process, `VNDetectTextRectanglesRequest` alone peaks at 9.9-11.3 MB on the iOS
+> Simulator and 66.7-72.6 MB on macOS 26.5.1, and `.fast` recognition at 18.1-22.9 MB
+> against 84.6-95.1 MB. Both platforms ship the same Vision model assets and both report
+> the same compute device for these two requests: `[cpu]`. The gap is where the kernel
+> charges the memory, not what runs; macOS puts
+> ~63 MB on the footprint ledger jetsam reads, and the iOS build maps ~11 MB file-backed
+> and charges the ledger ~5 MB. Which of those a phone does is unknown, and there is no
+> device measurement here. `Bar/screen-context/harness/run-memory.sh` re-takes all of it.
 
-That keeps every measured claim the README already earns, answers the question it already
-asks, and labels the deployment behind each number. The mock-to-real table's
+That keeps every measured claim the README already earns, puts the answered question first,
+and does not invent a mechanism for the unanswered one. The mock-to-real table's
 `MockScreenContext` row also needs the ReplayKit route marked as designed-but-unbuilt
 rather than absent.
 
 ### 5.4 What the App Group actually holds
 
-- `channel/status.bin`, 128 bytes: session UUID, heartbeat, last frame time, current
-  frame hash and the time it was sampled, paused flag, frames seen, reads fired, reads
-  refused by reason, last end reason, degraded flag.
+- `channel/status.bin`, 256 bytes: session UUID, heartbeat, last frame time, current frame
+  identity (32-byte SHA-256) and the time it was sampled, paused flag, frames seen, reads
+  fired, reads refused by reason (including the two secure-field counters of §3.3.1), last
+  end reason, degraded flag.
 - `channel/intent.bin`, 64 bytes: keyboard-visible flag, read request sequence.
-- `channel/reading.json`: `ScreenReadingRecord`. Sender, message, language, hashes,
+- `channel/reading.json`: `ScreenReadingRecord`. Sender, message, language, identity,
   timestamps. Deleted on `broadcastFinished()` and on session start.
 
-The one thing worth arguing about is the `dHash64`. It is a 64-bit difference hash of a
-32x64 greyscale reduction of the conversation area. 2,048 samples collapsed to 64 bits
-cannot recover glyphs, and it is not a hash *of* the text — but it is a per-screen
-identifier, so two devices reading the same screen produce the same value. It never leaves
-the device and no reason to send it exists. Say so in the code.
+**The frame identity is a SHA-256 of the 2,048-byte reduction, and that is a privacy
+choice as well as a matching one.** The previous version stored a 64-bit perceptual hash
+and defended it as safe *because it is uninformative*. That defence was the problem: an
+uninformative value is also a weak discriminator, which is what §5.5 went and measured.
+The replacement is better on both counts at once. A cryptographic hash of the reduction
+supports exactly one operation — "are these the same reduction" — whereas a perceptual hash
+also supports "are these *similar*", which is the operation that lets a value be clustered
+or matched against a corpus of known screens. Trading the perceptual hash for a
+cryptographic one buys discrimination and gives up a linkability capability at the same
+time. It is still a per-screen identifier, it still never leaves the device, and there is
+still no reason to send it. Say so in the code.
 
-### 5.5 The frame is cropped before it is hashed, and that matters
+The 64-bit perceptual hash does not disappear; it is confined to `changeScore`, the settle
+detector, where "uninformative" is the correct property and where nothing depends on it
+being unique.
 
-The fingerprint is taken over the frame with two bands removed: the status bar (top ~6.5%,
-matching `VisionScreenReader.Band.statusBar` at y >= 0.935) and the bottom 45% where our
-own keyboard sits. Without the first, the clock ticking over invalidates every reading once
-a minute. Without the second, our own suggestion bar redrawing invalidates readings
-constantly.
+### 5.5 The band the fingerprint is taken over, measured
 
-### 5.6 Option (b), analysed as asked, and now dead twice over
+The previous version cropped two bands before the reduction — the status bar (top ~6.5%)
+and "the bottom 45% where our own keyboard sits" — and justified them by analogy: without
+the first, the clock invalidates every reading once a minute. The first band was right and
+cited `VisionScreenReader.Band.statusBar`. **The second band was invented.** It has no
+counterpart in `VisionScreenReader.Band`, whose `composer` is 0.085, and it removed 45% of
+the frame from the region that decides identity.
+
+`Bar/screen-context/harness/frame-hash.mjs` measures what that costs. For each of the 30
+corpus scenes it renders the scene, a twin with every message's letters substituted inside
+its own script (same character count, same word breaks, same times, same bubble geometry,
+every glyph different), a variant with only the *newest* message's letters substituted, and
+a variant where only the status-bar clock and the header presence line changed. Then, per
+band and per value:
+
+| Band removed | Value | misses | false invalidations |
+|---|---|---|---|
+| none | `sha256` of the reduction | 0/29 | **30/30** |
+| none | 64-bit dHash | **10/29** | 1/30 |
+| none | 256-bit dHash | 0/29 | **13/30** |
+| top 6.5% (status bar) | `sha256` | 0/29 | **19/30** |
+| top 6.5% | 64-bit dHash | **6/29** | 3/30 |
+| top 6.5% | 256-bit dHash | 0/29 | **11/30** |
+| top 6.5% / bottom 8.5% (status + composer) | `sha256` | 0/29 | **19/30** |
+| top 6.5% / bottom 8.5% | 64-bit dHash | **10/29** | 2/30 |
+| top 6.5% / bottom 8.5% | 256-bit dHash | 0/29 | **15/30** |
+| top 6.5% / **bottom 45%** (the previous design) | `sha256` | **23/29** | **19/30** |
+| top 6.5% / **bottom 45%** | 64-bit dHash | **23/29** | 3/30 |
+| top 6.5% / bottom 45% | 256-bit dHash | **23/29** | **13/30** |
+| **top 14% / bottom 8.5% (`VisionScreenReader.Band`)** | **`sha256`** | **0/29** | **0/30** |
+| top 14% / bottom 8.5% | 64-bit dHash | **11/29** | 0/30 |
+| top 14% / bottom 8.5% | 256-bit dHash | 0/29 | 0/30 |
+
+*misses* counts scene pairs that differ only in the newest message's glyphs and produce the
+same value. §6 condition 4 is exact equality, so every miss is a reading that stays
+offerable across a conversation switch — the precise failure this design exists to prevent.
+*false invalidations* counts frames where nothing but the clock and the presence line moved
+and the value moved with them; each of those retires a good reading and buys a needless
+cloud read. `sl-05` is excluded from the miss column and counted separately: its newest
+message is drawn under the host keyboard, so the two renders are byte-identical and no
+fingerprint of any width can separate them. That is a property of the screen, and the
+correct behaviour there is the refusal `VisionScreenReader` already gives.
+
+Three things this settles:
+
+1. **The old bottom band was the primary defect, and it was not a close call.** Cropping
+   the bottom 45% removes the newest message from the fingerprint entirely: 23 of 29 pairs
+   that differ only in the newest message hash identically, and widening the hash from 64
+   to 256 bits does not fix a single one of them. A band that excludes the thing the
+   reading is *about* cannot be rescued by a better hash.
+2. **The correct band is the one `VisionScreenReader` already reads.** `Band.navigationBar
+   = 0.86` and `Band.composer = 0.085` in Vision's bottom-up coordinates are the top 14%
+   and the bottom 8.5% here. Cropping the navigation bar is not cosmetic: it is where the
+   presence line lives, and the presence line changes on its own. Without that band
+   removed, a chrome-only change moves an exact hash on 19 of 30 frames. With it removed,
+   on 0 of 30. The measurement extends this section's original argument about the clock to the
+   thing sitting directly under it, which the previous version missed. The pleasing
+   consequence is that the fingerprint now covers exactly the region the reading is taken
+   from — the same band `VisionScreenReader.interpret` filters message lines to.
+3. **64 bits is not enough even over the right band.** 11 of 29 pairs collide. The
+   256-bit dHash and the SHA-256 both reach 0/29 and 0/30; the SHA is chosen for §5.4's
+   reason, and because the miss column is what matters and an exact hash cannot regress on
+   it.
+
+The reduction stays 32x64 greyscale, 2,048 bytes, as §2.2 budgets, and the margin at the
+chosen band is not thin. Over the 29 separable pairs, the number of the 2,048 samples that
+change runs from 30 (minimum) through a median of 132, and the largest single-sample change
+is never smaller than 18 grey levels. Nothing here sits on a quantisation edge.
+
+### 5.6 Option (b), analysed as asked, and still rejected
 
 Option (b) — the extension stashes a downscaled frame, the keyboard reads it on demand —
 puts a JPEG of a private conversation into the App Group container. Six things would have
@@ -597,15 +913,16 @@ to be true for that to be defensible:
    for up to two seconds. You cannot keep the sentence and change the behaviour; the
    promise is the product.
 
-So (b) *can* be honest. It is rejected on two independent grounds, either of which is
-enough. The only thing (b) buys is letting the keyboard run `RoutedScreenReader`
-on-device, and (i) §2.3 measures every Vision configuration above the keyboard
-extension's own ~48 MB cap on the ANE deployment, and (ii) `.claude/CLAUDE.md` records
-that on iOS the routed path scores *worse* than the cloud on this bar. (b) would pay six
-real obligations for a capability that does not fit and would not be better if it did.
+So (b) *can* be honest. It is rejected on the ground that has not moved: the only thing (b)
+buys is letting the keyboard run `RoutedScreenReader` on device, and §1.1 measures that
+path scoring *below* cloud-only on iOS, with three of its eight answers wrong. (b) would
+pay six real obligations for a capability that is not better.
 
-If the device measurement in §1 comes back under ~30 MB, ground (i) falls and this section
-is the checklist. Ground (ii) still stands and would have to be answered separately.
+The memory ground that used to sit alongside it is withdrawn along with the ANE
+explanation. §2.3 no longer establishes that Vision cannot fit in a keyboard extension; it
+establishes that two non-device deployments disagree by 6x for reasons of accounting. If a
+device measurement comes back cheap, this section becomes the checklist for (b) and §1.1 is
+the thing that still has to be answered first.
 
 ### 5.7 Two things I did not verify
 
@@ -629,49 +946,71 @@ backstop and an explicit confirmation step.**
 
 A `ScreenReadingRecord` is offerable iff all five hold at the instant the strip renders:
 
-| # | Condition | Catches |
-|---|---|---|
-| 1 | `now - status.heartbeatAt <= 3 s` | the extension process is dead, including a jetsam kill that fired no callback |
-| 2 | `status.paused == 0` and `now - status.lastFrameAt <= 2 s` | the process is alive but frames have stopped: `broadcastPaused()`, a stalled delivery path, a wedged handler |
-| 3 | `status.currentFrameSampledAt >= record.readAt` | **the reading has been confirmed against a frame observed after it completed** |
-| 4 | `record.frameHash == status.currentFrameHash` | the user scrolled, switched conversation, switched app, or a new message arrived |
-| 5 | `now - record.capturedAt <= 20 s` and `record.sessionID == status.sessionID` | intent moved even though the pixels did not; the broadcast was restarted since the reading |
+| # | Condition | Kind | Catches |
+|---|---|---|---|
+| 1 | `now - status.heartbeatAt <= 3 s` | liveness | the extension process is dead, including a jetsam kill that fired no callback |
+| 2 | `status.paused == 0` and `now - status.lastFrameAt <= 2 s` | liveness | the process is alive but frames have stopped: `broadcastPaused()`, a stalled delivery path, a wedged handler |
+| 3 | `status.currentFrameSampledAt >= record.readAt` | liveness | **the reading has been confirmed against a frame observed after it completed** |
+| 4 | `record.frameIdentity == status.currentFrameIdentity` | **content** | the user scrolled, switched conversation, switched app, or a new message arrived |
+| 5 | `now - record.capturedAt <= 20 s` and `record.sessionID == status.sessionID` | timer | intent moved even though the pixels did not; the broadcast was restarted since the reading |
 
 Fail 1 and the strip renders `.ended`. Fail 2 and it renders `.paused`. Fail 3 and it
 renders the loading state, because the reading is not stale, it is merely unconfirmed.
 Fail 4 or 5 and it renders the pre-tap offer. **The strip has no stale-but-shown state at
 all.**
 
-### 6.1 Condition 3 is the one this revision adds, and it is the one that mattered
+**Condition 4 is the only content-identity condition in the table**, and the "kind" column
+is there so that stays visible. 1, 2 and 3 all answer "is the producer alive and has it
+looked recently"; a wedged process and a switched conversation are different failures and
+only condition 4 sees the second. 5 is a timer with a guessed constant (§6.2). So the whole
+defence against *the wrong conversation* is one equality test, and the value on both sides
+of it has to be good enough to carry that alone. §5.5 is the measurement that makes it so,
+and it changed two things: the band the value is computed over, and the value itself.
 
-Conditions 1, 4 and 5 were in the previous version and they do not close the hole. The
-hole is this: `status.currentFrameHash` is only meaningful if it is the hash of a frame
-the extension *observed*. If the read runs inline in `processSampleBuffer`, no frames are
-observed for the 5.3 s the read takes, so `currentFrameHash` is frozen at the value of the
+### 6.1 Condition 3 is the one the first revision added, and it is the one that mattered
+
+Conditions 1, 4 and 5 were in the original version and they do not close the hole. The
+hole is this: `status.currentFrameIdentity` is only meaningful if it is the identity of a
+frame the extension *observed*. If the read runs inline in `processSampleBuffer`, no frames
+are observed for the 5.3 s the read takes, so the identity is frozen at the value of the
 frame being read — while the heartbeat, on its own 1 Hz timer, keeps ticking. A user who
-switches conversation mid-read then gets a record whose `frameHash` matches a
-`currentFrameHash` that has not been updated since before the switch. Conditions 1, 4 and
-5 all pass and only the admittedly-guessed 20 s backstop stands between the user and a
+switches conversation mid-read then gets a record whose identity matches a
+`currentFrameIdentity` that has not been updated since before the switch. Conditions 1, 4
+and 5 all pass and only the admittedly-guessed 20 s backstop stands between the user and a
 reply written about somebody else's message. `broadcastPaused()` opens the identical
 window from the other direction.
 
-Condition 3 closes it by refusing to treat `currentFrameHash` as evidence until it has
-been *re-observed* after `record.readAt`. Condition 2 closes the pause variant. And §3.1
+Condition 3 closes it by refusing to treat the identity as evidence until it has been
+*re-observed* after `record.readAt`. Condition 2 closes the pause variant. And §3.1
 is what makes this cheap rather than a 5.3 s dead zone: because the read is off the
 delivery path, fingerprinting continues throughout, so `currentFrameSampledAt` advances
 every 250 ms and confirmation normally lands within one sample of the read returning.
 
 Two implementation rules follow and both are testable off-device:
 
-- `status.currentFrameHash` and `status.currentFrameSampledAt` are written **together, in
-  one seqlock transaction, on every sampled frame**, and by nothing else. A hash without
-  its timestamp is a lie waiting to happen.
-- The heartbeat writes `heartbeatAt` and **never touches** `currentFrameHash`,
+- `status.currentFrameIdentity` and `status.currentFrameSampledAt` are written **together,
+  in one seqlock transaction, on every sampled frame**, and by nothing else. An identity
+  without its timestamp is a lie waiting to happen.
+- The heartbeat writes `heartbeatAt` and **never touches** `currentFrameIdentity`,
   `currentFrameSampledAt` or `lastFrameAt`. The heartbeat proves the process is alive.
   `lastFrameAt` proves delivery is alive. They are different failures and conflating them
   is how a wedged handler looks healthy.
 
-### 6.2 The backstop is still a guess
+### 6.2 The residual hole condition 4 cannot close
+
+There is one and it should be named rather than hidden: **a frame whose newest message is
+drawn under the host keyboard has no pixels to change.** `sl-05` in the corpus is exactly
+this, and `frame-hash.mjs` reports its two renders as byte-identical. If the user switches
+to a conversation whose visible content is the same and whose only difference is under the
+keyboard, no fingerprint of any width separates them, because there is nothing to separate.
+
+This is bounded rather than solved. It is bounded because the content under the keyboard is
+also content `CloudScreenReader` cannot read — the reading itself would be about the
+visible part — and because condition 5's 20 s cap still applies. It is not solved and no
+change to the fingerprint solves it. The right move if it ever shows up in practice is
+`VisionScreenReader`'s: refuse rather than answer.
+
+### 6.3 The backstop is still a guess
 
 **The 20 s in condition 5 is a guess and I will not pretend otherwise.** The right way to
 set it is to instrument the interval between a settle and the Reply tap in real use and put
@@ -797,15 +1136,16 @@ ran out of memory", and the second one is a bug report.
 ## 9. Build sequence
 
 **Phase 0 — settle the numbers that decide the design (device required, currently
-blocked).** The probe is landed: `Bar/screen-context/harness/memory.swift` and
-`run-memory.sh`. What is left needs an iPhone, and the paired one is offline:
+blocked).** The probes are landed: `memory.swift`, `run-memory.sh` and `frame-hash.mjs`.
+What is left needs an iPhone, and the paired one is offline:
 
 - **R2/R2b, the ceilings.** Allocate in 1 MB steps in each extension and log
   `phys_footprint` until it dies. The last logged value is the answer, once for the
   broadcast extension and once for the keyboard.
-- **R3, Vision on an ANE device.** Build `memory.swift` for `arm64-apple-ios` and run it
-  as a device unit test over all 30 images. This is the one measurement that could
-  reopen an on-device path.
+- **R3, Vision on a device.** Build `memory.swift` for `arm64-apple-ios` and run it as a
+  device unit test over all 30 images. Record not just the peak but the ledger breakdown,
+  because §2.3.1's open question is *where the bytes are charged*, not how many there are.
+  This is the one measurement that decides §1.3.
 - **R1, the frame.** Log `CVPixelBufferGetPixelFormatType`, width, height and inter-frame
   interval from `processSampleBuffer` for 60 s.
 - **R7, the network.** A `URLSession` request from `broadcastStarted`, logged.
@@ -818,11 +1158,14 @@ Create `AIKeyboardShared`, move the Foundation-only types, add `@_exported impor
 `AIKeyboardCoreTests` (including `BackendTransportSuiteTests`) and
 `Scripts/prove-app-group.sh` must pass untouched. If they don't, the split is wrong.
 
-**Phase 2 — the channel, provable before anything captures.**
-`CaptureChannel`, `SharedPage`, `CaptureStatus` (with all four freshness fields),
-`CaptureIntent`, `ScreenReadingRecord`, `FrameFingerprint`. Unit tests for the seqlock and
-the fingerprint. Add check 5 to `prove-app-group.sh`: two processes, one mmap'd page, each
-sees the other's write. Do not proceed until that check passes on a real keyboard
+**Phase 2 — the channel and the fingerprint, provable before anything captures.**
+`CaptureChannel`, `SharedPage`, `CaptureStatus` (256 bytes, with all four freshness
+fields), `CaptureIntent`, `ScreenReadingRecord`, `FrameFingerprint`. Unit tests for the
+seqlock, and for the fingerprint against §5.5: the crop band is the
+`VisionScreenReader.Band` one and the identity is the SHA of the reduction, so a test can
+pin both by asserting that two corpus frames differing only in their newest message produce
+different identities. Add check 5 to `prove-app-group.sh`: two processes, one mmap'd page,
+each sees the other's write. Do not proceed until that check passes on a real keyboard
 extension, because everything above it assumes it.
 
 **Phase 3 — the shutter, with no reading in it. This is the budget gate.**
@@ -841,14 +1184,16 @@ quantity (accuracy, not memory) on the wrong deployment (`run-reader.sh` builds 
 different verdicts on these exact images). Replaced with:
 
 > Run `Bar/screen-context/harness/memory.swift` **on a device**, built for
-> `arm64-apple-ios`, all 30 images, all configurations, two runs per configuration.
-> Confirm the deployment line reads `iOS device` and that the ANE frameworks are mapped.
-> Peak under ~30 MB for `.fast` + rectangles reopens the on-device path and sends this
-> back to §5.6. Anything above the extension cap closes it for good, and Phase 8 writes
-> that down.
+> `arm64-apple-ios`, all 30 images, all configurations, two runs per configuration, plus
+> one `PASSES=2` run. Confirm the deployment line reads `iOS device`, record the
+> compute-device line, and record the ledger breakdown. Peak under ~30 MB for `.fast` +
+> rectangles removes the memory objection and sends this back to §5.6. Anything near the
+> macOS figure confirms this design's default.
 
-Note the accuracy case has to be re-won separately even if the memory case is won:
-`.claude/CLAUDE.md` records the routed path scoring below cloud-only on iOS.
+The accuracy case has to be re-won separately and it is the harder one:
+`AIKeyboardCoreTests/ScreenContextBarTests.swift` measures the routed path scoring below
+cloud-only on iOS, with three of its eight on-device answers wrong. A cheap memory result
+does not touch that.
 
 **Phase 5 — reading, in the shutter.**
 `CloudScreenReader` on the serial read queue inside the broadcast extension, gated by
@@ -860,32 +1205,58 @@ Phase 3 baseline has to have left room for.
 **Phase 6 — the consumer.**
 `ScreenContextSession` rewritten as a channel consumer. The §6 freshness gate, with tests
 for **all five** conditions, including the mid-read conversation switch and the
-`broadcastPaused()` window that condition 3 exists to catch. `.ended` and `.paused` in
+`broadcastPaused()` window that condition 3 exists to catch, and including §6.2's
+keyboard-occluded case as a known-unresolvable. `.ended` and `.paused` in
 `ScreenContextState` and in the strip. The strip stops naming apps and gains the pre-tap
 offer state.
 
-**Phase 7 — the budget and restart.**
-Daily and session read budgets in `SharedStore` and their UI. The `isSecureTextEntry`
-guard and R14. R8 and R9 on device, then whichever restart path survives. No speculative
-reads, now or later, without the signal §5.1 names.
+**Phase 7 — the budget, the secure-field guard and restart.**
+Daily and session read budgets in `SharedStore` and their UI. `SecureField` with its full
+truth table under test, including `nil` and `UITextContentType??`'s two nils. R14 becomes a
+counter: ship both `refusedSecure` and `refusedSecureUnknown` and read them off the first
+device run. If `refusedSecureUnknown` equals the tap count, the trait is never populated
+through the proxy and a different signal is needed — the default does not flip. R8 and R9
+on device, then whichever restart path survives. No speculative reads, now or later,
+without the signal §5.1 names.
 
 **Phase 8 — the docs that are now wrong.**
-`README.md` lines 128-132 are replaced per §5.3 and lines 110-127 keep. The mock-to-real table's
-`MockScreenContext` row. The five stale privacy comments in §5.2. `.claude/docs/architecture.md`'s
-directory map and data flow. And a `.claude/CLAUDE.md` gotcha, because this is the fact
-someone will otherwise rediscover the hard way:
+`README.md` lines 134-138 are replaced per §5.3 and lines 116-133 keep. The mock-to-real
+table's `MockScreenContext` row. The five stale privacy comments in §5.2.
+`.claude/docs/architecture.md`'s directory map and data flow. And a `.claude/CLAUDE.md`
+gotcha — but not the one the previous revision drafted, which asserted the ANE explanation
+this revision retracts:
 
-> **Vision's text recogniser cannot live in an iOS extension, and the simulator will tell
-> you it can.** Over the 30 bar screens in one process, peak `phys_footprint` is 199.8 MB
-> at `.accurate` and 84.7 MB at `.fast` on macOS 26.5.1; even
-> `VNDetectTextRectanglesRequest` alone is 67.9 MB. On the iOS Simulator the same code is
-> 174.8 / 18.1 / 10.3 MB. The difference is the Apple Neural Engine frameworks, which
-> macOS maps and the simulator does not — and a phone is an ANE configuration, so the
-> simulator is the optimistic deployment, not the pessimistic one. Extensions are capped
-> around 48-50 MB. Resolution does not help: 1/16 of the pixels moves `.accurate` by
-> 10-14%.
-> `Bar/screen-context/harness/run-memory.sh` re-takes all of it and asserts the ANE
-> control both ways.
+> **Vision's memory cost differs 6x between macOS and the iOS Simulator, and nobody here
+> knows what a phone does.** Over the 30 bar screens in one process, peak `phys_footprint`
+> for `VNDetectTextRectanglesRequest` alone is 66.7-72.6 MB on macOS 26.5.1 and
+> 9.9-11.3 MB on the iOS Simulator; `.fast` is 84.6-95.1 against 18.1-22.9. It is not the
+> Neural Engine: `supportedComputeStageDevices` reports both requests as `[cpu]` on **both**
+> deployments, and only `.accurate` lists `ane`. It is not a bigger model either: the two
+> platforms ship the same Vision Espresso assets at the same sizes. The difference is
+> accounting — macOS charges ~63 MB to the footprint ledger jetsam reads (32.7 MB of it
+> itemised as `ledger_tag_graphics_footprint`, the rest unitemised by `TASK_VM_INFO` and
+> unattributed by `vmmap`), while the iOS build maps ~11 MB file-backed into `external` and
+> charges the ledger ~5 MB. Extensions are capped around 48-50 MB, so which behaviour a
+> device has decides whether Vision fits, and there is no device measurement.
+> `.accurate` is separately unusable in a long-lived process: its cost grows with the number
+> of *distinct* images seen and does not plateau (macOS 198 MB over 30 images, 207 over 60,
+> 124 over one image thirty times), so any figure for it is a lower bound and not a ceiling.
+> `Bar/screen-context/harness/run-memory.sh` re-takes all of it and asserts the
+> compute-device control.
+
+A second gotcha, because §5.5 cost a design revision to learn:
+
+> **A frame fingerprint is only as good as the band it is taken over, and the obvious band
+> is wrong.** `Bar/screen-context/harness/frame-hash.mjs` renders each corpus scene with
+> only its newest message's glyphs changed and asks whether the fingerprint notices.
+> Cropping the bottom 45% "where our keyboard sits" removes the newest message from the
+> fingerprint: 23 of 29 pairs then hash identically, and widening the hash from 64 to 256
+> bits fixes none of them. Cropping `VisionScreenReader.Band` instead — top 14% for the
+> status and navigation bars, bottom 8.5% for the composer — gives 0 of 29 misses and, just
+> as importantly, 0 of 30 false invalidations from the clock ticking or the header changing
+> to "typing...". Over the right band a 64-bit difference hash still collides on 11 of 29;
+> the shipped identity is a SHA-256 of the 32x64 greyscale reduction, and the perceptual
+> hash is kept only for settle detection.
 
 ---
 
@@ -896,11 +1267,13 @@ Ordered by how much of the design they can invalidate.
 | # | Risk | What would resolve it |
 |---|---|---|
 | **R0** | **App Review.** A ReplayKit broadcast upload extension used to OCR the user's screen for a keyboard is not what the API is for. Rejection under 2.5.1 (private/undocumented use of an API) or 5.1.2 (data use) is a live possibility, and no amount of engineering answers it. This is the risk most likely to kill the feature and it is not technical. Deleting the speculative upload (§5.1) helps the 5.1.2 half and does nothing for the 2.5.1 half. | A pre-review question to App Review describing the flow, or a TestFlight external build. Ask before Phase 3, not after Phase 8. |
+| **R3** | **Which memory-accounting behaviour a device has.** macOS charges a cpu-only Vision request ~63 MB of `phys_footprint`; the iOS Simulator charges ~5 MB and maps ~11 MB file-backed. Same model file, same compute device. This is now the *only* thing standing between the on-device path being closed and being open, and it is unmeasured. Promoted from the bottom of this table because the ANE explanation that used to answer it is withdrawn. | `memory.swift` built for `arm64-apple-ios`, run as a device unit test, all 30 images, two runs, ledger breakdown recorded. Under ~30 MB for `.fast` + rectangles reopens §5.6; near the macOS figure confirms the default. |
 | **R2** | Is the broadcast ceiling really ~50 MB on iOS 26? It is in no header on this machine. §2.4 has 6-11 MB of headroom against it, so a 40 MB reality kills the design. | Device build that allocates in 1 MB steps and logs `phys_footprint` until it dies. The last logged value is the answer. |
-| **R2b** | Is the keyboard ceiling really ~48 MB? Reported by review, not re-derived here, and it is one of the two numbers §1 rests on. | Same experiment, in the keyboard extension. |
+| **R2b** | Is the keyboard ceiling really ~48 MB? Reported by review, not re-derived here. | Same experiment, in the keyboard extension. |
 | **R1** | Pixel format, resolution and rate ReplayKit actually delivers. 7.6 MiB of the budget swings on 420f versus BGRA. | Log `CVPixelBufferGetPixelFormatType`, width, height and inter-frame interval from `processSampleBuffer` on device for 60 s. |
 | **R2c** | The broadcast extension's own baseline, guessed at 20 MB, is the largest unmeasured line in §2.4. | Phase 3: the shutter with no reading in it, on a device, memory graph attached. |
-| R3 | Vision on an ANE **device**. Every measurement in this document is simulator (no ANE) or macOS (ANE). The device is the third point and it is missing. | `memory.swift` built for `arm64-apple-ios`, run as a device unit test, all 30 images, two runs. Under ~30 MB for `.fast` reopens §5.6; near the macOS figure confirms this design. |
+| **R14** | **`isSecureTextEntry` is `@optional` and therefore `Bool?`.** Verified in the header (`UITextInputTraits.h:239` opens the optional block, the property is at `:257`) and by the compiler. §3.3.1 specifies the guard to fail closed on `nil`, which is correct and may also mean it refuses every read on every host. Whether hosts populate the trait through the proxy is unknown, and if they never do, the guard as written disables the feature rather than protecting it. | Ship both counters (`refusedSecure`, `refusedSecureUnknown`) in Phase 7 and read them off the first device run. If the unknown counter equals the tap count, find a different signal — do not flip the default. |
+| R15 | **The fingerprint's residual blind spot.** §6.2: when the newest message is drawn under the host keyboard, two conversations can be pixel-identical in the visible band, and condition 4 cannot separate them. Measured on `sl-05`, one of 30 corpus frames. Bounded by condition 5's 20 s cap and by the fact that unreadable content is also unread content, but not closed. | Nothing on the fingerprint side closes it. If it shows up in practice, the answer is `VisionScreenReader`'s: refuse rather than answer. |
 | R7 | `URLSession` + TLS footprint inside a broadcast upload extension, guessed at 4-8 MB. Network *working* is almost certain — uploading is the extension point's purpose — but the memory it costs is not. | Request from `broadcastStarted` on device, with `MemoryGovernor` sampled before and during. |
 | R5 | Does 603x1311 hurt the cloud reader? Bar scores were taken at 1206x2622. | Cloud harness at both sizes, two runs each side, compare sender / message / language. |
 | R6 | Does `broadcastAnnotatedWithApplicationInfo` fire on every app switch or only the first? The header says the first. If it fired on every switch, §5.1 would have to be re-argued — that is how load-bearing it is. | Device log across three app switches inside one broadcast. |
@@ -910,36 +1283,63 @@ Ordered by how much of the design they can invalidate.
 | R11 | Does the broadcast survive a screen lock? `RPRecordingErrorSystemDormancy` suggests the power button ends it. If a lock ends every session, the feature's session length is measured in minutes and onboarding has to say so. | Lock the device mid-broadcast; observe whether `broadcastFinished()` fires. |
 | R12 | The 20 s staleness backstop is a guess. Less load-bearing now that §6 condition 3 exists, but still a guess. | Instrument settle-to-tap interval; set the cap at p95. |
 | R13 | Does protected content actually black out under ReplayKit? The README already claims it. §5.1 deliberately does not rely on it. | Capture a banking app and a DRM video on device. |
-| R14 | Does `textDocumentProxy.isSecureTextEntry` actually reflect the host field? The protocol chain is verified in the headers; whether hosts populate it is not. | Keyboard in a password field on device; log the trait. Ship the guard either way. |
+| R16 | §5.5 is measured on rendered corpus frames, not on real app pixels. The band fractions come from `VisionScreenReader.Band`, which was measured off those same frames. A real WhatsApp on a real phone with our keyboard up compresses the thread differently, and the newest message may sit closer to the composer than it does here. | Capture ten real frames on device with the keyboard up, run the same reduction, and check the newest message still lands inside the 14%-91.5% band. Phase 3 has the device time to do it. |
 
 ---
 
 ## How the numbers were taken
 
-**§2.3 and §2.4's one measured line.** `Bar/screen-context/harness/memory.swift`, driven by
-`Bar/screen-context/harness/run-memory.sh`, both in this repo. The probe reads
-`phys_footprint` out of `task_info(mach_task_self_, TASK_VM_INFO, ...)` after each of the
-30 images in `Bar/screen-context/images/`, one image alive at a time, one reused request
-per process. It reports its own deployment and the Neural Engine frameworks mapped into
-it, and it exits non-zero rather than printing a number it could not take.
+**§1.1's accuracy table.** `AIKeyboardCoreTests/ScreenContextBarTests.swift`, run on the
+iOS Simulator, which is the only place the on-device half runs the way a phone runs it.
+One `ScreenContextSession` for all thirty frames, only the network replaced by a transport
+replaying recorded answers. The cloud-only column is `Bar/screen-context/cloud_outputs.json`
+scored by the same scorer.
+
+**§2.3.** `Bar/screen-context/harness/memory.swift`, driven by `run-memory.sh`, both in
+this repo. The probe reads `phys_footprint`, the ledger tags and `internal`/`external` out
+of `task_info(mach_task_self_, TASK_VM_INFO, ...)` after each of the 30 images in
+`Bar/screen-context/images/`, one image alive at a time, one reused request per process. It
+reports its own deployment and, before anything runs, `supportedComputeStageDevices` for
+every request it will use. It exits non-zero rather than printing a number it could not
+take.
 
 ```
-Bar/screen-context/harness/run-memory.sh                       # both deployments
-SCALES="1.0 0.5 0.25" Bar/screen-context/harness/run-memory.sh  # the resolution sweep
+Bar/screen-context/harness/run-memory.sh                        # both deployments
+SCALES="1.0 0.5 0.25" Bar/screen-context/harness/run-memory.sh   # the resolution sweep
+PASSES=2 ./memory-host ../images accurate 1.0                    # the §2.3.2 climb
+SAME_IMAGE=1 ./memory-host ../images accurate 1.0                # one distinct image
 ```
 
 Taken 2026-08-08 on macOS 26.5.1 (25F80) and on the iOS 26.2 arm64 simulator runtime
 (iPhone 17 Pro), Xcode 26.2 (17C52). **Neither is a device.** The script asserts that
-macOS maps `AppleNeuralEngine.framework` and the simulator does not, and fails if that
-ever stops being true, because that asymmetry is the reason the two columns differ and the
-reason the simulator column must not be read as a phone.
+`VNDetectTextRectanglesRequest` reports `[cpu]` on both deployments and fails if that ever
+stops being true, because that is the control the §2.3.1 argument rests on. The
+`vmmap -summary` figures in §2.3.1 were taken against the same binary held at its first
+detector call.
 
-An earlier version of this document reported single-image deltas from a probe at
-`Bar/screen-context/harness/memory.swift` that did not exist in the repo, so its
-"reproducible" preamble was false. It is true now.
+The previous revision's control was the presence of `AppleNeuralEngine.framework`. That
+assertion was true and explained nothing, and asserting a true irrelevance is how the
+inverted argument in §1 survived a revision. It has been replaced, not merely relaxed.
+
+**§5.5 and §6.** `Bar/screen-context/harness/frame-hash.mjs`, Playwright/Chromium on the
+macOS host at 1206x2622, over the same 30 scenes `generate.mjs` renders the corpus from.
+120 frames in total: each scene as-is, with every message's glyphs substituted, with only
+the newest message's glyphs substituted, and with only the status-bar clock and the header
+presence line changed. Substitution is a letter-for-letter shift inside the same script, so
+character counts, word breaks, digits, times and bubble geometry are byte-for-byte
+preserved and only the glyphs move; anything weaker also moves the line wrapping, and then
+a fingerprint separates the pair for the wrong reason.
+
+```
+node Bar/screen-context/harness/frame-hash.mjs
+KEEP=1 node Bar/screen-context/harness/frame-hash.mjs   # keep the 120 rendered frames
+```
 
 **The JPEG size table (§2.2).** Pillow 11.3.0 on macOS over all 30 images at quality 70,
 LANCZOS resample. CoreGraphics will not produce byte-identical results; the ratios are what
 the design depends on.
+
+**§3.3.1's Swift types.** Compiled against `iPhoneSimulator26.2.sdk` with a deliberate type
+error, so the compiler names the type rather than the document guessing at it.
 
 **Everything else in §2.2 and §2.4** is arithmetic or an estimate, and each row says which.

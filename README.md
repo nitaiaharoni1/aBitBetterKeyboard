@@ -3,15 +3,21 @@
 A running SwiftUI mock of the keyboard described in `plan.md`: a Hebrew/English
 iOS keyboard with AI text actions, dictation, and screen-context replies.
 
-**Everything is faked.** No network, no model, no microphone, no screen capture.
-The point is to judge the interaction and the layout, not the intelligence.
+**The AI is real; the input to it is still partly faked.** Text actions and
+screen reading call real models and are scored against frozen corpora in `Bar/`.
+Typing suggestions and dictation are still mocks, and nothing yet captures a
+screen: the reading half of screen context is measured, the *getting a frame*
+half is not implemented. The table at the end says which is which.
 
 ```
 AIKeyboard.xcodeproj
 ├── AIKeyboard/               companion app
 ├── AIKeyboardExtension/      the keyboard extension (thin host)
+├── AIKeyboardBroadcast/      ReplayKit broadcast upload extension (capture)
 ├── AIKeyboardUITests/        screenshot walkthrough
-└── Packages/AIKeyboardCore/  design system, keyboard UI, mock engines
+├── AIKeyboardCoreTests/      unit tests over AIKeyboardCore
+├── Bar/                      frozen corpora the engines are scored against
+└── Packages/AIKeyboardCore/  design system, keyboard UI, engines
 ```
 
 The entire keyboard lives in `AIKeyboardCore`, not in the extension target. The
@@ -38,7 +44,7 @@ the 4-space `.swift-format` config at the repo root:
 
 ```bash
 xcrun swift-format --in-place --recursive \
-  AIKeyboard AIKeyboardExtension AIKeyboardUITests Packages
+  AIKeyboard AIKeyboardExtension AIKeyboardBroadcast AIKeyboardUITests AIKeyboardCoreTests Packages
 ```
 
 ## What's built

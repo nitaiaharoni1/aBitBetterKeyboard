@@ -16,7 +16,8 @@ xcodebuild test -project AIKeyboard.xcodeproj -scheme AIKeyboard \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 
 # Format (the PostToolUse hook already does this per edited file)
-xcrun swift-format --in-place --recursive AIKeyboard AIKeyboardExtension AIKeyboardUITests Packages
+xcrun swift-format --in-place --recursive \
+  AIKeyboard AIKeyboardExtension AIKeyboardBroadcast AIKeyboardUITests AIKeyboardCoreTests Packages
 ```
 
 No linter is configured.

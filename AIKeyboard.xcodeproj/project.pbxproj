@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		AA00000000000000000090 /* AIKeyboardExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AA00000000000000000021 /* AIKeyboardExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AA00000000000000000091 /* AIKeyboardBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AA00000000000000000024 /* AIKeyboardBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AA000000000000000000A5 /* AIKeyboardCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA000000000000000000A6 /* AIKeyboardCore */; };
 		AA000000000000000000A3 /* AIKeyboardCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA000000000000000000A1 /* AIKeyboardCore */; };
 		AA000000000000000000A4 /* AIKeyboardCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA000000000000000000A2 /* AIKeyboardCore */; };
@@ -28,6 +29,13 @@
 			remoteGlobalIDString = AA00000000000000000010;
 			remoteInfo = AIKeyboard;
 		};
+		AA00000000000000000085 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA00000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA00000000000000000014;
+			remoteInfo = AIKeyboardBroadcast;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -38,6 +46,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				AA00000000000000000090 /* AIKeyboardExtension.appex in Embed Foundation Extensions */,
+				AA00000000000000000091 /* AIKeyboardBroadcast.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -47,6 +56,7 @@
 /* Begin PBXFileReference section */
 		AA00000000000000000020 /* AIKeyboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AIKeyboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA00000000000000000021 /* AIKeyboardExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AIKeyboardExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA00000000000000000024 /* AIKeyboardBroadcast.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AIKeyboardBroadcast.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA00000000000000000023 /* AIKeyboardCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AIKeyboardCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA00000000000000000022 /* AIKeyboardUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AIKeyboardUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -58,6 +68,13 @@
 				Info.plist,
 			);
 			target = AA00000000000000000011 /* AIKeyboardExtension */;
+		};
+		AA00000000000000000036 /* Exceptions for "AIKeyboardBroadcast" folder in "AIKeyboardBroadcast" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = AA00000000000000000014 /* AIKeyboardBroadcast */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -71,6 +88,16 @@
 			explicitFileTypes = {};
 			explicitFolders = ();
 			path = AIKeyboardExtension;
+			sourceTree = "<group>";
+		};
+		AA00000000000000000035 /* AIKeyboardBroadcast */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AA00000000000000000036 /* Exceptions for "AIKeyboardBroadcast" folder in "AIKeyboardBroadcast" target */,
+			);
+			explicitFileTypes = {};
+			explicitFolders = ();
+			path = AIKeyboardBroadcast;
 			sourceTree = "<group>";
 		};
 		AA00000000000000000033 /* AIKeyboardUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = AIKeyboardUITests; sourceTree = "<group>"; };
@@ -109,6 +136,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA00000000000000000059 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -117,6 +151,7 @@
 			children = (
 				AA00000000000000000030 /* AIKeyboard */,
 				AA00000000000000000031 /* AIKeyboardExtension */,
+				AA00000000000000000035 /* AIKeyboardBroadcast */,
 				AA00000000000000000033 /* AIKeyboardUITests */,
 				AA00000000000000000004 /* Packages */,
 				AA00000000000000000003 /* Products */,
@@ -128,6 +163,7 @@
 			children = (
 				AA00000000000000000020 /* AIKeyboard.app */,
 				AA00000000000000000021 /* AIKeyboardExtension.appex */,
+				AA00000000000000000024 /* AIKeyboardBroadcast.appex */,
 				AA00000000000000000022 /* AIKeyboardUITests.xctest */,
 				AA00000000000000000023 /* AIKeyboardCoreTests.xctest */,
 			);
@@ -157,6 +193,7 @@
 			);
 			dependencies = (
 				AA00000000000000000080 /* PBXTargetDependency */,
+				AA00000000000000000084 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				AA00000000000000000030 /* AIKeyboard */,
@@ -190,6 +227,28 @@
 			);
 			productName = AIKeyboardExtension;
 			productReference = AA00000000000000000021 /* AIKeyboardExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		AA00000000000000000014 /* AIKeyboardBroadcast */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA00000000000000000075 /* Build configuration list for PBXNativeTarget "AIKeyboardBroadcast" */;
+			buildPhases = (
+				AA00000000000000000058 /* Sources */,
+				AA00000000000000000059 /* Frameworks */,
+				AA0000000000000000005A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				AA00000000000000000035 /* AIKeyboardBroadcast */,
+			);
+			name = AIKeyboardBroadcast;
+			packageProductDependencies = (
+			);
+			productName = AIKeyboardBroadcast;
+			productReference = AA00000000000000000024 /* AIKeyboardBroadcast.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 		AA00000000000000000012 /* AIKeyboardUITests */ = {
@@ -253,6 +312,9 @@
 					AA00000000000000000011 = {
 						CreatedOnToolsVersion = 26.2;
 					};
+					AA00000000000000000014 = {
+						CreatedOnToolsVersion = 26.2;
+					};
 					AA00000000000000000012 = {
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = AA00000000000000000010;
@@ -279,6 +341,7 @@
 			targets = (
 				AA00000000000000000010 /* AIKeyboard */,
 				AA00000000000000000011 /* AIKeyboardExtension */,
+				AA00000000000000000014 /* AIKeyboardBroadcast */,
 				AA00000000000000000012 /* AIKeyboardUITests */,
 				AA00000000000000000013 /* AIKeyboardCoreTests */,
 			);
@@ -301,6 +364,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		AA00000000000000000055 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000000000000000005A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -338,6 +408,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA00000000000000000058 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -350,6 +427,11 @@
 			isa = PBXTargetDependency;
 			target = AA00000000000000000010 /* AIKeyboard */;
 			targetProxy = AA00000000000000000083 /* PBXContainerItemProxy */;
+		};
+		AA00000000000000000084 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA00000000000000000014 /* AIKeyboardBroadcast */;
+			targetProxy = AA00000000000000000085 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -575,6 +657,50 @@
 			};
 			name = Release;
 		};
+		AA0000000000000000006A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AIKeyboardBroadcast/AIKeyboardBroadcast.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AIKeyboardBroadcast/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nitai.aikeyboard.broadcast;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AA0000000000000000006B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AIKeyboardBroadcast/AIKeyboardBroadcast.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AIKeyboardBroadcast/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nitai.aikeyboard.broadcast;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -601,6 +727,15 @@
 			buildConfigurations = (
 				AA00000000000000000064 /* Debug */,
 				AA00000000000000000065 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA00000000000000000075 /* Build configuration list for PBXNativeTarget "AIKeyboardBroadcast" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000000000000000006A /* Debug */,
+				AA0000000000000000006B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

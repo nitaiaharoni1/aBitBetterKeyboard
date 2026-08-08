@@ -3,11 +3,18 @@
 #
 #   Bar/screen-context/harness/run-memory.sh [simulator-name]
 #
-# Two columns, and the difference between them is the finding, not noise:
-# macOS maps the Apple Neural Engine frameworks and the iOS Simulator does not.
-# A physical iPhone is an ANE configuration, so the macOS column is the closer
-# analogue of the device and the simulator column is the optimistic one. Neither
-# is a device number. Nothing here can produce a device number.
+# Two columns, and the difference between them is a finding without an
+# explanation. It is *not* the Apple Neural Engine: `supportedComputeStageDevices`
+# reports `VNDetectTextRectanglesRequest` and `VNRecognizeTextRequest(.fast)` as
+# cpu-only on macOS and on the iOS Simulator alike, and only `.accurate` lists
+# ane/gpu. What differs is where the kernel charges the bytes — macOS puts tens
+# of megabytes on the phys_footprint ledger that the simulator maps file-backed
+# and charges to resident instead. Which of the two a phone does is unknown and
+# nothing on this machine can answer it.
+#
+# The control this script asserts is therefore the compute-device line, not the
+# framework list. If the detector or `.fast` ever stops being cpu-only on either
+# deployment, the design doc's §2.3 has to be re-argued from scratch.
 #
 # Fails rather than skips, in the manner of Scripts/prove-app-group.sh: no
 # booted simulator, a build error, a missing image or a task_info that will not
@@ -52,16 +59,29 @@ for rt in json.load(sys.stdin)["devices"].values():
 [ -n "$UDID" ] || fail "no booted simulator named '$SIM_NAME'; boot it, do not skip"
 pass "simulator $SIM_NAME booted"
 
-# The ANE control. If these two ever agree, the columns below stop meaning what
-# the design doc says they mean and the doc has to be re-argued.
+# The control. The detector and `.fast` are the two configurations an on-device
+# path would use, and both must read cpu-only on both deployments or §2.3 of the
+# design doc is describing a machine that no longer exists.
+echo "==> Compute devices"
+for config in rects fast accurate; do
+  MAC=$("$BUILD/memory-macos" "$IMAGES" "$config" 1.0 2>/dev/null | awk '/^compute/ {$1=""; print}')
+  SIM=$(xcrun simctl spawn "$UDID" "$BUILD/memory-ios" "$IMAGES" "$config" 1.0 2>/dev/null | awk '/^compute/ {$1=""; print}')
+  printf '  %-9s macOS%s\n  %-9s sim  %s\n' "$config" "$MAC" "" "$SIM"
+done
+
+MAC_RECTS=$("$BUILD/memory-macos" "$IMAGES" rects 1.0 | awk '/^compute/ {print}')
+SIM_RECTS=$(xcrun simctl spawn "$UDID" "$BUILD/memory-ios" "$IMAGES" rects 1.0 | awk '/^compute/ {print}')
+case "$MAC_RECTS$SIM_RECTS" in
+  *ane*|*gpu*) fail "the shape detector is no longer cpu-only on one of the deployments; re-argue §2.3" ;;
+  *) pass "VNDetectTextRectanglesRequest is cpu-only on both deployments" ;;
+esac
+
+# Reported, never asserted. The framework list differs between the deployments
+# and does not explain the footprint gap for any cpu-only configuration.
 MAC_ANE=$("$BUILD/memory-macos" "$IMAGES" decode 1.0 | awk '/^ane-mapped/ {$1=""; print}')
 SIM_ANE=$(xcrun simctl spawn "$UDID" "$BUILD/memory-ios" "$IMAGES" decode 1.0 | awk '/^ane-mapped/ {$1=""; print}')
 echo "  macOS  ANE frameworks:$MAC_ANE"
 echo "  sim    ANE frameworks:$SIM_ANE"
-case "$MAC_ANE" in *AppleNeuralEngine*) pass "macOS is an ANE deployment" ;;
-  *) fail "macOS mapped no ANE framework; the control this doc rests on is gone" ;; esac
-case "$SIM_ANE" in *AppleNeuralEngine*) fail "the simulator mapped an ANE framework; it is no longer the non-ANE control" ;;
-  *) pass "the iOS Simulator is not an ANE deployment" ;; esac
 
 printf '\n%-14s %-6s %14s %14s\n' config scale "macOS peak MB" "sim peak MB"
 for scale in $SCALES; do
@@ -79,3 +99,7 @@ echo
 echo "Peak is the number that decides the design: jetsam reads phys_footprint, and"
 echo "an extension dies at its ceiling rather than degrading. Neither column is a"
 echo "device measurement. Run this on a device before believing any of it fits."
+echo
+echo "For .accurate, one number over 30 images is a point on a curve rather than a"
+echo "ceiling. PASSES=2 walks the corpus twice and SAME_IMAGE=1 repeats one image;"
+echo "the gap between them is how much of the growth is per-distinct-image state."

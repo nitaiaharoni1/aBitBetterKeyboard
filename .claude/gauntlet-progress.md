@@ -852,3 +852,152 @@ Still unproven, and the document says so itself: **no number in it came from a
 phone.** Both memory caps are unverified and appear in no header.
 
 ### P2 — broadcast extension target: dispatched
+
+### P1 critic — round 2: **GAP.** The mechanism was falsified by one API call.
+
+The critic reproduced every number in the document (macOS rects 73.0/67.1/73.7
+against the doc's 67.9/66.7/69.2, and so on down), then falsified the *reason*
+the document gives for them. Reproduced independently by me on both deployments
+before acting on it:
+
+| request | compute devices, macOS | compute devices, iOS Simulator |
+|---|---|---|
+| `VNDetectTextRectanglesRequest` | **cpu** | **cpu** |
+| `VNRecognizeTextRequest(.fast)` | **cpu** | **cpu** |
+| `VNRecognizeTextRequest(.accurate)` | ane, cpu, gpu | cpu, gpu |
+
+One line: `try request.supportedComputeStageDevices`. The shape detector and
+`.fast` — the two configurations the on-device path would actually use — are
+CPU-only on both deployments, so **the Neural Engine cannot be why macOS is 6x
+the simulator**. Pinning the detector to CPU on macOS changes nothing. Only
+`.accurate` touches the ANE at all.
+
+The critic's alternative reading of the same data points the other way: macOS
+charges ~64 MB to the `phys_footprint` ledger for a CPU-only request, while the
+iOS build charges ~0 and maps ~11 MB clean and file-backed. **A device runs the
+iOS build.** If that holds, the simulator is the *representative* deployment for
+iOS memory accounting, not the optimistic one, and the document's own reversal
+threshold (~30 MB for `.fast` + rectangles) is already met by it.
+
+So cloud-only is **not forced by memory**. It remains the right default, but for
+the reason that was measured on the deployment that matters: on iOS, routing
+through Vision scores below asking the cloud for every frame. That argument
+never needed the memory number.
+
+Two further holes the critic found, both real and both sent to round 3:
+`isSecureTextEntry` sits in an `@optional` block, so the secure-field guard is
+`Bool?` and **fails open** on hosts that do not implement it; and the 64-bit
+dHash is the *only* content-identity condition in the freshness rule while §5.4
+argues it is safe precisely because it is uninformative, which is the same
+property that makes it a weak discriminator between two conversations in one
+app. Unmeasured, and the 30 bar frames across five app skins would settle it.
+
+Also corrected: the two probes never disagreed. 104/114 was stock
+`VNRecognizeTextRequest`; 199.8 was with `automaticallyDetectsLanguage`. And
+`.accurate`'s peak is a function of call count, not a ceiling — 60 images gives
+223.7 and is still climbing — so 199.8 should never have been quoted as fixed.
+
+Every ReplayKit and UIKit citation in the document verified correct, verbatim.
+
+**Correction to what was reported to the user:** I relayed the ANE mechanism as
+established fact. It was not, and it is now falsified for the two configurations
+that matter. The claim never reached `README.md` or `.claude/CLAUDE.md`.
+
+### P2 — broadcast extension target: built, embedded, proved as far as this machine allows
+
+`AIKeyboardBroadcast/` is a real target now: `SampleHandler: RPBroadcastSampleHandler`
+with all six lifecycle methods, audio types named and returned rather than
+falling through, video throttled to one frame per 250 ms inside an
+`autoreleasepool`, orientation read from the `RPVideoSampleOrientationKey`
+attachment, and **no `CVPixelBuffer` retained at all** — it never calls
+`CMSampleBufferGetImageBuffer`, taking size and pixel format from the format
+description instead. Everything logs through `Logger(subsystem:
+"com.nitai.aikeyboard")` so a device proof can read its verdict from the
+extension process's own line.
+
+`AIKeyboardCore` is deliberately **not** linked: the appex binary is 56 KB
+against the keyboard extension's 4.1 MB, which is the evidence it did not sneak
+in through a package dependency.
+
+`Scripts/prove-broadcast-extension.sh`, five checks, fails rather than skips.
+Verified by me independently: build green, 125 tests green, both appexes present
+in `PlugIns/`, script exit 0.
+
+The part that makes it trustworthy: the builder **falsified its own checks**
+rather than trusting green. Deleting `RPBroadcastProcessMode` made check 2 fail;
+pointing the principal class at a class that does not exist made check 5 fail.
+Both restored and re-verified. Check 5 derives the mangled Objective-C symbol
+from the plist string and demands it in the binary, so it tests the plist and the
+binary *agreeing* rather than either alone.
+
+Two environment traps handled: Xcode 26 Debug builds split code into a
+`.debug.dylib` beside a stub executable, so the class check searches both; and
+Release keeps that symbol local, so the script uses `nm -a` rather than `nm -g`,
+which reports nothing for a Release binary that plainly contains the class.
+
+**Still unproven, and the script says so in its own output:** nothing here shows
+a frame ever arrives. No `replayd` in the simulator runtime means
+`processSampleBuffer` has never executed once, anywhere, in any run. The
+throttle, the counters and the orientation read have never run.
+
+Docs updated: the format command missed the two new target folders, and
+`README.md` still opened with "Everything is faked. No network, no model" which
+stopped being true two rounds ago.
+
+### P2 critic — **GAP, closed.** The proof proved nothing.
+
+The critic replaced the handler with `final class SampleHandler: NSObject {}` —
+no ReplayKit, no superclass, no callbacks — and the script printed **"Proved"**
+and exited 0. `otool -L` showed zero ReplayKit links.
+
+Fixing it exposed a second bug in the fix itself: the strengthened check failed
+on the *real* handler with exit **141, SIGPIPE**. `grep -q` exits on first match,
+closes the pipe, kills `nm`, and `set -o pipefail` reports the pipeline failed.
+The pre-existing check had the same shape and only passed because `nm -mu` has
+short output and finished before grep exited — **it was winning a race, not
+passing**. Symbols are now read once into a variable and matched with `case`.
+
+Three checks where there was one: the class symbol exists, it has an undefined
+external `_OBJC_CLASS_$_RPBroadcastSampleHandler` from ReplayKit, and the ObjC
+thunk for `processSampleBuffer(_:with:)` is present (an override whose signature
+drifted mangles differently and goes red). Falsified in both directions.
+
+Also recorded: check 4 is simulator-only by construction, since a device Release
+`.appex` has no `__TEXT,__entitlements` section at all. And the handler's
+threading comment claimed an invariant it did not hold.
+
+### P1 — architecture, round 3: gaps closed, and a design-breaking bug found
+
+The falsification reproduced exactly, and the accounting picture is now itemised
+rather than asserted. macOS adds 63.2 MB of footprint for a **cpu-only** request,
+32.7 MB of it tagged *graphics*; the simulator adds 4.5 MB of footprint and grows
+`external` (file-backed, clean) by 10.7 MB. A decode-only control leaves the
+graphics ledger at zero, so the first Vision request creates it. Bonus finding:
+even for `.accurate` on macOS the ANE's memory lands on
+`ledger_tag_neural_nofootprint` with `ledger_tag_neural_footprint` at **0.0** —
+the ANE never touches the ledger jetsam reads.
+
+`.accurate` has a slope, not a peak, and it tracks **distinct images** rather
+than call count. `.fast` and the detector do plateau.
+
+**The frame hash was broken and would have shipped.** A new adversarial harness
+(`harness/frame-hash.mjs`) renders each scene four ways, including one where only
+the newest message's glyphs change. Verified by me:
+
+| band | misses | false invalidations |
+|---|---|---|
+| status + keyboard (bottom 45%) — as designed | **23/29** | 19/30 |
+| `VisionScreenReader.Band` + SHA-256 | **0/29** | **0/30** |
+
+The old band cropped the newest message out of the fingerprint, so the freshness
+check was blind to exactly the change it exists to detect, and 64 to 256 bits
+fixes none of them. Cropping to `VisionScreenReader.Band` and hashing with
+SHA-256 fixes it, and is *less* linkable than a perceptual hash, so the privacy
+argument improves rather than being traded away. One irreducible case remains:
+`sl-05`, whose newest message sits under the host keyboard, renders identically.
+
+The secure-field guard is now fail-closed, with `isSecureTextEntry` proven to be
+`Bool?` by the compiler against the 26.2 SDK.
+
+**Everything green:** build, 125 tests, `prove-app-group.sh`,
+`prove-broadcast-extension.sh`, all exit 0.
