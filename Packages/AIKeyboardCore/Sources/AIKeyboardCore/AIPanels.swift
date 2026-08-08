@@ -156,12 +156,14 @@ public struct AIMenuPanel: View {
         action.needsScreenContext ? true : controller.hasTextToWorkWith
     }
 
+    /// Reply's subtitle names the sender rather than the app, because the app is
+    /// the one thing this design cannot know: see `ScreenContextStrip`.
     private func subtitle(for action: AIAction) -> String {
         guard action.needsScreenContext else { return action.subtitle }
         switch controller.screenContext {
         case _ where !controller.canReply: return "Needs screen context"
-        case .ready(let context): return "From \(context.appName)"
-        default: return action.subtitle
+        case .ready(let context): return "To \(context.sender)"
+        default: return "Reads the screen when you tap"
         }
     }
 }
@@ -423,12 +425,13 @@ public struct AIResultPanel: View {
 
     private var replyResults: some View {
         VStack(spacing: Theme.Space.xs) {
-            if let context = controller.screenContext.context {
-                // Restate what is being answered. A reply generated from
-                // something the user cannot see is a reply they cannot trust.
+            // Restate what is being answered, and restate the reading the reply
+            // was actually written about rather than whatever the strip is
+            // showing now: the screen can move on while the model is generating,
+            // and then those are two different messages. No app name — the same
+            // reason the strip does not name one.
+            if let context = controller.replyContext ?? controller.screenContext.context {
                 HStack(spacing: 5) {
-                    Image(systemName: context.appIcon)
-                        .font(.system(size: 10, weight: .medium))
                     Text(context.sender)
                         .font(.system(size: 11, weight: .semibold))
                     Text(context.message)
@@ -489,8 +492,14 @@ public struct AIResultPanel: View {
         .accessibilityHint("Inserts this reply")
     }
 
-    /// Reply tapped with no live session. Explain the constraint plainly instead
-    /// of showing a dead button.
+    /// Reply tapped with no live session.
+    ///
+    /// **There is no button here on purpose.** Only iOS can start a screen
+    /// broadcast, through `RPSystemBroadcastPickerView`, which cannot be
+    /// triggered programmatically and lives in the app. A button here would
+    /// either do nothing or start something that is not a capture session, and
+    /// this panel used to do the second: it ran the scripted demo. Words that
+    /// send the user to the one place it works beat a button that lies.
     private var screenContextPrompt: some View {
         VStack(spacing: Theme.Space.sm) {
             VStack(spacing: 4) {
@@ -499,7 +508,7 @@ public struct AIResultPanel: View {
                     .foregroundStyle(Theme.Keys.label)
 
                 Text(
-                    "Reply needs to read the message on screen. iOS asks you to start that yourself, and it lasts until you stop it."
+                    "Reply answers the message in front of you. Open AI Keyboard, tap Screen Context, and start it there — iOS runs the picker itself and shows a red indicator until you stop it."
                 )
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.Keys.secondaryLabel)
@@ -507,11 +516,6 @@ public struct AIResultPanel: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, Theme.Space.md)
-
-            primaryButton("Start screen context") {
-                controller.requestScreenContext()
-            }
-            .padding(.horizontal, Theme.Space.sm)
 
             Spacer(minLength: 0)
         }

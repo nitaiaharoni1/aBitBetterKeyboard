@@ -1126,3 +1126,45 @@ over 14 s. The unit test is what has the power, and the probe's doc comment says
 so rather than implying the proof script covers it.
 
 **Verified independently:** build, 163 tests, all three proof scripts, exit 0.
+
+### P4 — session lifecycle, Reply, and honest copy
+
+`RPSystemBroadcastPickerView` in the app, with copy that says what is actually
+true: *"Only iOS can start this. No app can press that button for you, including
+this one."* `ScreenContextSession` now consumes the channel when a real session
+exists and keeps the scripted timeline for the playground and UI tests. The
+strip renders six states, and `.ended` carries a reason and a way back.
+
+Reply no longer reads the state it is displaying. `contextForReply` polls the
+channel at the instant of the tap and returns a reading only when the gate says
+`.offerable`; otherwise it raises `intent.readNow` and waits for a record newer
+than the request that is *also* offerable. A superseded or stale reading is never
+returned, and failure is a named error rather than a guess.
+
+**Three false promises deleted rather than faked**, which is the part worth
+recording:
+- A "Use the cloud for replies" toggle that **no code read**. It promised a
+  behaviour nothing implemented.
+- A "Start screen context" button in the Reply panel that actually started the
+  *scripted sample* — a privacy-relevant label doing something else entirely.
+- The stop button on a real session: nothing in either process can end a
+  broadcast, so it was a button that could not work.
+
+Copy corrected: *"Each frame goes through on-device text recognition"* was false
+under this design and is now *"Tapping Reply sends one screenshot"*. The
+protected-content promise was **weakened** to match what is actually verified.
+The red dot now requires `source == .capture && isLive`, so the sample gets a
+grey one.
+
+Three additions on top of the design, argued rather than slipped in: a
+`.starting` state (built as specified, the picker's own countdown rendered as
+"paused", which reads as a fault), `.ended(.userStopped)` mapping to `.off` (or
+the strip says "stopped" forever after a deliberate stop), and a decay on
+endings — **the ten minutes is explicitly labelled a guess**.
+
+163 tests to **184**. UI tests 4/4. All three proof scripts exit 0. Verified
+independently, unit and UI run separately.
+
+**Known and stated:** on a device today a Reply tap will **time out**. The
+broadcast extension publishes status but runs no reader; that piece was deferred
+by constraint, not overlooked.

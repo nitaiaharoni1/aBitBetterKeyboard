@@ -31,7 +31,15 @@ microphone, or screen capture.
   that were sent before inserting the replacement.
 - Screen context flows one way: `ScreenContextSession` publishes state,
   `KeyboardController` mirrors it via Combine, and the strip and Reply panel read
-  only the controller.
+  only the controller. The session has two sources and they are not equals — a
+  real capture session on `ScreenContextChannel`, and the scripted sample the app
+  offers — and a real one cancels the script rather than racing it. `source` says
+  which, so nothing paints a recording indicator over a demo.
+- Reply does not use the state it is looking at. `KeyboardController.runReply`
+  calls `ScreenContextSession.contextForReply()`, which polls the channel at the
+  instant of the tap, raises `intent.readNow` when the gate refuses what it has,
+  and waits for a record answering *that* sequence. A reading the gate refused is
+  never returned; the failure is `AIEngineError.screenNotRead`.
 - The capture channel is the one place two *processes* exchange state, and it is
   not `UserDefaults`. `AIKeyboardBroadcast` fingerprints each sampled frame and
   writes `channel/status.bin`; the keyboard maps the same page read-only at 4 Hz

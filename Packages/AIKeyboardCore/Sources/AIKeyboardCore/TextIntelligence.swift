@@ -59,6 +59,17 @@ public enum AIEngineError: Error, Equatable, Sendable {
     /// The call did not come back. Not hypothetical: on a simulator the
     /// on-device path blocks instead of failing, and the app is killed.
     case timedOut
+    /// Reply asked the capture session for a reading of the screen in front of
+    /// the user and did not get one it may use. Carries the reason, because
+    /// "screen context stopped when you took a call" and "the screen was not
+    /// read in time" need different things from the user.
+    ///
+    /// Distinct from every case above because no model ran: the failure is that
+    /// there was nothing safe to answer *about*. `ScreenContextSession` throws it
+    /// rather than falling back on the last reading it had, which is the one
+    /// thing that would put a reply about somebody else's message into the
+    /// user's name.
+    case screenNotRead(String)
     case failed(String)
 
     public var title: String {
@@ -75,6 +86,7 @@ public enum AIEngineError: Error, Equatable, Sendable {
         case .empty: return "Nothing came back"
         case .invented: return "Nothing safe to suggest"
         case .timedOut: return "Took too long"
+        case .screenNotRead: return "Couldn't read the screen"
         case .failed: return "Couldn't finish"
         }
     }
@@ -109,6 +121,9 @@ public enum AIEngineError: Error, Equatable, Sendable {
                 "Every suggestion added a time, a date or a promise that wasn't in the message, so none were shown. Try again."
         case .timedOut:
             return "The model didn't answer in time. Try again."
+        case .screenNotRead(let reason):
+            let detail = reason.isEmpty ? "The screen wasn't read." : reason
+            return "\(detail) Nothing was suggested, because the last reading is not what's on screen now."
         case .failed(let detail):
             return detail.isEmpty ? "Try again." : detail
         }

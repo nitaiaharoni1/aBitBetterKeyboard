@@ -79,7 +79,6 @@ public final class SharedStore: ObservableObject {
         static let personalDictionary = "personalDictionary"
         static let isSubscribed = "isSubscribed"
         static let screenContextAllowed = "screenContextAllowed"
-        static let screenContextCloud = "screenContextCloudReplies"
     }
 
     // MARK: Onboarding
@@ -134,17 +133,17 @@ public final class SharedStore: ObservableObject {
 
     // MARK: Screen context
 
-    /// Whether the user wants Reply offered at all. Separate from whether a
-    /// capture session is actually running: Apple makes the user start the
-    /// session through its own picker, so this is a preference, not a permission.
+    /// Whether the user has opted into screen context in the app. Separate from
+    /// whether a capture session is running, and weaker: Apple makes the user
+    /// start the session through its own picker, so a live session is its own
+    /// permission and this only gates the scripted in-app demo.
+    ///
+    /// There is deliberately no "keep screen reading on the device" switch beside
+    /// it. In the ReplayKit capture flow the read is cloud-only — the accuracy
+    /// argument is measured on iOS in `ScreenContextBarTests` — so a switch
+    /// promising otherwise would be a promise no code keeps.
     @Published public var screenContextAllowed = false {
         didSet { defaults.set(screenContextAllowed, forKey: Key.screenContextAllowed) }
-    }
-
-    /// Only the text read off the frame ever leaves the device. Turning this off
-    /// keeps everything on-device and disables the cloud reply model.
-    @Published public var screenContextCloudReplies = true {
-        didSet { defaults.set(screenContextCloudReplies, forKey: Key.screenContextCloud) }
     }
 
     // MARK: Billing
@@ -160,7 +159,7 @@ public final class SharedStore: ObservableObject {
             Key.hasCompletedOnboarding, Key.enabledLanguages, Key.autocorrect,
             Key.autocapitalise, Key.predictions, Key.haptics, Key.keySounds,
             Key.onDeviceAI, Key.defaultTone, Key.personalDictionary,
-            Key.isSubscribed, Key.screenContextAllowed, Key.screenContextCloud
+            Key.isSubscribed, Key.screenContextAllowed
         ] {
             defaults.removeObject(forKey: key)
         }
@@ -175,7 +174,6 @@ public final class SharedStore: ObservableObject {
         defaultTone = .clearer
         isSubscribed = false
         screenContextAllowed = false
-        screenContextCloudReplies = true
     }
 
     /// Loads persisted values without firing the `didSet` writes above.
@@ -212,9 +210,6 @@ public final class SharedStore: ObservableObject {
         }
         if defaults.object(forKey: Key.screenContextAllowed) != nil {
             screenContextAllowed = defaults.bool(forKey: Key.screenContextAllowed)
-        }
-        if defaults.object(forKey: Key.screenContextCloud) != nil {
-            screenContextCloudReplies = defaults.bool(forKey: Key.screenContextCloud)
         }
 
         // The app and the keyboard are separate processes, and a process always

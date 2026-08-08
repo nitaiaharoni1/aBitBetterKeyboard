@@ -82,6 +82,26 @@ final class CaptureFreshnessTests: XCTestCase {
             .ended(.phoneCall))
     }
 
+    /// A session that has begun and delivered no frame yet fails condition 2 the
+    /// same way a stalled one does, and it is not the same thing: the user is
+    /// still in Apple's picker or its countdown. Told apart by `lastFrameAt`
+    /// never having been written.
+    func testASessionThatHasSeenNoFrameYetIsStartingRatherThanPaused() {
+        var status = liveStatus()
+        status.lastFrameAt = 0
+        status.currentFrameSampledAt = 0
+        status.currentFrameIdentity = .absent
+
+        XCTAssertEqual(CaptureFreshness.evaluate(status: status, now: now), .starting)
+    }
+
+    /// …and a session that has seen a frame and stopped seeing them is paused,
+    /// which is the case the same field decides.
+    func testASessionThatSawFramesAndStoppedIsPaused() {
+        XCTAssertEqual(
+            CaptureFreshness.evaluate(status: liveStatus(lastFrame: 990), now: now), .paused)
+    }
+
     func testNoStatusAtAllIsNoSession() {
         XCTAssertEqual(CaptureFreshness.evaluate(status: nil, now: now), .noSession)
         XCTAssertEqual(CaptureFreshness.evaluate(status: CaptureStatus(), now: now), .noSession)

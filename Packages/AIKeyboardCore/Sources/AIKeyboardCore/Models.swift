@@ -143,12 +143,17 @@ public enum ToneStyle: String, CaseIterable, Identifiable, Codable, Sendable {
 
 // MARK: - Screen context
 
-/// One frame's worth of understanding, after OCR has run over the captured
-/// screen and before anything is sent anywhere.
+/// One frame's worth of understanding, after the screen has been read and
+/// before anything is shown to the user.
 ///
-/// The frame itself is never modelled here on purpose: the product promise is
-/// that pixels are overwritten and never kept, so the only thing that travels
-/// is the text that was read off them.
+/// The frame itself is never modelled here on purpose, and the promise that
+/// buys is narrower than an earlier version of this comment claimed. The screen
+/// is never *stored*: one frame at a time lives in a single buffer inside the
+/// capture process and is overwritten by the next, and nothing on disk, in the
+/// shared container or in a backup holds a picture of it. But a frame does
+/// leave the device — in the ReplayKit capture flow the reading is cloud-only,
+/// so tapping Reply uploads one downscaled screenshot and what comes back is
+/// this. See `CloudScreenReader` and `.claude/docs/screen-capture-design.md` §5.
 public struct ScreenContext: Identifiable, Equatable, Sendable {
     public let id = UUID()
     /// The app the message was read from, for the "we are reading this" strip.
@@ -174,22 +179,47 @@ public struct ScreenContext: Identifiable, Equatable, Sendable {
 }
 
 /// What the capture session is doing right now.
+///
+/// Six cases because there are six things to tell the user, and the last two are
+/// the ones a state machine with four cases gets wrong: a paused session looks
+/// live and a killed one looks off. `CaptureFreshness` decides which of these a
+/// real session is in; the scripted in-app demo drives the first four itself.
 public enum ScreenContextState: Equatable, Sendable {
     /// The user has never started a session, or stopped the last one.
     case off
-    /// Apple's picker is up, or the stream is spinning up.
+    /// The session has begun and no frame has arrived yet: Apple's picker, its
+    /// three-second countdown, or the stream spinning up.
     case starting
-    /// Frames are arriving but nothing repliable has been read yet.
+    /// Frames are arriving and nothing has been read. This is the normal state
+    /// of a live session, not a transient one, because a read only ever happens
+    /// in answer to a tap on Reply.
     case watching
-    /// A message was read off the screen and Reply is worth offering.
+    /// A reading of the frame on screen right now. Only ever set from a reading
+    /// the freshness gate calls offerable.
     case ready(ScreenContext)
+    /// Alive but not looking: `broadcastPaused()`, or delivery stopped without
+    /// one. Not an ending — nothing has to be restarted — and not live either,
+    /// so no reading may be offered.
+    case paused
+    /// The session ended for a reason that is not the user stopping it, so it
+    /// carries the reason and the strip offers a way back. A jetsam kill arrives
+    /// here as `.lost`, never as `.off`: the user switched screen context on and
+    /// it stopped without being asked, which is a different sentence.
+    case ended(ScreenContextEndReason)
 
+    /// Frames are being sampled. False for `.paused` and `.ended`, so nothing
+    /// downstream can offer a reply against a session that is not looking.
     public var isLive: Bool {
         switch self {
-        case .off: return false
+        case .off, .paused, .ended: return false
         case .starting, .watching, .ready: return true
         }
     }
+
+    /// Whether the strip has anything to say. Wider than `isLive` on purpose:
+    /// "stopped when you took a call" is exactly what the user needs to see, and
+    /// a strip that hides itself instead has told them screen context is off.
+    public var isVisible: Bool { self != .off }
 
     public var context: ScreenContext? {
         if case .ready(let context) = self { return context }

@@ -25,7 +25,8 @@ final class DemoWalkthroughTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = true
 
-        let path = ProcessInfo.processInfo.environment["SHOT_DIR"]
+        let path =
+            ProcessInfo.processInfo.environment["SHOT_DIR"]
             ?? NSTemporaryDirectory().appending("aikeyboard-shots")
         shotDirectory = URL(fileURLWithPath: path, isDirectory: true)
         try? FileManager.default.createDirectory(at: shotDirectory, withIntermediateDirectories: true)
@@ -170,7 +171,14 @@ final class DemoWalkthroughTests: XCTestCase {
         settle(1.0)
         capture("screen-context-off")
 
-        tap(app.buttons["Start screen context"], "start session")
+        // The sample conversation, not a real session: starting one of those
+        // needs `RPSystemBroadcastPickerView`, whose button is system-vended and
+        // does nothing here — the simulator runtime ships no `replayd`, so no
+        // broadcast can start on this destination at all.
+        let sample = app.buttons["Play a sample conversation"]
+        XCTAssertTrue(sample.waitForExistence(timeout: 6), "missing element: sample conversation")
+        if !sample.isHittable { app.swipeUp() }
+        tap(sample, "play the sample conversation")
         settle(3.2)
         capture("screen-context-live")
 

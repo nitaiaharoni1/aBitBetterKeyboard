@@ -31,14 +31,33 @@ public final class ScreenContextChannel: ObservableObject {
     /// tap is somebody else's answer.
     @Published public private(set) var requestSequence: UInt64 = 0
 
+    /// Who is watching, which decides one thing: whether this process may write
+    /// `intent.keyboardVisible`.
+    public enum Role: Sendable {
+        /// The keyboard extension. It is the thing the flag describes, so it is
+        /// the only role allowed to set it.
+        case keyboard
+        /// The containing app's Screen Context screen. It reads the same page to
+        /// show the user what the capture session is doing and writes nothing:
+        /// an app claiming the keyboard is visible would make the producer
+        /// believe a keyboard that is not there.
+        case observer
+    }
+
     private var reader: CaptureChannelReader?
+    private var role: Role = .keyboard
     private var timer: Timer?
     private var lastLogged = ""
 
     private static let log = Logger(
         subsystem: "com.nitai.aikeyboard", category: "CaptureChannel")
 
-    private init() {}
+    /// The shared channel opens the App Group container on first use. A reader
+    /// passed here roots it somewhere else, which is how `AIKeyboardCoreTests`
+    /// drives both ends of a real channel without an App Group entitlement.
+    init(reader: CaptureChannelReader? = nil) {
+        self.reader = reader
+    }
 
     /// Whether this process can reach the channel at all. False in the keyboard
     /// until the user grants Full Access, which is why screen context is a
@@ -48,10 +67,11 @@ public final class ScreenContextChannel: ObservableObject {
 
     // MARK: Lifecycle
 
-    public func startWatching() {
+    public func startWatching(as role: Role = .keyboard) {
         guard timer == nil else { return }
+        self.role = role
         if reader == nil { reader = CaptureChannelReader() }
-        reader?.setKeyboardVisible(true)
+        if role == .keyboard { reader?.setKeyboardVisible(true) }
         poll()
 
         let timer = Timer(timeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
@@ -64,7 +84,7 @@ public final class ScreenContextChannel: ObservableObject {
     public func stopWatching() {
         timer?.invalidate()
         timer = nil
-        reader?.setKeyboardVisible(false)
+        if role == .keyboard { reader?.setKeyboardVisible(false) }
         lastLogged = ""
     }
 
@@ -79,7 +99,14 @@ public final class ScreenContextChannel: ObservableObject {
 
     // MARK: The poll
 
-    private func poll() {
+    /// One page load and one pass of the gate.
+    ///
+    /// Internal rather than private for two callers that must not wait for the
+    /// timer: `ScreenContextSession` polls here at the instant Reply is tapped
+    /// and again while it waits for the answer, so a decision about what is on
+    /// screen is never taken against a snapshot up to 250 ms old, and the tests
+    /// step it by hand instead of racing a run loop.
+    func poll() {
         guard let reader else {
             verdict = .noSession
             return
@@ -132,6 +159,7 @@ public final class ScreenContextChannel: ObservableObject {
         switch verdict {
         case .offerable: return "offerable"
         case .ended(let reason): return "ended:\(reason)"
+        case .starting: return "starting"
         case .paused: return "paused"
         case .unconfirmed: return "unconfirmed"
         case .superseded: return "superseded"

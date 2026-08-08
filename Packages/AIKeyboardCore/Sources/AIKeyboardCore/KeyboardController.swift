@@ -78,6 +78,12 @@ public final class KeyboardController: ObservableObject {
     @Published public var selectedTone: ToneStyle?
     @Published public var replies: [ReplyOption] = []
 
+    /// The reading the replies on screen were written about. Held separately
+    /// from `screenContext` because the screen moves on: by the time three
+    /// replies come back, the strip may be showing a different message, and the
+    /// panel has to restate the one it answered.
+    @Published public var replyContext: ScreenContext?
+
     /// Why the last AI call produced nothing. The panel shows this instead of an
     /// empty result, which is the one outcome the user cannot act on.
     @Published public var aiError: AIEngineError?
@@ -86,6 +92,11 @@ public final class KeyboardController: ObservableObject {
 
     /// Mirrored from the capture session so views can observe one object.
     @Published public var screenContext: ScreenContextState = .off
+
+    /// Also mirrored, and separately, because the two move independently: the
+    /// scripted sample handing over to a real session changes what the strip may
+    /// claim without changing the state it is showing.
+    @Published public var screenContextSource: ScreenContextSession.Source = .none
 
     @Published public var isDictating = false
     @Published public var dictationTranscript = ""
@@ -134,6 +145,7 @@ public final class KeyboardController: ObservableObject {
 
         let session = ScreenContextSession.shared
         screenContext = session.state
+        screenContextSource = session.source
         session.$state
             .receive(on: RunLoop.main)
             .sink { [weak self] state in
@@ -141,18 +153,52 @@ public final class KeyboardController: ObservableObject {
                 withAnimation(Theme.Motion.panel) { self.screenContext = state }
             }
             .store(in: &cancellables)
+        session.$source
+            .receive(on: RunLoop.main)
+            .sink { [weak self] source in self?.screenContextSource = source }
+            .store(in: &cancellables)
 
         refreshSuggestions()
     }
 
-    /// Reply is only worth offering when a session has actually read something.
+    /// Reply is worth offering for as long as a session is live, whether or not
+    /// anything has been read yet.
+    ///
+    /// It used to require a reading. That was right when the session read every
+    /// frame speculatively and is wrong now: there is one trigger for a read and
+    /// it is this tap, so waiting for a reading before showing the button would
+    /// mean never showing it. The tap raises `intent.readNow` and waits.
     public var canReply: Bool {
-        store.screenContextAllowed && screenContext.context != nil
+        screenContextIsPermitted && screenContext.isLive
     }
 
-    /// The strip only earns its height once the user has opted in.
+    /// The strip earns its height whenever screen context has something to say,
+    /// which includes having stopped: an ending that hides itself has told the
+    /// user screen context is off.
     public var showsScreenContextStrip: Bool {
-        store.screenContextAllowed && screenContext.isLive
+        screenContextIsPermitted && screenContext.isVisible
+    }
+
+    /// Whether a capture session is running right now, as opposed to the scripted
+    /// sample. The recording indicator keys off this and nothing else: a red dot
+    /// over a demo claims the screen is being watched when it is not.
+    public var isCapturingScreen: Bool {
+        screenContextSource == .capture && screenContext.isLive
+    }
+
+    /// Whether the strip may offer to stop the session. Only the scripted demo
+    /// can be stopped from in here: a broadcast is ended by the user in iOS's own
+    /// UI, and this process has no way to end one.
+    public var canStopScreenContext: Bool {
+        screenContextSource == .scripted && screenContext.isVisible
+    }
+
+    /// A real capture session is its own permission. The stored setting is the
+    /// opt-in for the scripted in-app demo; a broadcast the user started in
+    /// Apple's picker, with iOS showing the red pill for as long as it runs, is a
+    /// stronger signal than any switch of ours and is not second-guessed here.
+    private var screenContextIsPermitted: Bool {
+        screenContextSource == .capture || store.screenContextAllowed
     }
 
     public func attach(target: TextTarget) {
@@ -354,6 +400,7 @@ public final class KeyboardController: ObservableObject {
             overlay = .none
             variants = []
             replies = []
+            replyContext = nil
             selectedTone = nil
             isWorking = false
             aiError = nil
@@ -401,31 +448,33 @@ public final class KeyboardController: ObservableObject {
         }
     }
 
+    /// Reply, against whatever is on screen at the moment of the tap.
+    ///
+    /// The reading is asked for here rather than read off the state, and the two
+    /// are not the same thing: `screenContext` may be showing a reading the
+    /// freshness gate has since refused, and `contextForReply()` will raise a new
+    /// read and wait rather than answer the wrong message. The wait happens
+    /// inside `beginWork`, so the panel shimmers through it exactly as it does
+    /// through a model call.
     private func runReply() {
-        guard let context = screenContext.context, store.screenContextAllowed else {
-            // No session, so say so and offer to start one, rather than showing
-            // an empty result the user cannot explain.
+        guard screenContextIsPermitted, screenContext.isLive || screenContext.context != nil else {
+            // No session, so say so, rather than showing an empty result the
+            // user cannot explain.
             withAnimation(Theme.Motion.panel) { overlay = .aiResult(.needsScreenContext) }
             return
         }
 
         // A reply replaces nothing; it is inserted where the cursor already is.
         aiSourceText = ""
-        beginWork(showing: .aiResult(.replies)) { [engine] in
-            try await engine.replies(to: context)
+        replyContext = nil
+        let session = ScreenContextSession.shared
+        beginWork(showing: .aiResult(.replies)) { [engine, weak self] in
+            let context = try await session.contextForReply()
+            await MainActor.run { self?.replyContext = context }
+            return try await engine.replies(to: context)
         } apply: { controller, replies in
             controller.replies = replies
         }
-    }
-
-    /// Starts a session from inside the keyboard. The extension cannot open a
-    /// capture stream itself, so the real build hands off to the app the same way
-    /// dictation does.
-    public func requestScreenContext() {
-        Feedback.actionPress()
-        store.screenContextAllowed = true
-        ScreenContextSession.shared.start()
-        withAnimation(Theme.Motion.panel) { overlay = .none }
     }
 
     public func selectTone(_ tone: ToneStyle) {

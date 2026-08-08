@@ -1,11 +1,18 @@
 import SwiftUI
 
-/// The row above the suggestion bar, shown only while a capture session is live.
+/// The row above the suggestion bar, shown whenever screen context has something
+/// to say.
 ///
 /// It does two jobs at once. It is the visible capture indicator Apple requires,
 /// and it is the entry point to Reply. Those belong together: the moment the user
 /// benefits from the screen being read is the moment they should be reminded it
 /// is being read.
+///
+/// **It never names the app.** There is no live signal for which app is on
+/// screen: `broadcastAnnotatedWithApplicationInfo:` names the *first* app of a
+/// session and only from a Control Center start, and a stale app name beside a
+/// fresh message is worse than no app name at all. The sender is the thing the
+/// user cares about anyway.
 public struct ScreenContextStrip: View {
 
     @ObservedObject private var controller: KeyboardController
@@ -24,18 +31,32 @@ public struct ScreenContextStrip: View {
             case .starting:
                 status("Starting screen context…")
             case .watching:
-                status("Watching for a message")
+                // The offer, not a claim. Nothing has been read, because a read
+                // only ever happens in answer to this button.
+                status("Reply can read this screen")
+                Spacer(minLength: Theme.Space.xxs)
+                replyButton
             case .ready(let context):
                 contextLabel(context)
                 Spacer(minLength: Theme.Space.xxs)
                 replyButton
+            case .paused:
+                status("Screen context is paused")
+            case .ended(let reason):
+                // A first-class state with a reason and a way back. Restarting a
+                // broadcast is Apple's picker's job and nothing here can do it,
+                // so this says where the button is instead of pretending to be
+                // one.
+                status("\(reason.explanation) Restart it in AI Keyboard.")
             }
 
             if controller.screenContext.context == nil {
                 Spacer(minLength: 0)
             }
 
-            stopButton
+            if controller.canStopScreenContext {
+                stopButton
+            }
         }
         .padding(.horizontal, Theme.Space.sm)
         .frame(height: Theme.Metrics.contextStripHeight)
@@ -49,9 +70,16 @@ public struct ScreenContextStrip: View {
 
     // MARK: Pieces
 
+    /// Red only while a capture session is sampling frames. A recording dot over
+    /// a paused session, a dead one, or the scripted sample is the one thing this
+    /// indicator must never do — it is the capture indicator, not decoration.
     private var liveDot: some View {
         Circle()
-            .fill(Theme.Semantic.record)
+            .fill(
+                controller.isCapturingScreen
+                    ? AnyShapeStyle(Theme.Semantic.record)
+                    : AnyShapeStyle(Theme.Keys.secondaryLabel.opacity(0.5))
+            )
             .frame(width: 7, height: 7)
             .accessibilityHidden(true)
     }
@@ -61,16 +89,13 @@ public struct ScreenContextStrip: View {
             .font(.system(size: 12))
             .foregroundStyle(Theme.Keys.secondaryLabel)
             .lineLimit(1)
+            .minimumScaleFactor(0.85)
     }
 
-    /// Names the app and the sender so it is obvious what was read, and shows the
-    /// message itself so nothing is happening off-screen.
+    /// Names the sender and shows the message itself, so nothing is happening
+    /// off-screen.
     private func contextLabel(_ context: ScreenContext) -> some View {
         HStack(spacing: 4) {
-            Image(systemName: context.appIcon)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(Theme.Keys.secondaryLabel)
-
             Text(context.sender)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Theme.Keys.label)
@@ -83,7 +108,7 @@ public struct ScreenContextStrip: View {
         }
         .environment(\.layoutDirection, context.language.layoutDirection)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Message from \(context.sender) in \(context.appName): \(context.message)")
+        .accessibilityLabel("Message from \(context.sender): \(context.message)")
     }
 
     private var replyButton: some View {
@@ -107,6 +132,9 @@ public struct ScreenContextStrip: View {
         .accessibilityLabel("Reply to this message")
     }
 
+    /// Only ever shown for the scripted demo. A real broadcast is stopped from
+    /// iOS's own red pill or Control Center, and a stop button here that could
+    /// not stop it would be a lie about who is in control.
     private var stopButton: some View {
         Button {
             ScreenContextSession.shared.stop()

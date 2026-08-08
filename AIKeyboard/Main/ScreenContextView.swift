@@ -1,27 +1,29 @@
-import SwiftUI
 import AIKeyboardCore
+import SwiftUI
 
-/// Where the capture session is started and stopped.
+/// Where the capture session is started, watched, and restarted.
 ///
 /// This screen carries the honesty burden for the whole feature. It has to say
 /// what is read, what leaves the device, what is kept, and when it stops, in
-/// language someone can check against what they observe.
+/// language someone can check against what they observe. Two claims on it used to
+/// fail that test and are gone: that the reading happens on device (in the
+/// ReplayKit flow it is cloud-only), and that a switch could keep it on device.
 struct ScreenContextView: View {
     @EnvironmentObject private var store: SharedStore
     @StateObject private var session = ScreenContextSession.shared
 
     var body: some View {
         ZStack {
-            AmbientBackground(intensity: session.isLive ? 1 : 0.5)
+            AmbientBackground(intensity: isCapturing ? 1 : 0.5)
 
             ScrollView {
                 VStack(spacing: Theme.Space.md) {
                     hero
-                    control
-                    if session.isLive { liveDetail }
+                    if session.source == .capture { liveDetail }
+                    starter
+                    demo
                     explanation
                     limits
-                    if session.isLive { cloudToggle }
                 }
                 .padding(.horizontal, Theme.Space.md)
                 .padding(.bottom, Theme.Space.xl)
@@ -33,26 +35,37 @@ struct ScreenContextView: View {
 
     // MARK: Hero
 
+    /// Nothing on this screen goes red for the sample conversation. A recording
+    /// colour over a session that is not capturing anything is the same lie as a
+    /// red dot on the strip, and this is the screen that has to be checkable
+    /// against what the user observes.
+    private var isCapturing: Bool { session.source == .capture && session.isLive }
+
     private var hero: some View {
         VStack(spacing: Theme.Space.xs) {
             ZStack {
                 Circle()
-                    .fill(session.isLive ? AnyShapeStyle(Theme.Semantic.record.opacity(0.16)) : AnyShapeStyle(Theme.Brand.softGradient))
+                    .fill(
+                        isCapturing
+                            ? AnyShapeStyle(Theme.Semantic.record.opacity(0.16))
+                            : AnyShapeStyle(Theme.Brand.softGradient)
+                    )
                     .frame(width: 104, height: 104)
 
-                Image(systemName: session.isLive ? "eye.fill" : "eye.slash")
+                Image(systemName: heroIcon)
                     .font(.system(size: 34, weight: .medium))
-                    .foregroundStyle(session.isLive ? AnyShapeStyle(Theme.Semantic.record) : AnyShapeStyle(Theme.Brand.gradient))
+                    .foregroundStyle(
+                        isCapturing
+                            ? AnyShapeStyle(Theme.Semantic.record) : AnyShapeStyle(Theme.Brand.gradient))
             }
             .padding(.top, Theme.Space.sm)
 
-            Text(session.isLive ? "Reading your screen" : "Not reading anything")
+            Text(headline)
                 .font(.system(size: 22, weight: .bold))
                 .foregroundStyle(Theme.Text.primary)
+                .multilineTextAlignment(.center)
 
-            Text(session.isLive
-                 ? "The keyboard can answer the message in front of you."
-                 : "Turn this on and the keyboard can answer the message in front of you, in any app.")
+            Text(subhead)
                 .font(.system(size: 15))
                 .foregroundStyle(Theme.Text.secondary)
                 .multilineTextAlignment(.center)
@@ -61,70 +74,76 @@ struct ScreenContextView: View {
         .accessibilityElement(children: .combine)
     }
 
-    // MARK: Control
+    private var heroIcon: String {
+        if session.source == .scripted { return "play.circle" }
+        return isCapturing ? "eye.fill" : "eye.slash"
+    }
 
-    private var control: some View {
-        VStack(spacing: Theme.Space.xs) {
-            if session.isLive {
-                Button {
-                    session.stop()
-                } label: {
-                    HStack(spacing: Theme.Space.xs) {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                        Text("Stop")
-                            .font(.system(size: 17, weight: .semibold))
-                    }
-                    .foregroundStyle(Theme.Semantic.record)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Theme.Semantic.record.opacity(0.14))
-                    )
-                    .contentShape(Rectangle())
-                }
-                .pressable()
-            } else {
-                PrimaryButton(title: "Start screen context", icon: "eye") {
-                    store.screenContextAllowed = true
-                    session.start()
-                }
-            }
+    /// Deliberately not "Reading your screen". A live session watches; it reads
+    /// only when the user taps Reply, and the difference is the whole privacy
+    /// story.
+    private var headline: String {
+        if session.source == .scripted { return "Sample conversation" }
+        switch session.state {
+        case .off: return "Not watching anything"
+        case .starting: return "Starting"
+        case .watching, .ready: return "Watching your screen"
+        case .paused: return "Paused"
+        case .ended: return "Screen context stopped"
+        }
+    }
 
-            // The single most important sentence on the screen.
-            Text("iOS shows its own picker and its own recording indicator. This stops when you stop it.")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.Text.tertiary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+    private var subhead: String {
+        if session.source == .scripted {
+            return
+                "Nothing is being captured. This is a message we wrote, so you can see what Reply does before starting anything."
+        }
+        switch session.state {
+        case .off:
+            return "Start this and the keyboard can answer the message in front of you, in any app."
+        case .starting:
+            return "Waiting for the first frame from iOS."
+        case .watching, .ready:
+            return "Nothing is sent anywhere until you tap Reply on the keyboard."
+        case .paused:
+            return "iOS has stopped sending frames. It usually resumes on its own."
+        case .ended(let reason):
+            return "\(reason.explanation) Start it again below."
         }
     }
 
     // MARK: Live detail
 
+    /// The capture process's own numbers, not a paraphrase of them. Every figure
+    /// here is read out of the shared status page written by the other process.
     private var liveDetail: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
                 HStack(spacing: Theme.Space.xs) {
                     Circle()
-                        .fill(Theme.Semantic.record)
+                        .fill(session.isLive ? Theme.Semantic.record : Theme.Text.tertiary)
                         .frame(width: 8, height: 8)
-                    Text("Live")
+                    Text(statusLabel)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.Text.primary)
                     Spacer()
-                    Text(statusLabel)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.Text.secondary)
+                    if session.status?.isDegraded == true {
+                        Text("LOW MEMORY")
+                            .font(.system(size: 9, weight: .bold))
+                            .tracking(0.5)
+                            .foregroundStyle(Theme.Text.onBrand)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Theme.Semantic.record))
+                    }
                 }
 
                 Divider().overlay(Theme.Surface.separator)
 
                 HStack(spacing: 0) {
-                    metric(value: "\(session.framesRead)", label: "Frames read")
-                    metric(value: "1", label: "Frames stored")
-                    metric(value: "0", label: "Frames sent")
+                    metric(value: "\(session.framesRead)", label: "Frames seen")
+                    metric(value: "\(session.status?.readsStarted ?? 0)", label: "Screens sent")
+                    metric(value: "0", label: "Pictures kept")
                 }
 
                 if let context = session.state.context {
@@ -136,26 +155,22 @@ struct ScreenContextView: View {
                             .tracking(0.6)
                             .foregroundStyle(Theme.Text.tertiary)
 
-                        HStack(spacing: 5) {
-                            Image(systemName: context.appIcon)
-                                .font(.system(size: 11))
-                            Text(context.sender)
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        .foregroundStyle(Theme.Text.primary)
+                        // No app name: this design has no live signal for which
+                        // app is on screen, and a stale one beside a fresh
+                        // message is worse than none.
+                        Text(context.sender)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.Text.primary)
 
                         Text(context.message)
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.Text.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .environment(\.layoutDirection, context.language.layoutDirection)
-                            .frame(maxWidth: .infinity, alignment: context.language.isRightToLeft ? .trailing : .leading)
+                            .frame(
+                                maxWidth: .infinity,
+                                alignment: context.language.isRightToLeft ? .trailing : .leading)
                     }
-
-                    Button("Show me a different conversation") {
-                        session.advanceToNextSample()
-                    }
-                    .font(.system(size: 13, weight: .medium))
                 }
             }
         }
@@ -163,10 +178,12 @@ struct ScreenContextView: View {
 
     private var statusLabel: String {
         switch session.state {
-        case .off: return ""
-        case .starting: return "Starting…"
+        case .off: return "Off"
+        case .starting: return "Starting"
         case .watching: return "Watching"
-        case .ready(let context): return context.appName
+        case .ready: return "Read the screen"
+        case .paused: return "Paused"
+        case .ended: return "Stopped"
         }
     }
 
@@ -186,6 +203,53 @@ struct ScreenContextView: View {
         .accessibilityElement(children: .combine)
     }
 
+    // MARK: Starting, and restarting
+
+    /// The only way in, and it is Apple's button.
+    ///
+    /// `RPSystemBroadcastPickerView` cannot be triggered programmatically, so
+    /// there is no "Start" button here that does the work — the three steps say
+    /// what the user has to do, and the button below them is the system's own.
+    private var starter: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            SectionHeader(title: session.source == .capture ? "Start it again" : "Start screen context")
+
+            Card {
+                VStack(alignment: .leading, spacing: Theme.Space.sm) {
+                    step(
+                        number: 1, title: "Tap the button below",
+                        detail: "iOS opens its own list of what can record the screen.")
+                    step(
+                        number: 2, title: "Pick AI Keyboard, then Start Broadcast",
+                        detail: "iOS counts down from three before anything starts.")
+                    step(
+                        number: 3, title: "Go back to your conversation",
+                        detail:
+                            "A red indicator stays in the status bar for as long as this runs. Tap it to stop."
+                    )
+
+                    HStack {
+                        Spacer()
+                        BroadcastPickerButton()
+                            .frame(width: 60, height: 60)
+                            .background(
+                                Circle().fill(Theme.Brand.softGradient)
+                            )
+                            .accessibilityLabel("Start a screen broadcast")
+                        Spacer()
+                    }
+
+                    Text("Only iOS can start this. No app can press that button for you, including this one.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.Text.tertiary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
     // MARK: Explanation
 
     private var explanation: some View {
@@ -197,17 +261,20 @@ struct ScreenContextView: View {
                     step(
                         number: 1,
                         title: "iOS captures the screen",
-                        detail: "You pick what to share in Apple's own picker. Capture keeps running when you switch to WhatsApp or Slack."
+                        detail:
+                            "The broadcast keeps running when you switch to WhatsApp or Slack. Nothing is sent anywhere while it just runs."
                     )
                     step(
                         number: 2,
-                        title: "Text is read on device",
-                        detail: "Each frame goes through on-device text recognition. The frame is overwritten by the next one and never saved."
+                        title: "Tapping Reply sends one screenshot",
+                        detail:
+                            "The screen is read in the cloud, because on-device text recognition has no Hebrew and reads the rest less accurately. One shrunken picture goes out per tap, and nothing else does."
                     )
                     step(
                         number: 3,
                         title: "Only text reaches the keyboard",
-                        detail: "The keyboard receives the recognised message, not an image, and only when you tap Reply."
+                        detail:
+                            "What comes back is the sender, the message and its language. The picture is never saved — not on disk, not in the shared container, not in a backup."
                     )
                 }
             }
@@ -243,9 +310,18 @@ struct ScreenContextView: View {
 
             Card {
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                    limit("Run forever. Apple reserves permanent capture for remote-desktop apps, so every session is one you started.")
-                    limit("See protected content. Banking and video apps can black themselves out of any recording, and they do.")
-                    limit("Work in the background silently. iOS shows a recording indicator the entire time, and so does the keyboard.")
+                    limit(
+                        "Run forever. Apple reserves permanent capture for remote-desktop apps, so every session is one you started — and iOS ends it for a phone call, the lock button or its own memory limit. This screen says which."
+                    )
+                    limit(
+                        "Read anything by itself. A screenshot leaves the device only when you tap Reply, and never on a timer, a screen change or because the keyboard is open."
+                    )
+                    limit(
+                        "Promise that protected content is hidden. Apps can exclude themselves from a recording and banking and video apps usually do, but we have not verified that on a device, so do not rely on it."
+                    )
+                    limit(
+                        "Work in the background silently. iOS shows a recording indicator the entire time, and the keyboard shows a strip whenever it is up."
+                    )
                 }
             }
         }
@@ -265,16 +341,39 @@ struct ScreenContextView: View {
         }
     }
 
-    // MARK: Cloud toggle
+    // MARK: Demo
 
-    private var cloudToggle: some View {
-        Card {
-            ToggleRow(
-                title: "Use the cloud for replies",
-                subtitle: "Off keeps the recognised text on the device and uses the smaller local model.",
-                icon: "cloud",
-                isOn: $store.screenContextCloudReplies
-            )
+    /// The scripted sample, labelled as one.
+    ///
+    /// It reads no screen and starts no broadcast — it plays a fixed
+    /// conversation through the same strip and the same Reply panel, which is
+    /// what the in-app playground and the UI walkthrough drive. A real session
+    /// takes the screen back from it the moment one appears.
+    private var demo: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            SectionHeader(title: "Not sure yet?")
+
+            Card {
+                VStack(alignment: .leading, spacing: Theme.Space.sm) {
+                    Text(
+                        "See it with a sample conversation. Nothing is captured, nothing is sent, and the message is one we wrote."
+                    )
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    if session.source == .scripted {
+                        SecondaryButton(title: "Stop the sample") {
+                            session.stop()
+                        }
+                    } else {
+                        PrimaryButton(title: "Play a sample conversation", icon: "play.fill") {
+                            store.screenContextAllowed = true
+                            session.start()
+                        }
+                    }
+                }
+            }
         }
     }
 }

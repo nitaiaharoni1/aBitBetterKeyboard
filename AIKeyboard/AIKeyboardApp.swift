@@ -9,9 +9,14 @@ struct AIKeyboardApp: App {
         let arguments = ProcessInfo.processInfo.arguments
 
         // The UI tests walk the app from a known starting point, so they ask for
-        // a clean slate rather than inheriting whatever the last run left.
+        // a clean slate rather than inheriting whatever the last run left. That
+        // includes the capture channel: a status page left behind by an earlier
+        // run has a heartbeat that stopped, which is a real session that ended
+        // unexpectedly and would correctly take the screen away from the sample
+        // conversation the walkthrough drives.
         if arguments.contains("-uiTestReset") {
             SharedStore.shared.resetToDefaults()
+            CaptureChannel.clear()
         } else {
             SharedStore.shared.load()
         }
@@ -52,5 +57,11 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: store.hasCompletedOnboarding)
+        // The app watches the same capture channel the keyboard does, as an
+        // observer: it reads the status page so Home and the Screen Context
+        // screen show what the capture session is actually doing, and it never
+        // writes `intent.keyboardVisible`, because the keyboard is the only
+        // thing that can honestly claim to be on screen.
+        .onAppear { ScreenContextSession.shared.startConsuming(.shared, as: .observer) }
     }
 }

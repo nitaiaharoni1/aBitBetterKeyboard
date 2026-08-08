@@ -739,6 +739,17 @@ and two of them are about to become false for a new reason.
 | `Packages/.../Models.swift:149-151` | "the product promise is that pixels are overwritten and never kept, so the only thing that travels is the text that was read off them" | **Half false.** Overwritten and never kept: true. Only text travels: false. |
 | `Packages/.../ScreenContextSession.swift:90-96` | "The frame is read and dropped; only the text survives the call, which is the promise the Screen Context screen makes." | **Half false**, same split. |
 
+**All five are fixed as of Phase 6**, and the copy pass found three more the table missed.
+`ScreenContextView`'s step 2 now says the reading happens in the cloud and that one
+shrunken picture goes out per tap. The three new ones: the "Use the cloud for replies"
+toggle promised that switching it off would keep screen reading on the device, and no code
+read the setting at all — it is deleted, property and all, rather than made to work,
+because §1.1 is the argument against the thing it promised. The limits list asserted that
+protected content blacks itself out; that is R13, unverified, and it now says so in the
+product rather than only in this document. And the Reply panel's "Start screen context"
+button started the *scripted sample*, which is the worst of the three: a button labelled
+with a privacy-relevant action that did something else. It is words now.
+
 The accurate claim, which each clause maps to code:
 
 > The screen is never stored. One frame at a time lives in a single buffer inside the
@@ -959,6 +970,14 @@ renders the loading state, because the reading is not stale, it is merely unconf
 Fail 4 or 5 and it renders the pre-tap offer. **The strip has no stale-but-shown state at
 all.**
 
+**Amended when Phase 6 was built: condition 2 needed splitting.** A session that has begun
+and delivered no frame yet fails it in exactly the same way a stalled one does, so the
+first three seconds of every session — the picker's own countdown — rendered as "paused",
+which reads as a fault. `CaptureFreshness` therefore returns `.starting` when
+`lastFrameAt` has never been written and `.paused` only once a session that *had* frames
+stops having them. The test is a fact about the page rather than a new threshold, and
+`CaptureFreshnessTests` pins both halves.
+
 **Condition 4 is the only content-identity condition in the table**, and the "kind" column
 is there so that stays visible. 1, 2 and 3 all answer "is the producer alive and has it
 looked recently"; a wedged process and a switched conversation are different failures and
@@ -1048,6 +1067,12 @@ describes the *broadcasting* app — the one that hosted the picker — which is
 This is the section §5.1 leans on. It is not a UI inconvenience; it is the reason no
 speculative upload can be made safe on this deployment.
 
+Move 3 is what shipped: the strip names the sender and never the app, `ScreenContextStrip`
+renders no SF Symbol for one, and Reply's own subtitle in the AI menu says "To Maya" rather
+than "From WhatsApp". `ScreenContext.appName` and `appIcon` still exist as strings because
+the in-app sample fills them, and the record that crosses the channel leaves both empty —
+so no code path can print an app name it did not read off the screen.
+
 Three moves, in order of confidence:
 
 1. **Store what the header gives, use it where it is true.** Capture the bundle ID into
@@ -1130,6 +1155,31 @@ it. Three paths, in preference order, and the first two are unverified:
 Whatever the outcome, `.ended` is a first-class state with a reason, not an absence.
 "Screen context stopped because you took a call" is a different message from "…because it
 ran out of memory", and the second one is a bug report.
+
+### 8.4 Two rules Phase 6 had to add, and they are not in §8.2
+
+Built as specified, §8.2 says two things the product should not say.
+
+1. **`.userStopped` is not an ending to report.** The end reason stays in the page until
+   the next `begin()`, so a strip that renders every ending would say "screen context
+   stopped" for ever after the user stopped it on purpose. There is nothing to explain and
+   nothing to restart, so `ScreenContextSession` maps it to `.off`. Every other reason,
+   `.lost` included, keeps its ending — which is what §8.2 was actually protecting.
+2. **An ending decays.** A page whose producer died is `.ended(.lost)` for ever, and a
+   strip still offering to restart yesterday's session is crying wolf. The session reports
+   an ending if it watched that session run *or* the heartbeat stopped within the last ten
+   minutes. The first half is exact; **the ten minutes is a guess** in the same class as
+   §6.3's twenty seconds, chosen to cover the case §8.2 exists for — a jetsam kill while
+   the user is in another app, so the consumer never saw the session alive — and would be
+   set properly by instrumenting the gap between a kill and the next keyboard appearance.
+   A reboot needs neither rule: `CaptureClock` restarts below every timestamp in the page
+   and `CaptureClock.elapsed` reports a future timestamp as infinitely old.
+
+Phase 6 also kept the scripted timeline §4 said would go, because the in-app playground and
+the UI walkthrough drive it and there is nothing else to drive on a machine with no
+`replayd`. It is not a peer of the real thing: `ScreenContextSession.source` names which
+source published the state, a real session cancels the script rather than racing it, and
+nothing paints a recording indicator over the sample.
 
 ---
 

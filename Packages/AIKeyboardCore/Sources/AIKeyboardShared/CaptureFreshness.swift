@@ -28,6 +28,13 @@ import Foundation
 /// record about somebody else's message. `broadcastPaused()` opens the same
 /// window from the other side, which is condition 2.
 ///
+/// **Condition 2 answers two questions and the design's table only named one.**
+/// A session that has begun and delivered no frame at all fails it exactly as a
+/// stalled one does, and the two are nothing alike to the user: the first is the
+/// picker's three-second countdown and the second is a broken pipeline. Split by
+/// `lastFrameAt` never having been written, which is a fact about the page rather
+/// than a threshold, into `.starting` and `.paused`.
+///
 /// There is no stale-but-shown verdict in this enumeration, deliberately. When
 /// Reply is tapped and the gate refuses, the keyboard asks for a new read and
 /// shows the loading state. A five-second wait is the honest answer; a stale
@@ -56,6 +63,14 @@ public enum CaptureFreshness {
         /// to restart. `.lost` when nothing recorded a reason, which is what a
         /// jetsam kill looks like.
         case ended(ScreenContextEndReason)
+        /// A session has begun and no frame has been delivered yet. Condition 2
+        /// would call this a stall, and it is not one: the user is still in
+        /// Apple's picker, or in the three-second countdown it starts, and the
+        /// first frame arrives after that. Told apart from `.paused` by
+        /// `lastFrameAt == 0` — a session that has *ever* seen a frame and
+        /// stopped seeing them is paused, and only a session that has never seen
+        /// one is starting.
+        case starting
         /// Condition 2. Alive, not looking. The strip says paused.
         case paused
         /// Condition 3. The reading is not stale, it is merely unconfirmed —
@@ -125,6 +140,7 @@ public enum CaptureFreshness {
 
         // 2. Liveness of delivery. Separate failure, separate field.
         if status.isPaused { return .paused }
+        guard status.lastFrameAt != 0 else { return .starting }
         guard CaptureClock.elapsed(since: status.lastFrameAt, now: now) <= frameWindow else {
             return .paused
         }

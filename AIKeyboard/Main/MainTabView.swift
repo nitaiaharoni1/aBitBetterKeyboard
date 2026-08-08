@@ -59,6 +59,11 @@ struct HomeView: View {
     /// Sits above everything else because it is the only thing on this screen
     /// that is a session rather than a setting: it needs starting, it can be
     /// running right now, and the user should always be able to see which.
+    /// LIVE means a capture session is running, and only that. The sample
+    /// conversation gets its own badge: a red LIVE over a scripted demo says the
+    /// screen is being watched when nothing is.
+    private var isCapturing: Bool { session.source == .capture && session.isLive }
+
     private var screenContextCard: some View {
         NavigationLink {
             ScreenContextView()
@@ -67,16 +72,19 @@ struct HomeView: View {
                 HStack(spacing: Theme.Space.sm) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .fill(session.isLive
-                                  ? AnyShapeStyle(Theme.Semantic.record.opacity(0.14))
-                                  : AnyShapeStyle(Theme.Brand.softGradient))
+                            .fill(
+                                isCapturing
+                                    ? AnyShapeStyle(Theme.Semantic.record.opacity(0.14))
+                                    : AnyShapeStyle(Theme.Brand.softGradient)
+                            )
                             .frame(width: 38, height: 38)
 
-                        Image(systemName: session.isLive ? "eye.fill" : "eye")
+                        Image(systemName: isCapturing ? "eye.fill" : "eye")
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(session.isLive
-                                             ? AnyShapeStyle(Theme.Semantic.record)
-                                             : AnyShapeStyle(Theme.Brand.gradient))
+                            .foregroundStyle(
+                                isCapturing
+                                    ? AnyShapeStyle(Theme.Semantic.record)
+                                    : AnyShapeStyle(Theme.Brand.gradient))
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -85,20 +93,14 @@ struct HomeView: View {
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(Theme.Text.primary)
 
-                            if session.isLive {
-                                Text("LIVE")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .tracking(0.5)
-                                    .foregroundStyle(Theme.Text.onBrand)
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(Capsule().fill(Theme.Semantic.record))
+                            if isCapturing {
+                                badge("LIVE", colour: Theme.Semantic.record)
+                            } else if session.source == .scripted {
+                                badge("SAMPLE", colour: Theme.Text.tertiary)
                             }
                         }
 
-                        Text(session.isLive
-                             ? "The keyboard can reply to what's on screen"
-                             : "Let the keyboard answer the message you're looking at")
+                        Text(screenContextDetail)
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.Text.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -114,6 +116,24 @@ struct HomeView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home-screen-context")
+    }
+
+    private func badge(_ text: String, colour: Color) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .bold))
+            .tracking(0.5)
+            .foregroundStyle(Theme.Text.onBrand)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(colour))
+    }
+
+    private var screenContextDetail: String {
+        switch session.source {
+        case .capture: return "The keyboard can reply to what's on screen"
+        case .scripted: return "Playing a sample conversation"
+        case .none: return "Let the keyboard answer the message you're looking at"
+        }
     }
 
     // MARK: Setup
@@ -150,7 +170,8 @@ struct HomeView: View {
                 )
                 StatusRow(
                     title: "Full Access",
-                    detail: fullAccessGranted ? "Cloud rewrites enabled" : "Typing and local AI still work without it",
+                    detail: fullAccessGranted
+                        ? "Cloud rewrites enabled" : "Typing and local AI still work without it",
                     isDone: fullAccessGranted,
                     action: openSettings
                 )

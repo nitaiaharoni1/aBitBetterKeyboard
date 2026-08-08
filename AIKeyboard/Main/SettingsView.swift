@@ -3,6 +3,7 @@ import AIKeyboardCore
 
 struct SettingsView: View {
     @EnvironmentObject private var store: SharedStore
+    @StateObject private var session = ScreenContextSession.shared
 
     var body: some View {
         NavigationStack {
@@ -96,11 +97,22 @@ struct SettingsView: View {
 
     // MARK: More
 
+    /// Reports the session rather than the stored opt-in. The setting only means
+    /// the user has seen the sample; whether Reply can read anything depends on a
+    /// broadcast that iOS starts and ends.
+    private var screenContextSubtitle: String {
+        switch session.source {
+        case .capture: return session.isLive ? "Watching your screen" : "Stopped"
+        case .scripted: return "Playing a sample"
+        case .none: return "Off"
+        }
+    }
+
     private var moreSection: some View {
         section("More") {
             NavigationRow(
                 title: "Screen context",
-                subtitle: store.screenContextAllowed ? "Reply is available" : "Off",
+                subtitle: screenContextSubtitle,
                 icon: "eye"
             ) {
                 ScreenContextView()

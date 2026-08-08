@@ -35,6 +35,26 @@ public enum CaptureChannel {
     /// Full-Access-only feature end to end.
     public static var isReachable: Bool { SharedContainer.url != nil }
 
+    /// Puts the channel back to "no session has ever run", in place.
+    ///
+    /// **In place rather than by deleting the files**, which is not a style
+    /// preference: another process may already have these pages mapped, and
+    /// unlinking a mapped file leaves that process reading an inode nobody will
+    /// ever write to again — a channel that looks alive and is not. Zeroing
+    /// through the seqlock is seen by every reader on the next load.
+    ///
+    /// Only `-uiTestReset` calls this. A capture session never does: it calls
+    /// `CaptureChannelWriter.begin()`, which zeroes the same page and then
+    /// publishes an identity.
+    public static func clear() {
+        guard prepareDirectory() != nil, let statusURL, let intentURL, let readingURL else {
+            return
+        }
+        SharedPage<CaptureStatus>(url: statusURL, bytes: statusPageBytes, writable: true)?.reset()
+        SharedPage<CaptureIntent>(url: intentURL, bytes: intentPageBytes, writable: true)?.reset()
+        try? FileManager.default.removeItem(at: readingURL)
+    }
+
     static func prepareDirectory() -> URL? {
         guard let directory = directoryURL else { return nil }
         try? FileManager.default.createDirectory(
@@ -269,19 +289,28 @@ public final class CaptureChannelWriter: @unchecked Sendable {
     private static let log = Logger(
         subsystem: "com.nitai.aikeyboard", category: "CaptureChannel")
 
-    public init?() {
+    public convenience init?() {
+        guard let directory = CaptureChannel.prepareDirectory() else { return nil }
+        self.init(directory: directory)
+    }
+
+    /// Roots the channel somewhere other than the App Group container.
+    ///
+    /// The capture process always uses the container. This exists for tests:
+    /// `AIKeyboardCoreTests` carries no App Group entitlement, so the container
+    /// is unreachable there, and a consumer tested against a hand-built
+    /// `CaptureStatus` would exercise neither the pages, nor the seqlock, nor the
+    /// gate reading them.
+    public init?(directory: URL) {
         guard
-            CaptureChannel.prepareDirectory() != nil,
-            let statusURL = CaptureChannel.statusURL,
-            let intentURL = CaptureChannel.intentURL,
-            let readingURL = CaptureChannel.readingURL,
             let statusPage = SharedPage<CaptureStatus>(
-                url: statusURL, bytes: CaptureChannel.statusPageBytes, writable: true)
+                url: directory.appendingPathComponent("status.bin"),
+                bytes: CaptureChannel.statusPageBytes, writable: true)
         else { return nil }
 
         self.statusPage = statusPage
-        self.intentURL = intentURL
-        self.readingURL = readingURL
+        self.intentURL = directory.appendingPathComponent("intent.bin")
+        self.readingURL = directory.appendingPathComponent("reading.json")
     }
 
     /// Starts a session. Zeroes the page first, so nothing from a previous run
@@ -420,18 +449,19 @@ public final class CaptureChannelReader: @unchecked Sendable {
     /// A missing `status.bin` is **not** a reason to fail: it means no broadcast
     /// has ever run, which is the ordinary starting state, and the user can start
     /// one while the keyboard is already on screen.
-    public init?() {
-        guard
-            CaptureChannel.prepareDirectory() != nil,
-            let statusURL = CaptureChannel.statusURL,
-            let intentURL = CaptureChannel.intentURL,
-            let readingURL = CaptureChannel.readingURL
-        else { return nil }
+    public convenience init?() {
+        guard let directory = CaptureChannel.prepareDirectory() else { return nil }
+        self.init(directory: directory)
+    }
 
-        self.statusURL = statusURL
-        self.readingURL = readingURL
+    /// Roots the channel somewhere other than the App Group container. See the
+    /// writer's overload for why it exists.
+    public init(directory: URL) {
+        self.statusURL = directory.appendingPathComponent("status.bin")
+        self.readingURL = directory.appendingPathComponent("reading.json")
         self.intentPage = SharedPage<CaptureIntent>(
-            url: intentURL, bytes: CaptureChannel.intentPageBytes, writable: true)
+            url: directory.appendingPathComponent("intent.bin"),
+            bytes: CaptureChannel.intentPageBytes, writable: true)
     }
 
     /// Retries the mapping until it succeeds, so a broadcast started while the

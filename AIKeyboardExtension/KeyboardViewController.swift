@@ -70,12 +70,12 @@ final class KeyboardViewController: UIInputViewController {
     /// at, and `intent.keyboardVisible` would be a lie.
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        ScreenContextChannel.shared.startWatching()
+        ScreenContextSession.shared.startConsuming(.shared, as: .keyboard)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        ScreenContextChannel.shared.stopWatching()
+        ScreenContextSession.shared.stopConsuming()
     }
 
     /// The host app decides how tall the keyboard is only if we tell it. The
