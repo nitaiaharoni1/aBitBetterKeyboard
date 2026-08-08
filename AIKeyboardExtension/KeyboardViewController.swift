@@ -40,6 +40,18 @@ final class KeyboardViewController: UIInputViewController {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateKeyboardHeight() }
             .store(in: &cancellables)
+
+        // Names and text replacements the user already has, so `SuggestionEngine`
+        // can offer "Nitai" without waiting for it to appear in a sentence
+        // first. "Will not provide a complete repository of a language's
+        // vocabulary" per Apple's own doc comment on this method — it is a
+        // supplement, not a dictionary, and on the Simulator it answers empty.
+        requestSupplementaryLexicon { [weak self] lexicon in
+            let words = lexicon.entries.map(\.documentText)
+            Task { @MainActor [weak self] in
+                self?.controller.updateSupplementaryLexicon(words)
+            }
+        }
     }
 
     private func install<Content: View>(_ root: Content) {

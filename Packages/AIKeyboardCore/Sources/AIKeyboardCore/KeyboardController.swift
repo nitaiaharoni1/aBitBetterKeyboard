@@ -161,6 +161,12 @@ public final class KeyboardController: ObservableObject {
     private var lastSpaceTapAt: Date?
     private var cancellables = Set<AnyCancellable>()
 
+    /// Names and shortcuts from `UILexicon`, read once by `KeyboardViewController`
+    /// via `requestSupplementaryLexicon` and handed down. Empty until that
+    /// callback returns, and empty for good in the app's playground, which has
+    /// no host to ask.
+    private var supplementaryWords: [String] = []
+
     public init(
         target: TextTarget?,
         store: SharedStore = .shared,
@@ -405,11 +411,21 @@ public final class KeyboardController: ObservableObject {
         let prefix = currentWordPrefix
         let before = contextBefore
         let context = prefix.isEmpty ? before : String(before.dropLast(prefix.count))
-        suggestions = MockSuggestionEngine.suggestions(
+        suggestions = SuggestionEngine.suggestions(
             prefix: prefix,
             context: context,
-            languages: store.enabledLanguages
+            languages: store.enabledLanguages,
+            supplementary: supplementaryWords
         )
+    }
+
+    /// Called by `KeyboardViewController` once `requestSupplementaryLexicon`
+    /// answers. Re-scores immediately rather than waiting for the next
+    /// keystroke, since the lexicon usually lands while the user is already
+    /// mid-word.
+    public func updateSupplementaryLexicon(_ words: [String]) {
+        supplementaryWords = words
+        refreshSuggestions()
     }
 
     public func apply(_ suggestion: Suggestion) {

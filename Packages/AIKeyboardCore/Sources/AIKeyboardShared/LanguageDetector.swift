@@ -11,7 +11,7 @@ public enum TextScript: String, Sendable, Hashable {
 
 /// Language and script detection shared by the AI engines and the dictation panel.
 ///
-/// Deliberately separate from `MockSuggestionEngine.dominantLanguage`, which
+/// Deliberately separate from `SuggestionEngine.dominantLanguage`, which
 /// answers a narrower question — which of the two keyboard layouts a run of
 /// characters belongs to — and is still what the suggestion bar wants.
 ///

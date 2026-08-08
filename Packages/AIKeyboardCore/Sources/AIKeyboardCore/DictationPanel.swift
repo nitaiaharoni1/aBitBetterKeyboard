@@ -2,10 +2,11 @@ import SwiftUI
 
 /// What the user sees while speaking.
 ///
-/// A keyboard extension cannot open the microphone itself, so in the real product
-/// the audio session lives in the main app and the transcript is handed back. That
-/// constraint shapes the copy here: the panel says where the recording is
-/// happening rather than pretending the keyboard is doing it.
+/// A keyboard extension has no path to the microphone at all — confirmed against
+/// Apple's current documentation, not assumed; see `MockDictation`'s doc comment
+/// for the citation and for why there is also no way to hand the recording off
+/// to the containing app from in here. `MockDictation` plays the onboarding
+/// script and the in-app playground; nothing behind this panel ever will record.
 public struct DictationPanel: View {
 
     @ObservedObject var controller: KeyboardController
@@ -70,7 +71,7 @@ public struct DictationPanel: View {
     }
 
     private var detectedLanguageTag: some View {
-        let detected = MockSuggestionEngine.dominantLanguage(in: controller.dictationTranscript) ?? .english
+        let detected = SuggestionEngine.dominantLanguage(in: controller.dictationTranscript) ?? .english
         let mixed = containsBothScripts(controller.dictationTranscript)
 
         return HStack(spacing: 3) {
