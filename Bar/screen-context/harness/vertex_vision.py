@@ -47,6 +47,18 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 BAR = HERE.parent
 
+# An alias, not a pinned version, and that is a measured hazard rather than a
+# theoretical one: re-running this identical configuration hours later disagreed
+# with the committed `cloud_outputs.json` on 10 of 30 frames and scored 26/30
+# sender against its 29/30, with nothing in the repo changed. Within one sitting
+# the runs are byte-identical (verified against a response cache by re-encoding
+# the corpus to different PNG bytes with identical pixels: same answers), so it
+# is the served model that moves, not the harness.
+#
+# Set VERTEX_MODEL to a dated version before taking a number you intend to quote.
+# Left as the alias by default because that is what the product's backend will
+# resolve to, and a bar that tracks the shipped model is the more honest default
+# for catching regressions the user would actually feel.
 MODEL = os.environ.get("VERTEX_MODEL", "gemini-2.5-flash")
 PROJECT = os.environ.get("VERTEX_PROJECT", "handi-project")
 THINKING_BUDGET = int(os.environ.get("VERTEX_THINKING_BUDGET", "512"))

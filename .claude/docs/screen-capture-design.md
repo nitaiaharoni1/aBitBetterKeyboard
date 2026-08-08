@@ -87,6 +87,12 @@ cloud harness is scored against:
 | message, exact | 16/30 | **19/30** |
 | message, within 90% | 24/30 | **26/30** |
 
+The right-hand column comes from the committed `cloud_outputs.json`, captured at
+1206x2622 as a PNG. §2.2.1 measures the size and encoding the product actually sends and
+finds them no worse — but it also finds that a fresh run of that same 1206x2622 PNG
+configuration now scores 26/30 sender, so read the column as the reading it was, not as a
+number the model will hand back today.
+
 Routing costs three points of sender and three of exact message. And the eight frames the
 on-device gate accepts (`byEngine["vision"]?.n == 8`) include **three it answers wrongly**:
 `wa-07`, whose only correct answer is silence, comes back as a message the user already
@@ -211,8 +217,56 @@ resample, **macOS host** — CoreGraphics will differ slightly):
 | 804x1748 | 96 | 142 | 151 |
 | 603x1311 | **66** | **98** | **104** |
 
+`FrameScaler.target` rounds down to even, so the shipped destination is **602x1310**, not
+the 603x1311 this section rounds to. Re-measured at that exact size the JPEG figures are
+unchanged to the kilobyte: 66 / 98 / 103.
+
 Fingerprint reduction: 32x64 greyscale = 2,048 bytes. Negligible, and §5.5 is where the
 band it is taken over is decided.
+
+#### 2.2.1 The downscale costs no accuracy — R5, closed
+
+The bytes above were never the question; the question was whether the model can still read
+602x1310. Measured 2026-08-08 with `Bar/screen-context/harness/vertex_vision.py`, which now
+takes `VERTEX_IMAGE_SCALE` and `VERTEX_IMAGE_FORMAT`. Nothing else moved: same prompt, same
+schema, same `propertyOrdering`, same `thinkingBudget: 512`, same model, all four cells in
+one sitting, two runs each minimum:
+
+| Sent | runs | bytes med / p90 | latency med / p90 | exact | +near | sender | language | traps |
+|---|---|---|---|---|---|---|---|---|
+| 1206x2622 PNG — what the bar always sent | 3 | 250 / 341 KB | 5.9 / 6.5 s | 18/30 | 6 | 26/30 | 28/30 | 0 |
+| 602x1310 PNG | 2 | 207 / 288 KB | 5.3 / 6.5 s | 17/30 | 5 | 28/30 | 29/30 | **1** |
+| 1206x2622 JPEG q0.70 | 3 | 176 / 254 KB | 5.2 / 5.9 s | 18-19/30 | 6 | 28/30 | 28/30 | 0 |
+| **602x1310 JPEG q0.70 — what `FrameScaler` sends** | 3 | **66 / 98 KB** | **5.0 / 6.0 s** | 18-19/30 | 7 | **29-30/30** | **30/30** | 0 |
+
+No axis moves by more than one between the two sizes at either encoding, and at the
+encoding that ships the half-size frame is ahead on sender and keyboard language. **So
+`FrameScaler.scale` stays at 2**, and the 804x1748 contingency is dead.
+
+Three things this run turned up that are worth more than the decision itself:
+
+1. **The encoder was the second unmeasured variable and nobody had noticed.** The bar sends
+   PNG; every path in the product sends JPEG q0.70. Half-size JPEG is 74% smaller than the
+   PNG the bar scored and scores at or above it on every axis, so this is a saving with no
+   accompanying cost — but it had never been measured, and "the same encoder, at the same
+   quality, the bar scored the reader at" in `FrameScaler.encode` was not true.
+2. **Totals hide per-frame churn.** Eleven of thirty frames change verdict between the two
+   PNG sizes (4 better, 6 worse, 1 wrong both ways) and five between the two JPEG sizes
+   (4 better, 1 worse). Read the per-entry diff in `Bar/screen-context/README.md`, not the
+   total. The single trap returned anywhere in the 2x2 is `im-03` at 602x1310 PNG, which is
+   not a configuration anything ships.
+3. **The model reproduces itself and does not reproduce the committed file.** Repeat runs
+   of a cell returned byte-identical answers on all 30 frames across 45 minutes, with two
+   single-frame exceptions — and re-encoding the corpus to a different PNG byte stream with
+   identical pixels reproduced the first run exactly, which rules out a response cache. But
+   a fresh run of the bar's own configuration disagrees with the committed
+   `cloud_outputs.json` on **9 of 30**, scoring 26/30 sender against its 29/30, with nothing
+   in the repo changed. Any comparison on this bar has to have both sides run together, and
+   any number quoted from a committed `*_outputs.json` is a historical reading.
+
+Latency moved 5.9s -> 5.0s median, which is real but not the point: this ran over a laptop
+uplink where 184 KB of saved payload is under 200 ms. The bytes are the figure that
+converts to seconds on a phone's cellular link.
 
 ### 2.3 Vision, measured on two deployments, neither of them a phone
 
@@ -377,7 +431,8 @@ in this section, and it is R3.
 > the two largest after the frame itself. Phase 3 exists to measure them, and the design
 > does not proceed past Phase 3 without them.
 
-Recommended configuration: 603x1311 downscale, cloud read, no Vision anywhere.
+Recommended configuration: 602x1310 downscale, cloud read, no Vision anywhere. §2.2.1
+measures the downscale and it costs nothing.
 
 | Line | MB | Status |
 |---|---|---|
@@ -441,7 +496,7 @@ Three processes, one shared container, no pixels between them.
   |    -> publish identity + sampledAt to status.bin |  every sampled frame, always
   |    -> ScreenReadService.claim(...) ?             |
   |         no  -> return                            |
-  |         yes -> scale to 603x1311 (reused buf)    |  3.0 MB, overwritten in place
+  |         yes -> scale to 602x1310 (reused buf)    |  3.0 MB, overwritten in place
   |                encode JPEG q0.70                 |  ~66 KB median
   |                hand bytes to the read queue      |  <-- returns here
   |                                                  |
@@ -1352,10 +1407,9 @@ does not touch that.
 
 **Phase 5 — reading, in the shutter.**
 `CloudScreenReader` on the serial read queue inside the broadcast extension, gated by
-`MemoryGovernor`, T1 only. Also settle R5 first: re-run the cloud harness at 1206x2622 and
-603x1311, two runs each, and confirm the downscale does not cost sender or message
-accuracy. If it does, move the downscale up to 804x1748 and take the 2.4 MB — which the
-Phase 3 baseline has to have left room for.
+`MemoryGovernor`, T1 only. R5 is settled ahead of this phase (§2.2.1): the downscale costs
+no sender, message or language accuracy, so the 804x1748 fallback and its 2.4 MB are not
+needed and Phase 3's baseline does not have to leave room for them.
 
 **Phase 6 — the consumer.**
 `ScreenContextSession` rewritten as a channel consumer. The §6 freshness gate, with tests
@@ -1433,7 +1487,7 @@ Ordered by how much of the design they can invalidate.
 | **R14** | **`isSecureTextEntry` is `@optional` and therefore `Bool?`.** Verified in the header (`UITextInputTraits.h:239` opens the optional block, the property is at `:257`) and by the compiler. §3.3.1 specifies the guard to fail closed on `nil`, which is correct and may also mean it refuses every read on every host. Whether hosts populate the trait through the proxy is unknown, and if they never do, the guard as written disables the feature rather than protecting it. | Ship both counters (`refusedSecure`, `refusedSecureUnknown`) in Phase 7 and read them off the first device run. If the unknown counter equals the tap count, find a different signal — do not flip the default. |
 | R15 | **The fingerprint's residual blind spot.** §6.2: when the newest message is drawn under the host keyboard, two conversations can be pixel-identical in the visible band, and condition 4 cannot separate them. Measured on `sl-05`, one of 30 corpus frames. Bounded by condition 5's 20 s cap and by the fact that unreadable content is also unread content, but not closed. | Nothing on the fingerprint side closes it. If it shows up in practice, the answer is `VisionScreenReader`'s: refuse rather than answer. |
 | R7 | `URLSession` + TLS footprint inside a broadcast upload extension, guessed at 4-8 MB. Network *working* is almost certain — uploading is the extension point's purpose — but the memory it costs is not. | Request from `broadcastStarted` on device, with `MemoryGovernor` sampled before and during. |
-| R5 | Does 603x1311 hurt the cloud reader? Bar scores were taken at 1206x2622. | Cloud harness at both sizes, two runs each side, compare sender / message / language. |
+| ~~R5~~ | ~~Does 603x1311 hurt the cloud reader? Bar scores were taken at 1206x2622.~~ **Closed 2026-08-08, §2.2.1.** It does not. The downscale stays. | Done: cloud harness as a 2x2 over size and encoder, two runs a cell, one sitting. |
 | R6 | Does `broadcastAnnotatedWithApplicationInfo` fire on every app switch or only the first? The header says the first. If it fired on every switch, §5.1 would have to be re-argued — that is how load-bearing it is. | Device log across three app switches inside one broadcast. |
 | R8 | Can a keyboard extension host a working `RPSystemBroadcastPickerView`? Decides whether restart is in-place or requires leaving the app. | Device build; tap it. |
 | R9 | Can a keyboard extension call `extensionContext.open(_:)`? Header allows it, folklore says no. | Device build; log the `success` flag. |

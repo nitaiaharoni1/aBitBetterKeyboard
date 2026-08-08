@@ -159,15 +159,30 @@ Vision behaves differently on iOS than on macOS — it answers three frames ther
 that it correctly refuses on macOS, including the one whose only right answer is
 silence.
 
+**Both of those cloud figures were taken at the corpus's full 1206x2622, as a
+PNG, and the capture process uploads 602x1310 as a JPEG.** That gap has now been
+measured rather than assumed: same prompt, same schema, same model, four
+combinations of size and encoder, two to three runs each in one sitting. Halving
+costs nothing — at the encoding that ships, the half-size frame scores sender
+29-30/30 and keyboard language 30/30 against 28/30 and 28/30 at full size,
+message is level, and it is 74% fewer bytes (66 KB median against 250 KB). The
+best of its three runs matches the published 19/30 exact, 26/30 within 90% and
+29/30 sender outright, at a quarter of the payload. The per-frame
+diff and the caveats are in `Bar/screen-context/README.md`; the shortest one is
+that the model is reproducible within a sitting and not across one, so a fresh
+run of the *full*-size configuration now disagrees with the committed
+`cloud_outputs.json` on 9 of 30 with nothing changed.
+
 **So in the ReplayKit capture flow every screen read goes to the cloud, English
 included, and it goes only when you tap Reply.** The order of the two open
 questions was backwards: the accuracy one is answered above, on iOS, and it
 decides this on its own. What the Screen Context screen therefore says is that
-tapping Reply sends one shrunken picture of the screen and gets text back — the
-previous wording, "each frame goes through on-device text recognition", was
-false under this design and is gone. There is no setting that changes it, and
-the switch that used to promise one ("Use the cloud for replies") is gone too,
-because nothing in the code read it.
+tapping Reply sends one picture of the screen at half its width and height and
+gets text back — the previous wording, "each frame goes through on-device text
+recognition", was false under this design and is gone, and "shrunken" is now a
+size rather than a hint. There is no setting that changes it, and the switch
+that used to promise one ("Use the cloud for replies") is gone too, because
+nothing in the code read it.
 
 The memory question is still open and is stranger than it looked. Over the 30
 screens in `Bar/screen-context/`, in one process, `VNDetectTextRectanglesRequest`

@@ -27,12 +27,31 @@ import Foundation
 /// so 420f is the cheaper case overall by 7 MiB. Nothing is allocated at all in a
 /// session where the user never taps Reply.
 ///
-/// **Half, and that factor is not measured.** `Bar/screen-context/` scored the
-/// cloud reader at the full 1206x2622 (sender 29/30, message 19/30 exact) and the
-/// design's R5 — does 603x1311 cost accuracy — is still open, because settling it
-/// needs two runs of the cloud harness per size against a real model. `scale` is
-/// the one place to change it, and `1` sends the frame at the size the bar
-/// measured, for 176 KB median instead of 66 KB and no destination buffer at all.
+/// **Half, and the factor is measured.** R5 asked whether halving the frame
+/// costs the cloud reader accuracy, because every published score on
+/// `Bar/screen-context/` was taken at the native 1206x2622. Settled 2026-08-08 by
+/// running that harness as a 2x2 — 1206x2622 and 602x1310, PNG and JPEG q0.70,
+/// two runs a cell minimum, same prompt, same schema, same model. It does not:
+///
+/// | Sent | bytes med / p90 | exact | sender | language | traps |
+/// |---|---|---|---|---|---|
+/// | 1206x2622 PNG, the bar's config | 250 / 341 KB | 18/30 | 26/30 | 28/30 | 0 |
+/// | 602x1310 PNG | 207 / 288 KB | 17/30 | 28/30 | 29/30 | 1 |
+/// | 1206x2622 JPEG q0.70 | 176 / 254 KB | 18-19/30 | 28/30 | 28/30 | 0 |
+/// | **602x1310 JPEG q0.70, what this class sends** | **66 / 98 KB** | 18-19/30 | **29-30/30** | **30/30** | 0 |
+///
+/// No axis moves by more than one between full and half, and at the format that
+/// actually ships the half-size frame is *ahead* on sender and keyboard
+/// language. It is also 74% smaller than the PNG the bar scored. So `scale`
+/// stays at 2; `1` sends the frame at the bar's resolution for 176 KB median
+/// instead of 66 KB and no destination buffer at all, and buys nothing.
+///
+/// Two caveats the bar's own README carries in full. The totals hide churn —
+/// eleven of thirty frames change verdict between the two PNG sizes, four of
+/// them for the better — so re-measure per entry rather than by total. And a
+/// fresh run of the bar's own configuration disagrees with the committed
+/// `cloud_outputs.json` on nine of thirty with nothing in the repo changed,
+/// which is why the table above was taken with all four cells in one sitting.
 ///
 /// **Landscape is unhandled and that is deliberate rather than forgotten.**
 /// Orientation rides as a sample attachment, `SampleHandler` logs it, and nothing
@@ -275,7 +294,10 @@ final class FrameScaler {
                 decode: nil, shouldInterpolate: false, intent: .defaultIntent)
         else { return nil }
 
-        // The same encoder, at the same quality, the bar scored the reader at.
+        // `CloudScreenReader`'s own encoder at its own default quality, so the
+        // capture process and the in-app playground put the same bytes on the
+        // wire. The bar scored this quality at this size — that used to be an
+        // assumption and is now the last row of the table above.
         return CloudScreenReader.encode(image)
     }
 }

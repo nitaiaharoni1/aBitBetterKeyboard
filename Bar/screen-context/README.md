@@ -228,6 +228,12 @@ bash run-reader.sh                                # writes ../reader_outputs.jso
 python3 vertex_vision.py                          # writes ../cloud_outputs.json
 python3 score_cloud.py cloud_outputs.json         # sender / message / language
 
+# The same reader at the size and format the capture process actually uploads.
+# Three environment knobs, and only these three, change what the model is shown.
+VERTEX_IMAGE_SCALE=2 VERTEX_IMAGE_FORMAT=jpeg \
+  python3 vertex_vision.py /tmp/ship.json         # 602x1310 JPEG q0.70
+python3 score_cloud.py /tmp/ship.json
+
 # The shipping path, end to end: every frame goes through
 # ScreenContextSession.submit(_:appName:appIcon:) -> RoutedScreenReader ->
 # VisionScreenReader or CloudScreenReader. Only the network is replaced, by a
@@ -253,7 +259,9 @@ things separately from near-misses: returning a string the bar lists under
 
 ## What the engines actually score
 
-Measured 2026-08-08. Every number below is the same across repeated runs.
+Measured 2026-08-08. Every number below is the same across repeated runs *in the
+same sitting*; the cloud one is not the same across sittings, and "Size and
+format" below says by how much.
 
 **Apple Vision, raw OCR** — character recall of the expected message:
 
@@ -306,6 +314,13 @@ the 29/30 this line used to claim; `score_cloud.py` computes the column but does
 not print it, so the number went stale unnoticed. The four misses are all the
 model calling a Hebrew message `mixed` because it contains digits.)
 
+**Read that line with two qualifiers, both settled in the next section.** It was
+measured at the corpus's native **1206x2622**, as a **PNG** — and the product
+uploads 602x1310 as JPEG q0.70. And it is a *stored artifact*:
+`cloud_outputs.json` is what the model returned in the sitting it was captured
+in, and a fresh run of the identical configuration now disagrees with it on 9 of
+the 30. Every number on this page that comes from that file inherits both.
+
 Two prompt changes are worth more than they look, and both are recorded in
 `CloudScreenReader`'s doc comment: making the model enumerate every bubble
 before naming one took sender from 21/30 to 29/30, and splitting `script` from
@@ -317,6 +332,98 @@ Two changes measured *worse* and were reverted rather than kept on the theory
 that they should help: a paragraph explaining bubble tint and edge, and "a
 printed name always means the message is incoming". Both are listed in the same
 doc comment so nobody re-adds them.
+
+### Size and format: what the capture process actually uploads
+
+Measured 2026-08-08, in one sitting, `gemini-2.5-flash` at `thinkingBudget: 512`
+and `temperature: 0`. Same prompt, same schema, same `propertyOrdering`, same
+model. The only thing that moved is the picture.
+
+The bar had always sent the corpus PNG untouched. `FrameScaler` sends
+`(w/2)&~1 x (h/2)&~1` — **602x1310**, not the 603x1311 the design doc rounds to —
+and `CloudScreenReader.encode` makes it a **JPEG at q0.70**. So the published
+scores were taken on a configuration the product never uses, on two counts, and
+this is the 2x2 that closes both. Two runs per cell minimum, spread over 45
+minutes; every run of a cell is listed:
+
+| Sent | runs | bytes med / p90 | latency med / p90 | exact | +near | sender | language | traps |
+|---|---|---|---|---|---|---|---|---|
+| 1206x2622 PNG — the bar's config | 3 | 250 / 341 KB | 5.9 / 6.5 s | 18, 18, 18 | 6, 6, 6 | 26 | 28 | 0 |
+| 602x1310 PNG | 2 | 207 / 288 KB | 5.3 / 6.5 s | 17, 17 | 5, 5 | 28 | 29 | **1** |
+| 1206x2622 JPEG q0.70 | 3 | 176 / 254 KB | 5.2 / 5.9 s | 18, 19, 18 | 6, 6, 6 | 28 | 28 | 0 |
+| **602x1310 JPEG q0.70 — what ships** | 3 | **66 / 98 KB** | **5.0 / 6.0 s** | 18, 18, 19 | 7, 7, 7 | 29, 30, 29 | **30** | 0 |
+
+The last row is worth reading against the top of this section: at 66 KB the
+shipping configuration reaches the same 19/30 exact, 26/30 within 90% and 29/30
+sender that `cloud_outputs.json` was published for at 250 KB, and is one better
+on keyboard language.
+
+Per bucket, taking the first run of each cell:
+
+| Sent | english (12) | mixed (8) | hebrew (10) |
+|---|---|---|---|
+| | exact +near / snd / lang | exact +near / snd / lang | exact +near / snd / lang |
+| 1206x2622 PNG | 11 +0 / 12 / 12 | 3 +3 / 6 / 7 | 4 +3 / 8 / 9 |
+| 602x1310 PNG | 10 +1 / 12 / 12 | 3 +2 / 8 / 7 | 4 +2 / 8 / 10 |
+| 1206x2622 JPEG | 10 +0 / 11 / 11 | 4 +3 / 7 / 7 | 4 +3 / 10 / 10 |
+| 602x1310 JPEG | 10 +0 / 12 / 12 | 4 +3 / 8 / 8 | 4 +4 / 9 / 10 |
+
+**Halving costs nothing measurable, and the encoder is the bigger lever.** No
+axis moves by more than 1 between full and half at either format. At the format
+that ships, half is ahead on sender (28 -> 29) and keyboard language (28 -> 30)
+and level on message. Half-size JPEG is **74% fewer bytes than the bar's PNG**
+and scores at or above it on every axis, so `FrameScaler.scale = 2` stays.
+
+Latency barely moves — 5.9s to 5.0s median — and that is honest rather than
+encouraging: this ran over a laptop's uplink, where 184 KB of saved payload is
+under 200 ms. The bytes are the number to carry to a phone on LTE, not the
+seconds.
+
+#### Which frames change, and the one thing to watch
+
+Totals hide the churn. **PNG, full -> half: 11 of 30 frames change verdict**, 4
+better, 6 worse, 1 wrong both ways.
+
+| | frames |
+|---|---|
+| half better | `im-02` `ml-01` `tg-05` `wa-03` — `tg-05` goes from the wrong bubble with the wrong sender *and* the wrong keyboard to exact |
+| half worse | `im-06` `ml-02` `ml-03` `sl-04` `tg-02` `wa-02` — `tg-02` answers an unrelated English message and takes the keyboard language with it |
+| both wrong | `im-03` — full returns nothing at all; half returns the user's own bottom-most bubble, which is the bar's own trap. **This is the only trap in the whole 2x2** |
+
+**JPEG, full -> half: 5 of 30**, and the direction reverses: `im-02`, `ml-01`,
+`ml-03` and `tg-03` all improve at half size, three of them recovering the sender
+and the keyboard language, and only `wa-05` goes the other way. That reversal is
+the reason the decision rests on the JPEG row: PNG-vs-PNG is the comparison
+nobody ships.
+
+No Hebrew frame stops being read at half size. `wa-05`, `tg-04`, `im-05`,
+`wa-01` and `im-03` are exact at 602x1310 JPEG, and `wa-06` — the frame cut
+through its middle — is a near-miss at every size.
+
+#### The runs reproduce each other and do not reproduce the committed file
+
+Every repeat of a configuration returned **byte-identical** `sender`, `message`
+and `language` on all 30 frames, across 45 minutes, with two exceptions of one
+frame each (`wa-06` and `wa-05`, both in a JPEG cell). So the deltas above are
+caused by the pixels, not by sampling, and the usual "one corpus run is not
+evidence" caveat does not rescue any of them.
+
+That is worth proving rather than assuming, because "identical output" has a
+boring explanation: a response cache keyed on the request bytes. So the harness
+was also run over the corpus **re-encoded to a different PNG byte stream with
+pixel-for-pixel identical content** (median 383 KB instead of 250 KB). All 30
+answers matched the original run exactly. Different bytes, same pixels, same
+answer: there is no byte cache, and `temperature: 0` is doing the work.
+
+Against the committed file it is a different story. A fresh run of the bar's own
+configuration disagrees with the stored `cloud_outputs.json` on **9 of 30**, and
+scores 26/30 sender and 28/30 language where the file scores 29 and 29. Nothing
+in this repo changed. So the protocol for this bar is narrower than "two runs":
+**run both sides together**, and treat any number quoted from a committed
+`*_outputs.json` as a historical reading rather than a current one.
+`cloud_outputs.json` is left as it is on purpose — `ScreenContextBarTests`
+replays it, and regenerating it would move every routed number on this page at
+the same time as the thing being measured.
 
 ### The shipping path — the only number the product delivers
 

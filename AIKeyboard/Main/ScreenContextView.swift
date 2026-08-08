@@ -268,11 +268,18 @@ struct ScreenContextView: View {
                         detail:
                             "The broadcast keeps running when you switch to WhatsApp or Slack. Nothing is sent anywhere while it just runs."
                     )
+                    // "Half the size" is the measurement, not a hedge: the
+                    // capture process uploads 602x1310 rather than the full
+                    // 1206x2622, and `Bar/screen-context/` §"Size and format"
+                    // scores both. It costs no accuracy and saves 74% of the
+                    // bytes. Saying the size here is what stops this screen
+                    // quoting a full-resolution bar for a half-resolution
+                    // pipeline.
                     step(
                         number: 2,
                         title: "Tapping Reply sends one screenshot",
                         detail:
-                            "The screen is read in the cloud, because on-device text recognition has no Hebrew and reads the rest less accurately. One shrunken picture goes out per tap, and nothing else does."
+                            "The screen is read in the cloud, because on-device text recognition has no Hebrew and reads the rest less accurately. One picture goes out per tap, shrunk to half the screen's width and height, and nothing else does."
                     )
                     step(
                         number: 3,

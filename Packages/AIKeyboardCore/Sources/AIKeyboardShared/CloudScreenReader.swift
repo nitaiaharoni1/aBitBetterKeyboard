@@ -18,6 +18,17 @@ import UniformTypeIdentifiers
 /// from the bar's `traps` list, and zero returned text the bar records as not
 /// being on screen. Median 5.3s, p90 6.4s.
 ///
+/// **Those four numbers were taken at the corpus's native 1206x2622, as a PNG,
+/// and neither is what this type sends.** `read(_:)` encodes JPEG q0.70 and the
+/// capture process halves the frame first. `Bar/screen-context/README.md`
+/// §"Size and format" scores the 2x2 and settles it: 602x1310 JPEG is 74% fewer
+/// bytes than the PNG above and no worse on any axis — sender 29-30/30,
+/// keyboard language 30/30, message 18-19/30 exact and 25-26/30 within 90%, no
+/// traps, over three runs at 66 KB median instead of 250 KB. It
+/// also records that the line above is a *stored* reading: rerunning its exact
+/// configuration today disagrees with `cloud_outputs.json` on 9 of 30 with
+/// nothing changed, so treat it as history and re-measure both sides together.
+///
 /// **In `AIKeyboardShared` because the capture process is now a caller.** The
 /// broadcast upload extension performs the read, and it must never link
 /// `AIKeyboardCore`. One copy of the prompt and the parsing serves both it and

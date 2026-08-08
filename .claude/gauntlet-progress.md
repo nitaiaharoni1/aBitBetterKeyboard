@@ -1386,3 +1386,46 @@ A comment claimed this was handled — *"there is no later event that will fix i
 
 **Verified by me, not taken on report:** build, **251** unit tests, 7 UI tests,
 and all three proof scripts, exit 0.
+
+### R5 closed by measurement, and a bigger finding underneath it
+
+The question was whether uploading at half resolution costs accuracy. The agent
+found the bar had **two** unmeasured deltas against the shipping pipeline, not
+one: every published score was measured on **PNG**, and every product path sends
+**JPEG q0.70**. So it ran the full 2x2.
+
+| sent | bytes med | exact | +near | sender | language | traps |
+|---|---|---|---|---|---|---|
+| 1206x2622 PNG (the bar's config) | 250 KB | 18 | 6 | 26 | 28 | 0 |
+| 602x1310 PNG | 207 KB | 17 | 5 | 28 | 29 | 1 |
+| 1206x2622 JPEG | 176 KB | 18 | 6 | 28 | 28 | 0 |
+| **602x1310 JPEG — ships** | **66 KB** | 18–19 | 7 | **29–30** | **30** | 0 |
+
+**Decision: keep `scale = 2`.** At the encoding that ships, the half-size frame
+is *ahead* on sender and keyboard language, at 74% fewer bytes than the PNG the
+bar scored. No Hebrew frame stops being read. The design's 804x1748 contingency
+is dead.
+
+**The bigger finding: the committed `cloud_outputs.json` no longer reproduces.**
+Verified by me independently, not taken on report: a fresh run of the bar's own
+configuration disagrees with the committed artifact on **10 of 30 frames** and
+scores 26/30 sender and 28/30 language where the file scores 29 and 29, with
+nothing in the repo changed.
+
+So **`29/30` is a reading with a date on it, not a property of the system**, and
+I quoted it to the user repeatedly as though it were the latter. The relative
+conclusion survives — routed and cloud-alone are both scored against the *same*
+recording, so "routing costs about 3 points of sender" is apples to apples — but
+every absolute cloud number in this repo needs a date and a model version beside
+it.
+
+The determinism is genuine *within* a sitting: repeats are byte-identical, and
+the agent ruled out a response cache by re-encoding the corpus to different PNG
+bytes with pixel-identical content and getting identical answers. It is the
+served model that moves. `gemini-2.5-flash` is an alias, not a pinned version.
+
+Two consequences now written into `.claude/CLAUDE.md` and the harness itself:
+pin `VERTEX_MODEL` to a dated version before quoting a number you expect to
+survive, and never regenerate `cloud_outputs.json` casually — `ScreenContextBarTests`
+replays it, so regenerating moves every routed threshold at the same moment as
+the thing being measured.
