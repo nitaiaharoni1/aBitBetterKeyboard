@@ -29,6 +29,15 @@ public final class SharedStore: ObservableObject {
 
     private let defaults: UserDefaults
 
+    /// The store the two processes actually share, for callers that need
+    /// `UserDefaults` itself rather than one of the typed accessors below.
+    ///
+    /// Exposed because the alternative is worse: a caller reaching for
+    /// `.standard` gets a store that works perfectly in the app, is private to
+    /// the extension in the keyboard, and fails silently in exactly one of the
+    /// two processes. `BackendTransport.configured` shipped that bug.
+    public var userDefaults: UserDefaults { defaults }
+
     private static let log = Logger(subsystem: "com.nitai.aikeyboard", category: "SharedStore")
 
     private init() {

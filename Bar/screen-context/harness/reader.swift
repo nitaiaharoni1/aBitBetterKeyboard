@@ -50,7 +50,9 @@ for entry in truth.images {
     let started = Date()
     let page = try VisionScreenReader.recognize(image)
     let passes = page.isTrustworthy(VisionScreenReader.Thresholds())
-    let reading = passes ? VisionScreenReader.interpret(page) : nil
+    // A throw here is the reader refusing the layout, which the router turns
+    // into a cloud call. Recorded as "no answer on device", not as a crash.
+    let reading = passes ? (try? VisionScreenReader.interpret(page)) ?? nil : nil
 
     rows.append(
         Row(

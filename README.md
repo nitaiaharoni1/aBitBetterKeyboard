@@ -115,11 +115,21 @@ English screens and 13% on Hebrew ones. So `RoutedScreenReader` reads what it
 can on device and sends the rest to the cloud, and it decides which is which
 without ever naming a script: `VNDetectTextRectanglesRequest` finds text by
 shape regardless of language, so comparing regions *found* against regions
-*read* measures "there is writing here I could not read" directly. At the
-measured thresholds no Hebrew or mixed screen is ever kept on device, at the
-price of 3 of 12 English screens going to the cloud that did not have to. That
-asymmetry is deliberate: a misread Hebrew screen produces a confident wrong
-reply in the user's name, while an unnecessary cloud call costs five seconds.
+*read* measures "there is writing here I could not read" directly. No Hebrew or
+mixed screen is ever kept on device. That asymmetry is deliberate: a misread
+Hebrew screen produces a confident wrong reply in the user's name, while an
+unnecessary cloud call costs five seconds.
+
+**The on-device half is not currently earning its place, and the honest numbers
+say so.** Measured end to end on iOS: routed scores sender 26/30 and message
+24/30 within 90%, while asking the cloud for every frame scores 29/30 and 26/30.
+Vision behaves differently on iOS than on macOS — it answers three frames there
+that it correctly refuses on macOS, including the one whose only right answer is
+silence. Two things are still open and are being measured rather than argued:
+whether Vision can run at all inside the ~48 MB a keyboard extension gets or the
+50 MB a broadcast extension gets, and whether the privacy gain of keeping eight
+English frames on the device is worth three points of accuracy. If the answer to
+the first is no, the second is moot and every screen read goes to the cloud.
 
 **Full Access is optional in English and effectively required in Hebrew.** Typing,
 autocorrect, predictions and emoji work without it. The on-device AI path works

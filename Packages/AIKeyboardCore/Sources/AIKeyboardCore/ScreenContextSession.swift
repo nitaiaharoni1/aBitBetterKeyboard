@@ -138,6 +138,18 @@ public final class ScreenContextSession: ObservableObject {
         state = .starting
 
         task?.cancel()
+        task = nil
+
+        // A capture backend is attached, so frames arrive through
+        // `submit(_:appName:appIcon:)` and the session waits for them. Running
+        // the scripted timeline alongside a real reader would drop the sample
+        // context on top of a real reading two seconds in, which is exactly what
+        // `ScreenContextBarTests` drives.
+        guard reader == nil else {
+            state = .watching
+            return
+        }
+
         task = Task { @MainActor [weak self] in
             try? await Task.sleep(for: MockScreenContext.startupDelay)
             guard !Task.isCancelled, let self else { return }

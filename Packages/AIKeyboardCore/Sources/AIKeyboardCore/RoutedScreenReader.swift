@@ -15,7 +15,18 @@ import Foundation
 /// path yields a confident, wrong message that the user then replies to in their
 /// own name. An English screen sent to the cloud costs about five seconds. So
 /// the gate is set where no Hebrew or mixed screen in the bar passes it, at the
-/// price of three of twelve English screens going to the cloud unnecessarily.
+/// price of two of twelve English screens going to the cloud unnecessarily.
+///
+/// **The fallback is narrower than the refusals it is meant to catch.**
+/// `VisionScreenReader` declines two ways: it throws `.notReadableOnDevice` when
+/// its readability gate fails, and it returns nil when the gate passed but the
+/// layout left no geometry to say who sent what. Only the first reaches the
+/// cloud. Measured over `Bar/screen-context/` by `ScreenContextBarTests`, that
+/// costs `sl-01` and `sl-03` outright — both carry plain answerable English that
+/// the cloud reads correctly, and the user is offered nothing on either. Turning
+/// the second refusal into a cloud call is a product decision (it moves two more
+/// English screens off the device), not a cleanup, so it is written down here
+/// rather than done quietly.
 public struct RoutedScreenReader: ScreenReader {
     private let onDevice: any ScreenReader
     private let cloud: (any ScreenReader)?

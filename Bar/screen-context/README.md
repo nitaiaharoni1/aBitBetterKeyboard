@@ -155,7 +155,23 @@ bash run-reader.sh                                # writes ../reader_outputs.jso
 # The cloud reader. Needs a gcloud login; ~25s for all 30.
 python3 vertex_vision.py                          # writes ../cloud_outputs.json
 python3 score_cloud.py cloud_outputs.json         # sender / message / language
+
+# The shipping path, end to end: every frame goes through
+# ScreenContextSession.submit(_:appName:appIcon:) -> RoutedScreenReader ->
+# VisionScreenReader or CloudScreenReader. Only the network is replaced, by a
+# transport replaying cloud_outputs.json, so the run needs no credential and
+# makes no network call. Writes ../routed_outputs.json; ~30s.
+xcodebuild test -project ../../../AIKeyboard.xcodeproj -scheme AIKeyboard \
+  -destination "platform=iOS Simulator,id=0966F3D6-2589-4E88-BE84-4A69CD64FEE8" \
+  -only-testing:AIKeyboardCoreTests/ScreenContextBarTests
+python3 score_cloud.py routed_outputs.json
 ```
+
+The last one is the number the product actually delivers, and it is the only one
+of the four that measures the composition rather than a part. `AIKeyboardCoreTests/
+ScreenContextBarTests.swift` ports `score_cloud.py`'s scorer into Swift so the run
+asserts its own numbers; the two agree cell for cell on `routed_outputs.json`, which
+is what makes the port checkable rather than a second opinion.
 
 `score_ocr.py` answers "did the recogniser put the text on the page at all",
 which is the only fair question to ask a raw OCR pass. `score_cloud.py` answers
@@ -179,16 +195,44 @@ overlap on digits, spaces and Latin loanwords, not reading. The 34% on mixed
 screens is worse than it looks: it is the English words *inside* Hebrew
 sentences, which is the wrong half of the message.
 
-**`VisionScreenReader`** — accepts 9 of 30 screens (9 English, **0** Hebrew,
-**0** mixed), then answers 5 of those 9 and refuses 4. Refusing is correct in
-all four: one is the voice-note screen with nothing to reply to, three are
-one-sided Slack layouts where no geometry says who sent what. On the 5 it
-answers: sender 5/5, keyboard language 5/5, message 4/5 exact and 5/5 within
-90%, no traps, no off-screen text. It answers only when it is right.
+**`VisionScreenReader`, run by `run-reader.sh` on macOS** — accepts 9 of 30
+screens (9 English, **0** Hebrew, **0** mixed), then answers 5 of those 9 and
+refuses 4. Refusing is correct in all four: one is the voice-note screen with
+nothing to reply to, three are one-sided Slack layouts where no geometry says who
+sent what. On the 5 it answers: sender 5/5, keyboard language 5/5, message 4/5
+exact and 5/5 within 90%, no traps, no off-screen text. It answers only when it
+is right.
+
+**The same reader on iOS does not do that.** Run on the simulator by
+`ScreenContextBarTests` it accepts **10** and answers **7**, and three of those
+answers are wrong. Same source files, same pixels, same thresholds:
+
+| | accepts | answers | wrong |
+|---|---|---|---|
+| macOS (`run-reader.sh`) | 9 / 30 | 5 | 0 |
+| iOS Simulator (`ScreenContextBarTests`) | 10 / 30 | 7 | 3 |
+
+- `ml-01` is a **gate** difference. macOS measures mean confidence 0.896, just
+  under the 0.90 threshold, and refuses. The simulator clears it and returns the
+  quoted history the user wrote themselves, with `0` as the sender.
+- `wa-07` and `sl-05` pass the gate on both, and the recogniser puts different
+  lines on the page. `wa-07` is the screen whose correct answer is silence; iOS
+  answers it with `hey are you around? 13:40`, which is the bar's own trap plus a
+  bubble timestamp. `sl-05` comes back as `X n m C V Z` from a sender called `b`,
+  which is keyboard key caps.
+
+The one property that holds on both platforms is the one the routing depends on:
+**zero** Hebrew and **zero** mixed screens are accepted on device. So the split
+is still safe; it is the "answers only when it is right" half that is macOS-only.
+`run-reader.sh` says in its header that "Vision ships the same recognition models
+on both platforms". Measured over these 30 images, it does not.
 
 **`CloudScreenReader`** — all 30 screens: sender 29/30, keyboard language 29/30,
-script 29/30, message 19/30 exact and 26/30 within 90%. No traps, no off-screen
-text. Median 5.3s, p90 6.4s.
+message 19/30 exact and 26/30 within 90%. No traps, no off-screen text. Median
+5.3s, p90 6.4s. (`script` is 25/30 against the current `cloud_outputs.json`, not
+the 29/30 this line used to claim; `score_cloud.py` computes the column but does
+not print it, so the number went stale unnoticed. The four misses are all the
+model calling a Hebrew message `mixed` because it contains digits.)
 
 Two prompt changes are worth more than they look, and both are recorded in
 `CloudScreenReader`'s doc comment: making the model enumerate every bubble
@@ -201,3 +245,64 @@ Two changes measured *worse* and were reverted rather than kept on the theory
 that they should help: a paragraph explaining bubble tint and edge, and "a
 printed name always means the message is incoming". Both are listed in the same
 doc comment so nobody re-adds them.
+
+### The shipping path — the only number the product delivers
+
+`ScreenContextSession` + `RoutedScreenReader`, driven frame by frame through
+`submit(_:appName:appIcon:)` with the cloud half replaying `cloud_outputs.json`.
+Measured on the simulator by `AIKeyboardCoreTests/ScreenContextBarTests.swift`,
+scored by `score_cloud.py routed_outputs.json`:
+
+| | n | message | +near | sender | language |
+|---|---|---|---|---|---|
+| english | 12 | 6 | 1 | 7 | 9 |
+| mixed | 8 | 3 | 4 | 7 | 7 |
+| hebrew | 10 | 5 | 3 | 10 | 10 |
+| **ALL** | **30** | **14** | **8** | **24** | **26** |
+
+Exact message 47%, exact-or-near 73%. Split by which engine answered:
+
+| engine | frames | message | +near | sender | language |
+|---|---|---|---|---|---|
+| `VisionScreenReader` | 10 | 4 | 1 | 5 | 7 |
+| `CloudScreenReader` | 20 | 10 | 7 | 19 | 19 |
+
+On device: `wa-04 wa-07 sl-01 sl-03 sl-05 sl-06 im-01 im-06 tg-03 ml-01`, median
+0.94s, p90 1.06s. Everything else goes to the cloud, which is every Hebrew and
+every mixed screen plus three English ones.
+
+**This is 5 points of sender, 3 of keyboard language and 5 of exact message below
+the cloud reader on its own**, and none of it is the cloud reader getting worse.
+Two separate defects account for all of it, and each has a test named after it:
+
+1. **`RoutedScreenReader` only falls back on a thrown error.**
+   `VisionScreenReader` declines two different ways: it *throws*
+   `.notReadableOnDevice` when its readability gate fails, and it *returns nil*
+   when the gate passed but a one-sided layout left no geometry to say who sent
+   what. Its own doc comment says of the second case that "the router turns it
+   into a cloud call rather than a wrong name" — it does not, because nil is an
+   answer. `sl-01` and `sl-03` carry plain, answerable English messages that the
+   cloud transcribes correctly, and the user is offered nothing on both.
+   (`testTheRouterDropsAnswerableScreensInsteadOfAskingTheCloud`.)
+2. **iOS Vision is not macOS Vision**, as above: `wa-07`, `sl-05` and `ml-01`.
+   (`testTheShippingPathScoresTheBar`, the `disagreesWithHarness` assertion.)
+
+What does *not* differ is the cloud half. On all 20 frames that reach it, the
+shipping path's `sender`, `message` and `language` are byte-identical to
+`cloud_outputs.json`: same prompt (`ScreenPrompt.instructions` is asserted
+against the request the transport receives), same field order, same parse. The
+only field that moves is `script`, on `wa-06`, `im-02`, `im-05` and `ml-02`,
+because `CloudScreenReader.parse` discards the model's `script` answer and
+recomputes it from the transcribed text with `LanguageDetector`. That is worth
+knowing but not worth fixing: on those four the recomputed answer is the *right*
+one, and `ScreenContext` does not carry `scripts` anyway, so nothing downstream
+reads it.
+
+One more thing this run turned up about the bar itself rather than the product:
+**`traps` is an exact-string check**, so a trap returned with chrome glued to it
+counts as an ordinary near-miss. Three answers contain a named trap and score
+zero traps — `wa-07` (the trap plus a timestamp), `ml-01` (quoted history) and
+`ml-02`, which is a *cloud* answer, so the "no traps" on the `CloudScreenReader`
+line above carries the same caveat. `ScreenContextBarTests` counts containment
+separately rather than widening `score_cloud.py`, because changing the bar's
+scorer would move every published number on this page at once.

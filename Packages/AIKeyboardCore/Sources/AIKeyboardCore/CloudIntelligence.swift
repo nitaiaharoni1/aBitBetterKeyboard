@@ -252,7 +252,16 @@ public struct BackendTransport: CloudTransport {
 
     /// Nil when the build has no backend configured, which is the state the app
     /// ships in today. The router then reports that rather than guessing.
-    public static func configured(defaults: UserDefaults = .standard) -> BackendTransport? {
+    ///
+    /// Reads the **shared** store, not `.standard`. The app writes this setting
+    /// and the keyboard extension reads it, and `.standard` in an extension is
+    /// that process's own private container: the URL set in the app would never
+    /// arrive, and the keyboard would report "no cloud model" for a backend that
+    /// was configured. That failure is invisible from the app side, which is
+    /// what made it worth a named default rather than a comment.
+    public static func configured(
+        defaults: UserDefaults = SharedStore.shared.userDefaults
+    ) -> BackendTransport? {
         guard let raw = defaults.string(forKey: "cloudBackendURL"),
             let url = URL(string: raw), url.scheme?.hasPrefix("http") == true
         else { return nil }

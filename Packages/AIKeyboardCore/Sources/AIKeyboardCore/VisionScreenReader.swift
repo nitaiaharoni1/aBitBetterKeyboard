@@ -17,6 +17,18 @@ import Vision
 /// perfectly, and *know* when it cannot. The second half is the hard one,
 /// because the only tool available to detect Hebrew on screen is the tool that
 /// is blind to it. `readability` answers it a different way — see there.
+///
+/// **Vision does not read these screens the same way on iOS as on macOS**, so
+/// measure this path on the simulator and treat `harness/run-reader.sh` as the
+/// macOS reading of it. Same sources, same pixels, same thresholds, measured
+/// 2026-08-08: macOS accepts 9 of the 30 bar images and answers 5, all 5 right;
+/// iOS accepts 10 and answers 7, and three of those are wrong — `ml-01` because
+/// macOS puts its mean confidence at 0.896, just under the gate, and `wa-07` and
+/// `sl-05` because the recogniser puts different lines on the page. `wa-07` is
+/// the screen whose only correct answer is silence and iOS answers it; `sl-05`
+/// comes back as keyboard key caps. `ScreenContextBarTests` pins the set.
+/// The property the routing rests on survives both: zero Hebrew and zero mixed
+/// screens are accepted on device either way.
 public struct VisionScreenReader: ScreenReader {
 
     /// Where the recogniser is trusted. Both numbers come from
@@ -25,9 +37,10 @@ public struct VisionScreenReader: ScreenReader {
     /// The pair is deliberately conservative. Sending a Hebrew screen down this
     /// path produces a confident, wrong answer in the user's voice; sending an
     /// English screen to the cloud costs a few seconds. At these thresholds 9 of
-    /// the 12 English screens stay on device and **no** Hebrew or mixed screen
-    /// ever does. Loosening coverage to 0.95 picks up one more English screen
-    /// and one mixed screen with it, which is the wrong trade.
+    /// the 12 English screens stay on device on macOS and 10 do on iOS — see the
+    /// platform note above — and **no** Hebrew or mixed screen ever does on
+    /// either. Loosening coverage to 0.95 picks up one more English screen and
+    /// one mixed screen with it, which is the wrong trade.
     public struct Thresholds: Sendable {
         public var coverage: Double = 0.97
         public var confidence: Double = 0.90
@@ -45,7 +58,7 @@ public struct VisionScreenReader: ScreenReader {
         guard page.isTrustworthy(thresholds) else {
             throw ScreenReadError.notReadableOnDevice
         }
-        return AIOutput(Self.interpret(page), provenance: .onDevice)
+        return AIOutput(try Self.interpret(page), provenance: .onDevice)
     }
 
     // MARK: - Recognition
@@ -149,7 +162,19 @@ public struct VisionScreenReader: ScreenReader {
         static let right = 0.92
     }
 
-    static func interpret(_ page: Page) -> ScreenReading? {
+    /// Two different refusals, and conflating them cost the user two screens.
+    ///
+    /// `nil` means *there is nothing here worth replying to* — a readable
+    /// conversation whose newest incoming message is a voice note. That is an
+    /// answer, and the router must not second-guess it.
+    ///
+    /// `throw .notReadableOnDevice` means *I could not read this*, which is a
+    /// question for the cloud. Returning nil for that case made
+    /// `RoutedScreenReader` treat "I cannot see" as "nothing is there", and the
+    /// session showed the user nothing on `sl-01` and `sl-03` — plain answerable
+    /// English that the cloud reader transcribes correctly. `ScreenContextBarTests`
+    /// pins both screens.
+    static func interpret(_ page: Page) throws -> ScreenReading? {
         let contact = navigationTitle(in: page)
 
         let body = page.lines
@@ -161,13 +186,16 @@ public struct VisionScreenReader: ScreenReader {
         // and mail threads print every message flush against the same margin
         // and put the author on a label above it, so there is no geometry left
         // to say who sent what — the reader would have to understand the app's
-        // layout rather than its shape. Refusing is the honest answer, and the
-        // router turns it into a cloud call rather than a wrong name.
-        guard isTwoSided(bubbles) else { return nil }
+        // layout rather than its shape. That is a failure to read, not a screen
+        // with nothing on it.
+        guard isTwoSided(bubbles) else { throw ScreenReadError.notReadableOnDevice }
         // The newest incoming message is the last one on the screen that is not
         // the user's own. Walking from the bottom rather than picking the most
         // answerable-looking bubble is the whole of it: every wrong answer
         // measured on this bar was a bubble one to four positions too early.
+        //
+        // No incoming bubble at all on a two-sided screen is genuinely nothing
+        // to reply to, not a failure to read.
         guard let newest = bubbles.last(where: { !$0.isOutgoing }) else { return nil }
 
         let message = newest.text

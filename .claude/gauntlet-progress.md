@@ -669,3 +669,186 @@ and the project's existing "one run is not evidence" rule applies here too.
 **Still open.** Capture itself. Neither API is implemented: ScreenCaptureKit has
 no SDK, ReplayKit needs a broadcast upload extension target that does not exist.
 `ScreenContextSession.submit(_:appName:appIcon:)` is the seam both plug into.
+
+---
+
+# Gauntlet run 2 — the capture layer (2026-08-08)
+
+**Goal.** Make screen context real: a user in WhatsApp opens the keyboard, taps
+Reply, and gets replies written against the message actually on their screen.
+Reading a frame is done and measured. Getting one is not implemented at all.
+
+**Restore point.** `6ffa669`, everything green before this run started.
+
+**Bar** (all three openable by a fresh critic with no context):
+
+| Material | Judges |
+|---|---|
+| `Bar/screen-context/` — 30 frames, `ground-truth.json`, `harness/score_cloud.py` | the pipeline driven through the **shipping** path. Hold: sender 29/30, language 29/30, message 26/30 within 90%, 0 traps, 0 off-screen text |
+| `Scripts/prove-app-group.sh` | this repo's standard for "proven": fails on skip, verdict comes from an OS-stamped log line in the *other* process |
+| Apple's `RPBroadcastSampleHandler` contract | lifecycle, and the 50 MB ceiling a broadcast upload extension is killed for crossing |
+
+**Settled before the run, not to be relitigated.**
+- ScreenCaptureKit is iOS 27+ and absent from the installed iOS 26.2 SDK. Nothing imports it.
+- **ReplayKit broadcast does not run in the iOS Simulator.** Measured: the iOS 26.2 runtime ships no `replayd` and no broadcast launch daemons; the macOS host has `/usr/libexec/replayd`, so the probe is sound. The framework links, so code compiles; no session ever starts.
+- The user chose simulator-only for this run. **No critic can confirm a frame ever arrives.** Capture ships labelled unproven, and every claim about it says so.
+- The app holds no cloud credential. Direct-to-Vertex stays in `Bar/`.
+- Apple's OCR has no Hebrew. Routing must not regress.
+
+**Pieces.**
+
+| # | Piece | Judged against | State |
+|---|---|---|---|
+| P1 | Capture architecture: where reading happens, memory budget, privacy | 50 MB cap, privacy promise, product flow | round 1 |
+| P2 | Broadcast upload extension target | builds, plist keys, entitlements, App Group | pending P1 |
+| P3 | Extension to keyboard handoff | `prove-app-group.sh` standard | pending P1 |
+| P4 | Session lifecycle: start, background, stop, restart | state machine + UI | pending P1 |
+| P5 | Reading pipeline through the shipping path | `Bar/screen-context/` scores | round 1 |
+| P6 | Privacy surface: claims vs code | README and Screen Context screen vs code | pending |
+
+## Round 1
+
+Dispatched: P1 (architecture) and P5 (shipping-path pipeline) in parallel, being
+the only two with no dependency on each other.
+
+### P1 — architecture, round 1: design delivered, **verdict pending**
+
+Design at `.claude/docs/screen-capture-design.md`. Recommends that the broadcast
+extension read, but never with Vision and never on frame arrival.
+
+The whole design turns on one measurement: Vision at `.accurate` costing far
+more than the entire 50 MB extension budget, and not shrinking with input
+resolution because the cost is model weights rather than activations. If that
+holds, `VisionScreenReader` cannot run in the extension at any resolution, and
+the consequence is blunt: **no on-device screen reading in the shipping flow**,
+with English frames going to the cloud alongside Hebrew ones.
+
+**Not accepted yet, and not reported to the user as settled.** The numbers were
+taken in the iOS Simulator; the extension runs on a device, where Vision may use
+the Neural Engine and model weights may be mapped shared rather than charged to
+the process. A Simulator measurement may not be able to support a claim about
+device behaviour at all. That is exactly the over-generalisation this project
+made once already with ScreenCaptureKit. A fresh-context critic is independently
+re-measuring rather than re-running the design's own script.
+
+### Found and fixed in passing: the backend URL never reached the keyboard
+
+`BackendTransport.configured()` defaulted to `UserDefaults.standard`. In the
+keyboard extension that is the extension's own private container, so a backend
+URL set in the app never arrived and the keyboard reported "no cloud model" for
+a backend that was configured. Invisible from the app side, which is the whole
+danger. The default is now `SharedStore.shared.userDefaults`, and
+`BackendTransportSuiteTests` pins it. This is the exact trap `SharedStore` was
+built to avoid, reintroduced by a defaulted parameter.
+
+Suite: 125 tests, green.
+
+### P1 critic — round 1: **GAP** (design sent back for round 2)
+
+The critic wrote its own probe rather than re-running the design's, and found
+the design's probe **is not in the repo**, so its "reproducible" preamble was
+false. The central claim survived; the escape hatch did not.
+
+| | simulator (no ANE) | macOS (ANE) |
+|---|---|---|
+| `.accurate`, peak over 30 frames | 104 MB | 114 MB |
+| `.fast`, peak over 30 frames | **23–26 MB** | **102.6 MB** |
+
+`DYLD_PRINT_LIBRARIES` gives the mechanism: macOS loads
+`AppleNeuralEngine`/`ANEServices`/`ANECompiler`, the simulator loads none of
+them. **A physical iPhone is an ANE configuration**, so the only ANE-equipped
+measurement available is 4x *higher* than the simulator, not lower. The design's
+risk register had it backwards, and its headline escape hatch (`.fast` at
+"+10.1 MB, which fits") is a simulator artifact — its own macOS column said
++55.9 MB three lines above.
+
+Resolution is not a knob, and more strongly than the design claimed: at 0.06% of
+the original pixel count `.accurate` still costs +63 MB. Two of the design's
+findings did not reproduce and were noise: the 130–165 MB accumulation figure
+(actual: 84 → 104 over 30 frames) and "halving resolution buys 14 MB" (a scale
+sweep moved ±22 MB non-monotonically).
+
+Verified independently by me: **a keyboard extension is capped at ~48 MB**,
+tighter than the broadcast extension's 50 MB. So both processes that could run
+Vision while the user is in another app are under ~50 MB, and the containing app
+— which has no cap — is not running.
+
+Also found by the critic, and sent to round 2: a **privacy hole** (a speculative
+cloud upload default-on, while the design's own section 7 concludes it cannot
+know which app is on screen, so it would upload banking and password-manager
+screens with no tap), a **freshness hole** (nothing ties the frame hash to a
+frame observed *after* the read completes, so a 5.3s inline read lets a
+conversation switch land a stale match), and a false claim that a README
+sentence was already wrong.
+
+### P5 — round 1: **shipping path scored, two real defects found**
+
+The routed score did not exist before and now does. It also corrects two things
+this file previously asserted.
+
+**Defect 1, fixed.** `VisionScreenReader.interpret` returned nil both for
+"nothing worth replying to" and for "I cannot read this layout".
+`RoutedScreenReader` only falls back on a throw, so the second case silently
+offered the user nothing on `sl-01` and `sl-03` — plain answerable English the
+cloud transcribes correctly. The two refusals are now distinct.
+
+| | before fix | after fix | cloud alone |
+|---|---|---|---|
+| sender | 24/30 | **26/30** | 29/30 |
+| language | 26/30 | **28/30** | 29/30 |
+| message exact | 14/30 | **16/30** | 19/30 |
+| within 90% | 22/30 | **24/30** | 26/30 |
+| frames with no answer | 2 | **0** | 0 |
+
+**Defect 2, not fixed, and it is the bigger one.** Even after the fix, routing
+through Vision scores *below* asking the cloud for everything. On iOS Vision
+answers 8 frames and gets 3 wrong, including `wa-07`, whose only correct answer
+is silence, and `sl-05`, which returns keyboard key caps.
+
+**Corrections to earlier claims in this file and in the docs.** "It accepts 9
+and answers 5, and answers only when it is right" was a *macOS* reading reported
+as the product's number. On iOS it accepts 10 and answers 7 with 3 wrong. Also,
+the bar's `traps` counter is an exact-string check: three answers contain a
+named trap with something appended and still score zero, one of them a **cloud**
+answer, so the published "no traps" carries that caveat on both engines.
+`.claude/CLAUDE.md` and `README.md` corrected.
+
+Suite: 125 tests, green.
+
+## Round 2
+
+### P1 — architecture, round 2: gaps closed, verdict pending
+
+The escape hatch is gone and the conclusion hardened rather than softened. New
+probe (`Bar/screen-context/harness/memory.swift`, which now actually exists —
+the first version cited a file that was not in the repo), peak physical
+footprint over all 30 frames in one process:
+
+| | iOS Simulator (no ANE) | macOS (ANE) |
+|---|---|---|
+| `VNDetectTextRectanglesRequest` alone | 10.3 MB | **67.9 MB** |
+| `.fast` + rectangles | 18.1 MB | **84.7 MB** |
+| `.accurate` + rectangles | 174.8 MB | **199.8 MB** |
+
+The load-bearing new fact: **even the language-agnostic shape detector** — the
+thing `VisionScreenReader`'s entire routing gate rests on — is over both the
+~50 MB and ~48 MB caps on the ANE deployment. If that holds, nothing in the
+Vision text stack fits on a phone and cloud-only is forced rather than chosen.
+
+The agent caught its own methodology bug before publishing (its first probe held
+all 30 decoded images alive and measured a ~190 MB image cache instead of
+Vision). Its numbers disagree with the critic's earlier probe by roughly 2x, so
+a second critic is checking which methodology is sound.
+
+**Privacy resolved in the safe direction.** The speculative-upload trigger is
+deleted, not defaulted off, with a real argument: "keyboard visible" correlates
+with password fields and banking forms rather than excluding them, and the
+narrowing that would fix it is circular — deciding whether a screen is safe to
+upload requires reading it. A secure-field guard was added, verified through the
+header chain. Freshness gap closed with a condition tying the frame hash to a
+frame sampled after the read completed, and the read moved off the delivery path.
+
+Still unproven, and the document says so itself: **no number in it came from a
+phone.** Both memory caps are unverified and appear in no header.
+
+### P2 — broadcast extension target: dispatched
