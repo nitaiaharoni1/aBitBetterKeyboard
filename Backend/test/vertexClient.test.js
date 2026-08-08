@@ -16,7 +16,7 @@ function okResponse(fieldsObject = {}) {
   );
 }
 
-test("the request matches the measured shape: endpoint, systemInstruction, one user turn, temperature 0, capped thinking, propertyOrdering, bearer token", async () => {
+test("the request matches the measured shape: endpoint, systemInstruction, one user turn, no temperature on the text path, capped thinking, propertyOrdering, bearer token", async () => {
   let captured;
   const fetchImpl = async (url, init) => {
     captured = { url, init };
@@ -42,7 +42,10 @@ test("the request matches the measured shape: endpoint, systemInstruction, one u
   const body = JSON.parse(captured.init.body);
   assert.deepEqual(body.systemInstruction, { parts: [{ text: "be terse" }] });
   assert.deepEqual(body.contents, [{ role: "user", parts: [{ text: "say hi" }] }]);
-  assert.equal(body.generationConfig.temperature, 0);
+  // No temperature: this call has no image, so it is a text action, and every
+  // ai-text score was taken with `VertexTransport.swift`'s generationConfig,
+  // which sets none. See the dedicated test at the end of this file.
+  assert.ok(!("temperature" in body.generationConfig));
   assert.equal(body.generationConfig.responseMimeType, "application/json");
   assert.equal(body.generationConfig.thinkingConfig.thinkingBudget, 512);
   assert.deepEqual(body.generationConfig.responseSchema.propertyOrdering, ["reply"]);
@@ -191,4 +194,36 @@ test("a candidate whose text is not valid JSON is unavailable, not a crash", asy
   const client = createVertexClient({ project: "p", model: "m", tokenProvider: tokenProviderStub(), fetchImpl });
   const result = await client.call({ instructions: "x", prompt: "y", fields: [], image: null });
   assert.equal(result.kind, "unavailable");
+});
+
+// Each endpoint has to send the generationConfig its own corpus was scored at,
+// and the two corpora disagree. vertex_vision.py sets temperature 0; the ai-text
+// harness sets no temperature at all. Sending 0 on both is the tidy-looking
+// mistake this pins against.
+test("a screen read sends temperature 0 and a text action sends none", async () => {
+  const bodies = [];
+  const client = createVertexClient({
+    project: "p",
+    model: "m",
+    tokenProvider: tokenProviderStub(),
+    fetchImpl: async (_url, init) => {
+      bodies.push(JSON.parse(init.body));
+      return okResponse();
+    }
+  });
+
+  await client.call({
+    instructions: "i", prompt: "p", fields: [{ name: "text", description: "d" }],
+    image: { mimeType: "image/jpeg", data: "AAAA" }
+  });
+  await client.call({ instructions: "i", prompt: "p", fields: [{ name: "text", description: "d" }] });
+
+  assert.equal(bodies[0].generationConfig.temperature, 0, "screen reads were scored at temperature 0");
+  assert.ok(
+    !("temperature" in bodies[1].generationConfig),
+    "the ai-text corpus was scored with no temperature set; sending 0 ships an ungraded config"
+  );
+  // The knob that IS shared, so this test cannot pass by dropping both.
+  assert.equal(bodies[0].generationConfig.thinkingConfig.thinkingBudget, 512);
+  assert.equal(bodies[1].generationConfig.thinkingConfig.thinkingBudget, 512);
 });

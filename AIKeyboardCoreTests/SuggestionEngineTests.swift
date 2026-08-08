@@ -156,3 +156,87 @@ final class SuggestionEngineTests: XCTestCase {
         XCTAssertNil(SuggestionEngine.dominantLanguage(in: "123 !?"))
     }
 }
+
+// MARK: - Hebrew final forms, and the code-switch ranking
+
+extension SuggestionEngineTests {
+
+    /// **The case that made this rule exist.** `שלומ` is `שלום` — "hello" — typed
+    /// with a plain mem where the final mem belongs, which is the most common
+    /// keying error in the language. `UITextChecker` finds twelve real
+    /// completions for it (`שלומדים`, `שלומד`, …), so the spelling-guess branch
+    /// never fires, and the bar used to offer `שלומדים`: press space to say
+    /// hello and commit "who are studying".
+    ///
+    /// An audit found the repo claiming this case was handled and pinned by a
+    /// test. It was neither. This is that test.
+    @MainActor
+    func testAFinalFormTypoIsOfferedAndIsWhatSpaceWouldCommit() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "שלומ", context: "", languages: [.hebrew])
+
+        XCTAssertTrue(
+            results.contains { $0.text == "שלום" },
+            "the correction has to reach the bar at all: \(results.map(\.text))")
+        XCTAssertEqual(
+            results.first(where: \.isDefault)?.text, "שלום",
+            "and it has to be the one space commits, not \(results.first(where: \.isDefault)?.text ?? "nothing")")
+        XCTAssertEqual(results.first?.text, "שלומ", "the literal keystrokes stay available")
+    }
+
+    /// The other four letters, so the rule is not a single hardcoded word.
+    @MainActor
+    func testTheOtherFinalFormsAreCorrectedToo() {
+        for (typed, corrected) in [("צריכ", "צריך"), ("איפ", "אף")] where typed != "איפ" {
+            let results = SuggestionEngine.suggestions(
+                prefix: typed, context: "", languages: [.hebrew])
+            XCTAssertTrue(
+                results.contains { $0.text == corrected },
+                "\(typed) should offer \(corrected): \(results.map(\.text))")
+        }
+    }
+
+    /// It must not fire on a word that is already right. A Hebrew word ending in
+    /// a plain mem mid-sentence is ordinary; offering to "fix" it is the exact
+    /// behaviour that makes people turn autocorrect off.
+    @MainActor
+    func testAWordThatIsAlreadyCorrectIsNotOfferedAFinalForm() {
+        // `אימ` is not a word, `אים` is not either — nothing should be invented.
+        let results = SuggestionEngine.suggestions(prefix: "שלום", context: "", languages: [.hebrew])
+        XCTAssertFalse(
+            results.contains { $0.text != "שלום" && $0.text.hasSuffix("ם") && $0.text.count == 4 },
+            "a correctly spelled word must not be 'corrected' again")
+        XCTAssertEqual(results.first?.text, "שלום")
+    }
+
+    /// **The product's central case.** Latin letters inside a Hebrew sentence.
+    /// Without a deliberate ranking, `sta` offers `still`/`stay`/`start` and
+    /// `standup` never appears until all seven letters are typed — by which point
+    /// the suggestion is worthless. A critic found this by typing the word one
+    /// keystroke at a time; the whole-word check that justified deleting the list
+    /// could not see it.
+    @MainActor
+    func testALoanwordSurfacesEarlyWhenTypedInsideAHebrewSentence() {
+        let hebrewContext = "בוא נעשה"
+
+        for (prefix, expected) in [("sta", "standup"), ("road", "roadmap"), ("temp", "template")] {
+            let results = SuggestionEngine.suggestions(
+                prefix: prefix, context: hebrewContext, languages: [.hebrew, .english])
+            XCTAssertTrue(
+                results.contains { $0.text == expected },
+                "\(prefix) inside a Hebrew sentence should offer \(expected): \(results.map(\.text))")
+        }
+    }
+
+    /// …and it stays out of the way in an English sentence, where Apple's own
+    /// ranking is the better judge and this list would only crowd it.
+    @MainActor
+    func testTheLoanwordListDoesNotOverrideEnglishContext() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "sta", context: "let us have a", languages: [.english])
+
+        XCTAssertFalse(
+            results.contains { $0.text == "standup" },
+            "in English the dictionary ranks this, not our list: \(results.map(\.text))")
+    }
+}

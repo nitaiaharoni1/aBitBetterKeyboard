@@ -39,7 +39,7 @@ public struct VisionScreenReader: ScreenReader {
     /// English screen to the cloud costs a few seconds. At these thresholds 9 of
     /// the 12 English screens stay on device on macOS and 10 do on iOS — see the
     /// platform note above — and **no** Hebrew or mixed screen ever does on
-    /// either. Loosening coverage to 0.95 picks up one more English screen and
+    /// either. Loosening coverage to 0.95 picks up two more English screens (`sl-02` at 0.9583 and `ml-04` at exactly 0.9500) and
     /// one mixed screen with it, which is the wrong trade.
     public struct Thresholds: Sendable {
         public var coverage: Double = 0.97

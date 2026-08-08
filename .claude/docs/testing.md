@@ -108,4 +108,4 @@ xcrun xccov view --report /tmp/AIKeyboard.xcresult
 ```
 
 Expect low numbers: UI walkthroughs exercise view code broadly but assert little,
-and the engines in `AIKeyboardCore` have no direct tests.
+and `AIKeyboardUITests` drives the app rather than the engines. `AIKeyboardCoreTests` is where the engines are covered directly, and it is where almost all of the assertions in this repo live.

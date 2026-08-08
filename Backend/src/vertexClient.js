@@ -20,24 +20,43 @@ import { buildResponseSchema } from "./schema.js";
 // `thinkingBudget` for the full numbers this backend has to match.
 const THINKING_BUDGET = 512;
 
+// **`temperature` is set for screen reads and deliberately left unset for text,
+// because that is what each side was actually scored at.** This is not symmetry
+// for its own sake — an earlier version of this file sent `temperature: 0` on
+// both paths, which reads as tidy and is a config no corpus ever ran.
+//
+// `Bar/screen-context/harness/vertex_vision.py` sets `temperature: 0`, and every
+// screen-context number in this repo was taken with it. `Bar/ai-text/harness/
+// VertexTransport.swift` sets no temperature at all — its `generationConfig`
+// carries `responseMimeType`, `responseSchema`, `propertyOrdering` and
+// `thinkingConfig` and nothing else — so every Fix, Rewrite, Tone and Reply score
+// was taken at the model's default. Sending 0 on the text path would mean the
+// shipping product runs a configuration the bar has never graded, on the actions
+// the bar exists to grade.
+//
+// If you want temperature 0 for text, that is a reasonable thing to want. Measure
+// it first: `Bar/ai-text/harness/run-real.sh`, two runs a side, and read per-entry
+// verdicts rather than the total — one run is not evidence on that bar either.
 function buildRequestBody({ instructions, prompt, fields, image }) {
   // Image first, prompt text second — the same order
   // `Bar/screen-context/harness/vertex_vision.py`'s `call` sends the corpus
   // through, kept for consistency rather than because the order is itself
-  // measured to matter at temperature 0 with a fixed schema.
+  // measured to matter with a fixed schema.
   const parts = [];
   if (image) parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
   parts.push({ text: prompt });
 
+  const generationConfig = {
+    responseMimeType: "application/json",
+    responseSchema: buildResponseSchema(fields),
+    thinkingConfig: { thinkingBudget: THINKING_BUDGET }
+  };
+  if (image) generationConfig.temperature = 0;
+
   return {
     systemInstruction: { parts: [{ text: instructions }] },
     contents: [{ role: "user", parts }],
-    generationConfig: {
-      temperature: 0,
-      responseMimeType: "application/json",
-      responseSchema: buildResponseSchema(fields),
-      thinkingConfig: { thinkingBudget: THINKING_BUDGET }
-    }
+    generationConfig
   };
 }
 

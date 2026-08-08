@@ -70,7 +70,27 @@ final class SampleHandler: RPBroadcastSampleHandler {
     /// frame can arrive and never cleared, for the reason `broadcastFinished`
     /// gives. Nil when the container is out of reach, because a reading nobody
     /// can collect is a cloud call spent for nothing.
-    private var reads: ScreenReadService?
+    ///
+    /// Behind a lock for the same reason `CaptureChannelWriter.intentPage` and
+    /// `CaptureChannelReader.statusPage` are, and it is the third instance of the
+    /// identical mistake in this codebase.
+    ///
+    /// It is assigned in `broadcastStarted`, on whatever queue ReplayKit runs the
+    /// lifecycle callbacks, and read in `serveReadRequest` on the delivery queue.
+    /// ReplayKit documents nothing about those being the same queue. The
+    /// extension is **reused across broadcasts** — `CaptureChannel`'s own doc
+    /// comment says so and `testANewSessionPublishesAgain` proves it — so a
+    /// second `broadcastStarted` arriving while a delivery callback from the
+    /// previous session is still running is an ordinary event, not a contrived
+    /// one, and it reassigns this reference underneath that callback.
+    ///
+    /// A pointer-sized store happens to be atomic on arm64 and
+    /// `CaptureFreshness`'s session check would refuse anything a stale service
+    /// published, so the blast radius was a wasted cloud call rather than wrong
+    /// text. That is an argument for it having been survivable, not for it having
+    /// been correct: the guarantee here is Swift's memory model, which says
+    /// nothing about either.
+    private let reads = OSAllocatedUnfairLock<ScreenReadService?>(initialState: nil)
     private let scaler = FrameScaler()
 
     // Mutated from ReplayKit's delivery queue by `processSampleBuffer`, and from
@@ -118,14 +138,14 @@ final class SampleHandler: RPBroadcastSampleHandler {
         if let channel, let session {
             let service = ScreenReadService.standard(channel: channel)
             service.begin(session: session, intent: channel.intent())
-            reads = service
+            reads.withLock { $0 = service }
         }
 
         Self.log.notice(
             """
             broadcast started intervalMs=\(Self.sampleIntervalMilliseconds, privacy: .public) \
             channel=\(self.channel == nil ? "unreachable" : "open", privacy: .public) \
-            reader=\(self.reads?.canRead == true ? "cloud" : "none", privacy: .public) \
+            reader=\(self.reads.withLock { $0 }?.canRead == true ? "cloud" : "none", privacy: .public) \
             session=\(session?.uuidString ?? "none", privacy: .public) \
             baselineMB=\(budget.baselineMB.map { String(format: "%.1f", $0) } ?? "unmeasurable", privacy: .public) \
             watermarkMB=\(String(format: "%.1f", budget.watermarkMB), privacy: .public)
@@ -334,7 +354,11 @@ final class SampleHandler: RPBroadcastSampleHandler {
         _ sampleBuffer: CMSampleBuffer, intent: CaptureIntent?, identity: FrameIdentity,
         sampledAt: UInt64
     ) {
-        guard let channel, let reads,
+        // Read once, under the lock, and work with that reference for the rest
+        // of this frame. Re-reading per use would let a `broadcastStarted` land
+        // between the claim and the answer, so a ticket taken from one session's
+        // service could be failed against another's.
+        guard let channel, let reads = reads.withLock({ $0 }),
             let ticket = reads.claim(
                 intent: intent, identity: identity, capturedAt: sampledAt)
         else { return }
@@ -381,9 +405,10 @@ final class SampleHandler: RPBroadcastSampleHandler {
     /// hash.
     /// Which edge of the buffer the top of the screen is on.
     ///
-    /// The crop band is a claim about the screen — keep its top, drop everything
-    /// from the top of our own keyboard down — and that claim only survives the
-    /// translation into buffer rows while the buffer is the right way up. An
+    /// The crop band is a claim about the screen — drop its top 14% of chrome and
+    /// everything from the top of our own keyboard down, fingerprint the middle —
+    /// and that claim only survives the translation into buffer rows while the
+    /// buffer is the right way up. An
     /// absent attachment means ReplayKit told us nothing, and `.up` is the right
     /// reading of silence here: it is what every portrait frame is, and it is the
     /// behaviour every measured number in `FrameFingerprint` was taken against.

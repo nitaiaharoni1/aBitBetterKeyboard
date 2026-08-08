@@ -195,3 +195,104 @@ test("a rate-limited caller is refused with retry-after and costs nothing", asyn
     { rateLimiter: createRateLimiter({ windowMs: 60_000, maxPerWindow: 1 }) }
   );
 });
+
+// A slow-POST probe, with a raw socket rather than `fetch`, because `fetch`
+// cannot express "announce a huge body and then dribble it forever" — which is
+// the whole attack. The gate refuses these callers instantly and for free; the
+// question is whether refusing them also lets go of the connection. Before the
+// fix it did not: node answered 401 and then held the socket open for as long
+// as the caller cared to keep it, which is a connection-exhaustion route that
+// costs the attacker no token and never reaches the paid model.
+//
+// Every test here carries its own timeout, because `node --test` runs with
+// `--test-timeout=0` and a socket that never closes would otherwise hang the
+// whole suite rather than failing it.
+
+import net from "node:net";
+
+const PROBE_TIMEOUT_MS = 3000;
+
+/// Opens a connection, claims a 100 MB body, sends `bodyBytes` of it, and then
+/// stops — never completing the request. Resolves with whatever the server said
+/// and whether it hung up.
+function slowPost(port, { authorization, bodyBytes = 1 } = {}) {
+  return new Promise((resolve, reject) => {
+    const socket = net.connect(port, "127.0.0.1", () => {
+      socket.write(
+        "POST /v1/text HTTP/1.1\r\n"
+          + "Host: 127.0.0.1\r\n"
+          + "Content-Type: application/json\r\n"
+          + (authorization ? `Authorization: ${authorization}\r\n` : "")
+          + "Content-Length: 100000000\r\n\r\n"
+          + "x".repeat(bodyBytes)
+      );
+    });
+
+    let received = "";
+    const guard = setTimeout(() => {
+      socket.destroy();
+      reject(new Error(`server never hung up; it said: ${received.slice(0, 80) || "(nothing)"}`));
+    }, PROBE_TIMEOUT_MS);
+
+    socket.on("data", (chunk) => { received += chunk.toString("utf8"); });
+    socket.on("close", () => { clearTimeout(guard); resolve(received); });
+    socket.on("error", () => { clearTimeout(guard); resolve(received); });
+  });
+}
+
+test("an unauthenticated slow POST is answered and hung up on", { timeout: 10_000 }, async () => {
+  await withServer(
+    fakeVertexClient(async () => ({ kind: "ok", fields: { text: "hi" } })),
+    async (base) => {
+      // No Authorization header: refused before the body is ever read.
+      const received = await slowPost(Number(new URL(base).port));
+      assert.match(received, /^HTTP\/1\.1 401/, "expected a 401");
+      assert.match(received, /connection: close/i);
+    },
+    { expectedToken: "letmein" }
+  );
+});
+
+test("a rate-limited slow POST is answered and hung up on", { timeout: 10_000 }, async () => {
+  const { createRateLimiter } = await import("../src/gate.js");
+  await withServer(
+    fakeVertexClient(async () => ({ kind: "ok", fields: { text: "hi" } })),
+    async (base) => {
+      await fetch(`${base}/v1/text`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ instructions: "i", prompt: "p", fields: [{ name: "text", description: "d" }] })
+      });
+
+      const received = await slowPost(Number(new URL(base).port));
+      assert.match(received, /^HTTP\/1\.1 429/, "expected a 429");
+      assert.match(received, /connection: close/i);
+    },
+    { rateLimiter: createRateLimiter({ windowMs: 60_000, maxPerWindow: 1 }) }
+  );
+});
+
+test("a body over the cap is answered and hung up on", { timeout: 10_000 }, async () => {
+  await withServer(
+    fakeVertexClient(async () => ({ kind: "ok", fields: { text: "hi" } })),
+    async (base) => {
+      // No token configured, so this one passes auth and dies on the byte cap
+      // instead — the other branch that answers before the body is consumed.
+      const received = await slowPost(Number(new URL(base).port), { bodyBytes: 64 });
+      assert.match(received, /^HTTP\/1\.1 413/, "expected a 413");
+      assert.match(received, /connection: close/i);
+    },
+    { maxBodyBytes: 8 }
+  );
+});
+
+test("an unknown route is hung up on too", { timeout: 10_000 }, async () => {
+  await withServer(
+    fakeVertexClient(async () => ({ kind: "ok", fields: {} })),
+    async (base) => {
+      const response = await fetch(`${base}/v1/nope`, { method: "POST", body: "{}" });
+      assert.equal(response.status, 404);
+      assert.equal(response.headers.get("connection"), "close");
+    }
+  );
+});

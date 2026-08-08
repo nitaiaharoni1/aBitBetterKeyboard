@@ -3,18 +3,30 @@ import UIKit
 
 // MARK: - Suggestions
 //
-// Backs the suggestion bar with `UITextChecker`, the same on-device spelling and
-// completion engine the system keyboard's autocorrect draws on. Replaces
-// `MockSuggestionEngine`.
+// Backs the suggestion bar with `UITextChecker`, Apple's public on-device
+// spelling and completion API. Replaces `MockSuggestionEngine`.
+//
+// (Not "the engine the system keyboard's autocorrect draws on" — this file said
+// that, and Apple documents no such relationship. It is also in tension with the
+// paragraph below about QuickType being private. `UITextChecker` is the public
+// API a third-party keyboard can call; what the system keyboard uses internally
+// is not something this repo knows.)
 //
 // **Verified before writing this, not assumed:** `UITextChecker.availableLanguages`
 // on the iOS 26.2 Simulator lists 42 languages including `he_IL`, and
-// `completions(forPartialWordRange:in:language:)` / `guesses(forWordRange:...)`
-// both return real, well-formed Hebrew results — `אנ` completes to `אני`,
-// `אנחנו`, `אנשים`…; the misspelling `שלומ` guesses `שלום` third. Hebrew is not
-// a second-class case here the way it is for Foundation Models, `SpeechTranscriber`
-// and Vision's text recognizer (see `.claude/CLAUDE.md`): `UITextChecker` is a
-// different, older API with its own language list, and this one has Hebrew.
+// `completions(forPartialWordRange:in:language:)` returns real, well-formed
+// Hebrew — `אנ` completes to `אני`, `אנחנו`, `אנשים`. So Hebrew is not a
+// second-class case here the way it is for Foundation Models, `SpeechTranscriber`
+// and Vision's text recognizer: `UITextChecker` is an older API with its own
+// language list, and this one has Hebrew.
+//
+// **Its Hebrew is not as good as that makes it sound, and two measured limits
+// are handled here rather than papered over.** `guesses` ranks `שלום` third for
+// the misspelling `שלומ`, behind `שלו` and `שלוש`, and the guesses branch does
+// not even run when completions came back fat — which for `שלומ` they do, twelve
+// of them. Left alone the bar offers `שלומדים` as the default, so pressing space
+// to say "hello" commits "who are studying". `hebrewFinalFormCorrection` fixes
+// that class outright, without asking the dictionary; see it for why not.
 //
 // **What is genuinely NOT available, and was not faked to look like it is:**
 // Apple exposes no public API for predicting the *next* word from nothing typed
@@ -24,14 +36,13 @@ import UIKit
 // below is therefore still a small, fixed table, exactly as it was in the mock —
 // see its doc comment for why that is disclosed rather than dressed up.
 //
-// **The mock's `codeSwitchVocabulary` list is gone, not ported.** It existed to
-// prioritise loanwords like `sync` and `standup` when Latin letters appear mid
-// Hebrew sentence. Measured before dropping it: `en_US`'s own `UITextChecker`
-// dictionary already knows every word that list had — `sync`, `backlog`,
-// `standup`, `roadmap`, `feedback` and eight others all come back
-// `misspelled == false` with real completions — so the dedicated list bought
-// nothing a plain English completion did not already cover, at the cost of a
-// second hardcoded vocabulary to keep in sync with the first.
+// **The mock's `codeSwitchVocabulary` list was dropped here and had to come
+// back.** The argument for dropping it was that `en_US`'s own dictionary already
+// knows every word in it — `sync`, `standup`, `roadmap` all come back
+// `misspelled == false`. True, and it measures the wrong thing: a suggestion bar
+// is asked about *prefixes*, every keystroke, and `sta` inside a Hebrew sentence
+// offers `still`, `stay`, `start` while `standup` never appears until all seven
+// letters are typed. See `codeSwitchVocabulary`.
 public enum SuggestionEngine {
 
     // MARK: Script detection
@@ -101,7 +112,11 @@ public enum SuggestionEngine {
 
         let typedLanguage = script(of: trimmedPrefix) ?? contextLanguage
         let results = completions(
-            for: trimmedPrefix, typedLanguage: typedLanguage, supplementary: supplementary)
+            for: trimmedPrefix, typedLanguage: typedLanguage, supplementary: supplementary,
+            // Latin letters inside a Hebrew sentence: the one case this product
+            // exists for, and the one `UITextChecker` ranks worst. See
+            // `codeSwitchVocabulary`.
+            codeSwitching: contextLanguage == .hebrew && typedLanguage == .english)
         return markDefault(
             results,
             at: shouldAutocorrect(trimmedPrefix, typedLanguage: typedLanguage, results: results) ? 1 : 0)
@@ -121,6 +136,12 @@ public enum SuggestionEngine {
 
         // A missing apostrophe is unambiguous, so correct it at any length.
         if contractions[lower] != nil { return true }
+
+        // So is a Hebrew word ending in a letter that has a final form: the
+        // script does not allow it, so this is not a guess about what the user
+        // meant. Deliberately *not* gated on `isKnownWord`, which reports
+        // `שלומ` as a real word — see `hebrewFinalFormCorrection`.
+        if typedLanguage == .hebrew, hebrewFinalFormCorrection(of: prefix) != nil { return true }
 
         // Otherwise wait until enough letters are in to be confident, and never
         // correct something `UITextChecker` already recognises as a real word —
@@ -148,11 +169,68 @@ public enum SuggestionEngine {
     @MainActor
     private static let sharedChecker = UITextChecker()
 
+    /// English work vocabulary that appears inside Hebrew sentences, ranked ahead
+    /// of the dictionary when exactly that is happening.
+    ///
+    /// **This list was deleted once and had to come back, and the reason it was
+    /// deleted is worth keeping.** The argument for dropping it was that
+    /// `UITextChecker`'s English dictionary already knows every word in it —
+    /// `sync`, `standup`, `roadmap` and the rest all return `misspelled == false`.
+    /// That is true, and it measures the wrong thing. A suggestion bar is not
+    /// asked about whole words; it is asked after every keystroke, about a
+    /// *prefix*. Typing `standup` into a Hebrew sentence one letter at a time
+    /// offers `still`, `stay`, `stand`, `standard`, `standing` — and never
+    /// `standup` until the user has typed all seven letters, at which point the
+    /// suggestion is worth nothing. Same for `road` → `roadmap` and `temp` →
+    /// `template`, while `backl` → `backlog` happens to work, because without this
+    /// list the outcome rides entirely on Apple's undocumented frequency ranking.
+    ///
+    /// So the list is not a vocabulary the dictionary lacks. It is a *ranking* the
+    /// dictionary gets wrong for this product's central case, and it applies only
+    /// when Latin letters are being typed into a Hebrew sentence.
+    /// The five Hebrew letters that take a different shape at the end of a word,
+    /// ordinary form to final form. `EditScope` corrects the same class of error
+    /// after the fact; this offers it before the user commits one.
+    private static let hebrewFinalForms: [Character: Character] = [
+        "כ": "ך", "מ": "ם", "נ": "ן", "פ": "ף", "צ": "ץ"
+    ]
+
+    /// The word with its last letter put into final form.
+    ///
+    /// **Asks no dictionary, deliberately, and the first version of this did.**
+    /// The obvious shape is "offer it when the typed word is misspelled and the
+    /// corrected one is not". That was written, and it never fired: inside the
+    /// engine `isKnownWord("שלומ")` comes back *true*, while the same call on a
+    /// checker that has already been used for Hebrew comes back false. Whatever
+    /// the cause — a dictionary that loads lazily is the obvious suspect — a rule
+    /// whose correctness depends on `UITextChecker` having warmed up is a rule
+    /// that silently does nothing on the first word a user types, which is the
+    /// worst possible time.
+    ///
+    /// It does not need one. Five Hebrew letters change shape at the end of a
+    /// word and a word may not end in the ordinary form: that is orthography, not
+    /// statistics, and it is true whether or not any dictionary agrees. The cost
+    /// of asking nothing is that a user midway through `שלומדים` is also offered
+    /// `שלום` — which is a correct suggestion for a word that, at that instant,
+    /// genuinely is spelled wrong.
+    @MainActor
+    private static func hebrewFinalFormCorrection(of prefix: String) -> String? {
+        guard let last = prefix.last, let final = hebrewFinalForms[last] else { return nil }
+        return String(prefix.dropLast()) + String(final)
+    }
+
+    private static let codeSwitchVocabulary: [String] = [
+        "backlog", "brief", "call", "deadline", "demo", "design", "document", "feedback",
+        "follow-up", "invite", "meeting", "presentation", "product", "review", "roadmap",
+        "scope", "slack", "sprint", "standup", "sync", "template", "ticket", "update"
+    ]
+
     @MainActor
     private static func completions(
         for prefix: String,
         typedLanguage: KeyboardLanguage,
-        supplementary: [String]
+        supplementary: [String],
+        codeSwitching: Bool = false
     ) -> [Suggestion] {
         let lower = prefix.lowercased()
         var out: [Suggestion] = []
@@ -167,6 +245,26 @@ public enum SuggestionEngine {
             out.append(Suggestion(text: matchCase(of: prefix, applyingTo: contraction), language: .english))
         }
 
+        // Hebrew's equivalent, and it has to be here for the same reason: a rule
+        // that is deterministic and unambiguous should not be left to a ranking
+        // that has no frequency model.
+        //
+        // Five Hebrew letters change shape at the end of a word, and typing the
+        // ordinary form there is the language's most common keying error. It is
+        // what `שלומ` is — `שלום`, "hello", with a plain mem instead of a final
+        // mem. Left to `UITextChecker` alone the user is actively harmed rather
+        // than merely unhelped: `שלומ` has twelve real completions
+        // (`שלומדים`, `שלומד`, …), so the guesses branch below never runs, and
+        // `שלומדים` is offered as the default. Pressing space to accept "hello"
+        // commits "who are studying". That is the autocorrect people switch off.
+        //
+        // Only offered when the swap produces a word the dictionary actually
+        // knows, so this cannot invent a correction for a word that was already
+        // right.
+        if let final = hebrewFinalFormCorrection(of: prefix) {
+            out.append(Suggestion(text: final, language: .hebrew))
+        }
+
         // Names and shortcuts from the user's own lexicon outrank the system
         // dictionary: `UITextChecker` has never heard of "Nitai", the user's
         // contacts have.
@@ -175,6 +273,17 @@ public enum SuggestionEngine {
             .filter { $0.lowercased().hasPrefix(lower) && $0.lowercased() != lower }
             .prefix(2)
             .map { Suggestion(text: $0, language: typedLanguage) }
+
+        // Latin letters inside a Hebrew sentence, ranked before the dictionary.
+        // Only here: in an English sentence Apple's ranking is the better judge
+        // and this list would only crowd it. See `codeSwitchVocabulary`.
+        if codeSwitching {
+            out +=
+                codeSwitchVocabulary
+                .filter { $0.hasPrefix(lower) && $0 != lower }
+                .prefix(2)
+                .map { Suggestion(text: matchCase(of: prefix, applyingTo: $0), language: .english) }
+        }
 
         let nsPrefix = prefix as NSString
         let range = NSRange(location: 0, length: nsPrefix.length)

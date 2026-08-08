@@ -61,7 +61,7 @@ be `language: "hebrew"` and `script: "mixed"`, which is most of how Israelis act
 Against that sit the fields that say what a correct implementation must *not* return:
 
 - **`chrome`**: every non-message run on screen. Nav bars, sender labels, timestamps, delivery
-  receipts, reaction counts, date dividers, composer placeholders, keyboard key caps. 600 runs
+  receipts, reaction counts, date dividers, composer placeholders, keyboard key caps. 607 runs
   across the corpus. Reading them is fine; returning one as the message is a failure.
 - **`traps`**: the 74 specific runs most likely to be returned instead, each with the reason.
   A link preview headline, a quoted reply, a forwarded news blurb, a contact saved as
@@ -122,7 +122,7 @@ harness builds the near pairs instead: seven renders per scene.
 renders are the same two tests asked of the state a reading is *actually* measured in: a
 reading exists only because the user tapped Reply on our keyboard, so our keyboard is on
 screen for the whole five-second read, repainting three shimmer lines at 60 Hz. On an
-iPhone 17 Pro it covers 292 pt of 874 pt — 32% of the fingerprint band.
+iPhone 17 Pro it covers 292 pt of 874 pt — 33.4% of the fingerprint band.
 
 Measured 2026-08-08, SHA-256 of the 32x64 reduction:
 
@@ -435,7 +435,7 @@ better, 6 worse, 1 wrong both ways.
 | half worse | `im-06` `ml-02` `ml-03` `sl-04` `tg-02` `wa-02` — `tg-02` answers an unrelated English message and takes the keyboard language with it |
 | both wrong | `im-03` — full returns nothing at all; half returns the user's own bottom-most bubble, which is the bar's own trap. **This is the only trap in the whole 2x2** |
 
-**JPEG, full -> half: 5 of 30**, and the direction reverses: `im-02`, `ml-01`,
+**JPEG, full -> half: 4 of 30**, and the direction reverses: `im-02`, `ml-01`,
 `ml-03` and `tg-03` all improve at half size, three of them recovering the sender
 and the keyboard language, and only `wa-05` goes the other way. That reversal is
 the reason the decision rests on the JPEG row: PNG-vs-PNG is the comparison
@@ -519,15 +519,15 @@ part:
    into a cloud call rather than a wrong name" — it does not, because nil is an
    answer. `sl-01` and `sl-03` carry plain, answerable English messages that the
    cloud transcribes correctly, and the user is offered nothing on both.
-   (`testTheRouterDropsAnswerableScreensInsteadOfAskingTheCloud`.)
+   (`ScreenContextBarTests.testAnUnreadableLayoutBecomesACloudCallRatherThanSilence`, and its session-level twin in `ScreenContextSessionTests`.)
 2. **iOS Vision is not macOS Vision**, as above: `wa-07`, `sl-05` and `ml-01`.
    (`testTheShippingPathScoresTheBar`, the `disagreesWithHarness` assertion.)
 
-What does *not* differ is the cloud half. On all 20 frames that reach it, the
+What does *not* differ is the cloud half. On all 22 frames that reach it, the
 shipping path's `sender`, `message` and `language` are byte-identical to
 `cloud_outputs.json`: same prompt (`ScreenPrompt.instructions` is asserted
 against the request the transport receives), same field order, same parse. The
-only field that moves is `script`, on `wa-06`, `im-02`, `im-05` and `ml-02`,
+only field that moves is `script`, on `wa-06`, `im-02`, `wa-02` and `ml-02`,
 because `CloudScreenReader.parse` discards the model's `script` answer and
 recomputes it from the transcribed text with `LanguageDetector`. That is worth
 knowing but not worth fixing: on those four the recomputed answer is the *right*

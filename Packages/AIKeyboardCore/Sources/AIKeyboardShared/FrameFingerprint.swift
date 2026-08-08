@@ -205,11 +205,13 @@ public enum FrameReduction {
     /// The region of the buffer the fingerprint is taken over, for a frame that
     /// may not be the right way up.
     ///
-    /// **Why this exists at all.** The band is a claim about the *screen* — keep
-    /// the top 14%, where a conversation's title sits, and drop everything from
-    /// the top of our own keyboard downwards, because our panel animates a shimmer
-    /// for the whole length of a read and would otherwise give every frame a fresh
-    /// identity. `bandRows` expressed that claim as a range of buffer *rows*,
+    /// **Why this exists at all.** The band is a claim about the *screen*: drop
+    /// the top 14% — status bar and navigation bar, where the presence line
+    /// changes on its own — and drop everything from the top of our own keyboard
+    /// downwards, because our panel animates a shimmer for the whole length of a
+    /// read and would otherwise give every frame a fresh identity. What is
+    /// fingerprinted is the middle, which is where the messages are.
+    /// `bandRows` expressed that claim as a range of buffer *rows*,
     /// which is only the same thing while the buffer is the right way up. Rotate
     /// the device and the top of the screen is a column edge; the band then holds
     /// neither the title nor an exclusion of our keyboard, and the freshness gate

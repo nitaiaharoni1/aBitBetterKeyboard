@@ -49,11 +49,12 @@ public enum MockScreenContext {
 // MARK: - Dictation
 //
 // A scripted transcript that streams in word by word, for the onboarding demo
-// and the app's playground. This stays a mock deliberately: the investigation
-// below found the real thing categorically unavailable inside a keyboard
-// extension, on any configuration, and a mock documented as necessary beats a
-// real implementation that would silently refuse every time it runs in the
-// shipping product.
+// and the app's playground. It stays a mock, and the investigation below is why
+// — but read that investigation before quoting it, because it says something
+// narrower than "dictation is impossible in a keyboard". The keyboard cannot
+// reach the microphone; the *feature* is achievable from the containing app, and
+// Gboard ships it that way. What is missing is a supported trigger, which is a
+// product decision rather than a coding task.
 //
 // **The blocking finding, read from Apple's current documentation on
 // 2026-08-08, not from memory.** "Configuring open access for a custom
@@ -84,8 +85,12 @@ public enum MockScreenContext {
 // recognition on real hardware — so read this as "network required on the
 // machines this was checked on," not as a permanent limit.) The newer API is
 // worse, not better: `SpeechTranscriber.supportedLocales` has no Hebrew locale
-// at all, independently reproduced here (30 locales) and already pinned by
-// `SpeechLanguageTests` in `ScreenReaderTests.swift`.
+// at all — 30 locales, read on macOS. **Not pinned by a test, and the test that
+// looks like it does is skipped**: `SpeechLanguageTests` in
+// `ScreenReaderTests.swift` asks the simulator, the simulator answers with zero
+// locales because the speech assets are not installed, and an empty list
+// satisfies "contains no Hebrew" while proving nothing — so it skips and says
+// so. Settling this needs a device.
 //
 // **But "the keyboard cannot record" is not the same as "dictation is
 // impossible", and an earlier version of this comment ran the two together.**
