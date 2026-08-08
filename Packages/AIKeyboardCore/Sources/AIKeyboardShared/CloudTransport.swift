@@ -89,10 +89,12 @@ public protocol CloudTransport: Sendable {
 /// backend decision: swapping Gemini for Claude changes nothing here.
 public struct BackendTransport: CloudTransport {
     private let baseURL: URL
+    private let token: String?
     private let session: URLSession
 
-    public init(baseURL: URL, session: URLSession = .shared) {
+    public init(baseURL: URL, token: String? = nil, session: URLSession = .shared) {
         self.baseURL = baseURL
+        self.token = token
         self.session = session
     }
 
@@ -117,7 +119,9 @@ public struct BackendTransport: CloudTransport {
         guard let raw = defaults.string(forKey: "cloudBackendURL"),
             let url = URL(string: raw), url.scheme?.hasPrefix("http") == true
         else { return nil }
-        return BackendTransport(baseURL: url)
+        let token = defaults.string(forKey: "cloudBackendToken")?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return BackendTransport(baseURL: url, token: (token?.isEmpty == false) ? token : nil)
     }
 
     public func send(_ request: CloudRequest) async throws -> [String: String] {
@@ -142,6 +146,17 @@ public struct BackendTransport: CloudTransport {
         var urlRequest = URLRequest(url: baseURL.appendingPathComponent(path))
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
+        // The backend spends money per call, so an endpoint anyone can find is an
+        // endpoint anyone can bill. This is *not* a bundled secret — nothing here
+        // ships one, for the same reason no provider credential does: anything in
+        // the bundle is extractable. It is a value the person running the backend
+        // puts into settings alongside its URL, so it is exactly as private as
+        // they keep it. A shipping consumer build wants App Attest instead, which
+        // proves the caller is a genuine copy of this app rather than proving it
+        // knows a string; `Backend/README.md` says so under its known gaps.
+        if let token {
+            urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "authorization")
+        }
         urlRequest.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let data: Data

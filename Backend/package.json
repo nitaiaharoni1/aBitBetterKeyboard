@@ -1,0 +1,14 @@
+{
+  "name": "aikeyboard-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The backend BackendTransport posts to. Owns the Vertex AI credential so the app and its extensions never have to.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  }
+}
