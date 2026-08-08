@@ -1,0 +1,479 @@
+{
+  "schema": 1,
+  "capturedAt": "2026-08-07T21:30:49+00:00",
+  "device": "iPhone 17 Pro",
+  "runtime": "iOS 26.2",
+  "hostApp": "com.apple.reminders",
+  "keyboard": "stock iOS, English (US) and Hebrew, no third-party keyboards installed",
+  "corpus": "../corpus.json",
+  "method": "XCUITest drives Apple's Reminders app and taps out every character of context + prefix on the system keyboard, then screenshots the whole screen. Tapping is not an implementation detail: iOS keeps its own typing session, and text inserted any other way (paste, typeText) never joins it, so the bar ends up answering a different question.",
+  "suggestionsRead": "Accessibility labels of the three slots under the element iOS labels 'Typing Predictions', ordered left to right on screen. Hebrew renders right to left, so for Hebrew entries the last item in the list is the leftmost slot, not the least likely one.",
+  "fieldText": "The text field's accessibility value at the moment of the screenshot. It includes iOS's grey inline completion, so on en-comp-01 it reads 'I'll be there in ten minutes' even though only 'minu' was typed and the rest is an unaccepted suggestion. It also shows autocorrect's work on the context: 'Ill' was typed, 'I'll' is what stuck.",
+  "skippedCharacters": "Characters the capture could not type, because reaching the numbers plane crashes the test runner on this simulator. In practice only the apostrophe, which iOS restores on the next space anyway.",
+  "totals": {
+    "corpus": 90,
+    "captured": 1,
+    "uncaptured": 89
+  },
+  "howToFillTheGaps": "Run Bar/typing/capture.sh --resume. It keeps every entry already captured and re-attempts the rest, so coverage only goes up. Entries reading 'the capture run never reached this entry' are not evidence about the stock keyboard in either direction — nobody asked it.",
+  "entries": [
+    {
+      "id": "en-comp-01",
+      "status": "captured",
+      "keyboardExpected": "en_US",
+      "screenshot": "en-comp-01.png",
+      "keyboardActual": "en_US",
+      "fieldText": "I’ll be there in ten minutes",
+      "suggestions": [
+        "“minu”",
+        "minutes",
+        "minute"
+      ]
+    },
+    {
+      "id": "en-comp-02",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-comp-03",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-comp-04",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-comp-05",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-comp-06",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-comp-07",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-comp-08",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-comp-09",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-comp-10",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-next-01",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-next-02",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-next-03",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-next-04",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-next-05",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-next-06",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-next-07",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "en-next-08",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-comp-01",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-comp-02",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-comp-03",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-comp-04",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-comp-05",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-comp-06",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-comp-07",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-comp-08",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-comp-09",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-comp-10",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-comp-11",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-comp-12",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-next-01",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-next-02",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-next-03",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-next-04",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-next-05",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-next-06",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-next-07",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-next-08",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-next-09",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "he-next-10",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "cs-01",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "cs-02",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "cs-03",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "cs-04",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "cs-05",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "cs-06",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "cs-07",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "cs-08",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "cs-09",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "cs-10",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "cs-11",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "cs-12",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "cs-13",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "cs-14",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "apos-01",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "apos-02",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "apos-03",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "apos-04",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "apos-05",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "apos-06",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "apos-07",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "apos-08",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "apos-09",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "typo-01",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "typo-02",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "typo-03",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "typo-04",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "typo-05",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "typo-06",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "typo-07",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "typo-08",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "typo-09",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "typo-10",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "typo-11",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "typo-12",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "nc-01",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "nc-02",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "nc-03",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "nc-04",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "nc-05",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "nc-06",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "nc-07",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "nc-08",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "nc-09",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "nc-10",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "nc-11",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "nc-12",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "wl-01",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "wl-02",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    },
+    {
+      "id": "wl-03",
+      "status": "uncaptured",
+      "reason": "the capture run never reached this entry"
+    }
+  ]
+}

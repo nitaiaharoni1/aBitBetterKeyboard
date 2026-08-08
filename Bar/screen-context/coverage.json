@@ -1,0 +1,272 @@
+[
+  {
+    "coverage" : 0.5333333333333333,
+    "id" : "wa-01",
+    "language" : "hebrew",
+    "meanConfidence" : 0.42500000695387524,
+    "recognized" : 8,
+    "rectangles" : 15,
+    "seconds" : 0.576490044593811
+  },
+  {
+    "coverage" : 0.6428571428571429,
+    "id" : "wa-02",
+    "language" : "hebrew",
+    "meanConfidence" : 0.6250000037252903,
+    "recognized" : 9,
+    "rectangles" : 14,
+    "seconds" : 0.32452189922332764
+  },
+  {
+    "coverage" : 0.5,
+    "id" : "wa-03",
+    "language" : "mixed",
+    "meanConfidence" : 0.6200000047683716,
+    "recognized" : 13,
+    "rectangles" : 26,
+    "seconds" : 0.2024240493774414
+  },
+  {
+    "coverage" : 1,
+    "id" : "wa-04",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "recognized" : 34,
+    "rectangles" : 34,
+    "seconds" : 0.23233604431152344
+  },
+  {
+    "coverage" : 0.7058823529411765,
+    "id" : "wa-05",
+    "language" : "hebrew",
+    "meanConfidence" : 0.47333333889643353,
+    "recognized" : 12,
+    "rectangles" : 17,
+    "seconds" : 0.17759597301483154
+  },
+  {
+    "coverage" : 0.4,
+    "id" : "wa-06",
+    "language" : "hebrew",
+    "meanConfidence" : 0.5727272765202955,
+    "recognized" : 12,
+    "rectangles" : 30,
+    "seconds" : 0.20342493057250977
+  },
+  {
+    "coverage" : 1,
+    "id" : "wa-07",
+    "language" : "english",
+    "meanConfidence" : 0.9440000009536743,
+    "recognized" : 24,
+    "rectangles" : 24,
+    "seconds" : 0.19442403316497803
+  },
+  {
+    "coverage" : 0.8260869565217391,
+    "id" : "wa-08",
+    "language" : "mixed",
+    "meanConfidence" : 0.6080000042915344,
+    "recognized" : 19,
+    "rectangles" : 23,
+    "seconds" : 0.24810504913330078
+  },
+  {
+    "coverage" : 1,
+    "id" : "sl-01",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "recognized" : 24,
+    "rectangles" : 24,
+    "seconds" : 0.17465293407440186
+  },
+  {
+    "coverage" : 0.9583333333333334,
+    "id" : "sl-02",
+    "language" : "english",
+    "meanConfidence" : 0.979411765056498,
+    "recognized" : 23,
+    "rectangles" : 24,
+    "seconds" : 0.18434202671051025
+  },
+  {
+    "coverage" : 1,
+    "id" : "sl-03",
+    "language" : "english",
+    "meanConfidence" : 0.9641025647138938,
+    "recognized" : 31,
+    "rectangles" : 31,
+    "seconds" : 0.24737906455993652
+  },
+  {
+    "coverage" : 0.8148148148148148,
+    "id" : "sl-04",
+    "language" : "mixed",
+    "meanConfidence" : 0.8642857159887042,
+    "recognized" : 22,
+    "rectangles" : 27,
+    "seconds" : 0.16831302642822266
+  },
+  {
+    "coverage" : 1,
+    "id" : "sl-05",
+    "language" : "english",
+    "meanConfidence" : 0.9538461543046511,
+    "recognized" : 25,
+    "rectangles" : 25,
+    "seconds" : 0.1827610731124878
+  },
+  {
+    "coverage" : 1,
+    "id" : "sl-06",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "recognized" : 21,
+    "rectangles" : 21,
+    "seconds" : 0.1580590009689331
+  },
+  {
+    "coverage" : 1,
+    "id" : "im-01",
+    "language" : "english",
+    "meanConfidence" : 0.9695652179096056,
+    "recognized" : 20,
+    "rectangles" : 20,
+    "seconds" : 0.14131295680999756
+  },
+  {
+    "coverage" : 0.4117647058823529,
+    "id" : "im-02",
+    "language" : "hebrew",
+    "meanConfidence" : 0.618181819265539,
+    "recognized" : 7,
+    "rectangles" : 17,
+    "seconds" : 0.1729869842529297
+  },
+  {
+    "coverage" : 0.7647058823529411,
+    "id" : "im-03",
+    "language" : "hebrew",
+    "meanConfidence" : 0.5857142891202655,
+    "recognized" : 13,
+    "rectangles" : 17,
+    "seconds" : 0.15460503101348877
+  },
+  {
+    "coverage" : 0.9047619047619048,
+    "id" : "im-04",
+    "language" : "mixed",
+    "meanConfidence" : 1,
+    "recognized" : 19,
+    "rectangles" : 21,
+    "seconds" : 0.12364208698272705
+  },
+  {
+    "coverage" : 0.6428571428571429,
+    "id" : "im-05",
+    "language" : "hebrew",
+    "meanConfidence" : 0.7272727299820293,
+    "recognized" : 9,
+    "rectangles" : 14,
+    "seconds" : 0.16059911251068115
+  },
+  {
+    "coverage" : 1,
+    "id" : "im-06",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "recognized" : 19,
+    "rectangles" : 19,
+    "seconds" : 0.14030098915100098
+  },
+  {
+    "coverage" : 0.75,
+    "id" : "im-07",
+    "language" : "mixed",
+    "meanConfidence" : 0.5500000059604645,
+    "recognized" : 9,
+    "rectangles" : 12,
+    "seconds" : 0.13691294193267822
+  },
+  {
+    "coverage" : 0.5217391304347826,
+    "id" : "tg-01",
+    "language" : "hebrew",
+    "meanConfidence" : 0.39230769872665405,
+    "recognized" : 12,
+    "rectangles" : 23,
+    "seconds" : 0.1999109983444214
+  },
+  {
+    "coverage" : 0.9615384615384616,
+    "id" : "tg-02",
+    "language" : "mixed",
+    "meanConfidence" : 0.9629629629629629,
+    "recognized" : 25,
+    "rectangles" : 26,
+    "seconds" : 0.15209496021270752
+  },
+  {
+    "coverage" : 1,
+    "id" : "tg-03",
+    "language" : "english",
+    "meanConfidence" : 0.9838709677419355,
+    "recognized" : 29,
+    "rectangles" : 29,
+    "seconds" : 0.16965293884277344
+  },
+  {
+    "coverage" : 0.6333333333333333,
+    "id" : "tg-04",
+    "language" : "hebrew",
+    "meanConfidence" : 0.6514285734721592,
+    "recognized" : 19,
+    "rectangles" : 30,
+    "seconds" : 0.2009580135345459
+  },
+  {
+    "coverage" : 0.9259259259259259,
+    "id" : "tg-05",
+    "language" : "mixed",
+    "meanConfidence" : 0.9821428571428571,
+    "recognized" : 25,
+    "rectangles" : 27,
+    "seconds" : 0.14963603019714355
+  },
+  {
+    "coverage" : 1,
+    "id" : "ml-01",
+    "language" : "english",
+    "meanConfidence" : 0.8960000014305115,
+    "recognized" : 21,
+    "rectangles" : 21,
+    "seconds" : 0.1579570770263672
+  },
+  {
+    "coverage" : 0.64,
+    "id" : "ml-02",
+    "language" : "hebrew",
+    "meanConfidence" : 0.4687500037252903,
+    "recognized" : 16,
+    "rectangles" : 25,
+    "seconds" : 0.19620299339294434
+  },
+  {
+    "coverage" : 0.896551724137931,
+    "id" : "ml-03",
+    "language" : "mixed",
+    "meanConfidence" : 0.9161290334117028,
+    "recognized" : 26,
+    "rectangles" : 29,
+    "seconds" : 0.23845791816711426
+  },
+  {
+    "coverage" : 0.95,
+    "id" : "ml-04",
+    "language" : "english",
+    "meanConfidence" : 0.9695652179096056,
+    "recognized" : 19,
+    "rectangles" : 20,
+    "seconds" : 0.14852392673492432
+  }
+]

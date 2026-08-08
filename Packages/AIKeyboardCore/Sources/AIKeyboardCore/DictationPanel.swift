@@ -94,8 +94,11 @@ public struct DictationPanel: View {
         var hebrew = false
         var latin = false
         for scalar in text.unicodeScalars {
-            if (0x0590...0x05FF).contains(scalar.value) { hebrew = true }
-            else if CharacterSet.letters.contains(scalar) { latin = true }
+            if (0x0590...0x05FF).contains(scalar.value) {
+                hebrew = true
+            } else if CharacterSet.letters.contains(scalar) {
+                latin = true
+            }
         }
         return hebrew && latin
     }
@@ -124,7 +127,9 @@ public struct DictationPanel: View {
                     controller.dictationTranscript.isEmpty ? Theme.Keys.secondaryLabel : Theme.Keys.label
                 )
                 .multilineTextAlignment(controller.dictationIsRightToLeft ? .trailing : .leading)
-                .frame(maxWidth: .infinity, alignment: controller.dictationIsRightToLeft ? .trailing : .leading)
+                .frame(
+                    maxWidth: .infinity, alignment: controller.dictationIsRightToLeft ? .trailing : .leading
+                )
                 .padding(.horizontal, Theme.Space.sm)
                 .padding(.vertical, Theme.Space.xs)
         }

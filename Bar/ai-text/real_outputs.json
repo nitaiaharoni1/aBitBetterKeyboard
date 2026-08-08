@@ -1,0 +1,464 @@
+{
+  "fix-en-01" : "I don't think we should do it because it doesn't make sense",
+  "fix-en-02" : "Sounds good, I'll send you the deck tonight.",
+  "fix-en-03" : "The onboarding is good, but its flow breaks on the last screen",
+  "fix-en-04" : "Can you send me the ID for the sprint ticket?",
+  "fix-en-05" : "Sorry, I was ill last week and didn't see your message",
+  "fix-en-06" : "He said \"I don't know\" and left it there",
+  "fix-en-07" : "OMG that meeting was SO long 😅 I'm gonna need coffee",
+  "fix-en-08" : "I'll send you the updated presentation after the standup tomorrow",
+  "fix-en-09" : "The numbers from last week do not match what the dashboard shows",
+  "fix-en-10" : "Please don't forget to send the invoice before the 15th, otherwise finance won't process it this month.",
+  "fix-he-01" : "היי, אני חושב שאנחנו צריכים לדבר על זה מחר בבקשה",
+  "fix-he-02" : "אני אבדוק את זה ואחזור אליך",
+  "fix-he-03" : "תודה רבה, קיבלתי. אני עובר על זה עכשיו ומעדכן.",
+  "fix-he-04" : "מעולה, נתראה מחר בבוקר",
+  "fix-he-05" : "אתה יכול להעביר לי את הקובץ של אתמול?",
+  "fix-he-06" : "יאללה סבבה, נדבר אח\"כ",
+  "fix-he-07" : "שלחתי לך את הקובץ אתמול בערב, תגיד לי אם קיבלת",
+  "fix-he-08" : "מה קורה? אני מנסה להתקשר אליך כל הבוקר",
+  "fix-mix-01" : "אני אשלח לך את ה-document מחר אחרי ה-standup",
+  "fix-mix-02" : "העליתי את התיקון ל-staging והכל עובד, it's fine",
+  "fix-mix-03" : "Can you check the deployment on staging, אני חושב שיש שם באג בבקשה?",
+  "fix-mix-04" : "בוא נעשה sync קצר על ה-roadmap של Q3",
+  "fix-mix-05" : "אני צריך את ה-API key בשביל ה-demo של מחר",
+  "fix-mix-06" : "צריך לעשות refactor ל-service הזה לפני ה-release",
+  "rp-en-01" : [
+    {
+      "intent" : "Accept",
+      "text" : "Yes, I can take the standup tomorrow."
+    },
+    {
+      "intent" : "Push back",
+      "text" : "I won't be able to take the standup tomorrow."
+    },
+    {
+      "intent" : "Ask",
+      "text" : "What time is the standup tomorrow?"
+    }
+  ],
+  "rp-en-02" : [
+    {
+      "intent" : "Accept",
+      "text" : "Yes, I can take a look. What is it?"
+    },
+    {
+      "intent" : "Push back",
+      "text" : "I can't commit until I know what 'this' is. What are you referring to?"
+    },
+    {
+      "intent" : "Ask",
+      "text" : "What is 'this'?"
+    }
+  ],
+  "rp-en-03" : [
+    {
+      "intent" : "Accept",
+      "text" : "Yes, I'd be happy to schedule a quick call this week."
+    },
+    {
+      "intent" : "Push back",
+      "text" : "Thank you for reaching out, but I'm not looking for new opportunities at the moment."
+    },
+    {
+      "intent" : "Ask",
+      "text" : "What days or times work best for you this week?"
+    }
+  ],
+  "rp-en-04" : [
+    {
+      "intent" : "Accept",
+      "text" : "Yes, Tuesday between 8 and 12 works for me."
+    },
+    {
+      "intent" : "Push back",
+      "text" : "No, Tuesday between 8 and 12 doesn't work for me; are there other times available?"
+    },
+    {
+      "intent" : "Ask",
+      "text" : "Do I need to be home for the plumber on Tuesday?"
+    }
+  ],
+  "rp-he-01" : [
+    {
+      "intent" : "Accept",
+      "text" : "כן, בשמחה! נשמע מעולה לנסות את המקום החדש ביפו."
+    },
+    {
+      "intent" : "Push back",
+      "text" : "תודה על ההצעה, אבל הערב פחות נוח לי. אולי נוכל לקבוע ביום אחר?"
+    },
+    {
+      "intent" : "Ask",
+      "text" : "איזו שעה מתאימה לך לארוחת ערב הערב?"
+    }
+  ],
+  "rp-he-02" : [
+    {
+      "intent" : "Accept",
+      "text" : "כן, בטח. אדאג להחזיר לך את ה-500 שקלים."
+    },
+    {
+      "intent" : "Push back",
+      "text" : "קשה לי עכשיו עם ה-500 שקלים. נוכל לדבר על זה?"
+    },
+    {
+      "intent" : "Ask",
+      "text" : "מתי בדיוק אתה צריך את ה-500 שקלים?"
+    }
+  ],
+  "rp-he-03" : [
+    {
+      "intent" : "Accept",
+      "text" : "כן, בשמחה."
+    },
+    {
+      "intent" : "Push back",
+      "text" : "כרגע אני לא פנויה, מתי נוח לך?"
+    },
+    {
+      "intent" : "Ask",
+      "text" : "על מה רצית לדבר?"
+    }
+  ],
+  "rp-he-04" : [
+    {
+      "intent" : "Accept",
+      "text" : "כן, אני אגיע ביום חמישי ב-19:00."
+    },
+    {
+      "intent" : "Push back",
+      "text" : "אני מצטער, לא אוכל להגיע ביום חמישי."
+    },
+    {
+      "intent" : "Ask",
+      "text" : "כמה זמן מתוכנן ערב הגיבוש?"
+    }
+  ],
+  "rp-mix-01" : [
+    {
+      "intent" : "Accept",
+      "text" : "כן, אשלח לך פידבק על ה-deck עד מחר בצהריים."
+    },
+    {
+      "intent" : "Push back",
+      "text" : "מחר בצהריים קצת לחוץ לי, תוכלי לקבל את הפידבק בערב?"
+    },
+    {
+      "intent" : "Ask",
+      "text" : "יש משהו ספציפי שחשוב לך שאשים לב אליו ב-deck?"
+    }
+  ],
+  "rp-mix-02" : [
+    {
+      "intent" : "Accept",
+      "text" : "כן, העליתי את ה-hotfix, אני בודקת את ה-monitoring עכשיו."
+    },
+    {
+      "intent" : "Push back",
+      "text" : "עדיין לא העליתי אותו, אבל אני בודקת למה ה-monitoring עדיין מראה errors."
+    },
+    {
+      "intent" : "Ask",
+      "text" : "את יכולה לפרט איזה errors ה-monitoring מראה?"
+    }
+  ],
+  "rp-mix-03" : [
+    {
+      "intent" : "Push back",
+      "text" : "צריכה פרטים נוספים כדי שאוכל לעזור, את יכולה לפרט יותר?"
+    },
+    {
+      "intent" : "Ask",
+      "text" : "האם זה קורה בגרסה מסוימת של ה-app או במכשיר מסוים?"
+    }
+  ],
+  "rp-mix-04" : [
+    {
+      "intent" : "Accept",
+      "text" : "בסדר גמור, אני אקח ownership על ה-onboarding flow ברבעון הבא."
+    },
+    {
+      "intent" : "Push back",
+      "text" : "אני חושש שאני עמוס מדי כרגע כדי לקחת ownership מלא על ה-onboarding flow ברבעון הבא."
+    },
+    {
+      "intent" : "Ask",
+      "text" : "אתה יכול לפרט קצת יותר מה כוללת המשימה של ownership על ה-onboarding flow?"
+    }
+  ],
+  "rw-en-01" : [
+    {
+      "label" : "Firm refusal",
+      "text" : "We should not do it.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Ask for conditions",
+      "text" : "I dont think we should do it. What would make sense?",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Suggest alternative",
+      "text" : "We should not do it. Is there another way?",
+      "tone" : "clearer"
+    }
+  ],
+  "rw-en-02" : [
+    {
+      "label" : "State Requirement",
+      "text" : "I need this by tomorrow.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Ask Favour",
+      "text" : "Could I get this by tomorrow, please?",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Negotiate Terms",
+      "text" : "I'm hoping to get this by tomorrow. Is that possible?",
+      "tone" : "clearer"
+    }
+  ],
+  "rw-en-03" : [
+    {
+      "label" : "Acknowledge directly",
+      "text" : "Thanks for turning that around fast; it made a difference today.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Acknowledge plainly",
+      "text" : "Thanks for turning that around so fast. It helped today.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Acknowledge warmly",
+      "text" : "Many thanks for turning that around so quickly! It really made a significant difference today.",
+      "tone" : "clearer"
+    }
+  ],
+  "rw-en-04" : [
+    {
+      "label" : "Refuse firmly",
+      "text" : "I can't make the 9am standup tomorrow.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Ask for input",
+      "text" : "I won't make the 9am standup tomorrow. What should I do?",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Offer alternative",
+      "text" : "I can't make the 9am standup tomorrow. Can I get an update later?",
+      "tone" : "clearer"
+    }
+  ],
+  "rw-he-01" : [
+    {
+      "label" : "Direct Refusal",
+      "text" : "אנחנו לא צריכים לעשות את זה.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Conditional Refusal",
+      "text" : "מה יגרום לך לחשוב שאנחנו צריכים לעשות את זה?",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Suggest Alternative",
+      "text" : "אני לא חושב שכדאי לנו לעשות את זה. האם יש דרך אחרת לעשות זאת?",
+      "tone" : "clearer"
+    }
+  ],
+  "rw-he-02" : [
+    {
+      "label" : "Present Demand",
+      "text" : "אני צריך את התשובה שלך עד סוף היום.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Negotiate Condition",
+      "text" : "תוכל לתת לי תשובה עד סוף היום, או שאתה צריך יותר זמן?",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Polite Request",
+      "text" : "אשמח לקבל את התשובה שלך עד סוף היום.",
+      "tone" : "clearer"
+    }
+  ],
+  "rw-he-03" : [
+    {
+      "label" : "Direct Gratitude",
+      "text" : "תודה רבה על העזרה אתמול, ממש הצלת אותי.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Brief Thanks",
+      "text" : "תודה על העזרה אתמול.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Warm Appreciation",
+      "text" : "תודה רבה על העזרה שלך אתמול, זה ממש הציל אותי!",
+      "tone" : "clearer"
+    }
+  ],
+  "rw-he-04" : [
+    {
+      "label" : "Direct Refusal",
+      "text" : "אני לא יכול לקחת את זה עכשיו, יש לי יותר מדי משימות.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Ask Conditions",
+      "text" : "אני לא יכול לקחת את זה עכשיו בגלל עומס. מה צריך לקרות כדי שאוכל לעשות את זה?",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Offer Alternative",
+      "text" : "בגלל העומס, אני לא יכול לקחת את זה עכשיו. האם נוכל להתייחס לזה מאוחר יותר, או בצורה אחרת?",
+      "tone" : "clearer"
+    }
+  ],
+  "rw-mix-01" : [
+    {
+      "label" : "State Delay Necessity",
+      "text" : "עקב אי-סיום ה-QA, ה-launch נדחה.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Ask What Changes",
+      "text" : "ה-QA לא סיים. מה יכול לשנות את הצורך לדחות את ה-launch?",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Propose Alternative Action",
+      "text" : "ה-QA לא סיים ולכן חייבים לדחות את ה-launch. אפשרות חלופית היא להוציא את ה-launch ב-MVP מצומצם יותר?",
+      "tone" : "clearer"
+    }
+  ],
+  "rw-mix-02" : [
+    {
+      "label" : "Commit Clearly",
+      "text" : "אני אשלח לך את ה-document מחר אחרי ה-standup.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Condition Commitment",
+      "text" : "אשלח לך את ה-document מחר אחרי ה-standup, אם זה מתאים לך?",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Offer Alternative",
+      "text" : "אני אשלח את ה-document מחר אחרי ה-standup, אלא אם תרצה שאעשה את זה באופן אחר.",
+      "tone" : "clearer"
+    }
+  ],
+  "rw-mix-03" : [
+    {
+      "label" : "Polite Request",
+      "text" : "אשמח אם תוכל לעשות את ה-review של ה-PR עד היום בערב.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "State Demand",
+      "text" : "עשה את ה-review של ה-PR עד היום בערב.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Open Negotiation",
+      "text" : "תוכל לעשות את ה-review של ה-PR עד היום בערב, או שמועד אחר יתאים לך יותר?",
+      "tone" : "clearer"
+    }
+  ],
+  "rw-mix-04" : [
+    {
+      "label" : "Directly Stated",
+      "text" : "ה-meeting היה בזבוז זמן, איש לא הגיע מוכן.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Concise Observation",
+      "text" : "איש לא הגיע מוכן ל-meeting, ולכן הוא היה בזבוז זמן.",
+      "tone" : "clearer"
+    },
+    {
+      "label" : "Warmly Stated",
+      "text" : "ה-meeting הרגיש קצת כמו waste of time כי אף אחד לא הגיע מוכן.",
+      "tone" : "clearer"
+    }
+  ],
+  "tn-en-01" : [
+    {
+      "label" : "",
+      "text" : "I believe it is advisable to relocate the meeting to the following week",
+      "tone" : "clearer"
+    }
+  ],
+  "tn-en-02" : [
+    {
+      "label" : "",
+      "text" : "Can't schedule review for Friday since client hasn't replied.",
+      "tone" : "shorter"
+    }
+  ],
+  "tn-en-03" : [
+    {
+      "label" : "",
+      "text" : "Could you please address the issue with the checkout flow, as it has been malfunctioning since Monday?",
+      "tone" : "professional"
+    }
+  ],
+  "tn-en-04" : [
+    {
+      "label" : "",
+      "text" : "We are not doing that",
+      "tone" : "confident"
+    }
+  ],
+  "tn-he-01" : [
+    {
+      "label" : "",
+      "text" : "אתה יכול בבקשה לבדוק את הנתונים ששלחתי לך?",
+      "tone" : "casual"
+    }
+  ],
+  "tn-he-02" : [
+    {
+      "label" : "",
+      "text" : "יש לדחות את הפגישה של יום ראשון.",
+      "tone" : "confident"
+    }
+  ],
+  "tn-he-03" : [
+    {
+      "label" : "",
+      "text" : "ברצוני להביע את חוסר שביעות רצוני מתוצאות הפרויקט.",
+      "tone" : "professional"
+    }
+  ],
+  "tn-mix-01" : [
+    {
+      "label" : "",
+      "text" : "אוי, לא הספקתי לעבור על ה-PR שלך עדיין, מתנצל/ת.",
+      "tone" : "friendly"
+    }
+  ],
+  "tn-mix-02" : [
+    {
+      "label" : "",
+      "text" : "בואו נעשה עוד iteration ל-design לפני ששולחים ל-client.",
+      "tone" : "shorter"
+    }
+  ],
+  "tn-mix-03" : [
+    {
+      "label" : "",
+      "text" : "ה-deploy נכשל שוב. הכשל עלול להיות קשור ל-config שהשתנה אתמול, אך הדבר אינו ודאי.",
+      "tone" : "clearer"
+    }
+  ]
+}

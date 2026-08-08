@@ -1,0 +1,542 @@
+[
+  {
+    "config" : "en",
+    "id" : "wa-01",
+    "language" : "hebrew",
+    "meanConfidence" : 0.42500000695387524,
+    "observations" : 12,
+    "seconds" : 0.5871219635009766,
+    "text" : "A A O80 UE\nURIqU' NI NEULI OIELIO R4 GKIAL EIIO\n9L:6\n1G' NE. XCl ถ.เดน LIa 9sig\ng g0¿\n17:8 11\nUn' XIl UnU ECCO NUUIL¿ 18\nLild\nO\nazucu\nAo col- PTIlO\nLt:6"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "wa-01",
+    "language" : "hebrew",
+    "meanConfidence" : 0.42500000695387524,
+    "observations" : 12,
+    "seconds" : 0.33826494216918945,
+    "text" : "A A O80 UE\nURIqU' NI NEULI OIELIO R4 GKIAL EIIO\n9L:6\n1G' NE. XCl ถ.เดน LIa 9sig\ng g0¿\n17:8 11\nUn' XIl UnU ECCO NUUIL¿ 18\nLild\nO\nazucu\nAo col- PTIlO\nLt:6"
+  },
+  {
+    "config" : "en",
+    "id" : "wa-02",
+    "language" : "hebrew",
+    "meanConfidence" : 0.6250000037252903,
+    "observations" : 16,
+    "seconds" : 0.3144099712371826,
+    "text" : "20:44\n-اا.\nコTア...\n）口\nDI'n\n18:40 ?1103\n~/ 19:20 กTITn7 กวกท ,เลภกา\n19:26\nDUA TI! ,ภ'กา 'o\nV/ 19:58 D'ภมบล กาก'^ กอ'งก !'ภารก\n      \n20:41\n20:44\nากท กาลงอง'x7 กทว กางx ½x A !กาเภ\n??nnn 770그 ,?그\n+ Message"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "wa-02",
+    "language" : "hebrew",
+    "meanConfidence" : 0.6250000037252903,
+    "observations" : 16,
+    "seconds" : 0.2140589952468872,
+    "text" : "20:44\n-اا.\nコTア...\n）口\nDI'n\n18:40 ?1103\n~/ 19:20 กTITn7 กวกท ,เลภกา\n19:26\nDUA TI! ,ภ'กา 'o\nV/ 19:58 D'ภมบล กาก'^ กอ'งก !'ภารก\n      \n20:41\n20:44\nากท กาลงอง'x7 กทว กางx ½x A !กาเภ\n??nnn 770그 ,?그\n+ Message"
+  },
+  {
+    "config" : "en",
+    "id" : "wa-03",
+    "language" : "mixed",
+    "meanConfidence" : 0.6200000047683716,
+    "observations" : 15,
+    "seconds" : 0.24905502796173096,
+    "text" : "11:09\nج ا.\n7YIn nIIY\nD'\n772 'N'X\n9:41\nリク リニ\n10:11 nat ny'nnn.n'N7,l'yn\n11:02\n142 790n\nV 11:05 TUN, alish\nreleas-\n11:09\n?ากท\n+"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "wa-03",
+    "language" : "mixed",
+    "meanConfidence" : 0.6200000047683716,
+    "observations" : 15,
+    "seconds" : 0.1461719274520874,
+    "text" : "11:09\nج ا.\n7YIn nIIY\nD'\n772 'N'X\n9:41\nリク リニ\n10:11 nat ny'nnn.n'N7,l'yn\n11:02\n142 790n\nV 11:05 TUN, alish\nreleas-\n11:09\n?ากท\n+"
+  },
+  {
+    "config" : "en",
+    "id" : "wa-04",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "observations" : 35,
+    "seconds" : 0.23284590244293213,
+    "text" : "<\n9:03\nJames Whitfield\nlast seen today at 8:58\nBarely. Coffee first. 8:36 v v\nFair. Take five minutes, this one is\nlong.\n8:37\nGo ahead, I'm reading. 8:40 v v\nRight, here it is. 8:40\nMorning, quick recap from the call\nwith the vendor yesterday so it is\nwritten down somewhere: they can\nhold the current pricing until the end of\nthe quarter, but only if we commit to\nthe two year term. If we go month to\nmonth the rate goes up by about\neighteen percent starting in October,\nand they will not budge on the setup\nfee. I told them we would come back\nby Thursday.\n8:41\nThanks for writing it up. Two years is a\nlot to commit to.\n8:52 VV\nAlso the legal review came back clean,\nso nothing blocking on that side.\n8:55\nGood. I will look at the numbers\ntonight.\n8:58 VV\nCan you sanity check the numbers\nbefore I reply to them on Thursday?\n9:03\n+ Message"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "wa-04",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "observations" : 35,
+    "seconds" : 0.21445691585540771,
+    "text" : "<\n9:03\nJames Whitfield\nlast seen today at 8:58\nBarely. Coffee first. 8:36 v v\nFair. Take five minutes, this one is\nlong.\n8:37\nGo ahead, I'm reading. 8:40 v v\nRight, here it is. 8:40\nMorning, quick recap from the call\nwith the vendor yesterday so it is\nwritten down somewhere: they can\nhold the current pricing until the end of\nthe quarter, but only if we commit to\nthe two year term. If we go month to\nmonth the rate goes up by about\neighteen percent starting in October,\nand they will not budge on the setup\nfee. I told them we would come back\nby Thursday.\n8:41\nThanks for writing it up. Two years is a\nlot to commit to.\n8:52 VV\nAlso the legal review came back clean,\nso nothing blocking on that side.\n8:55\nGood. I will look at the numbers\ntonight.\n8:58 VV\nCan you sanity check the numbers\nbefore I reply to them on Thursday?\n9:03\n+ Message"
+  },
+  {
+    "config" : "en",
+    "id" : "wa-05",
+    "language" : "hebrew",
+    "meanConfidence" : 0.47333333889643353,
+    "observations" : 15,
+    "seconds" : 0.1710599660873413,
+    "text" : "16:22\nXIX\n16:20-2 DI'ก กงเทกx7 กาว\nc\nコン\nDIn\n9:05 701n7 I0Ixn nx 'nn77 ,210 771\n944\n15:55 ถกวก เวภา อก .0'ทลก 77» 1,240\n, 4'XN الا 16:01\n16•03 |\n16:20\n, 'لا 'I دلا 16:22\n01622 pan\nTh +"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "wa-05",
+    "language" : "hebrew",
+    "meanConfidence" : 0.47333333889643353,
+    "observations" : 15,
+    "seconds" : 0.15006804466247559,
+    "text" : "16:22\nXIX\n16:20-2 DI'ก กงเทกx7 กาว\nc\nコン\nDIn\n9:05 701n7 I0Ixn nx 'nn77 ,210 771\n944\n15:55 ถกวก เวภา อก .0'ทลก 77» 1,240\n, 4'XN الا 16:01\n16•03 |\n16:20\n, 'لا 'I دلا 16:22\n01622 pan\nTh +"
+  },
+  {
+    "config" : "en",
+    "id" : "wa-06",
+    "language" : "hebrew",
+    "meanConfidence" : 0.5727272765202955,
+    "observations" : 22,
+    "seconds" : 0.2134150266647339,
+    "text" : "18:02\nO1\n7700\n9\n7\nY\nภาแกท\nกะนาเทือกเหงานคาราเทอนานทก\nก'ลภ ภามทก ภเTวมก เทาว.กาวมบ\nTlann 77T 0uo nn p'n'at 'anos\n18:02\nกมาเก +\nATIN\nX\n7\n𠃑\nn\nY\nh\nT\nnin\n123"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "wa-06",
+    "language" : "hebrew",
+    "meanConfidence" : 0.5727272765202955,
+    "observations" : 22,
+    "seconds" : 0.19412004947662354,
+    "text" : "18:02\nO1\n7700\n9\n7\nY\nภาแกท\nกะนาเทือกเหงานคาราเทอนานทก\nก'ลภ ภามทก ภเTวมก เทาว.กาวมบ\nTlann 77T 0uo nn p'n'at 'anos\n18:02\nกมาเก +\nATIN\nX\n7\n𠃑\nn\nY\nh\nT\nnin\n123"
+  },
+  {
+    "config" : "en",
+    "id" : "wa-07",
+    "language" : "english",
+    "meanConfidence" : 0.9440000009536743,
+    "observations" : 25,
+    "seconds" : 0.1826310157775879,
+    "text" : "13:53\nPriya Raman\nonline\nTODAY\nmorning, is the cluster still on the old\ninstance type?\n9:12\nyes, migration is scheduled for next\nsprint\nok, that's what | assumed 9:31\ndid the storage numbers ever come\nback from finance?\n9:30 V V\n11:20\nnot yet, chasing them 11:44 v v\nok. I need them before I can size the\ncluster\n11:46\nunderstood, I'll push today 12:02 v r\nhey are you around? 13:40\njust got out of a meeting, what's up\n13:52 \\ V\n▶・二二ー・リリーー 0:47\n13:53\n+ Message @"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "wa-07",
+    "language" : "english",
+    "meanConfidence" : 0.9440000009536743,
+    "observations" : 25,
+    "seconds" : 0.17382001876831055,
+    "text" : "13:53\nPriya Raman\nonline\nTODAY\nmorning, is the cluster still on the old\ninstance type?\n9:12\nyes, migration is scheduled for next\nsprint\nok, that's what | assumed 9:31\ndid the storage numbers ever come\nback from finance?\n9:30 V V\n11:20\nnot yet, chasing them 11:44 v v\nok. I need them before I can size the\ncluster\n11:46\nunderstood, I'll push today 12:02 v r\nhey are you around? 13:40\njust got out of a meeting, what's up\n13:52 \\ V\n▶・二二ー・リリーー 0:47\n13:53\n+ Message @"
+  },
+  {
+    "config" : "en",
+    "id" : "wa-08",
+    "language" : "mixed",
+    "meanConfidence" : 0.6080000042915344,
+    "observations" : 25,
+    "seconds" : 0.259147047996521,
+    "text" : "15:22\n•il a\n• T\n口十\n, 1\n口.～口\n口\n10:12 RFC-n n N77 nn\"o ,د10 دارد\n~/ 10:40 ?nyT กทเ\n10:47\nDA10 MINUT NAEM\n14:30 ?ว ากx การา7 บู',\"ก\n80 14:38 9 x 3 00 ,\n']97 architecture-n 7y nay7 nyn .n7ivn\n14:41\n4•5\nV V 15:10\n3 DU U' Notion-' spec-n n& 'n'yn\nopen questions\n15:22\n...tions 3 nu u' Notion-} spec-n Ax 'N'Un\nnO7Y IXTOU aUIn x 2 nU Yy.'nN77\n-n 70 n I7 7Ion' nt, server-side 4\nsync logic\nnyTIn +"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "wa-08",
+    "language" : "mixed",
+    "meanConfidence" : 0.6080000042915344,
+    "observations" : 25,
+    "seconds" : 0.20324599742889404,
+    "text" : "15:22\n•il a\n• T\n口十\n, 1\n口.～口\n口\n10:12 RFC-n n N77 nn\"o ,د10 دارد\n~/ 10:40 ?nyT กทเ\n10:47\nDA10 MINUT NAEM\n14:30 ?ว ากx การา7 บู',\"ก\n80 14:38 9 x 3 00 ,\n']97 architecture-n 7y nay7 nyn .n7ivn\n14:41\n4•5\nV V 15:10\n3 DU U' Notion-' spec-n n& 'n'yn\nopen questions\n15:22\n...tions 3 nu u' Notion-} spec-n Ax 'N'Un\nnO7Y IXTOU aUIn x 2 nU Yy.'nN77\n-n 70 n I7 7Ion' nt, server-side 4\nsync logic\nnyTIn +"
+  },
+  {
+    "config" : "en",
+    "id" : "sl-01",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "observations" : 29,
+    "seconds" : 0.17895996570587158,
+    "text" : "10:24\n#product-eng\n128 members\nA\nY\nY\nA\nY\nToday\nAna Delgado 9:04 AM\nAnyone still merging into main this morning?\nYosef Aviram 9:11 AM\nNot me, I'm done for now.\nYou 9:19 AM\nSame, go ahead.\nAna Delgado 9:28 AM\nStarting the staging deploy now, should be\nabout ten minutes.\nYosef Aviram 9:33 AM\nThanks. I'll hold off on merging until it's green.\nAna Delgado 9:41 AM\nDeploy to staging finished, build 4471 is up.\nNo errors in the last 20 minutes.\nYou 9:58 AM\nNice. I'll run the smoke tests after lunch.\nDaniel Cohen 10:24 AM\nCan you take the standup tomorrow? I have a\nconflict at 9.\nMessage #product-eng"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "sl-01",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "observations" : 29,
+    "seconds" : 0.16360104084014893,
+    "text" : "10:24\n#product-eng\n128 members\nA\nY\nY\nA\nY\nToday\nAna Delgado 9:04 AM\nAnyone still merging into main this morning?\nYosef Aviram 9:11 AM\nNot me, I'm done for now.\nYou 9:19 AM\nSame, go ahead.\nAna Delgado 9:28 AM\nStarting the staging deploy now, should be\nabout ten minutes.\nYosef Aviram 9:33 AM\nThanks. I'll hold off on merging until it's green.\nAna Delgado 9:41 AM\nDeploy to staging finished, build 4471 is up.\nNo errors in the last 20 minutes.\nYou 9:58 AM\nNice. I'll run the smoke tests after lunch.\nDaniel Cohen 10:24 AM\nCan you take the standup tomorrow? I have a\nconflict at 9.\nMessage #product-eng"
+  },
+  {
+    "config" : "en",
+    "id" : "sl-02",
+    "language" : "english",
+    "meanConfidence" : 0.979411765056498,
+    "observations" : 34,
+    "seconds" : 0.1909109354019165,
+    "text" : "<\n11:31\nMarcus Reeve\nActive\nC\n=\nM\nY\nM\nM\nM\nToday\nMarcus Reeve 10:31 AM\nMorning. Did you get anywhere with the auth\nbug?\nYou 10:44 AM\nReproduced it. It only happens after the token\nexpires mid-session.\nMarcus Reeve 10:47 AM\nThat narrows it a lot. Give me twenty minutes.\nMarcus Reeve 11:02 AM\nPushed the fix for the token refresh loop. Turned\nout we were retrying on 401 without clearing the\ncached credential.\n3\n4 replies Last reply 12 minutes ago\nYou 11:20 AM\nBeautiful. Does that also explain the logout\nspikes on Android?\nMarcus Reeve 11:31 AM\nAlmost certainly. Can you check the Sentry\nnumbers after the release goes out at 2?\nMessage Marcus Reeve\n+"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "sl-02",
+    "language" : "english",
+    "meanConfidence" : 0.979411765056498,
+    "observations" : 34,
+    "seconds" : 0.17084908485412598,
+    "text" : "<\n11:31\nMarcus Reeve\nActive\nC\n=\nM\nY\nM\nM\nM\nToday\nMarcus Reeve 10:31 AM\nMorning. Did you get anywhere with the auth\nbug?\nYou 10:44 AM\nReproduced it. It only happens after the token\nexpires mid-session.\nMarcus Reeve 10:47 AM\nThat narrows it a lot. Give me twenty minutes.\nMarcus Reeve 11:02 AM\nPushed the fix for the token refresh loop. Turned\nout we were retrying on 401 without clearing the\ncached credential.\n3\n4 replies Last reply 12 minutes ago\nYou 11:20 AM\nBeautiful. Does that also explain the logout\nspikes on Android?\nMarcus Reeve 11:31 AM\nAlmost certainly. Can you check the Sentry\nnumbers after the release goes out at 2?\nMessage Marcus Reeve\n+"
+  },
+  {
+    "config" : "en",
+    "id" : "sl-03",
+    "language" : "english",
+    "meanConfidence" : 0.9641025647138938,
+    "observations" : 39,
+    "seconds" : 0.2658790349960327,
+    "text" : "8:05\n# incidents\n42 members\n(eu-west-1). Auto-paged the on-call.\nPriya Raman 3:06 AM\nI'm on it. Looking at the gateway dashboards\nnow.\nError rate is sitting around eleven percent.\n=\nP\nㅜ\nP\nY\nP\nTom Aldridge 3:09 AM\nAnything you need from me, or are you good?\nPriya Raman 3:11 AM\nGood for now. Go back to sleep, I'll write it up.\nTom Aldridge 3:12 AM\nThanks. Ping me if it turns into a page.\nPriya Raman 3:14 AM\nRoot cause is the connection pool on the read\nreplica. We raised max connections last week\nfor the migration and never put it back, so the\ngateway was opening more sockets than the\nreplica would accept and failing closed instead\nof queueing. Rolled the config back at 3:41 and\nerror rate was under one percent within four\nminutes. Nothing was lost, but roughly nine\nthousand requests got a 502 during the window.\nYou 7:40 AM\nThanks for handling it overnight. Anything still\nopen?\nPriya Raman 8:05 AM\nWrote the postmortem draft. Can you add the\ncustomer impact section before the review at 4?\nMessage #incidents\n+\n@"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "sl-03",
+    "language" : "english",
+    "meanConfidence" : 0.9641025647138938,
+    "observations" : 39,
+    "seconds" : 0.2379150390625,
+    "text" : "8:05\n# incidents\n42 members\n(eu-west-1). Auto-paged the on-call.\nPriya Raman 3:06 AM\nI'm on it. Looking at the gateway dashboards\nnow.\nError rate is sitting around eleven percent.\n=\nP\nㅜ\nP\nY\nP\nTom Aldridge 3:09 AM\nAnything you need from me, or are you good?\nPriya Raman 3:11 AM\nGood for now. Go back to sleep, I'll write it up.\nTom Aldridge 3:12 AM\nThanks. Ping me if it turns into a page.\nPriya Raman 3:14 AM\nRoot cause is the connection pool on the read\nreplica. We raised max connections last week\nfor the migration and never put it back, so the\ngateway was opening more sockets than the\nreplica would accept and failing closed instead\nof queueing. Rolled the config back at 3:41 and\nerror rate was under one percent within four\nminutes. Nothing was lost, but roughly nine\nthousand requests got a 502 during the window.\nYou 7:40 AM\nThanks for handling it overnight. Anything still\nopen?\nPriya Raman 8:05 AM\nWrote the postmortem draft. Can you add the\ncustomer impact section before the review at 4?\nMessage #incidents\n+\n@"
+  },
+  {
+    "config" : "en",
+    "id" : "sl-04",
+    "language" : "mixed",
+    "meanConfidence" : 0.8642857159887042,
+    "observations" : 28,
+    "seconds" : 0.1736910343170166,
+    "text" : "10:52\n# israel-launch\n17 members\n三\nToday\nA\nAdi Peretz 9:02 AM\nReminder: Hebrew launch is a week from\nThursday.\n\"½ ny 9:26 AM\nY\nA\nYou 9:48 AM\nWho is reviewing the legal copy?\nAdi Peretz 9:55 AM\nLegal signed off yesterday. We're clear.\n\"7 ny 10:15 AM\non\nKeyboard\n2'Y740X 7دy7 421 P'nyn7.\naikeyboard.app\nYou 10:40 AM\nLooks good. RTL punctuation on the pricing\ntable is off though.\n\"17 ny 10:52 AM\n? production !\nMessage #israel-launch\n+"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "sl-04",
+    "language" : "mixed",
+    "meanConfidence" : 0.8642857159887042,
+    "observations" : 28,
+    "seconds" : 0.15784204006195068,
+    "text" : "10:52\n# israel-launch\n17 members\n三\nToday\nA\nAdi Peretz 9:02 AM\nReminder: Hebrew launch is a week from\nThursday.\n\"½ ny 9:26 AM\nY\nA\nYou 9:48 AM\nWho is reviewing the legal copy?\nAdi Peretz 9:55 AM\nLegal signed off yesterday. We're clear.\n\"7 ny 10:15 AM\non\nKeyboard\n2'Y740X 7دy7 421 P'nyn7.\naikeyboard.app\nYou 10:40 AM\nLooks good. RTL punctuation on the pricing\ntable is off though.\n\"17 ny 10:52 AM\n? production !\nMessage #israel-launch\n+"
+  },
+  {
+    "config" : "en",
+    "id" : "sl-05",
+    "language" : "english",
+    "meanConfidence" : 0.9538461543046511,
+    "observations" : 52,
+    "seconds" : 0.2092430591583252,
+    "text" : "2:13\n# design-review\n63 members\nج اا.\nE\nY\nE\nY\nE\nToday\nElena Fischer 1:52 PM\nPulled the key row spacing up by two points\nacross all three keyboard heights.\nYou 1:58 PM\nDid that fix the thumb reach complaint?\nElena Fischer 2:04 PM\nOn the small phone yes. On the Pro Max it\nmade the bottom row worse.\nYou 2:08 PM\nCan we scale it per device class instead of a flat\nvalue?\nElena Fischer 2:12 PM\nThat is what I ended up doing. The new spacing\nreads much better on the 6.3 inch. Can you\nexport the dark variant too so I can drop both\ninto the review deck?\nThe\nSure\nW\ne\nr\nt\ny\nU\ni\nO\na\nS\nZ\nd\nX\nf\n123\ng\nV\nspace\nh\nb\nj\nn\nm\nreturn"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "sl-05",
+    "language" : "english",
+    "meanConfidence" : 0.9538461543046511,
+    "observations" : 52,
+    "seconds" : 0.19407296180725098,
+    "text" : "2:13\n# design-review\n63 members\nج اا.\nE\nY\nE\nY\nE\nToday\nElena Fischer 1:52 PM\nPulled the key row spacing up by two points\nacross all three keyboard heights.\nYou 1:58 PM\nDid that fix the thumb reach complaint?\nElena Fischer 2:04 PM\nOn the small phone yes. On the Pro Max it\nmade the bottom row worse.\nYou 2:08 PM\nCan we scale it per device class instead of a flat\nvalue?\nElena Fischer 2:12 PM\nThat is what I ended up doing. The new spacing\nreads much better on the 6.3 inch. Can you\nexport the dark variant too so I can drop both\ninto the review deck?\nThe\nSure\nW\ne\nr\nt\ny\nU\ni\nO\na\nS\nZ\nd\nX\nf\n123\ng\nV\nspace\nh\nb\nj\nn\nm\nreturn"
+  },
+  {
+    "config" : "en",
+    "id" : "sl-06",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "observations" : 28,
+    "seconds" : 0.1776829957962036,
+    "text" : "9:30\n# releases\n204 members\nD\nToday\nDeploy Bot APp\n5:41 AM\naikeyboard-ios 1.4.0 build started. Triggered by\nsofia.marchetti.\nTests passed: 412 of 412. Archive uploaded.\nD\nDeploy Bot APP\n6:00 AM\naikeyboard-ios 1.4.0 promoted to production. O\nrollbacks, O failed health checks.\nNew\nS\nSofia Marchetti 9:12 AM\n1.4.0 is live in the App Store. The ratings\ndashboard is already picking up Hebrew\nreviews.\nTwo people have asked for a floating keyboard.\nT\nTom Aldridge 9:30 AM\nCan someone own the 1.4.1 hotfix list? I can\nstart it after lunch if nobody else has it.\nMessage #releases\n+"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "sl-06",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "observations" : 28,
+    "seconds" : 0.16052699089050293,
+    "text" : "9:30\n# releases\n204 members\nD\nToday\nDeploy Bot APp\n5:41 AM\naikeyboard-ios 1.4.0 build started. Triggered by\nsofia.marchetti.\nTests passed: 412 of 412. Archive uploaded.\nD\nDeploy Bot APP\n6:00 AM\naikeyboard-ios 1.4.0 promoted to production. O\nrollbacks, O failed health checks.\nNew\nS\nSofia Marchetti 9:12 AM\n1.4.0 is live in the App Store. The ratings\ndashboard is already picking up Hebrew\nreviews.\nTwo people have asked for a floating keyboard.\nT\nTom Aldridge 9:30 AM\nCan someone own the 1.4.1 hotfix list? I can\nstart it after lunch if nobody else has it.\nMessage #releases\n+"
+  },
+  {
+    "config" : "en",
+    "id" : "im-01",
+    "language" : "english",
+    "meanConfidence" : 0.9695652179096056,
+    "observations" : 23,
+    "seconds" : 0.15936505794525146,
+    "text" : "9:41\n<12\nN\nNadia\nToday 9:41 AM\nMade it home fine, thanks for\ndriving\nAny time. That was a long night\nWorth it though\nMorning! Did you see the photos\nfrom Saturday?\nJust went through them. The one\nby the harbour is great.\nThat's my favourite too. I'll print it.\nSend me one as well\nAre we still on for Thursday?\nYes, 7pm at the usual place\nDelivered\nPerfect. Bringing my sister, hope\nthat's ok.\n+\niMessage\n个"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "im-01",
+    "language" : "english",
+    "meanConfidence" : 0.9695652179096056,
+    "observations" : 23,
+    "seconds" : 0.12999391555786133,
+    "text" : "9:41\n<12\nN\nNadia\nToday 9:41 AM\nMade it home fine, thanks for\ndriving\nAny time. That was a long night\nWorth it though\nMorning! Did you see the photos\nfrom Saturday?\nJust went through them. The one\nby the harbour is great.\nThat's my favourite too. I'll print it.\nSend me one as well\nAre we still on for Thursday?\nYes, 7pm at the usual place\nDelivered\nPerfect. Bringing my sister, hope\nthat's ok.\n+\niMessage\n个"
+  },
+  {
+    "config" : "en",
+    "id" : "im-02",
+    "language" : "hebrew",
+    "meanConfidence" : 0.618181819265539,
+    "observations" : 11,
+    "seconds" : 0.18783390522003174,
+    "text" : "21:14\n•ll\n21:14 Di'n\nาทวา ภูเกว7\n7'T\n??กกบทวกากการหา\n2\nบาลทก ภชกทท 712 ,D'07 ภา7T เกษ\nการกก ภN\niMessage\n+"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "im-02",
+    "language" : "hebrew",
+    "meanConfidence" : 0.618181819265539,
+    "observations" : 11,
+    "seconds" : 0.12728404998779297,
+    "text" : "21:14\n•ll\n21:14 Di'n\nาทวา ภูเกว7\n7'T\n??กกบทวกากการหา\n2\nบาลทก ภชกทท 712 ,D'07 ภา7T เกษ\nการกก ภN\niMessage\n+"
+  },
+  {
+    "config" : "en",
+    "id" : "im-03",
+    "language" : "hebrew",
+    "meanConfidence" : 0.5857142891202655,
+    "observations" : 14,
+    "seconds" : 0.16292798519134521,
+    "text" : "8:36\n8:30 Dn\n?nyynn Yy ann 7a73,'7\n٦'7X YIO7N, D7UIN\n17 กวกท\n77T7 XXI' X ,د10 77دا\nIA GEL ECTIA D' XIGI NAUL LAU\nราบทก 70 ภาเภวก ภX กบาลง 7 กระ\nUTnn\n8 กทเ7,45 Thบงา\n1948# TI7 Dy าyy W' ,2 0เท\n8:36 x7,71\niMessage\n+"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "im-03",
+    "language" : "hebrew",
+    "meanConfidence" : 0.5857142891202655,
+    "observations" : 14,
+    "seconds" : 0.14055001735687256,
+    "text" : "8:36\n8:30 Dn\n?nyynn Yy ann 7a73,'7\n٦'7X YIO7N, D7UIN\n17 กวกท\n77T7 XXI' X ,د10 77دا\nIA GEL ECTIA D' XIGI NAUL LAU\nราบทก 70 ภาเภวก ภX กบาลง 7 กระ\nUTnn\n8 กทเ7,45 Thบงา\n1948# TI7 Dy าyy W' ,2 0เท\n8:36 x7,71\niMessage\n+"
+  },
+  {
+    "config" : "en",
+    "id" : "im-04",
+    "language" : "mixed",
+    "meanConfidence" : 1,
+    "observations" : 21,
+    "seconds" : 0.1376800537109375,
+    "text" : "7:22\n<\nTeam Handi\nYesterday 9:40 PM\nDana\nMerged the settings refactor.\nNothing user visible.\nNice, that unblocks the theme\nwork\nllan\nToday 7:15 AM\nDana\nIt's the new privacy manifest.\nXcode 26 rejects the old key.\nAdding it now\nDelivered\nllan\nur ?feature/keyboard-rtl-4 rebase\nPackage.resolved-a conflict nu\n+\niMessage"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "im-04",
+    "language" : "mixed",
+    "meanConfidence" : 1,
+    "observations" : 21,
+    "seconds" : 0.1190650463104248,
+    "text" : "7:22\n<\nTeam Handi\nYesterday 9:40 PM\nDana\nMerged the settings refactor.\nNothing user visible.\nNice, that unblocks the theme\nwork\nllan\nToday 7:15 AM\nDana\nIt's the new privacy manifest.\nXcode 26 rejects the old key.\nAdding it now\nDelivered\nllan\nur ?feature/keyboard-rtl-4 rebase\nPackage.resolved-a conflict nu\n+\niMessage"
+  },
+  {
+    "config" : "en",
+    "id" : "im-05",
+    "language" : "hebrew",
+    "meanConfidence" : 0.7272727299820293,
+    "observations" : 22,
+    "seconds" : 0.1717989444732666,
+    "text" : "11:07\nกาเภ ,าบมา\n7703\n9\nD\n7\nY\nกาเบ\n['7 7\"7-D'70 ภวาท\n11:02 D''ก\n9:15-]ากทา7บาเภ7 ภาเวชา !Dite\n.DI'n 20:00 Ty\niMessage\nX\n7\n7\nn\nJ\nT\nユ\nT\n123"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "im-05",
+    "language" : "hebrew",
+    "meanConfidence" : 0.7272727299820293,
+    "observations" : 22,
+    "seconds" : 0.13590002059936523,
+    "text" : "11:07\nกาเภ ,าบมา\n7703\n9\nD\n7\nY\nกาเบ\n['7 7\"7-D'70 ภวาท\n11:02 D''ก\n9:15-]ากทา7บาเภ7 ภาเวชา !Dite\n.DI'n 20:00 Ty\niMessage\nX\n7\n7\nn\nJ\nT\nユ\nT\n123"
+  },
+  {
+    "config" : "en",
+    "id" : "im-06",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "observations" : 23,
+    "seconds" : 0.1510399580001831,
+    "text" : "4:24\n•1/\n<\nG\nGreg\nToday 4:20 PM\nDid you ever get that OCR thing\nworking?\nSort of. Accuracy is fine, picking\nthe right line is the hard part\nThat's exactly what the article said\nThis is the piece I was talking\nabout\nWhy on-device OCR still beats the\ncloud for keyboards\narstechnica.com\nSaved it, will read tonight.\nDelivered\nThe section on Hebrew line\ndetection is the part you'll care\nabout. Worth five minutes.\niMessage\n个"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "im-06",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "observations" : 23,
+    "seconds" : 0.1305450201034546,
+    "text" : "4:24\n•1/\n<\nG\nGreg\nToday 4:20 PM\nDid you ever get that OCR thing\nworking?\nSort of. Accuracy is fine, picking\nthe right line is the hard part\nThat's exactly what the article said\nThis is the piece I was talking\nabout\nWhy on-device OCR still beats the\ncloud for keyboards\narstechnica.com\nSaved it, will read tonight.\nDelivered\nThe section on Hebrew line\ndetection is the part you'll care\nabout. Worth five minutes.\niMessage\n个"
+  },
+  {
+    "config" : "en",
+    "id" : "im-07",
+    "language" : "mixed",
+    "meanConfidence" : 0.5500000059604645,
+    "observations" : 10,
+    "seconds" : 0.15277695655822754,
+    "text" : "13:12\nba'n\n13:05 อ!'ก\nภแบ ภเสมเภก 72X 7าภก7 เทร การ7\nprint-n ,7เทภx 'ภอวากย กท กา\nา0ทง\nnT'X '7 T'aN ?TNX 77 O'DTNU nXI7\nx| size\niMessage\n+"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "im-07",
+    "language" : "mixed",
+    "meanConfidence" : 0.5500000059604645,
+    "observations" : 10,
+    "seconds" : 0.1355609893798828,
+    "text" : "13:12\nba'n\n13:05 อ!'ก\nภแบ ภเสมเภก 72X 7าภก7 เทร การ7\nprint-n ,7เทภx 'ภอวากย กท กา\nา0ทง\nnT'X '7 T'aN ?TNX 77 O'DTNU nXI7\nx| size\niMessage\n+"
+  },
+  {
+    "config" : "en",
+    "id" : "tg-01",
+    "language" : "hebrew",
+    "meanConfidence" : 0.39230769872665405,
+    "observations" : 13,
+    "seconds" : 0.21760904788970947,
+    "text" : "LILAL\nLIN LEU XI CACU\nCkL lAtu tuatu' uUU LOGL\nXLU LICL XIGU AUCI XU LUGUUIL A4*''\nLunale\nX XG MAN X LUGUIU A4\nLCuol\nGEEL\n„NIZE XE CAN X AAL GE 20\nCZL CE XE CEN COGITI KAL 09:8\nUnIO\n{ x,x9.0\nXLCO"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "tg-01",
+    "language" : "hebrew",
+    "meanConfidence" : 0.39230769872665405,
+    "observations" : 13,
+    "seconds" : 0.12697911262512207,
+    "text" : "LILAL\nLIN LEU XI CACU\nCkL lAtu tuatu' uUU LOGL\nXLU LICL XIGU AUCI XU LUGUUIL A4*''\nLunale\nX XG MAN X LUGUIU A4\nLCuol\nGEEL\n„NIZE XE CAN X AAL GE 20\nCZL CE XE CEN COGITI KAL 09:8\nUnIO\n{ x,x9.0\nXLCO"
+  },
+  {
+    "config" : "en",
+    "id" : "tg-02",
+    "language" : "mixed",
+    "meanConfidence" : 0.9629629629629629,
+    "observations" : 27,
+    "seconds" : 0.16015207767486572,
+    "text" : "9:26\n< Chats\nDana Kessler\nonline\nToday\nAre you at the office today or working\nfrom home?\n8:32\nHome until lunch, then in. 8:40 v v\nGood, I'll grab you after. Something\ncame out this morning.\n8:44\nNow I'm curious. 9:01 vr\nForwarded from TechCrunch\nApple is opening the keyboard\nextension sandbox in iOS 27,\nallowing full network access without\na container app.\n9:14\n4\nThat changes our whole architecture.\n9:20 \\ V\nx .iOS 27-\nn'nu} App Group fallback-n x\n9:26\n1\nMessage"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "tg-02",
+    "language" : "mixed",
+    "meanConfidence" : 0.9629629629629629,
+    "observations" : 27,
+    "seconds" : 0.15365004539489746,
+    "text" : "9:26\n< Chats\nDana Kessler\nonline\nToday\nAre you at the office today or working\nfrom home?\n8:32\nHome until lunch, then in. 8:40 v v\nGood, I'll grab you after. Something\ncame out this morning.\n8:44\nNow I'm curious. 9:01 vr\nForwarded from TechCrunch\nApple is opening the keyboard\nextension sandbox in iOS 27,\nallowing full network access without\na container app.\n9:14\n4\nThat changes our whole architecture.\n9:20 \\ V\nx .iOS 27-\nn'nu} App Group fallback-n x\n9:26\n1\nMessage"
+  },
+  {
+    "config" : "en",
+    "id" : "tg-03",
+    "language" : "english",
+    "meanConfidence" : 0.9838709677419355,
+    "observations" : 31,
+    "seconds" : 0.1693100929260254,
+    "text" : "5:46\n< Chats\n•ll\nYusuf\nlast seen recently\nToday\nShipment left the port this morning.\n16:14\nGood. ETA still Friday? 16:31 vr\nThursday evening if customs is quick.\n16:35\nI'll let the warehouse know. 16:50 v v\nThe warehouse confirmed the pallet\ncount.\n17:02\nAll forty?\n17:11 V\nThirty eight. Two were damaged in\ntransit.\n17:14\nFile a claim, we can't absorb that.\n17:2601\nAlready did, this morning. 17:28\nDid the invoice for June ever get\npaid? Accounting is asking.\n17:40\nChecking now. 17:44 v v\nPaid on the 3rd, reference 88412. I'II\nforward the confirmation.\n17:46\nMessage"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "tg-03",
+    "language" : "english",
+    "meanConfidence" : 0.9838709677419355,
+    "observations" : 31,
+    "seconds" : 0.16418802738189697,
+    "text" : "5:46\n< Chats\n•ll\nYusuf\nlast seen recently\nToday\nShipment left the port this morning.\n16:14\nGood. ETA still Friday? 16:31 vr\nThursday evening if customs is quick.\n16:35\nI'll let the warehouse know. 16:50 v v\nThe warehouse confirmed the pallet\ncount.\n17:02\nAll forty?\n17:11 V\nThirty eight. Two were damaged in\ntransit.\n17:14\nFile a claim, we can't absorb that.\n17:2601\nAlready did, this morning. 17:28\nDid the invoice for June ever get\npaid? Accounting is asking.\n17:40\nChecking now. 17:44 v v\nPaid on the 3rd, reference 88412. I'II\nforward the confirmation.\n17:46\nMessage"
+  },
+  {
+    "config" : "en",
+    "id" : "tg-04",
+    "language" : "hebrew",
+    "meanConfidence" : 0.6514285734721592,
+    "observations" : 35,
+    "seconds" : 0.18901896476745605,
+    "text" : "7:48\nلاه.\nD'UX'≤ >\na0 24\n• •Ț\n .    \n    \nเคว การบ\n7'0 บากทบ ภาวร !0707 2เง า7ว\nเภวะ\n'การท 'o|\"\n  \nX\n7\n7\n7703\n9\n7\nY\nกาเบ\n7:12\n7:18\n7:40\n7:41\n7:48\nD\nn\nJ\n7\nT\nユ\nO\nT\nnil\n123"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "tg-04",
+    "language" : "hebrew",
+    "meanConfidence" : 0.6514285734721592,
+    "observations" : 35,
+    "seconds" : 0.1794140338897705,
+    "text" : "7:48\nلاه.\nD'UX'≤ >\na0 24\n• •Ț\n .    \n    \nเคว การบ\n7'0 บากทบ ภาวร !0707 2เง า7ว\nเภวะ\n'การท 'o|\"\n  \nX\n7\n7\n7703\n9\n7\nY\nกาเบ\n7:12\n7:18\n7:40\n7:41\n7:48\nD\nn\nJ\n7\nT\nユ\nO\nT\nnil\n123"
+  },
+  {
+    "config" : "en",
+    "id" : "tg-05",
+    "language" : "mixed",
+    "meanConfidence" : 0.9821428571428571,
+    "observations" : 28,
+    "seconds" : 0.1496518850326538,
+    "text" : "12:35\n< Chats\n•ll\nAlKeyboard Beta\n1,204 members, 89 online\nA\nToday\nLior S.\nBuild 1.4.2 installed fine here, no\ncrash on launch.\nAhmad N.\nSame. Arabic layout still missing\nthough, any plans?\n12:04\n12:11\nRavid\naU Un a naya swipe typing-n\n12:20\nMarta K.\nSame here on English. Only issue is\nthe number row disappears in\nlandscape.\n12:28\nRavid\nD'YI7 Dnax ?1.5-4 7'7xn e nitai@\n12:35\n12\nMessage"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "tg-05",
+    "language" : "mixed",
+    "meanConfidence" : 0.9821428571428571,
+    "observations" : 28,
+    "seconds" : 0.13540494441986084,
+    "text" : "12:35\n< Chats\n•ll\nAlKeyboard Beta\n1,204 members, 89 online\nA\nToday\nLior S.\nBuild 1.4.2 installed fine here, no\ncrash on launch.\nAhmad N.\nSame. Arabic layout still missing\nthough, any plans?\n12:04\n12:11\nRavid\naU Un a naya swipe typing-n\n12:20\nMarta K.\nSame here on English. Only issue is\nthe number row disappears in\nlandscape.\n12:28\nRavid\nD'YI7 Dnax ?1.5-4 7'7xn e nitai@\n12:35\n12\nMessage"
+  },
+  {
+    "config" : "en",
+    "id" : "ml-01",
+    "language" : "english",
+    "meanConfidence" : 0.8960000014305115,
+    "observations" : 25,
+    "seconds" : 0.16297698020935059,
+    "text" : "9:41\n< Inbox\n0\nContract renewal, Northwind\nLogistics\nKaren Boyd\nTo: Nitai Aharoni\nToday 09:14\nDetails\nHi Nitai,\nLegal came back on the renewal. They are fine with\nthe two year term but want the liability cap raised\nto match last year's contract. Everything else is\nagreed.\nCan you confirm by Friday so we can get\nsignatures out before the quarter closes?\nKaren Boyd\nHead of Partnerships, Northwind Logistics\n+44 20 7946 0912\n...\nOn Tue, 5 Aug, Nitai Aharoni wrote:\n> Sending over the redlines this afternoon.\n口\n口\n介"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "ml-01",
+    "language" : "english",
+    "meanConfidence" : 0.8960000014305115,
+    "observations" : 25,
+    "seconds" : 0.14880001544952393,
+    "text" : "9:41\n< Inbox\n0\nContract renewal, Northwind\nLogistics\nKaren Boyd\nTo: Nitai Aharoni\nToday 09:14\nDetails\nHi Nitai,\nLegal came back on the renewal. They are fine with\nthe two year term but want the liability cap raised\nto match last year's contract. Everything else is\nagreed.\nCan you confirm by Friday so we can get\nsignatures out before the quarter closes?\nKaren Boyd\nHead of Partnerships, Northwind Logistics\n+44 20 7946 0912\n...\nOn Tue, 5 Aug, Nitai Aharoni wrote:\n> Sending over the redlines this afternoon.\n口\n口\n介"
+  },
+  {
+    "config" : "en",
+    "id" : "ml-02",
+    "language" : "hebrew",
+    "meanConfidence" : 0.4687500037252903,
+    "observations" : 16,
+    "seconds" : 0.20565199851989746,
+    "text" : "0029-9\n442\nAIUL LALL CACIA CON' LNO IO AL CRAL CCILL CUNIO\nCUCUCL ICULKIO GC. Ci\n\"LIALLLL TELIL CINCL LXLEI' CILA LICICL\n24a CCx.\nNL: CILINI MULICI\nLICU NYt\nGLA.U\nALICLL EA.CL\nX4: LIGU AYT' GUX, XULICI\nunu xLLNG\nGLA.U\nXUUIL GO:LL\n•\n( LIXL ICEO"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "ml-02",
+    "language" : "hebrew",
+    "meanConfidence" : 0.4687500037252903,
+    "observations" : 16,
+    "seconds" : 0.18502402305603027,
+    "text" : "0029-9\n442\nAIUL LALL CACIA CON' LNO IO AL CRAL CCILL CUNIO\nCUCUCL ICULKIO GC. Ci\n\"LIALLLL TELIL CINCL LXLEI' CILA LICICL\n24a CCx.\nNL: CILINI MULICI\nLICU NYt\nGLA.U\nALICLL EA.CL\nX4: LIGU AYT' GUX, XULICI\nunu xLLNG\nGLA.U\nXUUIL GO:LL\n•\n( LIXL ICEO"
+  },
+  {
+    "config" : "en",
+    "id" : "ml-03",
+    "language" : "mixed",
+    "meanConfidence" : 0.9161290334117028,
+    "observations" : 31,
+    "seconds" : 0.2433619499206543,
+    "text" : "11:37\n•ll\n< Inbox\nAttaching the traces from the RTL cursor bug.\nShort version: when the user types a Latin word\ninside a Hebrew sentence, the caret jumps to the\nvisual end of the run instead of the logical one, and\nthe next backspace deletes the wrong character.\nI tried three fixes. Forcing the base writing direction\nper paragraph works but breaks mixed quotes.\nOverriding the bidi level on the attributed string\nfixes the caret and breaks selection. Letting the\nsystem handle it is correct everywhere except\ninside our own suggestion strip.\nWhat would you do here?\nE\nEhud Barzilai\nTo: Nitai Aharoni\nToday 11:37\nDetails\nma naxy NSAttributedString-n n'u 'IT' override\nAppen 7 a Ming direction exa\n.Group\n？14:00-\n14'772 tinx | Staff iOS Engineer\nehud@example.co.il\nOn Thu, 7 Aug, Nitai Aharoni wrote:\n> Attaching the traces from the RTL cursor bug.\nP\n다\n口"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "ml-03",
+    "language" : "mixed",
+    "meanConfidence" : 0.9161290334117028,
+    "observations" : 31,
+    "seconds" : 0.22570598125457764,
+    "text" : "11:37\n•ll\n< Inbox\nAttaching the traces from the RTL cursor bug.\nShort version: when the user types a Latin word\ninside a Hebrew sentence, the caret jumps to the\nvisual end of the run instead of the logical one, and\nthe next backspace deletes the wrong character.\nI tried three fixes. Forcing the base writing direction\nper paragraph works but breaks mixed quotes.\nOverriding the bidi level on the attributed string\nfixes the caret and breaks selection. Letting the\nsystem handle it is correct everywhere except\ninside our own suggestion strip.\nWhat would you do here?\nE\nEhud Barzilai\nTo: Nitai Aharoni\nToday 11:37\nDetails\nma naxy NSAttributedString-n n'u 'IT' override\nAppen 7 a Ming direction exa\n.Group\n？14:00-\n14'772 tinx | Staff iOS Engineer\nehud@example.co.il\nOn Thu, 7 Aug, Nitai Aharoni wrote:\n> Attaching the traces from the RTL cursor bug.\nP\n다\n口"
+  },
+  {
+    "config" : "en",
+    "id" : "ml-04",
+    "language" : "english",
+    "meanConfidence" : 0.9695652179096056,
+    "observations" : 23,
+    "seconds" : 0.1501520872116089,
+    "text" : "8:05\n< Inbox\nOnboarding copy review\nMarta Kowalski\nTo: Nitai Aharoni\nM\nYesterday 16:20\nDetails\nHi,\nI went through the onboarding screens. Screens\none and three are clear. Screen two asks for\nkeyboard access before it has explained why, and\nthree testers backed out there.\nSuggested rewrite is in the shared doc. Can you\ntake a look before Thursday's build?\nN\nNitai Aharoni\nTo: Marta Kowalski\nToday 08:05\nDetails\nThanks Marta, edits are in the doc. Take another\nlook when you can and I'll cut the build after.\n口"
+  },
+  {
+    "config" : "en+ar",
+    "id" : "ml-04",
+    "language" : "english",
+    "meanConfidence" : 0.9695652179096056,
+    "observations" : 23,
+    "seconds" : 0.1463170051574707,
+    "text" : "8:05\n< Inbox\nOnboarding copy review\nMarta Kowalski\nTo: Nitai Aharoni\nM\nYesterday 16:20\nDetails\nHi,\nI went through the onboarding screens. Screens\none and three are clear. Screen two asks for\nkeyboard access before it has explained why, and\nthree testers backed out there.\nSuggested rewrite is in the shared doc. Can you\ntake a look before Thursday's build?\nN\nNitai Aharoni\nTo: Marta Kowalski\nToday 08:05\nDetails\nThanks Marta, edits are in the doc. Take another\nlook when you can and I'll cut the build after.\n口"
+  }
+]

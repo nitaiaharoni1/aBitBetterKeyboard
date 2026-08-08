@@ -1,0 +1,292 @@
+[
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.5333333333333333,
+    "gated" : false,
+    "id" : "wa-01",
+    "language" : "hebrew",
+    "meanConfidence" : 0.42500000695387524,
+    "seconds" : 0.5495630502700806
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.6428571428571429,
+    "gated" : false,
+    "id" : "wa-02",
+    "language" : "hebrew",
+    "meanConfidence" : 0.6250000037252903,
+    "seconds" : 0.3247619867324829
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.5,
+    "gated" : false,
+    "id" : "wa-03",
+    "language" : "mixed",
+    "meanConfidence" : 0.6200000047683716,
+    "seconds" : 0.19532692432403564
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 1,
+    "detectedLanguage" : "english",
+    "detectedScript" : "latin",
+    "gated" : true,
+    "id" : "wa-04",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "message" : "Can you sanity check the numbers before I reply to them on Thursday?",
+    "seconds" : 0.22071993350982666,
+    "sender" : "James Whitfield"
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.7058823529411765,
+    "gated" : false,
+    "id" : "wa-05",
+    "language" : "hebrew",
+    "meanConfidence" : 0.47333333889643353,
+    "seconds" : 0.1705549955368042
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.4,
+    "gated" : false,
+    "id" : "wa-06",
+    "language" : "hebrew",
+    "meanConfidence" : 0.5727272765202955,
+    "seconds" : 0.22669100761413574
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 1,
+    "gated" : true,
+    "id" : "wa-07",
+    "language" : "english",
+    "meanConfidence" : 0.9440000009536743,
+    "seconds" : 0.1808100938796997
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.8260869565217391,
+    "gated" : false,
+    "id" : "wa-08",
+    "language" : "mixed",
+    "meanConfidence" : 0.6080000042915344,
+    "seconds" : 0.24000298976898193
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 1,
+    "gated" : true,
+    "id" : "sl-01",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "seconds" : 0.17114698886871338
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.9583333333333334,
+    "gated" : false,
+    "id" : "sl-02",
+    "language" : "english",
+    "meanConfidence" : 0.979411765056498,
+    "seconds" : 0.18389904499053955
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 1,
+    "gated" : true,
+    "id" : "sl-03",
+    "language" : "english",
+    "meanConfidence" : 0.9641025647138938,
+    "seconds" : 0.24532103538513184
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.8148148148148148,
+    "gated" : false,
+    "id" : "sl-04",
+    "language" : "mixed",
+    "meanConfidence" : 0.8642857159887042,
+    "seconds" : 0.17165803909301758
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 1,
+    "gated" : true,
+    "id" : "sl-05",
+    "language" : "english",
+    "meanConfidence" : 0.9538461543046511,
+    "seconds" : 0.1858910322189331
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 1,
+    "detectedLanguage" : "english",
+    "detectedScript" : "latin",
+    "gated" : true,
+    "id" : "sl-06",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "message" : "T Can someone own the 1.4.1 hotfix list? I can start it after lunch if nobody else has it.",
+    "seconds" : 0.15751397609710693,
+    "sender" : "Tom Aldridge"
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 1,
+    "detectedLanguage" : "english",
+    "detectedScript" : "latin",
+    "gated" : true,
+    "id" : "im-01",
+    "language" : "english",
+    "meanConfidence" : 0.9695652179096056,
+    "message" : "Perfect. Bringing my sister, hope that's ok.",
+    "seconds" : 0.14354097843170166,
+    "sender" : "Nadia"
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.4117647058823529,
+    "gated" : false,
+    "id" : "im-02",
+    "language" : "hebrew",
+    "meanConfidence" : 0.618181819265539,
+    "seconds" : 0.17026090621948242
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.7647058823529411,
+    "gated" : false,
+    "id" : "im-03",
+    "language" : "hebrew",
+    "meanConfidence" : 0.5857142891202655,
+    "seconds" : 0.1545569896697998
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.9047619047619048,
+    "gated" : false,
+    "id" : "im-04",
+    "language" : "mixed",
+    "meanConfidence" : 1,
+    "seconds" : 0.12799608707427979
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.6428571428571429,
+    "gated" : false,
+    "id" : "im-05",
+    "language" : "hebrew",
+    "meanConfidence" : 0.7272727299820293,
+    "seconds" : 0.16358602046966553
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 1,
+    "detectedLanguage" : "english",
+    "detectedScript" : "latin",
+    "gated" : true,
+    "id" : "im-06",
+    "language" : "english",
+    "meanConfidence" : 1,
+    "message" : "The section on Hebrew line detection is the part you'll care about. Worth five minutes.",
+    "seconds" : 0.13824307918548584,
+    "sender" : "Greg"
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.75,
+    "gated" : false,
+    "id" : "im-07",
+    "language" : "mixed",
+    "meanConfidence" : 0.5500000059604645,
+    "seconds" : 0.13857603073120117
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.5217391304347826,
+    "gated" : false,
+    "id" : "tg-01",
+    "language" : "hebrew",
+    "meanConfidence" : 0.39230769872665405,
+    "seconds" : 0.19517302513122559
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.9615384615384616,
+    "gated" : false,
+    "id" : "tg-02",
+    "language" : "mixed",
+    "meanConfidence" : 0.9629629629629629,
+    "seconds" : 0.1592940092086792
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 1,
+    "detectedLanguage" : "english",
+    "detectedScript" : "latin",
+    "gated" : true,
+    "id" : "tg-03",
+    "language" : "english",
+    "meanConfidence" : 0.9838709677419355,
+    "message" : "Did the invoice for June ever get paid? Accounting is asking.",
+    "seconds" : 0.17391300201416016,
+    "sender" : "Yusuf"
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.6333333333333333,
+    "gated" : false,
+    "id" : "tg-04",
+    "language" : "hebrew",
+    "meanConfidence" : 0.6514285734721592,
+    "seconds" : 0.1868969202041626
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.9259259259259259,
+    "gated" : false,
+    "id" : "tg-05",
+    "language" : "mixed",
+    "meanConfidence" : 0.9821428571428571,
+    "seconds" : 0.13855600357055664
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 1,
+    "gated" : false,
+    "id" : "ml-01",
+    "language" : "english",
+    "meanConfidence" : 0.8960000014305115,
+    "seconds" : 0.1543879508972168
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.64,
+    "gated" : false,
+    "id" : "ml-02",
+    "language" : "hebrew",
+    "meanConfidence" : 0.4687500037252903,
+    "seconds" : 0.1986609697341919
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.896551724137931,
+    "gated" : false,
+    "id" : "ml-03",
+    "language" : "mixed",
+    "meanConfidence" : 0.9161290334117028,
+    "seconds" : 0.24020099639892578
+  },
+  {
+    "config" : "vision-reader",
+    "coverage" : 0.95,
+    "gated" : false,
+    "id" : "ml-04",
+    "language" : "english",
+    "meanConfidence" : 0.9695652179096056,
+    "seconds" : 0.1546560525894165
+  }
+]

@@ -1,0 +1,1042 @@
+{
+  "version": 1,
+  "generated": "2026-08-07",
+  "purpose": "Frozen inputs for the four AI text actions. Paired with reference.json (what a good writer would produce) and mock_output (what the current rule-based MockAI produces). A real engine has to beat mock_output and get close to the reference.",
+  "source_of_truth": {
+    "mock": "Packages/AIKeyboardCore/Sources/AIKeyboardCore/MockIntelligence.swift",
+    "call_sites": "Packages/AIKeyboardCore/Sources/AIKeyboardCore/KeyboardController.swift:361 (fix), :367 (rewrite), :387 (reply), :407 (tone)",
+    "mock_output_derivation": "Executed, not guessed. Bar/ai-text/harness/run.sh copies MockIntelligence.swift and Models.swift verbatim into a temp directory, compiles them with swiftc 6.2.3 alongside harness/main.swift, runs the result over this file's inputs and writes mock_outputs.json, which is merged back in here. AIKeyboardCore itself does not build for macOS because Feedback.swift imports UIKit, which is why the two files are copied rather than linked. Rerun run.sh after any change to the mock.",
+    "nondeterminism": "MockAI.shorten iterates a Swift Dictionary, whose order is not stable across processes. No corpus input has two overlapping compression rules, so every mock_output here is reproducible; a future input might not be."
+  },
+  "actions": {
+    "fix": "Grammar and spelling only. Meaning, tone and language preserved. Output is one string.",
+    "rewrite": "Three variants of the same message. The product promise is that they differ in the decision they take, not in wording. Output is a list.",
+    "tone": "One of six registers: clearer, shorter, professional, casual, confident, friendly. Output is one variant, always shown even if nothing changed.",
+    "reply": "Three answers to a message read off the screen, differing in what they decide (accept / push back / ask), not in phrasing. Input is a ScreenContext, not the text field."
+  },
+  "languages": {
+    "en": "English only.",
+    "he": "Hebrew only, written the way it is actually sent in WhatsApp and Slack in Israel.",
+    "he-en": "Hebrew with English loanwords left in Latin script. The case this product exists for."
+  },
+  "tags": {
+    "already-correct": "Nothing is wrong. A good engine returns it unchanged or nearly so; changing it is the failure.",
+    "meaning-trap": "A naive fix changes what the sentence says.",
+    "over-correction-trap": "Deliberate informality that a corrector will want to formalise. It must survive.",
+    "mixed-script": "Hebrew and Latin in one sentence, with an error in one of the two scripts.",
+    "code-switch": "Hebrew sentence with English loanwords that must stay in Latin script.",
+    "mock-dictionary-hit": "The input contains a typo that MockAI happens to have in its 8-entry Hebrew table, so the mock scores well here for the wrong reason.",
+    "question-mark": "The input is a question with no question mark. Missing it is an error, unlike a missing full stop.",
+    "punctuation-register": "The mock appends a full stop to everything. On a one-line chat message that changes the tone.",
+    "underspecified": "The message cannot be answered without asking something back. The right reply is a question.",
+    "gender": "Hebrew requires agreeing with the addressee's gender, which is knowable here only from the sender's name.",
+    "plan-example": "Appears verbatim in plan.md.",
+    "built-in-sample": "Is one of MockScreenContext's three samples, so the mock's hard-coded reply was written for it."
+  },
+  "entries": [
+    {
+      "id": "fix-en-01",
+      "action": "fix",
+      "language": "en",
+      "input": "I dont think we should do it because its not make sense",
+      "tags": [
+        "plan-example",
+        "meaning-trap"
+      ],
+      "why": "The sentence plan.md promises to fix. MockAI has a literal string replacement for exactly this phrase, so it is the one input the mock is tuned for. Treat a real engine matching it as table stakes, not as evidence.",
+      "mock_output": "I don't think we should do it because it doesn't make sense."
+    },
+    {
+      "id": "fix-en-02",
+      "action": "fix",
+      "language": "en",
+      "input": "Sounds good, I'll send you the deck tonight.",
+      "tags": [
+        "already-correct"
+      ],
+      "why": "Nothing to do. Any edit is a regression.",
+      "mock_output": "Sounds good, I'll send you the deck tonight."
+    },
+    {
+      "id": "fix-en-03",
+      "action": "fix",
+      "language": "en",
+      "input": "The onboarding is good but its flow breaks on the last screen",
+      "tags": [
+        "meaning-trap"
+      ],
+      "why": "Possessive 'its' is correct here. A contraction table turns it into 'it's' and breaks the sentence.",
+      "mock_output": "The onboarding is good but it's flow breaks on the last screen."
+    },
+    {
+      "id": "fix-en-04",
+      "action": "fix",
+      "language": "en",
+      "input": "can you send me the id for the sprint ticket",
+      "tags": [
+        "meaning-trap",
+        "question-mark"
+      ],
+      "why": "'id' is an identifier, not 'I'd'. Also a question with no question mark.",
+      "mock_output": "Can you send me the I'd for the sprint ticket."
+    },
+    {
+      "id": "fix-en-05",
+      "action": "fix",
+      "language": "en",
+      "input": "sorry i was ill last week and didnt see your message",
+      "tags": [
+        "meaning-trap"
+      ],
+      "why": "'ill' is an adjective here, not 'I'll'. The same sentence also has a real contraction to fix, so the engine has to tell them apart.",
+      "mock_output": "Sorry I was I'll last week and didn't see your message."
+    },
+    {
+      "id": "fix-en-06",
+      "action": "fix",
+      "language": "en",
+      "input": "he said \"i dont know\" and left it there",
+      "tags": [
+        "meaning-trap"
+      ],
+      "why": "Quoted speech. Word-level fixing that assumes punctuation only ever trails a word mangles the opening quote.",
+      "mock_output": "He said Ii don't know\" and left it there."
+    },
+    {
+      "id": "fix-en-07",
+      "action": "fix",
+      "language": "en",
+      "input": "omg that meeting was sooo long 😅 im gonna need coffee",
+      "tags": [
+        "over-correction-trap"
+      ],
+      "why": "'sooo', 'omg' and 'gonna' are choices, not mistakes. Only 'im' is wrong. Formalising the rest destroys the register the user picked.",
+      "mock_output": "Omg that meeting was sooo long 😅 I'm gonna need coffee."
+    },
+    {
+      "id": "fix-en-08",
+      "action": "fix",
+      "language": "en",
+      "input": "Ill sedn you teh updated presentaion after the standup tommorow",
+      "tags": [],
+      "why": "Ordinary thumb typos, four of them. This is the bread-and-butter case and the one a dictionary-based mock cannot do at all.",
+      "mock_output": "I'll sedn you teh updated presentaion after the standup tommorow."
+    },
+    {
+      "id": "fix-en-09",
+      "action": "fix",
+      "language": "en",
+      "input": "the numbers from last week doesnt match what the dashboard show",
+      "tags": [],
+      "why": "Two subject-verb agreement errors in opposite directions. Needs parsing, not lookup.",
+      "mock_output": "The numbers from last week doesn't match what the dashboard show."
+    },
+    {
+      "id": "fix-en-10",
+      "action": "fix",
+      "language": "en",
+      "input": "Please dont forget to send the invoice before the 15th, otherwise finance wont process it this month.",
+      "tags": [],
+      "why": "Two plain missing apostrophes and nothing else. The mock gets this exactly right, which is the floor a real engine must not fall below.",
+      "mock_output": "Please don't forget to send the invoice before the 15th, otherwise finance won't process it this month."
+    },
+    {
+      "id": "fix-he-01",
+      "action": "fix",
+      "language": "he",
+      "input": "היי, אני חושב שאנחנו צריכים לדבר על זה מחרר בבקשא",
+      "tags": [
+        "mock-dictionary-hit"
+      ],
+      "why": "Two doubled-letter typos that both happen to be in the mock's table. Included so the critic can see where the mock's Hebrew score comes from.",
+      "mock_output": "היי, אני חושב שאנחנו צריכים לדבר על זה מחר בבקשה."
+    },
+    {
+      "id": "fix-he-02",
+      "action": "fix",
+      "language": "he",
+      "input": "אני יבדוק את זה ואחזור אליך",
+      "tags": [],
+      "why": "The most common Hebrew writing error there is: first-person future with yud instead of alef. No dictionary catches it because יבדוק is a real word.",
+      "mock_output": "אני יבדוק את זה ואחזור אליך."
+    },
+    {
+      "id": "fix-he-03",
+      "action": "fix",
+      "language": "he",
+      "input": "תודה רבה, קיבלתי. אני עובר על זה עכשיו ומעדכן.",
+      "tags": [
+        "already-correct"
+      ],
+      "why": "Correct Hebrew that already ends in a full stop. The mock returns it untouched, so this is the one Hebrew case where the floor is the ceiling.",
+      "mock_output": "תודה רבה, קיבלתי. אני עובר על זה עכשיו ומעדכן."
+    },
+    {
+      "id": "fix-he-04",
+      "action": "fix",
+      "language": "he",
+      "input": "מעולה, נתראה מחר בבוקר",
+      "tags": [
+        "already-correct",
+        "punctuation-register"
+      ],
+      "why": "Correct, and deliberately unpunctuated. A full stop on a two-word Hebrew sign-off reads cold.",
+      "mock_output": "מעולה, נתראה מחר בבוקר."
+    },
+    {
+      "id": "fix-he-05",
+      "action": "fix",
+      "language": "he",
+      "input": "אתה יכול להעביר לי את הקובץ של אתמול",
+      "tags": [
+        "question-mark"
+      ],
+      "why": "A question with no question mark. Adding one is a genuine fix; adding a full stop instead turns it into an order.",
+      "mock_output": "אתה יכול להעביר לי את הקובץ של אתמול."
+    },
+    {
+      "id": "fix-he-06",
+      "action": "fix",
+      "language": "he",
+      "input": "יאללה סבבה, נדבר אח\"כ",
+      "tags": [
+        "already-correct",
+        "over-correction-trap"
+      ],
+      "why": "Slang plus a shorthand abbreviation. Standardising יאללה or סבבה, or expanding אח\"כ, is exactly the over-correction that makes people turn a feature off.",
+      "mock_output": "יאללה סבבה, נדבר אח\"כ."
+    },
+    {
+      "id": "fix-he-07",
+      "action": "fix",
+      "language": "he",
+      "input": "שלחתי לך את הקובץ אתמול בערב, תגדי לי אם קיבלת",
+      "tags": [
+        "gender"
+      ],
+      "why": "תגדי is a typo for either תגיד (masculine) or תגידי (feminine) and the sentence gives no way to tell. Both are defensible; leaving תגדי is not.",
+      "mock_output": "שלחתי לך את הקובץ אתמול בערב, תגדי לי אם קיבלת."
+    },
+    {
+      "id": "fix-he-08",
+      "action": "fix",
+      "language": "he",
+      "input": "מה קורה אני מנסה להתקשר אליך כל הבוקר",
+      "tags": [
+        "question-mark"
+      ],
+      "why": "Two sentences run together, the first of them a question. Needs sentence-internal punctuation, which the mock never adds.",
+      "mock_output": "מה קורה אני מנסה להתקשר אליך כל הבוקר."
+    },
+    {
+      "id": "fix-mix-01",
+      "action": "fix",
+      "language": "he-en",
+      "input": "אני אשלח לך את ה-document מחר אחרי ה-standup",
+      "tags": [
+        "already-correct",
+        "code-switch"
+      ],
+      "why": "The canonical code-switched sentence for this product, and it is already correct. Translating the loanwords, transliterating them, or dropping the ה- prefix are all failures.",
+      "mock_output": "אני אשלח לך את ה-document מחר אחרי ה-standup."
+    },
+    {
+      "id": "fix-mix-02",
+      "action": "fix",
+      "language": "he-en",
+      "input": "העליתי את התיקון ל-staging והכל עובד, its fine",
+      "tags": [
+        "mixed-script"
+      ],
+      "why": "Hebrew dominates the sentence, so a language-detecting router sends it down the Hebrew path and never sees the English error.",
+      "mock_output": "העליתי את התיקון ל-staging והכל עובד, its fine."
+    },
+    {
+      "id": "fix-mix-03",
+      "action": "fix",
+      "language": "he-en",
+      "input": "Can you check the deployment on staging, אני חושב שיש שם באג בבקשא",
+      "tags": [
+        "mixed-script"
+      ],
+      "why": "The mirror image: English dominates, so the Hebrew typo survives. One sentence should not need two engines.",
+      "mock_output": "Can you check the deployment on staging, אני חושב שיש שם באג בבקשא."
+    },
+    {
+      "id": "fix-mix-04",
+      "action": "fix",
+      "language": "he-en",
+      "input": "בוא נעשה sync קצר על ה-roadmap של Q3",
+      "tags": [
+        "already-correct",
+        "code-switch"
+      ],
+      "why": "Correct as sent. Also one of MockDictation's scripts, so it is text the demo already puts on screen.",
+      "mock_output": "בוא נעשה sync קצר על ה-roadmap של Q3."
+    },
+    {
+      "id": "fix-mix-05",
+      "action": "fix",
+      "language": "he-en",
+      "input": "אנני צריך את ה-API key בשביל ה-demo של מחר",
+      "tags": [
+        "mock-dictionary-hit",
+        "code-switch"
+      ],
+      "why": "A real Hebrew typo the mock happens to know, next to an acronym and two loanwords that must come back untouched.",
+      "mock_output": "אני צריך את ה-API key בשביל ה-demo של מחר."
+    },
+    {
+      "id": "fix-mix-06",
+      "action": "fix",
+      "language": "he-en",
+      "input": "צריך לעשות refactor ל-service הזה לפני ה-release",
+      "tags": [
+        "already-correct",
+        "code-switch"
+      ],
+      "why": "Latin characters outnumber Hebrew ones here, so this goes down the English path. It still has to come back unchanged.",
+      "mock_output": "צריך לעשות refactor ל-service הזה לפני ה-release."
+    },
+    {
+      "id": "rw-en-01",
+      "action": "rewrite",
+      "language": "en",
+      "input": "I dont think we should do it because its not make sense",
+      "tags": [
+        "plan-example"
+      ],
+      "why": "A disagreement. The three real options are refuse, ask to revisit, and counter-propose. Three phrasings of the same refusal would be the failure mode.",
+      "mock_output": [
+        {
+          "text": "To be clear, I don't think we should do it because it doesn't make sense.",
+          "tone": "clearer"
+        },
+        {
+          "text": "I doubt we should do it, it doesn't make sense.",
+          "tone": "shorter"
+        },
+        {
+          "text": "Could you please make sure that I don't think we should do it because it doesn't make sense.",
+          "tone": "professional"
+        }
+      ]
+    },
+    {
+      "id": "rw-en-02",
+      "action": "rewrite",
+      "language": "en",
+      "input": "hey i need this by tomorrow please",
+      "tags": [
+        "plan-example"
+      ],
+      "why": "plan.md uses this to advertise Rewrite. The decision that varies is how hard the ask is: request, requirement, or negotiation.",
+      "mock_output": [
+        {
+          "text": "To be clear, hey I need this by tomorrow please.",
+          "tone": "clearer"
+        },
+        {
+          "text": "Could you please make sure that hey I need this by tomorrow please.",
+          "tone": "professional"
+        }
+      ]
+    },
+    {
+      "id": "rw-en-03",
+      "action": "rewrite",
+      "language": "en",
+      "input": "Thanks for turning that around so fast, it made a real difference today.",
+      "tags": [
+        "already-correct"
+      ],
+      "why": "A thank-you has no decision to vary. The honest answer is three registers of the same thing, and above all no invented content.",
+      "mock_output": [
+        {
+          "text": "To be clear, thanks for turning that around so fast, it made a real difference today.",
+          "tone": "clearer"
+        },
+        {
+          "text": "Could you please make sure that thanks for turning that around so fast, it made a real difference today.",
+          "tone": "professional"
+        }
+      ]
+    },
+    {
+      "id": "rw-en-04",
+      "action": "rewrite",
+      "language": "en",
+      "input": "i cant make the 9am standup tomorrow",
+      "tags": [],
+      "why": "Inform, delegate, or reschedule. The 9am must survive into every variant; inventing a reason for the absence must not.",
+      "mock_output": [
+        {
+          "text": "To be clear, I can't make the 9am standup tomorrow.",
+          "tone": "clearer"
+        },
+        {
+          "text": "Could you please make sure that I can't make the 9am standup tomorrow.",
+          "tone": "professional"
+        }
+      ]
+    },
+    {
+      "id": "rw-he-01",
+      "action": "rewrite",
+      "language": "he",
+      "input": "אני לא חושב שכדאי לנו לעשות את זה",
+      "tags": [],
+      "why": "The Hebrew twin of rw-en-01. Also the input that triggers the mock's one Hebrew compression rule, אני לא חושב ש -> אני בספק ש, which is not idiomatic Hebrew.",
+      "mock_output": [
+        {
+          "text": "רציתי לוודא: אני לא חושב שכדאי לנו לעשות את זה.",
+          "tone": "clearer"
+        },
+        {
+          "text": "אני בספק שכדאי לנו לעשות את זה.",
+          "tone": "shorter"
+        },
+        {
+          "text": "אשמח אם נוכל להתייחס לכך: אני לא חושב שכדאי לנו לעשות את זה.",
+          "tone": "professional"
+        }
+      ]
+    },
+    {
+      "id": "rw-he-02",
+      "action": "rewrite",
+      "language": "he",
+      "input": "אפשר לקבל את התשובה שלך עד סוף היום",
+      "tags": [],
+      "why": "A deadline request. Soft ask, firm requirement, or negotiable deadline are three different messages to send a colleague.",
+      "mock_output": [
+        {
+          "text": "רציתי לוודא: אפשר לקבל את התשובה שלך עד סוף היום.",
+          "tone": "clearer"
+        },
+        {
+          "text": "אשמח אם נוכל להתייחס לכך: אפשר לקבל את התשובה שלך עד סוף היום.",
+          "tone": "professional"
+        }
+      ]
+    },
+    {
+      "id": "rw-he-03",
+      "action": "rewrite",
+      "language": "he",
+      "input": "תודה רבה על העזרה אתמול, ממש הצלת אותי",
+      "tags": [
+        "already-correct"
+      ],
+      "why": "Warm and already right. Prefixing it with a clarifier or a formality, which is all the mock can do, ruins it.",
+      "mock_output": [
+        {
+          "text": "רציתי לוודא: תודה רבה על העזרה אתמול, ממש הצלת אותי.",
+          "tone": "clearer"
+        },
+        {
+          "text": "אשמח אם נוכל להתייחס לכך: תודה רבה על העזרה אתמול, ממש הצלת אותי.",
+          "tone": "professional"
+        }
+      ]
+    },
+    {
+      "id": "rw-he-04",
+      "action": "rewrite",
+      "language": "he",
+      "input": "אני לא יכול לקחת את זה עכשיו יש לי יותר מדי דברים",
+      "tags": [],
+      "why": "Refusing work. Flat no, defer, or ask what to drop are genuinely different answers to give a manager.",
+      "mock_output": [
+        {
+          "text": "רציתי לוודא: אני לא יכול לקחת את זה עכשיו יש לי יותר מדי דברים.",
+          "tone": "clearer"
+        },
+        {
+          "text": "אשמח אם נוכל להתייחס לכך: אני לא יכול לקחת את זה עכשיו יש לי יותר מדי דברים.",
+          "tone": "professional"
+        }
+      ]
+    },
+    {
+      "id": "rw-mix-01",
+      "action": "rewrite",
+      "language": "he-en",
+      "input": "צריך לדחות את ה-launch כי ה-QA לא סיים",
+      "tags": [
+        "code-switch"
+      ],
+      "why": "A call that affects other people. Recommend, ask the room, or propose a partial launch.",
+      "mock_output": [
+        {
+          "text": "רציתי לוודא: צריך לדחות את ה-launch כי ה-QA לא סיים.",
+          "tone": "clearer"
+        },
+        {
+          "text": "אשמח אם נוכל להתייחס לכך: צריך לדחות את ה-launch כי ה-QA לא סיים.",
+          "tone": "professional"
+        }
+      ]
+    },
+    {
+      "id": "rw-mix-02",
+      "action": "rewrite",
+      "language": "he-en",
+      "input": "אני אשלח לך את ה-document מחר אחרי ה-standup",
+      "tags": [
+        "code-switch"
+      ],
+      "why": "A commitment. Firm, hedged, or offering to move it earlier. The loanwords must survive all three.",
+      "mock_output": [
+        {
+          "text": "רציתי לוודא: אני אשלח לך את ה-document מחר אחרי ה-standup.",
+          "tone": "clearer"
+        },
+        {
+          "text": "אשמח אם נוכל להתייחס לכך: אני אשלח לך את ה-document מחר אחרי ה-standup.",
+          "tone": "professional"
+        }
+      ]
+    },
+    {
+      "id": "rw-mix-03",
+      "action": "rewrite",
+      "language": "he-en",
+      "input": "תעשה את ה-review של ה-PR עד היום בערב",
+      "tags": [
+        "code-switch"
+      ],
+      "why": "A bare imperative to a peer. Order, request, or negotiation, and the difference is what the sender is actually willing to accept.",
+      "mock_output": [
+        {
+          "text": "רציתי לוודא: תעשה את ה-review של ה-PR עד היום בערב.",
+          "tone": "clearer"
+        },
+        {
+          "text": "אשמח אם נוכל להתייחס לכך: תעשה את ה-review של ה-PR עד היום בערב.",
+          "tone": "professional"
+        }
+      ]
+    },
+    {
+      "id": "rw-mix-04",
+      "action": "rewrite",
+      "language": "he-en",
+      "input": "ה-meeting היה waste of time, אף אחד לא הגיע מוכן",
+      "tags": [
+        "code-switch"
+      ],
+      "why": "Venting that is about to be sent. The variants differ in how far it escalates, from a private observation to a process complaint.",
+      "mock_output": [
+        {
+          "text": "רציתי לוודא: ה-meeting היה waste of time, אף אחד לא הגיע מוכן.",
+          "tone": "clearer"
+        },
+        {
+          "text": "אשמח אם נוכל להתייחס לכך: ה-meeting היה waste of time, אף אחד לא הגיע מוכן.",
+          "tone": "professional"
+        }
+      ]
+    },
+    {
+      "id": "tn-en-01",
+      "action": "tone",
+      "language": "en",
+      "tone": "clearer",
+      "input": "i think we should probably just move the meeting to next week",
+      "tags": [],
+      "why": "Three hedges stacked on one opinion. Clearer means removing them, not announcing that clarity is about to happen.",
+      "mock_output": [
+        {
+          "text": "To be clear, I think we should probably just move the meeting to next week.",
+          "tone": "clearer"
+        }
+      ]
+    },
+    {
+      "id": "tn-en-02",
+      "action": "tone",
+      "language": "en",
+      "tone": "shorter",
+      "input": "due to the fact that the client hasnt replied yet, i would like to postpone the review that we had scheduled for friday",
+      "tags": [],
+      "why": "Contains two phrases the mock's compression table knows, so this is where the mock looks best. It still leaves 'friday' lowercase and the sentence long.",
+      "mock_output": [
+        {
+          "text": "Because the client hasn't replied yet, I want to postpone the review that we had scheduled for friday.",
+          "tone": "shorter"
+        }
+      ]
+    },
+    {
+      "id": "tn-en-03",
+      "action": "tone",
+      "language": "en",
+      "tone": "professional",
+      "input": "hey can you fix the bug in the checkout flow its been broken since monday",
+      "tags": [],
+      "why": "Two sentences jammed together, informal opener, missing capital. Professional here means restructuring, not prefixing.",
+      "mock_output": [
+        {
+          "text": "Could you please make sure that hey can you fix the bug in the checkout flow it's been broken since monday.",
+          "tone": "professional"
+        }
+      ]
+    },
+    {
+      "id": "tn-en-04",
+      "action": "tone",
+      "language": "en",
+      "tone": "confident",
+      "input": "we are not doing that",
+      "tags": [
+        "already-correct"
+      ],
+      "why": "Already maximally confident. The right move is to leave it alone. Anything bolted on the end weakens it.",
+      "mock_output": [
+        {
+          "text": "We are not doing that. Let's move on that.",
+          "tone": "confident"
+        }
+      ]
+    },
+    {
+      "id": "tn-he-01",
+      "action": "tone",
+      "language": "he",
+      "tone": "casual",
+      "input": "אני רוצה לבקש ממך לבדוק את הנתונים שהעברתי אליך",
+      "tags": [],
+      "why": "Stiff written Hebrew. Casual is a different sentence, not the same sentence with היי glued to the front.",
+      "mock_output": [
+        {
+          "text": "היי, אני רוצה לבקש ממך לבדוק את הנתונים שהעברתי אליך.",
+          "tone": "casual"
+        }
+      ]
+    },
+    {
+      "id": "tn-he-02",
+      "action": "tone",
+      "language": "he",
+      "tone": "confident",
+      "input": "אולי אפשר בבקשה לשקול לדחות את הפגישה של יום ראשון",
+      "tags": [],
+      "why": "Four hedges in one Hebrew sentence. Confident means dropping them all and stating the thing.",
+      "mock_output": [
+        {
+          "text": "אולי אפשר בבקשה לשקול לדחות את הפגישה של יום ראשון. זה מה שצריך לקרות.",
+          "tone": "confident"
+        }
+      ]
+    },
+    {
+      "id": "tn-he-03",
+      "action": "tone",
+      "language": "he",
+      "tone": "professional",
+      "input": "תשמע אני לא מרוצה מהתוצאה של הפרויקט הזה בכלל",
+      "tags": [],
+      "why": "Blunt criticism that has to survive into a version that can be sent to a manager without losing the complaint.",
+      "mock_output": [
+        {
+          "text": "אשמח אם נוכל להתייחס לכך: תשמע אני לא מרוצה מהתוצאה של הפרויקט הזה בכלל.",
+          "tone": "professional"
+        }
+      ]
+    },
+    {
+      "id": "tn-mix-01",
+      "action": "tone",
+      "language": "he-en",
+      "tone": "friendly",
+      "input": "לא הספקתי לעשות review ל-PR שלך, סליחה",
+      "tags": [
+        "code-switch"
+      ],
+      "why": "An apology. The mock's friendly rule prefixes תודה מראש, which on an apology is nonsense, and that is the clearest single demonstration that these rules are context-blind.",
+      "mock_output": [
+        {
+          "text": "תודה מראש! לא הספקתי לעשות review ל-PR שלך, סליחה.",
+          "tone": "friendly"
+        }
+      ]
+    },
+    {
+      "id": "tn-mix-02",
+      "action": "tone",
+      "language": "he-en",
+      "tone": "shorter",
+      "input": "אני חושב שאולי כדאי שנעשה עוד iteration על ה-design לפני שאנחנו שולחים את זה ל-client",
+      "tags": [
+        "code-switch"
+      ],
+      "why": "Long and hedged, but matches none of the mock's six Hebrew compression rules, so Shorter hands back the same sentence. The UI promised a shorter one.",
+      "mock_output": [
+        {
+          "text": "אני חושב שאולי כדאי שנעשה עוד iteration על ה-design לפני שאנחנו שולחים את זה ל-client.",
+          "tone": "shorter"
+        }
+      ]
+    },
+    {
+      "id": "tn-mix-03",
+      "action": "tone",
+      "language": "he-en",
+      "tone": "clearer",
+      "input": "ה-deploy נכשל שוב, אני חושב שזה קשור ל-config שהשתנה אתמול אבל אני לא בטוח",
+      "tags": [
+        "code-switch"
+      ],
+      "why": "An incident update. Clearer must keep the uncertainty honest while separating what happened from what is suspected.",
+      "mock_output": [
+        {
+          "text": "רציתי לוודא: ה-deploy נכשל שוב, אני חושב שזה קשור ל-config שהשתנה אתמול אבל אני לא בטוח.",
+          "tone": "clearer"
+        }
+      ]
+    },
+    {
+      "id": "rp-en-01",
+      "action": "reply",
+      "language": "en",
+      "context": {
+        "app": "Slack",
+        "sender": "Daniel",
+        "message": "Can you take the standup tomorrow? I have a conflict at 9.",
+        "language": "english"
+      },
+      "tags": [
+        "built-in-sample"
+      ],
+      "why": "MockScreenContext sample 2. The mock's three English replies were written for this exact message, so it is the mock's best case and tells you nothing about generalisation.",
+      "mock_output": [
+        {
+          "intent": "Accept",
+          "text": "Sure, I can take it. I'll run standup at 9."
+        },
+        {
+          "intent": "Push back",
+          "text": "I have something at 9 too. Can we move it to 10?"
+        },
+        {
+          "intent": "Ask first",
+          "text": "Probably yes. Anything specific you want covered?"
+        }
+      ]
+    },
+    {
+      "id": "rp-en-02",
+      "action": "reply",
+      "language": "en",
+      "context": {
+        "app": "Slack",
+        "sender": "Tom",
+        "message": "Can you look at this when you get a chance?",
+        "language": "english"
+      },
+      "tags": [
+        "underspecified"
+      ],
+      "why": "There is no 'this'. Every good reply is a question; an engine that confidently accepts has hallucinated a task.",
+      "mock_output": [
+        {
+          "intent": "Accept",
+          "text": "Sure, I can take it. I'll run standup at 9."
+        },
+        {
+          "intent": "Push back",
+          "text": "I have something at 9 too. Can we move it to 10?"
+        },
+        {
+          "intent": "Ask first",
+          "text": "Probably yes. Anything specific you want covered?"
+        }
+      ]
+    },
+    {
+      "id": "rp-en-03",
+      "action": "reply",
+      "language": "en",
+      "context": {
+        "app": "LinkedIn",
+        "sender": "Rina Katz",
+        "message": "Hi! We're hiring for a senior iOS role and your background looks like a great fit. Would you be open to a quick call this week?",
+        "language": "english"
+      },
+      "tags": [],
+      "why": "Recruiter outreach. Yes, no thanks, and ask for details are three genuinely different life decisions, and the polite decline has to be short without being rude.",
+      "mock_output": [
+        {
+          "intent": "Accept",
+          "text": "Sure, I can take it. I'll run standup at 9."
+        },
+        {
+          "intent": "Push back",
+          "text": "I have something at 9 too. Can we move it to 10?"
+        },
+        {
+          "intent": "Ask first",
+          "text": "Probably yes. Anything specific you want covered?"
+        }
+      ]
+    },
+    {
+      "id": "rp-en-04",
+      "action": "reply",
+      "language": "en",
+      "context": {
+        "app": "WhatsApp",
+        "sender": "Amir (landlord)",
+        "message": "The plumber can come Tuesday between 8 and 12, does that work?",
+        "language": "english"
+      },
+      "tags": [],
+      "why": "A concrete offer with a four-hour window. Accept, counter-offer, or ask to narrow the window. The times in the reply must come from the message and nowhere else.",
+      "mock_output": [
+        {
+          "intent": "Accept",
+          "text": "Sure, I can take it. I'll run standup at 9."
+        },
+        {
+          "intent": "Push back",
+          "text": "I have something at 9 too. Can we move it to 10?"
+        },
+        {
+          "intent": "Ask first",
+          "text": "Probably yes. Anything specific you want covered?"
+        }
+      ]
+    },
+    {
+      "id": "rp-he-01",
+      "action": "reply",
+      "language": "he",
+      "context": {
+        "app": "WhatsApp",
+        "sender": "שרה",
+        "message": "היי, אתה פנוי לארוחת ערב הערב? חשבתי על המקום החדש ביפו",
+        "language": "hebrew"
+      },
+      "tags": [
+        "built-in-sample"
+      ],
+      "why": "MockScreenContext sample 1, and the message the mock's three Hebrew replies were written for. Every other Hebrew entry below gets these same three replies.",
+      "mock_output": [
+        {
+          "intent": "מאשר",
+          "text": "כן, פנוי. באיזו שעה נוח לך?"
+        },
+        {
+          "intent": "דוחה",
+          "text": "הערב קצת צפוף לי, אפשר לדחות למחר?"
+        },
+        {
+          "intent": "שואל",
+          "text": "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+        }
+      ]
+    },
+    {
+      "id": "rp-he-02",
+      "action": "reply",
+      "language": "he",
+      "context": {
+        "app": "WhatsApp",
+        "sender": "גיא",
+        "message": "אחי תוכל להחזיר לי את ה-500 שקל שהלוויתי לך? קצת בלחץ החודש",
+        "language": "hebrew"
+      },
+      "tags": [],
+      "why": "Money between friends. Pay now, ask for time, or ask how. Register matters more than grammar here: this has to sound like a friend, not a bank.",
+      "mock_output": [
+        {
+          "intent": "מאשר",
+          "text": "כן, פנוי. באיזו שעה נוח לך?"
+        },
+        {
+          "intent": "דוחה",
+          "text": "הערב קצת צפוף לי, אפשר לדחות למחר?"
+        },
+        {
+          "intent": "שואל",
+          "text": "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+        }
+      ]
+    },
+    {
+      "id": "rp-he-03",
+      "action": "reply",
+      "language": "he",
+      "context": {
+        "app": "Slack",
+        "sender": "נועה",
+        "message": "אפשר לדבר רגע?",
+        "language": "hebrew"
+      },
+      "tags": [
+        "underspecified"
+      ],
+      "why": "Four words from a manager with no subject. The only fully safe reply is asking what about, and the sender is female, so any reply that addresses her back has to agree.",
+      "mock_output": [
+        {
+          "intent": "מאשר",
+          "text": "כן, פנוי. באיזו שעה נוח לך?"
+        },
+        {
+          "intent": "דוחה",
+          "text": "הערב קצת צפוף לי, אפשר לדחות למחר?"
+        },
+        {
+          "intent": "שואל",
+          "text": "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+        }
+      ]
+    },
+    {
+      "id": "rp-he-04",
+      "action": "reply",
+      "language": "he",
+      "context": {
+        "app": "WhatsApp",
+        "sender": "אורי",
+        "message": "יש לנו ערב גיבוש של הצוות ביום חמישי ב-19:00, אתה מגיע?",
+        "language": "hebrew"
+      },
+      "tags": [],
+      "why": "A yes or no invitation with a fixed time. Declining without a reason is the hard one to write well in Hebrew.",
+      "mock_output": [
+        {
+          "intent": "מאשר",
+          "text": "כן, פנוי. באיזו שעה נוח לך?"
+        },
+        {
+          "intent": "דוחה",
+          "text": "הערב קצת צפוף לי, אפשר לדחות למחר?"
+        },
+        {
+          "intent": "שואל",
+          "text": "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+        }
+      ]
+    },
+    {
+      "id": "rp-mix-01",
+      "action": "reply",
+      "language": "he-en",
+      "context": {
+        "app": "Messages",
+        "sender": "Maya",
+        "message": "שלחתי לך את ה-deck, אפשר feedback עד מחר בצהריים?",
+        "language": "hebrew"
+      },
+      "tags": [
+        "built-in-sample"
+      ],
+      "why": "MockScreenContext sample 3. It is tagged Hebrew, so the mock answers it with the dinner replies written for sample 1. This is the single clearest exhibit that the mock's Reply reads the language field and not the message.",
+      "mock_output": [
+        {
+          "intent": "מאשר",
+          "text": "כן, פנוי. באיזו שעה נוח לך?"
+        },
+        {
+          "intent": "דוחה",
+          "text": "הערב קצת צפוף לי, אפשר לדחות למחר?"
+        },
+        {
+          "intent": "שואל",
+          "text": "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+        }
+      ]
+    },
+    {
+      "id": "rp-mix-02",
+      "action": "reply",
+      "language": "he-en",
+      "context": {
+        "app": "Slack",
+        "sender": "יעל",
+        "message": "העלית את ה-hotfix ל-production? ה-monitoring עדיין מראה errors",
+        "language": "hebrew"
+      },
+      "tags": [
+        "underspecified",
+        "code-switch"
+      ],
+      "why": "Two questions in one, and the useful reply asks which errors. Loanwords must come back in Latin script; 'errors' translated to Hebrew would read as a machine wrote it.",
+      "mock_output": [
+        {
+          "intent": "מאשר",
+          "text": "כן, פנוי. באיזו שעה נוח לך?"
+        },
+        {
+          "intent": "דוחה",
+          "text": "הערב קצת צפוף לי, אפשר לדחות למחר?"
+        },
+        {
+          "intent": "שואל",
+          "text": "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+        }
+      ]
+    },
+    {
+      "id": "rp-mix-03",
+      "action": "reply",
+      "language": "he-en",
+      "context": {
+        "app": "WhatsApp",
+        "sender": "רונית",
+        "message": "היי, ה-app קורס לי כשאני מנסה להעלות תמונה. זה קורה כבר יומיים",
+        "language": "hebrew"
+      },
+      "tags": [
+        "underspecified",
+        "gender"
+      ],
+      "why": "A customer bug report. The right first reply is a question about device and version, and the sender is female, so every reply has to agree with her.",
+      "mock_output": [
+        {
+          "intent": "מאשר",
+          "text": "כן, פנוי. באיזו שעה נוח לך?"
+        },
+        {
+          "intent": "דוחה",
+          "text": "הערב קצת צפוף לי, אפשר לדחות למחר?"
+        },
+        {
+          "intent": "שואל",
+          "text": "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+        }
+      ]
+    },
+    {
+      "id": "rp-mix-04",
+      "action": "reply",
+      "language": "he-en",
+      "context": {
+        "app": "Slack",
+        "sender": "אסף",
+        "message": "אני רוצה שתיקח ownership על ה-onboarding flow ברבעון הבא",
+        "language": "hebrew"
+      },
+      "tags": [
+        "code-switch"
+      ],
+      "why": "An offer that is really a scope negotiation. Accept, negotiate what comes off the plate, or ask what ownership means here.",
+      "mock_output": [
+        {
+          "intent": "מאשר",
+          "text": "כן, פנוי. באיזו שעה נוח לך?"
+        },
+        {
+          "intent": "דוחה",
+          "text": "הערב קצת צפוף לי, אפשר לדחות למחר?"
+        },
+        {
+          "intent": "שואל",
+          "text": "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+        }
+      ]
+    }
+  ]
+}

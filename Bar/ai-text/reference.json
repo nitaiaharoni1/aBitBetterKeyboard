@@ -1,0 +1,926 @@
+{
+  "version": 1,
+  "generated": "2026-08-07",
+  "purpose": "For every input in corpus.json, the output a good writer would produce. This is the ceiling; corpus.json's mock_output is the floor. A real engine is worth shipping when it clears the floor by a distance and lands near the ceiling.",
+  "how_to_use": "Match on id. `reference` is the target. `alternates` are answers that are equally right; matching any of them counts as a match. `must` and `must_not` are the scored properties when the wording differs from the reference, which it usually will. `confidence: low` means a native speaker might reasonably disagree with the reference wording; weight those entries down rather than treating them as ground truth.",
+  "conventions": {
+    "terminal_full_stop": "Not scored on single-sentence input. Adding or omitting a final full stop is neutral, EXCEPT where must_not says otherwise: on a two-word sign-off or a slang message a full stop changes the tone, and that is scored.",
+    "question_mark": "Always scored. A question that comes back with a full stop instead of a question mark is a failure, in both languages.",
+    "register": "Fix preserves the register the user chose. Slang, emoji, stretched vowels, lowercase openings and abbreviations are choices, not errors.",
+    "script": "Nothing is transliterated. English loanwords stay in Latin script with their Hebrew prefix attached by hyphen (ה-document, ל-staging). Hebrew never comes back in Latin letters.",
+    "rewrite_may_change_stance": "Rewrite variants may change how hard an ask is, or whether the sender accepts, refuses or negotiates. That is the point of three variants. They may NOT invent facts: no times, names, reasons, consequences or commitments that are not in the input.",
+    "reply_may_decide": "A reply option asserts a decision on the user's behalf, because the three options exist to offer three decisions. It may not invent specifics: times and numbers must come from the message, and where a counter-proposal needs a new specific it should be left open ('when?') rather than fabricated.",
+    "hebrew_gender": "Where the sender's name reveals gender, Hebrew replies that address the sender must agree with it. Getting this wrong is the single most visible tell that a model is translating from English.",
+    "hebrew_quality": "Hebrew references are written as sent Hebrew, not translated Hebrew. Where the corpus input is itself slightly stilted (a few were constructed to carry a specific error), the reference inherits that and is marked low confidence."
+  },
+  "entries": [
+    {
+      "id": "fix-en-01",
+      "action": "fix",
+      "language": "en",
+      "confidence": "high",
+      "reference": "I don't think we should do it because it doesn't make sense.",
+      "must": ["fix dont -> don't", "fix 'its not make sense' -> 'it doesn't make sense'"],
+      "must_not": ["soften the disagreement", "add a reason that is not in the input"],
+      "note": "The mock produces this exactly, via a hard-coded string replacement for this one phrase. Parity here is worth nothing on its own; check whether the engine also handles fix-en-09, which is the same class of error without the hard-coding."
+    },
+    {
+      "id": "fix-en-02",
+      "action": "fix",
+      "language": "en",
+      "confidence": "high",
+      "reference": "Sounds good, I'll send you the deck tonight.",
+      "unchanged": true,
+      "must_not": ["change anything"]
+    },
+    {
+      "id": "fix-en-03",
+      "action": "fix",
+      "language": "en",
+      "confidence": "high",
+      "reference": "The onboarding is good but its flow breaks on the last screen",
+      "alternates": ["The onboarding is good, but its flow breaks on the last screen."],
+      "must_not": ["turn possessive 'its' into 'it's'"],
+      "note": "The mock fails this. It is the clearest example of a lookup table that cannot see context."
+    },
+    {
+      "id": "fix-en-04",
+      "action": "fix",
+      "language": "en",
+      "confidence": "high",
+      "reference": "Can you send me the ID for the sprint ticket?",
+      "alternates": ["Can you send me the id for the sprint ticket?"],
+      "must": ["capitalise the sentence", "end with a question mark"],
+      "must_not": ["turn 'id' into \"I'd\""]
+    },
+    {
+      "id": "fix-en-05",
+      "action": "fix",
+      "language": "en",
+      "confidence": "high",
+      "reference": "Sorry, I was ill last week and didn't see your message",
+      "alternates": ["Sorry I was ill last week and didn't see your message."],
+      "must": ["i -> I", "didnt -> didn't"],
+      "must_not": ["turn 'ill' into \"I'll\""],
+      "note": "Both a true contraction and a false one in the same sentence. An engine that fixes neither is safer than the mock, which fixes one and breaks the other."
+    },
+    {
+      "id": "fix-en-06",
+      "action": "fix",
+      "language": "en",
+      "confidence": "high",
+      "reference": "He said \"I don't know\" and left it there.",
+      "must": ["both quotation marks survive", "capitalise 'he'"],
+      "must_not": ["duplicate or drop any character next to the opening quote"],
+      "note": "The mock returns 'He said Ii don't know\" and left it there.' It loses the opening quote and doubles the i, because it assumes punctuation only ever trails a word."
+    },
+    {
+      "id": "fix-en-07",
+      "action": "fix",
+      "language": "en",
+      "confidence": "high",
+      "reference": "omg that meeting was sooo long 😅 I'm gonna need coffee",
+      "must": ["im -> I'm"],
+      "must_not": ["capitalise 'omg'", "shorten 'sooo'", "expand 'gonna'", "remove the emoji", "add a full stop"],
+      "note": "Scored on restraint. Everything the mock changes beyond I'm is a regression, including the capital O and the final full stop."
+    },
+    {
+      "id": "fix-en-08",
+      "action": "fix",
+      "language": "en",
+      "confidence": "high",
+      "reference": "I'll send you the updated presentation after the standup tomorrow.",
+      "must": ["sedn -> send", "teh -> the", "presentaion -> presentation", "tommorow -> tomorrow", "Ill -> I'll"],
+      "note": "The mock fixes one of five. This is the most common real input in the whole corpus."
+    },
+    {
+      "id": "fix-en-09",
+      "action": "fix",
+      "language": "en",
+      "confidence": "high",
+      "reference": "The numbers from last week don't match what the dashboard shows.",
+      "must": ["doesnt -> don't (plural subject)", "show -> shows (singular subject)"],
+      "note": "The mock fixes the apostrophe and gets both agreements wrong, ending at 'The numbers ... doesn't match what the dashboard show.'"
+    },
+    {
+      "id": "fix-en-10",
+      "action": "fix",
+      "language": "en",
+      "confidence": "high",
+      "reference": "Please don't forget to send the invoice before the 15th, otherwise finance won't process it this month.",
+      "must": ["dont -> don't", "wont -> won't"],
+      "must_not": ["change anything else"],
+      "note": "The mock is exactly right here. Any engine that scores worse than the mock on this entry is not shippable, whatever it does elsewhere."
+    },
+    {
+      "id": "fix-he-01",
+      "action": "fix",
+      "language": "he",
+      "confidence": "low",
+      "reference": "היי, אני חושב שאנחנו צריכים לדבר על זה מחר בבקשה",
+      "alternates": ["היי, אני חושב שאנחנו צריכים לדבר על זה מחר, בבקשה"],
+      "must": ["מחרר -> מחר", "בבקשא -> בבקשה"],
+      "note": "Low confidence because the input was constructed to carry two typos the mock knows, and the trailing בבקשה is slightly stilted Hebrew; the reference inherits that. The scored part is only the two spellings. The mock gets both, which is the point of including it."
+    },
+    {
+      "id": "fix-he-02",
+      "action": "fix",
+      "language": "he",
+      "confidence": "high",
+      "reference": "אני אבדוק את זה ואחזור אליך",
+      "must": ["אני יבדוק -> אני אבדוק"],
+      "note": "The most common error in written Hebrew and the mock cannot touch it: יבדוק is a real word, so no spelling table flags it. This single entry is a fair proxy for whether an engine understands Hebrew morphology at all."
+    },
+    {
+      "id": "fix-he-03",
+      "action": "fix",
+      "language": "he",
+      "confidence": "high",
+      "reference": "תודה רבה, קיבלתי. אני עובר על זה עכשיו ומעדכן.",
+      "unchanged": true,
+      "must_not": ["change anything"],
+      "note": "The mock returns it untouched. Parity is the target."
+    },
+    {
+      "id": "fix-he-04",
+      "action": "fix",
+      "language": "he",
+      "confidence": "high",
+      "reference": "מעולה, נתראה מחר בבוקר",
+      "unchanged": true,
+      "must_not": ["add a full stop"],
+      "note": "Scored on the full stop, unusually. A period on a two-word Hebrew sign-off reads as cold or annoyed. The mock adds one to every Hebrew string it sees."
+    },
+    {
+      "id": "fix-he-05",
+      "action": "fix",
+      "language": "he",
+      "confidence": "high",
+      "reference": "אתה יכול להעביר לי את הקובץ של אתמול?",
+      "must": ["end with a question mark"],
+      "must_not": ["end with a full stop, which turns the request into an instruction"]
+    },
+    {
+      "id": "fix-he-06",
+      "action": "fix",
+      "language": "he",
+      "confidence": "high",
+      "reference": "יאללה סבבה, נדבר אח\"כ",
+      "unchanged": true,
+      "must_not": ["replace יאללה or סבבה with standard Hebrew", "expand אח\"כ to אחר כך", "add a full stop"],
+      "note": "Scored on restraint. This is the entry that catches an engine that has been told to 'improve' the text."
+    },
+    {
+      "id": "fix-he-07",
+      "action": "fix",
+      "language": "he",
+      "confidence": "high",
+      "reference": "שלחתי לך את הקובץ אתמול בערב, תגיד לי אם קיבלת",
+      "alternates": ["שלחתי לך את הקובץ אתמול בערב, תגידי לי אם קיבלת"],
+      "must": ["תגדי is corrected to a real form"],
+      "must_not": ["leave תגדי as it is", "change any other word to force agreement with the guess"],
+      "note": "Genuinely ambiguous: nothing else in the sentence marks gender, since קיבלת is spelled identically for both. Masculine is the unmarked default; feminine is the smaller edit. Either is a match, and an engine that silently rewrites the rest of the sentence to match its guess is worse than one that picks either."
+    },
+    {
+      "id": "fix-he-08",
+      "action": "fix",
+      "language": "he",
+      "confidence": "high",
+      "reference": "מה קורה? אני מנסה להתקשר אליך כל הבוקר",
+      "must": ["split the two sentences", "question mark after מה קורה"],
+      "note": "The mock only appends a full stop at the very end, which leaves the run-on intact."
+    },
+    {
+      "id": "fix-mix-01",
+      "action": "fix",
+      "language": "he-en",
+      "confidence": "high",
+      "reference": "אני אשלח לך את ה-document מחר אחרי ה-standup",
+      "unchanged": true,
+      "must_not": ["translate document or standup", "transliterate them into Hebrew letters", "drop or space out the hyphen after ה"],
+      "note": "The product's headline sentence. If an engine cannot leave this alone, nothing else it does matters."
+    },
+    {
+      "id": "fix-mix-02",
+      "action": "fix",
+      "language": "he-en",
+      "confidence": "high",
+      "reference": "העליתי את התיקון ל-staging והכל עובד, it's fine",
+      "must": ["its -> it's, even though Hebrew dominates the sentence"],
+      "must_not": ["touch the Hebrew", "translate staging"],
+      "note": "The mock routes on dominant script, sends this down the Hebrew path, and never sees the English error."
+    },
+    {
+      "id": "fix-mix-03",
+      "action": "fix",
+      "language": "he-en",
+      "confidence": "low",
+      "reference": "Can you check the deployment on staging? אני חושב שיש שם באג, בבקשה",
+      "alternates": ["Can you check the deployment on staging, אני חושב שיש שם באג בבקשה"],
+      "must": ["בבקשא -> בבקשה, even though English dominates the sentence"],
+      "note": "Low confidence on the sentence split and comma only; the scored part is the Hebrew spelling. The input was built so that the mock's script router points at English and misses the Hebrew typo, which is the mirror image of fix-mix-02. Splitting at the question is optional."
+    },
+    {
+      "id": "fix-mix-04",
+      "action": "fix",
+      "language": "he-en",
+      "confidence": "high",
+      "reference": "בוא נעשה sync קצר על ה-roadmap של Q3",
+      "unchanged": true,
+      "must_not": ["translate sync or roadmap", "change Q3"]
+    },
+    {
+      "id": "fix-mix-05",
+      "action": "fix",
+      "language": "he-en",
+      "confidence": "high",
+      "reference": "אני צריך את ה-API key בשביל ה-demo של מחר",
+      "must": ["אנני -> אני"],
+      "must_not": ["change API, key or demo"],
+      "note": "The mock gets this one right, because אנני is in its eight-word table."
+    },
+    {
+      "id": "fix-mix-06",
+      "action": "fix",
+      "language": "he-en",
+      "confidence": "high",
+      "reference": "צריך לעשות refactor ל-service הזה לפני ה-release",
+      "unchanged": true,
+      "must_not": ["translate refactor, service or release"]
+    },
+
+    {
+      "id": "rw-en-01",
+      "action": "rewrite",
+      "language": "en",
+      "confidence": "high",
+      "reference": [
+        {
+          "label": "Direct no",
+          "text": "I don't think we should do this. The reasoning doesn't hold up for me.",
+          "differs_by": "Refuses outright and stands behind it."
+        },
+        {
+          "label": "Open to being convinced",
+          "text": "I'm not sold on this. Can we walk through the reasoning again before we commit?",
+          "differs_by": "Leaves the decision open and asks for another pass."
+        },
+        {
+          "label": "Counter-proposal",
+          "text": "I'd rather not go ahead with this as it stands. Could we try a smaller version first?",
+          "differs_by": "Refuses this version but puts something else on the table."
+        }
+      ],
+      "must": ["three different decisions, not three phrasings of a refusal"],
+      "must_not": ["invent a reason (deadline, budget, a person's opinion) that is not in the input"],
+      "note": "The mock returns 'To be clear, ...', a compressed version, and 'Could you please make sure that I don't think we should do it because it doesn't make sense.' The third is grammatically broken; all three take the same decision."
+    },
+    {
+      "id": "rw-en-02",
+      "action": "rewrite",
+      "language": "en",
+      "confidence": "high",
+      "reference": [
+        {
+          "label": "Soft ask",
+          "text": "Hey, any chance you could get this to me by tomorrow?",
+          "differs_by": "Asks a favour and accepts no as an answer."
+        },
+        {
+          "label": "Firm",
+          "text": "Hey, I need this by tomorrow, please.",
+          "differs_by": "States a requirement rather than a request."
+        },
+        {
+          "label": "Negotiable",
+          "text": "Hey, I'm hoping to have this tomorrow. Does that work, or should we push it?",
+          "differs_by": "Opens the deadline itself for discussion."
+        }
+      ],
+      "must": ["keep 'tomorrow' in all three"],
+      "must_not": ["invent a consequence or a reason for the deadline"],
+      "note": "plan.md advertises this exact input. The mock returns only two variants for it, because its Shorter output is identical to the input and gets dropped, and both survivors are broken English."
+    },
+    {
+      "id": "rw-en-03",
+      "action": "rewrite",
+      "language": "en",
+      "confidence": "high",
+      "reference": [
+        {
+          "label": "Shorter",
+          "text": "Thanks for the fast turnaround, it really helped today.",
+          "differs_by": "Same message, less of it."
+        },
+        {
+          "label": "Warmer",
+          "text": "Really appreciate you getting that done so quickly. It made a difference today.",
+          "differs_by": "More personal, two beats instead of one."
+        },
+        {
+          "label": "More formal",
+          "text": "Thank you for the quick turnaround, it made a real difference today.",
+          "differs_by": "Sendable to someone senior or outside the team."
+        }
+      ],
+      "must_not": ["add a follow-up ask", "name a person, project or deliverable", "claim an outcome that is not in the input"],
+      "note": "The decision space here is genuinely narrow: a thank-you has nothing to decide. Three registers is the honest answer, and an engine that invents a next step to make the variants look different is failing, not trying harder."
+    },
+    {
+      "id": "rw-en-04",
+      "action": "rewrite",
+      "language": "en",
+      "confidence": "high",
+      "reference": [
+        {
+          "label": "Inform",
+          "text": "I can't make standup at 9 tomorrow.",
+          "differs_by": "States it and leaves the problem with the room."
+        },
+        {
+          "label": "Delegate",
+          "text": "I can't make standup at 9 tomorrow. Can someone else run it?",
+          "differs_by": "Asks for cover."
+        },
+        {
+          "label": "Reschedule",
+          "text": "I can't make standup at 9 tomorrow. Could we push it later?",
+          "differs_by": "Asks to move the meeting instead of skipping it."
+        }
+      ],
+      "must": ["keep 9 and tomorrow"],
+      "must_not": ["invent a reason for the absence", "invent a specific new time"]
+    },
+    {
+      "id": "rw-he-01",
+      "action": "rewrite",
+      "language": "he",
+      "confidence": "high",
+      "reference": [
+        {
+          "label": "Direct no",
+          "text": "לדעתי לא כדאי לנו לעשות את זה.",
+          "differs_by": "אומר לא ונשאר מאחורי זה."
+        },
+        {
+          "label": "Open",
+          "text": "אני לא בטוח שזה נכון. אפשר לעבור על זה שוב לפני שמחליטים?",
+          "differs_by": "משאיר את ההחלטה פתוחה ומבקש עוד סבב."
+        },
+        {
+          "label": "Counter-proposal",
+          "text": "אני לא הייתי מתקדם עם זה בשלב הזה. אולי נתחיל ממשהו קטן יותר?",
+          "differs_by": "דוחה את הגרסה הזאת ומציע חלופה."
+        }
+      ],
+      "must_not": ["produce 'אני בספק ש', which is not idiomatic; the idiom is 'אני בספק אם'"],
+      "note": "This input is the only one in the corpus that triggers a Hebrew compression rule in the mock, and the rule produces exactly the non-idiomatic phrase above."
+    },
+    {
+      "id": "rw-he-02",
+      "action": "rewrite",
+      "language": "he",
+      "confidence": "high",
+      "reference": [
+        {
+          "label": "Soft ask",
+          "text": "תוכל לחזור אליי עם תשובה עד סוף היום?",
+          "differs_by": "בקשה שאפשר לסרב לה."
+        },
+        {
+          "label": "Firm",
+          "text": "אני צריך את התשובה שלך עד סוף היום.",
+          "differs_by": "דרישה, לא בקשה."
+        },
+        {
+          "label": "Negotiable",
+          "text": "אשמח לתשובה עד סוף היום, ואם זה לא ריאלי תגיד לי מתי כן.",
+          "differs_by": "פותח את המועד עצמו למשא ומתן."
+        }
+      ],
+      "must": ["keep עד סוף היום in all three", "keep the addressee's gender consistent across the three"]
+    },
+    {
+      "id": "rw-he-03",
+      "action": "rewrite",
+      "language": "he",
+      "confidence": "high",
+      "reference": [
+        {
+          "label": "Shorter",
+          "text": "תודה על העזרה אתמול, ממש הצלת אותי.",
+          "differs_by": "אותו דבר, קצר יותר."
+        },
+        {
+          "label": "Warmer",
+          "text": "תודה ענקית על העזרה אתמול, ממש הצלת אותי.",
+          "differs_by": "חם יותר."
+        },
+        {
+          "label": "More formal",
+          "text": "תודה רבה על העזרה אתמול, זה עזר לי מאוד.",
+          "differs_by": "מתאים לשליחה למישהו שאתה פחות קרוב אליו."
+        }
+      ],
+      "must_not": ["prefix the message with a clarifier or a formality", "add a request"],
+      "note": "The mock returns 'רציתי לוודא: תודה רבה...' and 'אשמח אם נוכל להתייחס לכך: תודה רבה...'. Both read as a complaint attached to a thank-you."
+    },
+    {
+      "id": "rw-he-04",
+      "action": "rewrite",
+      "language": "he",
+      "confidence": "high",
+      "reference": [
+        {
+          "label": "Refuse",
+          "text": "אני לא יכול לקחת את זה עכשיו, אני עמוס מדי.",
+          "differs_by": "לא, בלי המשך."
+        },
+        {
+          "label": "Defer",
+          "text": "עכשיו אני לא יכול לקחת את זה. אני אחזור אליך כשאתפנה, אוקיי?",
+          "differs_by": "לא עכשיו, אבל כן בהמשך."
+        },
+        {
+          "label": "Ask what to drop",
+          "text": "אני עמוס עכשיו. אם זה דחוף, תגיד לי מה להוריד כדי לפנות לזה מקום.",
+          "differs_by": "מחזיר את ההחלטה לצד השני."
+        }
+      ],
+      "must_not": ["invent what the sender is busy with"]
+    },
+    {
+      "id": "rw-mix-01",
+      "action": "rewrite",
+      "language": "he-en",
+      "confidence": "high",
+      "reference": [
+        {
+          "label": "Recommend",
+          "text": "אני חושב שצריך לדחות את ה-launch, ה-QA עוד לא סיים.",
+          "differs_by": "המלצה ברורה עם הנימוק."
+        },
+        {
+          "label": "Ask the room",
+          "text": "ה-QA עוד לא סיים. לדחות את ה-launch או לצאת עם מה שיש?",
+          "differs_by": "מציג את ההחלטה לאחרים במקום להחליט."
+        },
+        {
+          "label": "Partial launch",
+          "text": "אפשר לצאת רק עם מה שעבר QA ולדחות את השאר.",
+          "differs_by": "חלופה שלישית שלא הייתה בהודעה המקורית."
+        }
+      ],
+      "must": ["launch and QA stay in Latin script"]
+    },
+    {
+      "id": "rw-mix-02",
+      "action": "rewrite",
+      "language": "he-en",
+      "confidence": "high",
+      "reference": [
+        {
+          "label": "Firm commitment",
+          "text": "אשלח לך את ה-document מחר אחרי ה-standup.",
+          "differs_by": "התחייבות."
+        },
+        {
+          "label": "Hedged",
+          "text": "אני מתכוון לשלוח לך את ה-document מחר אחרי ה-standup, אעדכן אם משהו משתנה.",
+          "differs_by": "משאיר פתח לשינוי."
+        },
+        {
+          "label": "Offer to move it up",
+          "text": "אם אתה צריך את ה-document לפני, תגיד לי ואנסה להקדים.",
+          "differs_by": "מציע להקדים במקום לקבע את המועד."
+        }
+      ],
+      "must": ["document and standup stay in Latin script with the ה- prefix in all three"]
+    },
+    {
+      "id": "rw-mix-03",
+      "action": "rewrite",
+      "language": "he-en",
+      "confidence": "high",
+      "reference": [
+        {
+          "label": "Request",
+          "text": "תוכל לעשות review ל-PR עד הערב?",
+          "differs_by": "בקשה שאפשר לענות עליה לא."
+        },
+        {
+          "label": "Requirement",
+          "text": "אני צריך את ה-review על ה-PR עד הערב.",
+          "differs_by": "לא פותח את זה לדיון."
+        },
+        {
+          "label": "Negotiable",
+          "text": "צריך review ל-PR עד הערב. אם זה לא מסתדר לך, תגיד לי מתי כן.",
+          "differs_by": "מבקש ומציע להזיז."
+        }
+      ],
+      "must": ["review and PR stay in Latin script"],
+      "must_not": ["invent why it is needed by tonight"]
+    },
+    {
+      "id": "rw-mix-04",
+      "action": "rewrite",
+      "language": "he-en",
+      "confidence": "high",
+      "reference": [
+        {
+          "label": "Private observation",
+          "text": "הפגישה לא הייתה יעילה, אף אחד לא הגיע מוכן.",
+          "differs_by": "אותה טענה, בלי החום."
+        },
+        {
+          "label": "Process complaint",
+          "text": "אני חושב שאין טעם בפגישה הזאת בלי agenda, היום אף אחד לא הגיע מוכן.",
+          "differs_by": "הופך תלונה חד פעמית לבקשה לשנות משהו."
+        },
+        {
+          "label": "Check with others",
+          "text": "מישהו חוץ ממני הרגיש שהפגישה היום לא הייתה יעילה? אף אחד לא הגיע מוכן.",
+          "differs_by": "בודק אם יש גיבוי לפני שמסלים."
+        }
+      ],
+      "must_not": ["name anyone as responsible", "add an accusation that is not in the input"],
+      "note": "Translating 'waste of time' into Hebrew is fine here, and so is keeping it. What is not fine is flipping the whole sentence into one script."
+    },
+
+    {
+      "id": "tn-en-01",
+      "action": "tone",
+      "language": "en",
+      "tone": "clearer",
+      "confidence": "high",
+      "reference": "I think we should move the meeting to next week.",
+      "must": ["drop 'probably' and 'just'", "keep it as an opinion", "keep 'next week'"],
+      "must_not": ["prefix the sentence with 'To be clear'"],
+      "note": "Clearer means removing what blurs the sentence. The mock announces clarity and then repeats the blurred sentence verbatim."
+    },
+    {
+      "id": "tn-en-02",
+      "action": "tone",
+      "language": "en",
+      "tone": "shorter",
+      "confidence": "high",
+      "reference": "The client hasn't replied, so I want to push Friday's review.",
+      "must": ["shorter than the input", "friday -> Friday", "keep the client, the review and Friday"],
+      "note": "This is the mock's best Shorter case: two of its compression phrases appear. It still returns a 17-word sentence that starts with 'Because' and leaves 'friday' lowercase."
+    },
+    {
+      "id": "tn-en-03",
+      "action": "tone",
+      "language": "en",
+      "tone": "professional",
+      "confidence": "high",
+      "reference": "Could you take a look at the bug in the checkout flow? It's been broken since Monday.",
+      "must": ["split into two sentences", "monday -> Monday", "question mark on the request"],
+      "must_not": ["prefix with 'Could you please make sure that' and leave the rest untouched"]
+    },
+    {
+      "id": "tn-en-04",
+      "action": "tone",
+      "language": "en",
+      "tone": "confident",
+      "confidence": "high",
+      "reference": "We're not doing that.",
+      "alternates": ["We are not doing that."],
+      "must_not": ["append a second sentence", "add a justification"],
+      "note": "Already as confident as it gets. The right answer is a contraction or nothing at all. The mock appends 'Let's move on that.', which reads as bluster and makes the sentence weaker."
+    },
+    {
+      "id": "tn-he-01",
+      "action": "tone",
+      "language": "he",
+      "tone": "casual",
+      "confidence": "high",
+      "reference": "תוכל לזרוק מבט על הנתונים ששלחתי לך?",
+      "alternates": ["תוכל להסתכל על הנתונים ששלחתי לך?"],
+      "must": ["a different sentence, not the original with היי in front"],
+      "note": "Casual Hebrew is shorter and more direct than formal Hebrew, not the same sentence with a greeting attached. The mock's rule is literally 'היי, ' + the original."
+    },
+    {
+      "id": "tn-he-02",
+      "action": "tone",
+      "language": "he",
+      "tone": "confident",
+      "confidence": "high",
+      "reference": "בוא נדחה את הפגישה של יום ראשון.",
+      "must": ["drop אולי, אפשר, בבקשה and לשקול", "keep יום ראשון"],
+      "must_not": ["append 'זה מה שצריך לקרות' or any similar slogan"],
+      "note": "The mock keeps all four hedges and then declares the sentence non-negotiable, which is how you write a message nobody can act on."
+    },
+    {
+      "id": "tn-he-03",
+      "action": "tone",
+      "language": "he",
+      "tone": "professional",
+      "confidence": "high",
+      "reference": "אני לא מרוצה מהתוצאה של הפרויקט, ואשמח שנעבור על זה יחד.",
+      "must": ["the complaint survives", "תשמע is dropped"],
+      "must_not": ["soften it into something that no longer says the sender is unhappy"]
+    },
+    {
+      "id": "tn-mix-01",
+      "action": "tone",
+      "language": "he-en",
+      "tone": "friendly",
+      "confidence": "high",
+      "reference": "ממש סליחה שלא הספקתי לעשות review ל-PR שלך 🙏",
+      "alternates": ["סליחה שלא הספקתי לעשות review ל-PR שלך, אני אגיע לזה בהקדם 🙏"],
+      "must": ["stays an apology", "review and PR stay in Latin script"],
+      "must_not": ["open with תודה or any form of thanks"],
+      "note": "The mock's friendly rule prefixes 'תודה מראש!' to everything, so an apology comes back as 'Thanks in advance! Sorry I did not review your PR.' This is the single clearest proof that the rules are context-blind."
+    },
+    {
+      "id": "tn-mix-02",
+      "action": "tone",
+      "language": "he-en",
+      "tone": "shorter",
+      "confidence": "high",
+      "reference": "כדאי עוד iteration על ה-design לפני שזה הולך ל-client.",
+      "must": ["strictly shorter than the input", "iteration, design and client stay in Latin script"],
+      "must_not": ["return the input unchanged"],
+      "note": "The mock returns the input with a full stop added. The panel is titled 'Shorter' while it does so, which is the worst kind of failure: the UI keeps a promise the engine did not."
+    },
+    {
+      "id": "tn-mix-03",
+      "action": "tone",
+      "language": "he-en",
+      "tone": "clearer",
+      "confidence": "high",
+      "reference": "ה-deploy נכשל שוב. אני חושד שזה קשור ל-config שהשתנה אתמול, אבל עוד לא בדקתי.",
+      "must": ["separate what happened from what is suspected", "the uncertainty survives"],
+      "must_not": ["prefix with 'רציתי לוודא:'", "turn the suspicion into a statement of fact"]
+    },
+
+    {
+      "id": "rp-en-01",
+      "action": "reply",
+      "language": "en",
+      "confidence": "high",
+      "reference": [
+        {
+          "intent": "Accept",
+          "text": "Sure, I'll run it. 9 works for me."
+        },
+        {
+          "intent": "Push back",
+          "text": "I can't do 9 tomorrow either. Can we push it, or should someone else take it?"
+        },
+        {
+          "intent": "Ask first",
+          "text": "I can probably cover it. Anything specific you want raised?"
+        }
+      ],
+      "must": ["the 9 comes from the message"],
+      "note": "The mock's three English replies were written for this message, so it matches closely. Compare against rp-en-02 to rp-en-04, where it returns these same three lines regardless of what was said."
+    },
+    {
+      "id": "rp-en-02",
+      "action": "reply",
+      "language": "en",
+      "confidence": "high",
+      "reference": [
+        {
+          "intent": "Accept, then ask",
+          "text": "Sure. What am I looking at?"
+        },
+        {
+          "intent": "Accept with a limit",
+          "text": "Happy to, though it won't be today. What is it?"
+        },
+        {
+          "intent": "Ask before committing",
+          "text": "Depends what it is. Can you send it over?"
+        }
+      ],
+      "must": ["all three ask what 'this' refers to"],
+      "must_not": ["accept a specific task", "name a document, ticket or PR", "promise a time"],
+      "note": "The strongest hallucination probe in the corpus. There is no antecedent for 'this' anywhere in the context, so any confident, specific acceptance is invented. The mock answers it with 'Sure, I can take it. I'll run standup at 9.'"
+    },
+    {
+      "id": "rp-en-03",
+      "action": "reply",
+      "language": "en",
+      "confidence": "high",
+      "reference": [
+        {
+          "intent": "Accept",
+          "text": "Thanks for reaching out. I'd be open to a call, what times work for you this week?"
+        },
+        {
+          "intent": "Decline",
+          "text": "Thanks for thinking of me, but I'm not looking to move right now."
+        },
+        {
+          "intent": "Ask first",
+          "text": "Thanks. Before we set up a call, could you send the job description and the range?"
+        }
+      ],
+      "must": ["the decline is short and does not apologise at length"],
+      "must_not": ["state the recipient's current employer, seniority or salary", "invent availability"]
+    },
+    {
+      "id": "rp-en-04",
+      "action": "reply",
+      "language": "en",
+      "confidence": "high",
+      "reference": [
+        {
+          "intent": "Accept",
+          "text": "Tuesday 8 to 12 works, I'll be home."
+        },
+        {
+          "intent": "Push back",
+          "text": "Tuesday doesn't work for me. Is there another day this week?"
+        },
+        {
+          "intent": "Ask first",
+          "text": "Tuesday is fine, but can he narrow it down? Four hours is a long window to wait at home."
+        }
+      ],
+      "must": ["Tuesday and the 8 to 12 window come from the message"],
+      "must_not": ["invent a different specific time the plumber could come"]
+    },
+    {
+      "id": "rp-he-01",
+      "action": "reply",
+      "language": "he",
+      "confidence": "high",
+      "reference": [
+        {
+          "intent": "מאשר",
+          "text": "כן, פנוי. באיזו שעה?"
+        },
+        {
+          "intent": "דוחה",
+          "text": "הערב קצת עמוס לי, אפשר מחר במקום?"
+        },
+        {
+          "intent": "שואל",
+          "text": "נשמע מעולה. הזמנת מקום או שאני מסדר?"
+        }
+      ],
+      "note": "The mock's three Hebrew replies were written for this message and are close to the reference. Every other Hebrew and mixed entry below gets these same three lines."
+    },
+    {
+      "id": "rp-he-02",
+      "action": "reply",
+      "language": "he",
+      "confidence": "low",
+      "reference": [
+        {
+          "intent": "מאשר",
+          "text": "בטח אחי, מעביר לך עכשיו בביט."
+        },
+        {
+          "intent": "דוחה",
+          "text": "אחי אני קצת דחוק החודש, אפשר להחזיר לך בחלקים?"
+        },
+        {
+          "intent": "שואל",
+          "text": "בטח. ביט או העברה בנקאית?"
+        }
+      ],
+      "must": ["reads like a friend, not like a bank", "the 500 is not restated as a formal sum"],
+      "note": "Low confidence on one thing only: the payment app is written both as ביט and as bit in real messages, and the choice changes how natural the line reads. The decisions and the register are the scored part."
+    },
+    {
+      "id": "rp-he-03",
+      "action": "reply",
+      "language": "he",
+      "confidence": "high",
+      "reference": [
+        {
+          "intent": "מאשר",
+          "text": "כן, בואי נדבר. אני פנוי עכשיו."
+        },
+        {
+          "intent": "דוחה",
+          "text": "אני באמצע משהו, אפשר בעוד חצי שעה?"
+        },
+        {
+          "intent": "שואל",
+          "text": "בטח. תגידי על מה מדובר ואני מתפנה."
+        }
+      ],
+      "must": ["feminine forms where the reply addresses נועה: בואי, תגידי"],
+      "must_not": ["use בוא or תגיד", "assume what the conversation is about"],
+      "note": "The gender test. An engine translating from English will produce masculine forms by default and be wrong twice in three replies."
+    },
+    {
+      "id": "rp-he-04",
+      "action": "reply",
+      "language": "he",
+      "confidence": "high",
+      "reference": [
+        {
+          "intent": "מאשר",
+          "text": "כן, אני מגיע."
+        },
+        {
+          "intent": "דוחה",
+          "text": "לא אצליח להגיע ביום חמישי, סליחה. תעדכן אותי איך היה."
+        },
+        {
+          "intent": "שואל",
+          "text": "אני עוד לא בטוח לגבי חמישי. עד מתי אפשר לעדכן?"
+        }
+      ],
+      "must": ["יום חמישי comes from the message"],
+      "must_not": ["invent a reason for declining"]
+    },
+    {
+      "id": "rp-mix-01",
+      "action": "reply",
+      "language": "he-en",
+      "confidence": "high",
+      "reference": [
+        {
+          "intent": "מאשר",
+          "text": "קיבלתי, אני עובר על ה-deck ומחזיר לך feedback עד מחר בצהריים."
+        },
+        {
+          "intent": "דוחה",
+          "text": "מחר בצהריים קצת לחוץ לי. אפשר עד מחר בערב?"
+        },
+        {
+          "intent": "שואל",
+          "text": "בטח. יש חלק שאת רוצה שאתמקד בו?"
+        }
+      ],
+      "must": ["feminine agreement with Maya: שאת רוצה", "deck and feedback stay in Latin script", "the deadline comes from the message"],
+      "note": "The headline exhibit. The mock answers this with 'כן, פנוי. באיזו שעה נוח לך?', because Reply reads context.language and never reads context.message."
+    },
+    {
+      "id": "rp-mix-02",
+      "action": "reply",
+      "language": "he-en",
+      "confidence": "high",
+      "reference": [
+        {
+          "intent": "מאשר",
+          "text": "כן, ה-hotfix כבר ב-production. אני בודק את ה-errors עכשיו."
+        },
+        {
+          "intent": "דוחה",
+          "text": "עוד לא העליתי. אני עושה את זה עכשיו."
+        },
+        {
+          "intent": "שואל",
+          "text": "העליתי. אילו errors את רואה? תשלחי לי דוגמה."
+        }
+      ],
+      "must": ["feminine agreement with יעל: את רואה, תשלחי", "hotfix, production and monitoring stay in Latin script"],
+      "note": "Two questions in one message. The useful reply answers the first and asks about the second. Translating errors to שגיאות is acceptable; flipping the whole sentence into Hebrew is not."
+    },
+    {
+      "id": "rp-mix-03",
+      "action": "reply",
+      "language": "he-en",
+      "confidence": "high",
+      "reference": [
+        {
+          "intent": "מאשר",
+          "text": "סליחה על זה. אני בודק את זה עכשיו ומעדכן אותך."
+        },
+        {
+          "intent": "שואל",
+          "text": "סליחה על התקלה. באיזה מכשיר את משתמשת ואיזו גרסה של האפליקציה?"
+        },
+        {
+          "intent": "דוחה",
+          "text": "מצטער על זה. בינתיים תנסי לצאת מהאפליקציה ולהיכנס שוב, ואני בודק מה קורה."
+        }
+      ],
+      "must": ["feminine agreement with רונית throughout: את משתמשת, תנסי", "at least one option asks for device and version"],
+      "must_not": ["promise a fix by a specific date", "blame the user"],
+      "note": "The right first reply to a bug report is a question. An engine that only offers apologies is polite and useless."
+    },
+    {
+      "id": "rp-mix-04",
+      "action": "reply",
+      "language": "he-en",
+      "confidence": "high",
+      "reference": [
+        {
+          "intent": "מאשר",
+          "text": "אני בעניין. בוא נדבר על מה זה אומר בפועל."
+        },
+        {
+          "intent": "דוחה",
+          "text": "אני מוכן לקחת את זה, אבל אז צריך להוריד ממני משהו אחר. בוא נסתכל על מה."
+        },
+        {
+          "intent": "שואל",
+          "text": "מעניין אותי. מה בדיוק כולל ה-ownership הזה, ומול מי אני עובד?"
+        }
+      ],
+      "must": ["ownership and onboarding flow stay in Latin script"],
+      "must_not": ["accept and add a specific plan that was never discussed"]
+    }
+  ]
+}

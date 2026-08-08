@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		AA00000000000000000090 /* AIKeyboardExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AA00000000000000000021 /* AIKeyboardExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AA000000000000000000A5 /* AIKeyboardCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA000000000000000000A6 /* AIKeyboardCore */; };
 		AA000000000000000000A3 /* AIKeyboardCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA000000000000000000A1 /* AIKeyboardCore */; };
 		AA000000000000000000A4 /* AIKeyboardCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA000000000000000000A2 /* AIKeyboardCore */; };
 /* End PBXBuildFile section */
@@ -46,6 +47,7 @@
 /* Begin PBXFileReference section */
 		AA00000000000000000020 /* AIKeyboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AIKeyboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA00000000000000000021 /* AIKeyboardExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AIKeyboardExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA00000000000000000023 /* AIKeyboardCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AIKeyboardCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA00000000000000000022 /* AIKeyboardUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AIKeyboardUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -72,6 +74,7 @@
 			sourceTree = "<group>";
 		};
 		AA00000000000000000033 /* AIKeyboardUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = AIKeyboardUITests; sourceTree = "<group>"; };
+		AA00000000000000000034 /* AIKeyboardCoreTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = AIKeyboardCoreTests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -98,6 +101,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA00000000000000000057 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000000000000000000A5 /* AIKeyboardCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -118,6 +129,7 @@
 				AA00000000000000000020 /* AIKeyboard.app */,
 				AA00000000000000000021 /* AIKeyboardExtension.appex */,
 				AA00000000000000000022 /* AIKeyboardUITests.xctest */,
+				AA00000000000000000023 /* AIKeyboardCoreTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -203,6 +215,28 @@
 			productReference = AA00000000000000000022 /* AIKeyboardUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		AA00000000000000000013 /* AIKeyboardCoreTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA00000000000000000074 /* Build configuration list for PBXNativeTarget "AIKeyboardCoreTests" */;
+			buildPhases = (
+				AA00000000000000000056 /* Sources */,
+				AA00000000000000000057 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				AA00000000000000000034 /* AIKeyboardCoreTests */,
+			);
+			name = AIKeyboardCoreTests;
+			packageProductDependencies = (
+				AA000000000000000000A6 /* AIKeyboardCore */,
+			);
+			productName = AIKeyboardCoreTests;
+			productReference = AA00000000000000000023 /* AIKeyboardCoreTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -246,6 +280,7 @@
 				AA00000000000000000010 /* AIKeyboard */,
 				AA00000000000000000011 /* AIKeyboardExtension */,
 				AA00000000000000000012 /* AIKeyboardUITests */,
+				AA00000000000000000013 /* AIKeyboardCoreTests */,
 			);
 		};
 /* End PBXProject section */
@@ -290,6 +325,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		AA00000000000000000053 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA00000000000000000056 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -374,6 +416,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AIKeyboard/AIKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
@@ -402,6 +445,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AIKeyboard/AIKeyboard.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
@@ -428,6 +472,7 @@
 		AA00000000000000000064 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AIKeyboardExtension/AIKeyboardExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
@@ -451,6 +496,7 @@
 		AA00000000000000000065 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AIKeyboardExtension/AIKeyboardExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
@@ -501,6 +547,34 @@
 			};
 			name = Release;
 		};
+		AA00000000000000000068 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nitai.aikeyboard.coretests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AA00000000000000000069 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nitai.aikeyboard.coretests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -540,6 +614,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		AA00000000000000000074 /* Build configuration list for PBXNativeTarget "AIKeyboardCoreTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA00000000000000000068 /* Debug */,
+				AA00000000000000000069 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -555,6 +638,10 @@
 			productName = AIKeyboardCore;
 		};
 		AA000000000000000000A2 /* AIKeyboardCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AIKeyboardCore;
+		};
+		AA000000000000000000A6 /* AIKeyboardCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AIKeyboardCore;
 		};

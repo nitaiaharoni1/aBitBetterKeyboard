@@ -1,0 +1,2007 @@
+{
+  "fix-en-01": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "soften the disagreement",
+          "violated": false,
+          "why": "The engine's output has the same level of directness as the original message."
+        },
+        {
+          "criterion": "add a reason that is not in the input",
+          "violated": false,
+          "why": "The engine corrected the reason from the input but did not add a new one."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "fix dont -> don't",
+          "met": true,
+          "why": "The engine correctly changed 'dont' to 'don't'."
+        },
+        {
+          "criterion": "fix 'its not make sense' -> 'it doesn't make sense'",
+          "met": true,
+          "why": "The engine correctly rephrased 'its not make sense' to 'it doesn't make sense'."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-en-02": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "change anything",
+          "violated": false,
+          "why": "The output is identical to the input, as requested."
+        }
+      ],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "left_alone": [
+        true,
+        "changed an input that was already correct"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-en-03": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "turn possessive 'its' into 'it's'",
+          "violated": false,
+          "why": "The engine correctly used the possessive 'its' and did not change it to 'it's'."
+        }
+      ],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-en-04": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "turn 'id' into \"I'd\"",
+          "violated": false,
+          "why": "The output correctly capitalized 'id' to 'ID' and did not change it to 'I'd'."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "capitalise the sentence",
+          "met": true,
+          "why": "The output starts with a capital 'C'."
+        },
+        {
+          "criterion": "end with a question mark",
+          "met": true,
+          "why": "The output ends with a question mark."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ],
+      "question_mark": [
+        true,
+        "question came back without a question mark"
+      ]
+    }
+  },
+  "fix-en-05": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "turn 'ill' into \"I'll\"",
+          "violated": false,
+          "why": "The output correctly kept the word 'ill' and did not change it to 'I'll'."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "i -> I",
+          "met": true,
+          "why": "The output correctly capitalized the pronoun 'i' to 'I'."
+        },
+        {
+          "criterion": "didnt -> didn't",
+          "met": true,
+          "why": "The output correctly changed 'didnt' to the contraction 'didn't'."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-en-06": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "duplicate or drop any character next to the opening quote",
+          "violated": false,
+          "why": "No characters were duplicated or dropped next to the opening quote."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "both quotation marks survive",
+          "met": true,
+          "why": "Both quotation marks are present in the output."
+        },
+        {
+          "criterion": "capitalise 'he'",
+          "met": true,
+          "why": "The output correctly capitalizes 'He' at the start of the sentence."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-en-07": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "capitalise 'omg'",
+          "violated": true,
+          "why": "The engine changed 'omg' to 'OMG'."
+        },
+        {
+          "criterion": "shorten 'sooo'",
+          "violated": true,
+          "why": "The engine shortened 'sooo' to 'so'."
+        },
+        {
+          "criterion": "expand 'gonna'",
+          "violated": false,
+          "why": "The engine did not expand 'gonna'."
+        },
+        {
+          "criterion": "remove the emoji",
+          "violated": false,
+          "why": "The engine kept the emoji."
+        },
+        {
+          "criterion": "add a full stop",
+          "violated": false,
+          "why": "The engine did not add a full stop at the end."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "im -> I'm",
+          "met": true,
+          "why": "The engine correctly changed 'im' to 'I'm'."
+        }
+      ],
+      "verdict": "partial"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-en-08": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "sedn -> send",
+          "met": true,
+          "why": "The model correctly changed 'sedn' to 'send'."
+        },
+        {
+          "criterion": "teh -> the",
+          "met": true,
+          "why": "The model correctly changed 'teh' to 'the'."
+        },
+        {
+          "criterion": "presentaion -> presentation",
+          "met": true,
+          "why": "The model correctly changed 'presentaion' to 'presentation'."
+        },
+        {
+          "criterion": "tommorow -> tomorrow",
+          "met": true,
+          "why": "The model correctly changed 'tommorow' to 'tomorrow'."
+        },
+        {
+          "criterion": "Ill -> I'll",
+          "met": true,
+          "why": "The model correctly changed 'Ill' to 'I'll'."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-en-09": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "doesnt -> don't (plural subject)",
+          "met": true,
+          "why": "The output correctly changes 'doesnt' to 'do not', which is the correct verb form for the plural subject 'numbers'."
+        },
+        {
+          "criterion": "show -> shows (singular subject)",
+          "met": true,
+          "why": "The output correctly changes 'show' to 'shows', the correct verb form for the singular subject 'dashboard'."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-en-10": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "change anything else",
+          "violated": false,
+          "why": "The engine only made the requested changes and did not alter any other part of the text."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "dont -> don't",
+          "met": true,
+          "why": "The engine correctly changed 'dont' to 'don't'."
+        },
+        {
+          "criterion": "wont -> won't",
+          "met": true,
+          "why": "The engine correctly changed 'wont' to 'won't'."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-he-01": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "מחרר -> מחר",
+          "met": true,
+          "why": "The engine correctly changed the typo 'מחרר' to 'מחר'."
+        },
+        {
+          "criterion": "בבקשא -> בבקשה",
+          "met": true,
+          "why": "The engine correctly changed the typo 'בבקשא' to 'בבקשה'."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-he-02": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "אני יבדוק -> אני אבדוק",
+          "met": true,
+          "why": "The output correctly changed the verb from the third person future tense to the first person future tense."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-he-03": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "change anything",
+          "violated": false,
+          "why": "The output is identical to the input, which was already correct."
+        }
+      ],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "left_alone": [
+        true,
+        "changed an input that was already correct"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-he-04": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "add a full stop",
+          "violated": false,
+          "why": "The output does not end with a full stop."
+        }
+      ],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "left_alone": [
+        true,
+        "changed an input that was already correct"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-he-05": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "end with a full stop, which turns the request into an instruction",
+          "violated": false,
+          "why": "The output does not end with a full stop."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "end with a question mark",
+          "met": true,
+          "why": "The output ends with a question mark, as required."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ],
+      "question_mark": [
+        true,
+        "question came back without a question mark"
+      ]
+    }
+  },
+  "fix-he-06": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "replace יאללה or סבבה with standard Hebrew",
+          "violated": false,
+          "why": "The output correctly retains the slang terms 'יאללה' and 'סבבה'."
+        },
+        {
+          "criterion": "expand אח\"כ to אחר כך",
+          "violated": false,
+          "why": "The output correctly retains the abbreviation 'אח\"כ'."
+        },
+        {
+          "criterion": "add a full stop",
+          "violated": false,
+          "why": "The output does not add a full stop at the end."
+        }
+      ],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "left_alone": [
+        true,
+        "changed an input that was already correct"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-he-07": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "leave תגדי as it is",
+          "violated": false,
+          "why": "The engine correctly identified 'תגדי' as an error and changed it."
+        },
+        {
+          "criterion": "change any other word to force agreement with the guess",
+          "violated": false,
+          "why": "The engine only changed 'תגדי' to 'תגיד' and left the rest of the sentence unchanged."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "תגדי is corrected to a real form",
+          "met": true,
+          "why": "The engine corrected the non-word 'תגדי' to the correct word 'תגיד'."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-he-08": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "split the two sentences",
+          "met": true,
+          "why": "The engine correctly added a question mark between 'מה קורה' and 'אני מנסה להתקשר אליך כל הבוקר', effectively splitting the run-on sentence into two distinct parts."
+        },
+        {
+          "criterion": "question mark after מה קורה",
+          "met": true,
+          "why": "The engine added a question mark after 'מה קורה', which is a question."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ],
+      "question_mark": [
+        true,
+        "question came back without a question mark"
+      ]
+    }
+  },
+  "fix-mix-01": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "translate document or standup",
+          "violated": false,
+          "why": "The output correctly kept the English words 'document' and 'standup' and did not translate them."
+        },
+        {
+          "criterion": "transliterate them into Hebrew letters",
+          "violated": false,
+          "why": "The output correctly kept the English words in their original script and did not transliterate them."
+        },
+        {
+          "criterion": "drop or space out the hyphen after ה",
+          "violated": false,
+          "why": "The output correctly kept the hyphens in 'ה-document' and 'ה-standup'."
+        }
+      ],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        true,
+        "lost from Latin script: "
+      ],
+      "left_alone": [
+        true,
+        "changed an input that was already correct"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-mix-02": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "touch the Hebrew",
+          "violated": false,
+          "why": "The Hebrew portion of the text was left unchanged."
+        },
+        {
+          "criterion": "translate staging",
+          "violated": false,
+          "why": "The word 'staging' was not translated."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "its -> it's, even though Hebrew dominates the sentence",
+          "met": true,
+          "why": "The engine correctly changed 'its' to 'it's'."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        true,
+        "lost from Latin script: "
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-mix-03": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "בבקשא -> בבקשה, even though English dominates the sentence",
+          "met": true,
+          "why": "The engine correctly identified and fixed the Hebrew typo \"בבקשא\" to \"בבקשה\"."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        true,
+        "lost from Latin script: "
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-mix-04": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "translate sync or roadmap",
+          "violated": false,
+          "why": "The output correctly retained the English words 'sync' and 'roadmap' without translating them."
+        },
+        {
+          "criterion": "change Q3",
+          "violated": false,
+          "why": "The output correctly retained 'Q3'."
+        }
+      ],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        true,
+        "lost from Latin script: "
+      ],
+      "left_alone": [
+        true,
+        "changed an input that was already correct"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-mix-05": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "change API, key or demo",
+          "violated": false,
+          "why": "The engine did not change the English words 'API', 'key', or 'demo'."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "אנני -> אני",
+          "met": true,
+          "why": "The engine correctly changed 'אנני' to 'אני'."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        true,
+        "lost from Latin script: "
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "fix-mix-06": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "translate refactor, service or release",
+          "violated": false,
+          "why": "The output correctly did not translate the English words 'refactor', 'service', or 'release', keeping them as they were in the original message."
+        }
+      ],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        true,
+        "lost from Latin script: "
+      ],
+      "left_alone": [
+        true,
+        "changed an input that was already correct"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rp-en-01": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "the 9 comes from the message",
+          "met": false,
+          "why": "The third suggestion asks what time the meeting is, but the original message already implies the meeting is at 9."
+        }
+      ],
+      "verdict": "partial"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rp-en-02": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "accept a specific task",
+          "violated": false,
+          "why": "None of the options accept a specific task, as they all first ask what the task is."
+        },
+        {
+          "criterion": "name a document, ticket or PR",
+          "violated": false,
+          "why": "None of the options name a specific type of document or work item."
+        },
+        {
+          "criterion": "promise a time",
+          "violated": false,
+          "why": "None of the options promise to do the task by a specific time."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "all three ask what 'this' refers to",
+          "met": true,
+          "why": "All three generated responses ask for clarification on what 'this' is."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rp-en-03": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "state the recipient's current employer, seniority or salary",
+          "violated": false,
+          "why": "The output does not mention the user's current employer, seniority, or salary."
+        },
+        {
+          "criterion": "invent availability",
+          "violated": false,
+          "why": "The output does not invent specific days or times for the call."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "the decline is short and does not apologise at length",
+          "met": true,
+          "why": "The decline option ('Thank you for reaching out, but I'm not looking for new opportunities at the moment.') is short, polite, and doesn't apologize."
+        }
+      ],
+      "verdict": "partial"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rp-en-04": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "invent a different specific time the plumber could come",
+          "violated": false,
+          "why": "The engine does not invent any new times. The second option asks for other available times in general, but does not suggest a specific one."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "Tuesday and the 8 to 12 window come from the message",
+          "met": true,
+          "why": "All three suggestions use information (the day and/or the time) from the original message."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rp-he-01": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rp-he-02": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "reads like a friend, not like a bank",
+          "met": false,
+          "why": "The phrasing is a bit stiff and formal (e.g., \"אדאג להחזיר\", \"נוכל לדבר על זה?\") compared to the casual tone of the original message (\"אחי\")."
+        },
+        {
+          "criterion": "the 500 is not restated as a formal sum",
+          "met": false,
+          "why": "The output uses \"500 שקלים\", which is the grammatically correct but more formal plural form, whereas the original message uses the colloquial \"500 שקל\". This makes the reply sound slightly more formal."
+        }
+      ],
+      "verdict": "partial"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rp-he-03": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "use בוא or תגיד",
+          "violated": false,
+          "why": "The output does not use the masculine forms 'בוא' or 'תגיד'."
+        },
+        {
+          "criterion": "assume what the conversation is about",
+          "violated": false,
+          "why": "The output does not make any assumptions about the topic of the conversation; one option asks what the user wants to talk about."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "feminine forms where the reply addresses נועה: בואי, תגידי",
+          "met": false,
+          "why": "The output does not use feminine forms to address the recipient. For example, it uses 'לך' which is the masculine form for 'you', instead of the feminine 'לךְ'."
+        }
+      ],
+      "verdict": "partial"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rp-he-04": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "invent a reason for declining",
+          "violated": false,
+          "why": "The declining option does not invent a reason; it simply states that the user will not be able to make it."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "יום חמישי comes from the message",
+          "met": true,
+          "why": "The affirmative and negative suggestions both use the phrase 'יום חמישי' (Thursday), which comes from the original message. The third suggestion is a relevant question about the event taking place on that day."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rp-mix-01": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "feminine agreement with Maya: שאת רוצה",
+          "met": true,
+          "why": "The second option uses the feminine form 'תוכלי', which correctly addresses a female speaker."
+        },
+        {
+          "criterion": "deck and feedback stay in Latin script",
+          "met": false,
+          "why": "The engine transliterated 'feedback' to 'פידבק' in two of the three suggestions, which violates the criterion."
+        },
+        {
+          "criterion": "the deadline comes from the message",
+          "met": true,
+          "why": "The first two options directly address the deadline from the original message. The third option provides a relevant question instead, which is also an appropriate response."
+        }
+      ],
+      "verdict": "partial"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        false,
+        "lost from Latin script: feedback"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rp-mix-02": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "feminine agreement with יעל: את רואה, תשלחי",
+          "met": true,
+          "why": "The third option uses the feminine form \"את יכולה לפרט\", correctly addressing a female recipient."
+        },
+        {
+          "criterion": "hotfix, production and monitoring stay in Latin script",
+          "met": true,
+          "why": "The terms 'hotfix' and 'monitoring' are correctly kept in Latin script in the generated options."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        false,
+        "lost from Latin script: production"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rp-mix-03": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "promise a fix by a specific date",
+          "violated": false,
+          "why": "The output does not promise a fix at all, it only asks for more information."
+        },
+        {
+          "criterion": "blame the user",
+          "violated": false,
+          "why": "The output is polite and helpful, and does not suggest the user is at fault."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "feminine agreement with רונית throughout: את משתמשת, תנסי",
+          "met": true,
+          "why": "The output uses the phrase \"את יכולה לפרט\", which is the correct feminine form."
+        },
+        {
+          "criterion": "at least one option asks for device and version",
+          "met": true,
+          "why": "The output asks: \"האם זה קורה בגרסה מסוימת של ה-app או במכשיר מסוים?\" (Does this happen on a specific version of the app or on a specific device?)."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rp-mix-04": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "accept and add a specific plan that was never discussed",
+          "violated": false,
+          "why": "The accepting option is a simple agreement and does not add any new, specific plan."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "ownership and onboarding flow stay in Latin script",
+          "met": true,
+          "why": "All three suggestions correctly keep the terms 'ownership' and 'onboarding flow' in Latin script, as they were in the original message."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        true,
+        "lost from Latin script: "
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rw-en-01": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "invent a reason (deadline, budget, a person's opinion) that is not in the input",
+          "violated": false,
+          "why": "The output does not invent any external reasons for the refusal."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "three different decisions, not three phrasings of a refusal",
+          "met": false,
+          "why": "The output gives a direct refusal, and then two very similar options that are both refusals asking for an alternative. This is only two distinct types of decision, not three."
+        }
+      ],
+      "verdict": "partial"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rw-en-02": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "invent a consequence or a reason for the deadline",
+          "violated": false,
+          "why": "None of the suggestions invent a reason or a consequence for the deadline."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "keep 'tomorrow' in all three",
+          "met": true,
+          "why": "All three suggestions contain the word 'tomorrow'."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rw-en-03": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "add a follow-up ask",
+          "violated": false,
+          "why": "No follow-up asks were added in any of the outputs."
+        },
+        {
+          "criterion": "name a person, project or deliverable",
+          "violated": false,
+          "why": "No specific people, projects, or deliverables were named."
+        },
+        {
+          "criterion": "claim an outcome that is not in the input",
+          "violated": false,
+          "why": "The outcomes mentioned in the outputs are all reasonable paraphrases of the original's 'made a real difference'."
+        }
+      ],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rw-en-04": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "invent a reason for the absence",
+          "violated": false,
+          "why": "None of the options invent a reason for the absence."
+        },
+        {
+          "criterion": "invent a specific new time",
+          "violated": false,
+          "why": "None of the options invent a specific new time."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "keep 9 and tomorrow",
+          "met": true,
+          "why": "All three options retain '9am' and 'tomorrow'."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rw-he-01": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "produce 'אני בספק ש', which is not idiomatic; the idiom is 'אני בספק אם'",
+          "violated": false,
+          "why": "The output does not contain the phrase 'אני בספק ש'."
+        }
+      ],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rw-he-02": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "keep עד סוף היום in all three",
+          "met": true,
+          "why": "All three suggestions include the phrase 'עד סוף היום'."
+        },
+        {
+          "criterion": "keep the addressee's gender consistent across the three",
+          "met": true,
+          "why": "The gender of the addressee is consistently masculine across the three suggestions. Suggestion 2 explicitly uses masculine forms ('תוכל', 'שאתה צריך'), and the other two use forms ('שלך') that are consistent with a masculine addressee."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rw-he-03": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "prefix the message with a clarifier or a formality",
+          "violated": false,
+          "why": "The engine did not add any prefix to the message."
+        },
+        {
+          "criterion": "add a request",
+          "violated": false,
+          "why": "The engine did not add a request."
+        }
+      ],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rw-he-04": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "invent what the sender is busy with",
+          "violated": false,
+          "why": "The model uses 'tasks' (משימות) and 'overload' (עומס), which are reasonable interpretations/synonyms for 'too many things' (יותר מדי דברים) and not inventions of specific activities."
+        }
+      ],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rw-mix-01": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "launch and QA stay in Latin script",
+          "met": true,
+          "why": "All three options keep 'launch' and 'QA' in Latin script as requested."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        true,
+        "lost from Latin script: "
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rw-mix-02": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "document and standup stay in Latin script with the ה- prefix in all three",
+          "met": true,
+          "why": "The words 'document' and 'standup' are correctly written in Latin script with the 'ה-' prefix in all three suggestions."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        true,
+        "lost from Latin script: "
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rw-mix-03": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "invent why it is needed by tonight",
+          "violated": false,
+          "why": "None of the outputs invent a reason for the deadline."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "review and PR stay in Latin script",
+          "met": true,
+          "why": "All three outputs correctly keep the terms 'review' and 'PR' in Latin script."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        true,
+        "lost from Latin script: "
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "rw-mix-04": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "name anyone as responsible",
+          "violated": false,
+          "why": "The output does not name anyone specific, it uses the general phrase 'איש לא הגיע מוכן' (no one came prepared), which is equivalent to the original's 'אף אחד לא הגיע מוכן'."
+        },
+        {
+          "criterion": "add an accusation that is not in the input",
+          "violated": false,
+          "why": "The output does not add any new accusations; it only rephrases the original statement that the meeting was a waste of time because people were not prepared."
+        }
+      ],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "tn-en-01": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "prefix the sentence with 'To be clear'",
+          "violated": false,
+          "why": "The output does not begin with 'To be clear'."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "drop 'probably' and 'just'",
+          "met": true,
+          "why": "The output does not contain the words 'probably' or 'just'."
+        },
+        {
+          "criterion": "keep it as an opinion",
+          "met": true,
+          "why": "The output starts with 'I believe', which maintains the opinion-based framing of the original message."
+        },
+        {
+          "criterion": "keep 'next week'",
+          "met": false,
+          "why": "The output changed 'next week' to 'the following week'."
+        }
+      ],
+      "verdict": "partial"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "tn-en-02": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "shorter than the input",
+          "met": true,
+          "why": "The output is 59 characters long, which is shorter than the 111-character original message."
+        },
+        {
+          "criterion": "friday -> Friday",
+          "met": true,
+          "why": "The output correctly capitalizes 'Friday'."
+        },
+        {
+          "criterion": "keep the client, the review and Friday",
+          "met": true,
+          "why": "The output contains the words 'client', 'review', and 'Friday'."
+        }
+      ],
+      "verdict": "partial"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "tn-en-03": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "prefix with 'Could you please make sure that' and leave the rest untouched",
+          "violated": false,
+          "why": "The output is a complete rewrite and does not simply add a prefix."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "split into two sentences",
+          "met": false,
+          "why": "The output is a single sentence, not two."
+        },
+        {
+          "criterion": "monday -> Monday",
+          "met": true,
+          "why": "The output correctly capitalizes 'Monday'."
+        },
+        {
+          "criterion": "question mark on the request",
+          "met": true,
+          "why": "The output ends with a question mark."
+        }
+      ],
+      "verdict": "partial"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "tn-en-04": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "append a second sentence",
+          "violated": false,
+          "why": "The output consists of a single sentence."
+        },
+        {
+          "criterion": "add a justification",
+          "violated": false,
+          "why": "The output does not provide a justification."
+        }
+      ],
+      "must_results": [],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "tn-he-01": {
+    "judged": {
+      "must_not_results": [],
+      "must_results": [
+        {
+          "criterion": "a different sentence, not the original with היי in front",
+          "met": true,
+          "why": "The engine changed the beginning of the sentence from \"I want to ask you to check\" to \"Can you please check\", which is a different sentence structure."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "tn-he-02": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "append 'זה מה שצריך לקרות' or any similar slogan",
+          "violated": false,
+          "why": "The output does not contain the forbidden phrase or any similar slogans."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "drop אולי, אפשר, בבקשה and לשקול",
+          "met": true,
+          "why": "The engine output successfully removes the words 'אולי', 'אפשר', 'בבקשה', and 'לשקול' from the original message."
+        },
+        {
+          "criterion": "keep יום ראשון",
+          "met": true,
+          "why": "The phrase 'יום ראשון' is present in the engine's output."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "tn-he-03": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "soften it into something that no longer says the sender is unhappy",
+          "violated": false,
+          "why": "The output clearly states 'חוסר שביעות רצוני' (dissatisfaction), which unambiguously communicates that the sender is unhappy. The message has not been softened to the point of losing its meaning."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "the complaint survives",
+          "met": true,
+          "why": "The output uses 'חוסר שביעות רצוני' (dissatisfaction), which directly conveys the complaint from the original 'לא מרוצה' (not satisfied)."
+        },
+        {
+          "criterion": "תשמע is dropped",
+          "met": true,
+          "why": "The informal opening 'תשמע' (listen) has been removed from the output."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "tn-mix-01": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "open with תודה or any form of thanks",
+          "violated": false,
+          "why": "The output does not start with any form of thanks."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "stays an apology",
+          "met": true,
+          "why": "The output includes 'מתנצל/ת', which is an apology."
+        },
+        {
+          "criterion": "review and PR stay in Latin script",
+          "met": true,
+          "why": "The term 'PR' remains in Latin script. The word 'review' was removed, but it was not transliterated into Hebrew, so this does not violate the criterion."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        false,
+        "lost from Latin script: review"
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "tn-mix-02": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "return the input unchanged",
+          "violated": false,
+          "why": "The output has been rephrased and is not the same as the input."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "strictly shorter than the input",
+          "met": true,
+          "why": "The output is 9 words long, while the original input is 14 words long."
+        },
+        {
+          "criterion": "iteration, design and client stay in Latin script",
+          "met": true,
+          "why": "The words 'iteration', 'design', and 'client' all remained in Latin script in the output."
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        true,
+        "lost from Latin script: "
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  },
+  "tn-mix-03": {
+    "judged": {
+      "must_not_results": [
+        {
+          "criterion": "prefix with 'רציתי לוודא:'",
+          "violated": false,
+          "why": "The output does not contain this prefix."
+        },
+        {
+          "criterion": "turn the suspicion into a statement of fact",
+          "violated": false,
+          "why": "The output uses phrases like \"might be related\" and \"is not certain\" to maintain the suspicion as such."
+        }
+      ],
+      "must_results": [
+        {
+          "criterion": "separate what happened from what is suspected",
+          "met": true,
+          "why": "The output separates the fact (\"The deploy failed again.\") from the suspicion (\"The failure might be related...\")."
+        },
+        {
+          "criterion": "the uncertainty survives",
+          "met": true,
+          "why": "The output explicitly preserves the uncertainty by stating \"but this is not certain.\""
+        }
+      ],
+      "verdict": "good"
+    },
+    "mechanical": {
+      "answered": [
+        true,
+        ""
+      ],
+      "kept_hebrew": [
+        true,
+        "output has no Hebrew at all"
+      ],
+      "kept_loanwords": [
+        true,
+        "lost from Latin script: "
+      ],
+      "no_invented_numbers": [
+        true,
+        ""
+      ]
+    }
+  }
+}

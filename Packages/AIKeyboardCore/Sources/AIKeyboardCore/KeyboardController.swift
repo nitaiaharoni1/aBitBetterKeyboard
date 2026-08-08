@@ -78,6 +78,12 @@ public final class KeyboardController: ObservableObject {
     @Published public var selectedTone: ToneStyle?
     @Published public var replies: [ReplyOption] = []
 
+    /// Why the last AI call produced nothing. The panel shows this instead of an
+    /// empty result, which is the one outcome the user cannot act on.
+    @Published public var aiError: AIEngineError?
+    /// Which engine answered, so a best-effort answer can say so.
+    @Published public var aiProvenance: AIProvenance?
+
     /// Mirrored from the capture session so views can observe one object.
     @Published public var screenContext: ScreenContextState = .off
 
@@ -99,6 +105,7 @@ public final class KeyboardController: ObservableObject {
 
     private weak var target: TextTarget?
     private let store: SharedStore
+    private let engine: RoutedIntelligence
 
     private var dictationTask: Task<Void, Never>?
     private var waveformTask: Task<Void, Never>?
@@ -107,10 +114,23 @@ public final class KeyboardController: ObservableObject {
     private var lastSpaceTapAt: Date?
     private var cancellables = Set<AnyCancellable>()
 
-    public init(target: TextTarget?, store: SharedStore = .shared, language: KeyboardLanguage = .english) {
+    public init(
+        target: TextTarget?,
+        store: SharedStore = .shared,
+        language: KeyboardLanguage = .english,
+        engine: RoutedIntelligence? = nil
+    ) {
         self.target = target
         self.store = store
         self.language = language
+        // No backend URL ships in this build, so the cloud half is usually nil
+        // and Hebrew reports why rather than being handed to a model that would
+        // answer it in English.
+        self.engine =
+            engine
+            ?? RoutedIntelligence.standard(
+                cloud: BackendTransport.configured().map { CloudIntelligence(transport: $0) }
+            )
 
         let session = ScreenContextSession.shared
         screenContext = session.state
@@ -224,9 +244,10 @@ public final class KeyboardController: ObservableObject {
         // Two spaces in quick succession become a full stop, as on the system keyboard.
         let now = Date()
         if let last = lastSpaceTapAt,
-           now.timeIntervalSince(last) < 0.6,
-           contextBefore.hasSuffix(" "),
-           !contextBefore.hasSuffix("  ") {
+            now.timeIntervalSince(last) < 0.6,
+            contextBefore.hasSuffix(" "),
+            !contextBefore.hasSuffix("  ")
+        {
             target?.deleteBackward()
             target?.insertText(". ")
             lastSpaceTapAt = nil
@@ -239,9 +260,10 @@ public final class KeyboardController: ObservableObject {
         // A space commits the highlighted candidate, which is what makes a
         // suggestion bar worth having.
         if store.autocorrect,
-           let candidate = suggestions.first(where: \.isDefault),
-           !currentWordPrefix.isEmpty,
-           candidate.text.lowercased() != currentWordPrefix.lowercased() {
+            let candidate = suggestions.first(where: \.isDefault),
+            !currentWordPrefix.isEmpty,
+            candidate.text.lowercased() != currentWordPrefix.lowercased()
+        {
             replaceCurrentWord(with: candidate.text)
         }
 
@@ -334,6 +356,8 @@ public final class KeyboardController: ObservableObject {
             replies = []
             selectedTone = nil
             isWorking = false
+            aiError = nil
+            aiProvenance = nil
         }
     }
 
@@ -356,15 +380,19 @@ public final class KeyboardController: ObservableObject {
         case .reply:
             break
         case .fix:
-            beginWork(showing: .aiResult(.fix)) { [weak self] in
-                guard let self else { return }
-                aiResultText = MockAI.fix(aiSourceText)
+            let source = aiSourceText
+            beginWork(showing: .aiResult(.fix)) { [engine] in
+                try await engine.fix(source)
+            } apply: { controller, text in
+                controller.aiResultText = text
             }
         case .rewrite:
             selectedTone = nil
-            beginWork(showing: .aiResult(.variants(nil))) { [weak self] in
-                guard let self else { return }
-                variants = MockAI.variants(for: aiSourceText)
+            let source = aiSourceText
+            beginWork(showing: .aiResult(.variants(nil))) { [engine] in
+                try await engine.variants(for: source, tone: nil)
+            } apply: { controller, variants in
+                controller.variants = variants
             }
         case .tone:
             selectedTone = nil
@@ -383,8 +411,10 @@ public final class KeyboardController: ObservableObject {
 
         // A reply replaces nothing; it is inserted where the cursor already is.
         aiSourceText = ""
-        beginWork(showing: .aiResult(.replies)) { [weak self] in
-            self?.replies = MockAI.replies(to: context)
+        beginWork(showing: .aiResult(.replies)) { [engine] in
+            try await engine.replies(to: context)
+        } apply: { controller, replies in
+            controller.replies = replies
         }
     }
 
@@ -402,17 +432,30 @@ public final class KeyboardController: ObservableObject {
         Feedback.modifierPress()
         selectedTone = tone
         aiSourceText = aiSourceText.isEmpty ? aiTargetText : aiSourceText
-        beginWork(showing: .aiResult(.variants(tone))) { [weak self] in
-            guard let self else { return }
-            variants = MockAI.variants(for: aiSourceText, tone: tone)
+        let source = aiSourceText
+        beginWork(showing: .aiResult(.variants(tone))) { [engine] in
+            try await engine.variants(for: source, tone: tone)
+        } apply: { controller, variants in
+            controller.variants = variants
         }
     }
 
-    /// Runs the pretend model call, keeping the loading state on screen long
-    /// enough that the real latency will not come as a surprise later.
-    private func beginWork(showing destination: KeyboardOverlay, work: @MainActor @escaping () -> Void) {
+    /// Runs one model call. The latency here is the model's, not a sleep: the
+    /// shimmer runs until the answer lands, however long that takes.
+    ///
+    /// A failure sets `aiError` rather than leaving the panel empty, because
+    /// every one of these calls can fail for a reason the user can act on —
+    /// Apple Intelligence switched off, a language no engine covers, a guardrail
+    /// that fires on a benign Hebrew sign-off.
+    private func beginWork<Value: Sendable>(
+        showing destination: KeyboardOverlay,
+        work: @escaping @Sendable () async throws -> AIOutput<Value>,
+        apply: @MainActor @escaping (KeyboardController, Value) -> Void
+    ) {
         workingTask?.cancel()
         isWorking = true
+        aiError = nil
+        aiProvenance = nil
         withAnimation(Theme.Motion.panel) { overlay = destination }
 
         workingTask = Task { [weak self] in
@@ -423,10 +466,20 @@ public final class KeyboardController: ObservableObject {
                     try? await Task.sleep(for: .milliseconds(16))
                 }
             }
-            try? await Task.sleep(for: MockAI.simulatedLatency)
-            animation.cancel()
-            guard !Task.isCancelled else { return }
-            work()
+            defer { animation.cancel() }
+
+            do {
+                let output = try await work()
+                guard !Task.isCancelled else { return }
+                apply(self, output.value)
+                aiProvenance = output.provenance
+            } catch let error as AIEngineError {
+                guard !Task.isCancelled else { return }
+                aiError = error
+            } catch {
+                guard !Task.isCancelled else { return }
+                aiError = .failed(error.localizedDescription)
+            }
             withAnimation(Theme.Motion.content) { self.isWorking = false }
         }
     }

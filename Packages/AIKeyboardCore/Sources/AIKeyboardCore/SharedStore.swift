@@ -1,22 +1,60 @@
 import Foundation
 import Combine
+import os
 
 /// Settings the app writes and the keyboard reads.
 ///
-/// The real product moves this behind an App Group so both processes see one
-/// store. Until entitlements are wired up, each process keeps its own copy and
-/// the keyboard falls back to sensible defaults — swapping in the shared suite
-/// is a one-line change here and nowhere else.
+/// Both targets carry the App Group entitlement, so `UserDefaults(suiteName:)`
+/// resolves to one plist inside the shared container and a change made in the
+/// app is visible to the keyboard extension.
 public final class SharedStore: ObservableObject {
 
     public static let appGroupIdentifier = "group.com.nitai.aikeyboard"
 
     public static let shared = SharedStore()
 
+    /// Where this instance actually persists. Probed at init, never assumed.
+    public enum Storage: String {
+        /// The App Group suite. The app and the keyboard see one store.
+        case appGroup
+        /// This process's own defaults, because the shared container was out of
+        /// reach. Anything written here is invisible to the other process.
+        case processLocal
+    }
+
+    /// `.processLocal` means the two processes are *not* sharing state, and
+    /// anything that round-trips through this store between the app and the
+    /// keyboard will quietly fail.
+    public let storage: Storage
+
     private let defaults: UserDefaults
 
+    private static let log = Logger(subsystem: "com.nitai.aikeyboard", category: "SharedStore")
+
     private init() {
-        defaults = UserDefaults(suiteName: Self.appGroupIdentifier) ?? .standard
+        // `UserDefaults(suiteName:)` hands back a usable object whether or not
+        // this process is entitled to the group, which is exactly how the old
+        // `?? .standard` fallback could look successful while each process
+        // talked to its own store. Asking the container manager for the group's
+        // directory is the question that actually has a false answer: it is nil
+        // without the entitlement, and nil in the keyboard until the user grants
+        // Full Access.
+        let container = FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier)
+
+        if container != nil, let suite = UserDefaults(suiteName: Self.appGroupIdentifier) {
+            defaults = suite
+            storage = .appGroup
+        } else {
+            defaults = .standard
+            storage = .processLocal
+            Self.log.error(
+                """
+                App Group \(Self.appGroupIdentifier, privacy: .public) is unreachable — \
+                settings are private to this process and will not reach the keyboard.
+                """
+            )
+        }
     }
 
     private enum Key {
@@ -50,7 +88,9 @@ public final class SharedStore: ObservableObject {
     // MARK: Typing
 
     @Published public var autocorrect = true { didSet { defaults.set(autocorrect, forKey: Key.autocorrect) } }
-    @Published public var autocapitalise = true { didSet { defaults.set(autocapitalise, forKey: Key.autocapitalise) } }
+    @Published public var autocapitalise = true {
+        didSet { defaults.set(autocapitalise, forKey: Key.autocapitalise) }
+    }
     @Published public var predictions = true { didSet { defaults.set(predictions, forKey: Key.predictions) } }
     @Published public var haptics = true {
         didSet {
@@ -67,7 +107,9 @@ public final class SharedStore: ObservableObject {
 
     // MARK: AI
 
-    @Published public var preferOnDeviceAI = true { didSet { defaults.set(preferOnDeviceAI, forKey: Key.onDeviceAI) } }
+    @Published public var preferOnDeviceAI = true {
+        didSet { defaults.set(preferOnDeviceAI, forKey: Key.onDeviceAI) }
+    }
     @Published public var defaultTone: ToneStyle = .clearer {
         didSet { defaults.set(defaultTone.rawValue, forKey: Key.defaultTone) }
     }
@@ -76,7 +118,8 @@ public final class SharedStore: ObservableObject {
 
     @Published public var personalDictionary: [String] = [
         "Nitai", "Handi", "Wispr", "KeyboardKit", "סאפא", "בלי־פרופ"
-    ] {
+    ]
+    {
         didSet { defaults.set(personalDictionary, forKey: Key.personalDictionary) }
     }
 
@@ -97,7 +140,9 @@ public final class SharedStore: ObservableObject {
 
     // MARK: Billing
 
-    @Published public var isSubscribed = false { didSet { defaults.set(isSubscribed, forKey: Key.isSubscribed) } }
+    @Published public var isSubscribed = false {
+        didSet { defaults.set(isSubscribed, forKey: Key.isSubscribed) }
+    }
 
     /// Puts every setting back to its shipped default. Used by the UI tests so a
     /// run never depends on what the previous run left behind.
@@ -133,22 +178,48 @@ public final class SharedStore: ObservableObject {
             let parsed = raw.compactMap(KeyboardLanguage.init(rawValue:))
             if !parsed.isEmpty { enabledLanguages = parsed }
         }
-        if defaults.object(forKey: Key.autocorrect) != nil { autocorrect = defaults.bool(forKey: Key.autocorrect) }
-        if defaults.object(forKey: Key.autocapitalise) != nil { autocapitalise = defaults.bool(forKey: Key.autocapitalise) }
-        if defaults.object(forKey: Key.predictions) != nil { predictions = defaults.bool(forKey: Key.predictions) }
+        if defaults.object(forKey: Key.autocorrect) != nil {
+            autocorrect = defaults.bool(forKey: Key.autocorrect)
+        }
+        if defaults.object(forKey: Key.autocapitalise) != nil {
+            autocapitalise = defaults.bool(forKey: Key.autocapitalise)
+        }
+        if defaults.object(forKey: Key.predictions) != nil {
+            predictions = defaults.bool(forKey: Key.predictions)
+        }
         if defaults.object(forKey: Key.haptics) != nil { haptics = defaults.bool(forKey: Key.haptics) }
         if defaults.object(forKey: Key.keySounds) != nil { keySounds = defaults.bool(forKey: Key.keySounds) }
-        if defaults.object(forKey: Key.onDeviceAI) != nil { preferOnDeviceAI = defaults.bool(forKey: Key.onDeviceAI) }
-        if let tone = defaults.string(forKey: Key.defaultTone).flatMap(ToneStyle.init(rawValue:)) { defaultTone = tone }
+        if defaults.object(forKey: Key.onDeviceAI) != nil {
+            preferOnDeviceAI = defaults.bool(forKey: Key.onDeviceAI)
+        }
+        if let tone = defaults.string(forKey: Key.defaultTone).flatMap(ToneStyle.init(rawValue:)) {
+            defaultTone = tone
+        }
         if let words = defaults.array(forKey: Key.personalDictionary) as? [String], !words.isEmpty {
             personalDictionary = words
         }
-        if defaults.object(forKey: Key.isSubscribed) != nil { isSubscribed = defaults.bool(forKey: Key.isSubscribed) }
+        if defaults.object(forKey: Key.isSubscribed) != nil {
+            isSubscribed = defaults.bool(forKey: Key.isSubscribed)
+        }
         if defaults.object(forKey: Key.screenContextAllowed) != nil {
             screenContextAllowed = defaults.bool(forKey: Key.screenContextAllowed)
         }
         if defaults.object(forKey: Key.screenContextCloud) != nil {
             screenContextCloudReplies = defaults.bool(forKey: Key.screenContextCloud)
         }
+
+        // The app and the keyboard are separate processes, and a process always
+        // sees its own writes — so the only way to observe that the App Group is
+        // genuinely shared is to watch both processes report what they read. The
+        // unified log stamps each line with the process that emitted it, which
+        // makes `AppGroupProof.sh` able to fail. Keep this in sync with the keys
+        // that script greps for.
+        Self.log.notice(
+            """
+            load storage=\(self.storage.rawValue, privacy: .public) \
+            languages=\(self.enabledLanguages.map(\.rawValue).joined(separator: ","), privacy: .public) \
+            onboarded=\(self.hasCompletedOnboarding, privacy: .public)
+            """
+        )
     }
 }

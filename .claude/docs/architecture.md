@@ -37,7 +37,7 @@ microphone, or screen capture.
 - **One controller owns all mutation.** `KeyboardController` is the only type that
   edits text or drives overlays; every view is a projection of its published
   state.
-- **Mocks are isolated behind named types** (`MockSuggestionEngine`, `MockAI`,
+- **Mocks are isolated behind named types** (`MockSuggestionEngine`,
   `MockDictation`, `MockScreenContext`) so each has a single obvious replacement
   point. See the mock-to-real table in `README.md`.
 - **Design tokens are centralised in `Theme.swift`.** Colors resolve per

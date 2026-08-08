@@ -28,7 +28,9 @@ public struct WaveformView: View {
     private let color: Color
     private let isActive: Bool
 
-    public init(phase: Double, barCount: Int = 28, color: Color = Theme.Semantic.record, isActive: Bool = true) {
+    public init(
+        phase: Double, barCount: Int = 28, color: Color = Theme.Semantic.record, isActive: Bool = true
+    ) {
         self.phase = phase
         self.barCount = barCount
         self.color = color

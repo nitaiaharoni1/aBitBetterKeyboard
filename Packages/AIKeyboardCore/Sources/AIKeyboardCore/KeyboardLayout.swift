@@ -105,10 +105,11 @@ public enum KeyboardLayout {
         [
             KeyRow(id: 0, keys: chars("qwertyuiop")),
             KeyRow(id: 1, keys: chars("asdfghjkl"), sideInsetUnits: 0.5),
-            KeyRow(id: 2, keys:
-                [KeySpec(.shift, width: .remainderShare)]
-                + chars("zxcvbnm")
-                + [KeySpec(.backspace, width: .remainderShare)]
+            KeyRow(
+                id: 2,
+                keys: [KeySpec(.shift, width: .remainderShare)]
+                    + chars("zxcvbnm")
+                    + [KeySpec(.backspace, width: .remainderShare)]
             )
         ]
     }
@@ -120,9 +121,11 @@ public enum KeyboardLayout {
         [
             KeyRow(id: 0, keys: chars("קראטוןםפ"), sideInsetUnits: 1.0),
             KeyRow(id: 1, keys: chars("שדגכעיחלךף")),
-            KeyRow(id: 2, keys:
-                chars("זסבהנמצתץ")
-                + [KeySpec(.backspace, width: .remainderShare)]
+            KeyRow(
+                id: 2,
+                keys:
+                    chars("זסבהנמצתץ")
+                    + [KeySpec(.backspace, width: .remainderShare)]
             )
         ]
     }
@@ -136,10 +139,11 @@ public enum KeyboardLayout {
         return [
             KeyRow(id: 0, keys: chars("1234567890")),
             KeyRow(id: 1, keys: chars("-/:;()") + chars(currency) + chars("&@\"")),
-            KeyRow(id: 2, keys:
-                [KeySpec(.plane(.symbols, label: "#+="), width: .remainderShare)]
-                + chars(".,?!'")
-                + [KeySpec(.backspace, width: .remainderShare)],
+            KeyRow(
+                id: 2,
+                keys: [KeySpec(.plane(.symbols, label: "#+="), width: .remainderShare)]
+                    + chars(".,?!'")
+                    + [KeySpec(.backspace, width: .remainderShare)],
                 sideInsetUnits: 0
             )
         ]
@@ -149,10 +153,11 @@ public enum KeyboardLayout {
         [
             KeyRow(id: 0, keys: chars("[]{}#%^*+=")),
             KeyRow(id: 1, keys: chars("_\\|~<>$₪¥•")),
-            KeyRow(id: 2, keys:
-                [KeySpec(.plane(.numbers, label: "123"), width: .remainderShare)]
-                + chars(".,?!'")
-                + [KeySpec(.backspace, width: .remainderShare)],
+            KeyRow(
+                id: 2,
+                keys: [KeySpec(.plane(.numbers, label: "123"), width: .remainderShare)]
+                    + chars(".,?!'")
+                    + [KeySpec(.backspace, width: .remainderShare)],
                 sideInsetUnits: 0
             )
         ]
@@ -162,8 +167,11 @@ public enum KeyboardLayout {
 
     /// Sparkle and emoji live in the suggestion bar, so this row stays close to
     /// the system layout: plane switch, globe, space, dictation, return.
-    public static func bottomRow(for language: KeyboardLanguage, plane: KeyboardPlane, showsGlobe: Bool) -> KeyRow {
-        let planeKey: KeySpec = plane == .letters
+    public static func bottomRow(
+        for language: KeyboardLanguage, plane: KeyboardPlane, showsGlobe: Bool
+    ) -> KeyRow {
+        let planeKey: KeySpec =
+            plane == .letters
             ? KeySpec(.plane(.numbers, label: "123"), width: .unit(1.3))
             : KeySpec(.plane(.letters, label: language == .hebrew ? "אבג" : "ABC"), width: .unit(1.3))
 
@@ -206,7 +214,8 @@ public enum KeyboardLayout {
         // and delete tappable on a narrow screen.
         let stretchCount = row.keys.filter { $0.width == .flexible || $0.width == .remainderShare }.count
         let leftover = max(0, available - fixedTotal)
-        let stretchWidth = stretchCount > 0
+        let stretchWidth =
+            stretchCount > 0
             ? max(unitWidth * 1.15, leftover / CGFloat(stretchCount))
             : 0
 

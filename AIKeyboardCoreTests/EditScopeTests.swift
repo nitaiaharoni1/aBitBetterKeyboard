@@ -1,0 +1,437 @@
+import XCTest
+
+@testable import AIKeyboardCore
+
+/// The check that keeps a Fix inside the mistakes it was asked to fix.
+///
+/// It is tested here rather than only through `Bar/ai-text` because the corpus is
+/// scored by a model, one entry at a time: it can say the rate went up, and it
+/// cannot say that this exact word can never be respelled behind the user's back
+/// again. These are the cases that must never regress, whatever the score does.
+final class EditScopeTests: XCTestCase {
+
+    // MARK: Nothing wrong
+
+    /// The entry the whole file exists for on the Hebrew side: slang, an
+    /// abbreviation, no full stop, nothing wrong. Whatever the model wrote, a
+    /// message it found no mistakes in comes back exactly as the user typed it.
+    func testAMessageWithNoMistakesComesBackUntouched() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "יאללה סבבה, נדבר אחר כך.", to: "יאללה סבבה, נדבר אח\"כ", corrections: "none"),
+            "יאללה סבבה, נדבר אח\"כ"
+        )
+    }
+
+    func testAFullStopIsNotAddedToAMessageWithNothingWrongInIt() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "צריך לעשות refactor ל-service הזה לפני ה-release.",
+                to: "צריך לעשות refactor ל-service הזה לפני ה-release",
+                corrections: "none"
+            ),
+            "צריך לעשות refactor ל-service הזה לפני ה-release"
+        )
+    }
+
+    /// The field is required, so a model with nothing to report writes a
+    /// placeholder rather than leaving it blank.
+    func testEveryWayOfSayingNothingIsWrongCountsAsNothingIsWrong() {
+        for placeholder in ["", "  ", "none", "None", "N/A", "null", "-", "nothing", "אין שגיאות"] {
+            XCTAssertTrue(
+                EditScope.declaresNothing(placeholder),
+                "\(placeholder.debugDescription) means nothing is wrong")
+        }
+        XCTAssertFalse(EditScope.declaresNothing("teh -> the"))
+    }
+
+    // MARK: Changes the model did not name
+
+    /// `והכל` and `והכול` are both correct Hebrew. Respelling one as the other is
+    /// a house-style preference, and it is the change that makes people turn
+    /// autocorrect off — so it goes back, and the English error the model was
+    /// actually right about stays fixed.
+    func testHebrewTheModelRespelledWithoutCallingItAMistakeGoesBack() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "העליתי את התיקון ל-staging והכול עובד, it's fine.",
+                to: "העליתי את התיקון ל-staging והכל עובד, its fine",
+                corrections: "its -> it's"
+            ),
+            "העליתי את התיקון ל-staging והכל עובד, it's fine"
+        )
+    }
+
+    /// Named or not, the two accepted Hebrew spellings of a word are not a
+    /// correction: a model that lists the respelling as a mistake is still wrong.
+    func testAnAlternativeHebrewSpellingIsNotACorrectionEvenWhenTheModelClaimsItIs() {
+        XCTAssertEqual(
+            EditScope.applied("והכול עובד", to: "והכל עובד", corrections: "והכל -> והכול"),
+            "והכל עובד"
+        )
+    }
+
+    /// The other side of that rule. `תגדי` → `תגיד` moves a י rather than adding
+    /// one, and `יבדוק` → `אבדוק` swaps a letter, so both are real corrections
+    /// and both survive.
+    func testARealHebrewCorrectionIsNotMistakenForASpellingVariant() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "שלחתי לך את הקובץ אתמול בערב, תגיד לי אם קיבלת",
+                to: "שלחתי לך את הקובץ אתמול בערב, תגדי לי אם קיבלת",
+                corrections: "תגדי -> תגיד"
+            ),
+            "שלחתי לך את הקובץ אתמול בערב, תגיד לי אם קיבלת"
+        )
+        XCTAssertEqual(
+            EditScope.applied("אני אבדוק את זה", to: "אני יבדוק את זה", corrections: "יבדוק -> אבדוק"),
+            "אני אבדוק את זה"
+        )
+    }
+
+    func testAWordSwappedForAnotherWithoutBeingNamedGoesBack() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "I think we should ship this on Thursday afternoon",
+                to: "I think we should shipp this on Thurdsay afternon",
+                corrections: "Thurdsay -> Thursday, afternon -> afternoon"
+            ),
+            "I think we should shipp this on Thursday afternoon"
+        )
+    }
+
+    /// Measured: the model prefixed a loanword it had no business touching.
+    func testAPrefixTheModelAddedToALoanwordGoesBack() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "צריך לעשות ל-refactor ל-service הזה לפני ה-release",
+                to: "צריך לעשות refactor ל-service הזה לפני ה-release",
+                corrections: "חסר ניקוד"
+            ),
+            "צריך לעשות refactor ל-service הזה לפני ה-release"
+        )
+    }
+
+    func testAWordTheModelDeletedWithoutNamingItComesBack() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "that meeting was long I'm gonna need coffee",
+                to: "that meeting was sooo long 😅 im gonna need coffee",
+                corrections: "im -> I'm"
+            ),
+            "that meeting was sooo long 😅 I'm gonna need coffee"
+        )
+    }
+
+    // MARK: Contractions
+
+    /// A missing apostrophe is a typo, not shorthand: `dont` is `don't`, and
+    /// expanding it rewrites the register of a message the user only wanted
+    /// spellchecked. This holds whichever way the model described the change.
+    func testAnExpandedContractionComesBackAsAContraction() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "Please do not forget to send the invoice before the 15th, otherwise finance will not process it this month.",
+                to:
+                    "Please dont forget to send the invoice before the 15th, otherwise finance wont process it this month.",
+                corrections: "dont -> do not, wont -> will not"
+            ),
+            "Please don't forget to send the invoice before the 15th, otherwise finance won't process it this month."
+        )
+    }
+
+    func testAnExpandedContractionKeepsItsSentenceCaseAndPunctuation() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "Do not worry about it.", to: "Dont worry about it.", corrections: "Dont -> Do not"),
+            "Don't worry about it."
+        )
+        XCTAssertEqual(
+            EditScope.applied("I am on it, thanks!", to: "im on it, thanks!", corrections: "im -> I am"),
+            "I'm on it, thanks!"
+        )
+    }
+
+    /// `ill` and `lets` are ordinary words as well as contractions, so neither is
+    /// in the list. A rule that rewrites "I was ill last week" is worse than the
+    /// one it fixes.
+    func testAnOrdinaryWordThatLooksLikeAContractionIsLeftAlone() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "Sorry, I was ill last week", to: "sorry i was ill last week",
+                corrections: "sorry i -> Sorry, I"),
+            "Sorry, I was ill last week"
+        )
+    }
+
+    // MARK: What is not a change
+
+    /// Punctuation is invisible to the scope check, because the reference answers
+    /// add question marks and commas without ever listing them as mistakes — and
+    /// a question that comes back without its question mark is a failure in both
+    /// languages.
+    func testPunctuationTheModelAddedSurvives() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "מה קורה? אני מנסה להתקשר אליך כל הבוקר",
+                to: "מה קורה אני מנסה להתקשר אליך כל הבוקר",
+                corrections: "חסר סימן שאלה"
+            ),
+            "מה קורה? אני מנסה להתקשר אליך כל הבוקר"
+        )
+    }
+
+    func testCapitalisationTheModelFixedSurvives() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "Can you send me the ID for the sprint ticket?",
+                to: "can you send me the id for the sprint ticket",
+                corrections: "missing question mark"
+            ),
+            "Can you send me the ID for the sprint ticket?"
+        )
+    }
+
+    // MARK: Shape
+
+    func testLineBreaksInTheMessageSurvive() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "Hi Dana,\n\nThe deck is attached.\nThanks",
+                to: "Hi Dana,\n\nThe dekc is attached.\nThanks",
+                corrections: "dekc -> deck"
+            ),
+            "Hi Dana,\n\nThe deck is attached.\nThanks"
+        )
+    }
+
+    func testARestoredWordAtTheEndOfTheMessageDoesNotSwallowTheSpaceAfterIt() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "send it Monday please", to: "send it monady plz", corrections: "monady -> Monday"),
+            "send it Monday plz"
+        )
+    }
+
+    // MARK: Full stops
+
+    /// Measured: the model kept putting a full stop on the end of Hebrew messages
+    /// that had nothing wrong with them, and once on one it had genuinely
+    /// corrected. No Hebrew or code-switched reference in the corpus ends in one.
+    func testAFullStopIsNotAddedToTheEndOfAHebrewMessage() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "מעולה, נתראה מחר בבוקר.", to: "מעולה, נתראה מחר בבוקר", corrections: " -> ."),
+            "מעולה, נתראה מחר בבוקר"
+        )
+        XCTAssertEqual(
+            EditScope.applied(
+                "שלחתי לך את הקובץ, תגיד לי אם קיבלת.",
+                to: "שלחתי לך את הקובץ, תגדי לי אם קיבלת",
+                corrections: "תגדי -> תגיד"
+            ),
+            "שלחתי לך את הקובץ, תגיד לי אם קיבלת"
+        )
+    }
+
+    func testAFullStopTheWriterTypedThemselvesStays() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "תודה רבה, קיבלתי. אני עובר על זה עכשיו.",
+                to: "תודה רבה, קיבלתי. אני עובר על זה עכשיו.",
+                corrections: "none"
+            ),
+            "תודה רבה, קיבלתי. אני עובר על זה עכשיו."
+        )
+    }
+
+    /// English is the other way round: four of the corpus's own reference answers
+    /// close a corrected English sentence with a full stop the writer left off.
+    func testAFullStopIsStillAddedToAnEnglishMessage() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "He said \"I don't know\" and left it there.",
+                to: "he said \"i dont know\" and left it there",
+                corrections: "he -> He, i -> I, dont -> don't"
+            ),
+            "He said \"I don't know\" and left it there."
+        )
+    }
+
+    // MARK: Without a list
+
+    /// The on-device model is not asked what it corrected, because asking made it
+    /// worse at correcting. What survives without a list is the pair of changes no
+    /// model gets right: an expanded contraction, and a Hebrew word respelled into
+    /// its other accepted spelling.
+    func testAnExpandedContractionIsRepairedWithNoListAtAll() {
+        XCTAssertEqual(
+            EditScope.repaired(
+                "Please do not forget to send the invoice.", to: "Please dont forget to send the invoice."),
+            "Please don't forget to send the invoice."
+        )
+    }
+
+    func testAHebrewSpellingVariantGoesBackWithNoListAtAll() {
+        XCTAssertEqual(
+            EditScope.repaired("והכול עובד, it's fine", to: "והכל עובד, its fine"),
+            "והכל עובד, it's fine"
+        )
+    }
+
+    /// The other half of the check is exactly what is given up: with no list, a
+    /// word swap has nothing to be measured against, so it is taken on trust.
+    func testWithNoListAnUnexplainedWordChangeIsLeftAlone() {
+        XCTAssertEqual(
+            EditScope.repaired("the deck is ready", to: "the dekc is redy"),
+            "the deck is ready"
+        )
+    }
+
+    func testWithNoListARealCorrectionStillSurvives() {
+        XCTAssertEqual(
+            EditScope.repaired(
+                "I'll send you the updated presentation after the standup tomorrow.",
+                to: "Ill sedn you teh updated presentaion after the standup tommorow"),
+            "I'll send you the updated presentation after the standup tomorrow."
+        )
+    }
+
+    // MARK: The corpus, as a table
+
+    /// Every Fix entry in `Bar/ai-text`, as `(what the user typed, what a good
+    /// writer produces, the corrections that names)`. Applying the scope check to
+    /// a reference answer has to give that answer back: if it does not, the rule
+    /// is undoing a correction the product is measured on.
+    func testTheScopeCheckNeverUndoesACorrectionTheReferenceAnswersMake() {
+        let corpus = [
+            (
+                "I dont think we should do it because its not make sense",
+                "I don't think we should do it because it doesn't make sense.",
+                "dont -> don't, its not -> it doesn't, sense -> sense."
+            ),
+            (
+                "Sounds good, I'll send you the deck tonight.",
+                "Sounds good, I'll send you the deck tonight.",
+                "none"
+            ),
+            (
+                "The onboarding is good but its flow breaks on the last screen",
+                "The onboarding is good but its flow breaks on the last screen",
+                "none"
+            ),
+            (
+                "can you send me the id for the sprint ticket",
+                "Can you send me the ID for the sprint ticket?",
+                "can -> Can, id -> ID, ticket -> ticket?"
+            ),
+            (
+                "sorry i was ill last week and didnt see your message",
+                "Sorry, I was ill last week and didn't see your message",
+                "sorry i -> Sorry, I, didnt -> didn't"
+            ),
+            (
+                "he said \"i dont know\" and left it there",
+                "He said \"I don't know\" and left it there.",
+                "he -> He, \"i dont -> \"I don't, there -> there."
+            ),
+            (
+                "omg that meeting was sooo long 😅 im gonna need coffee",
+                "omg that meeting was sooo long 😅 I'm gonna need coffee",
+                "im -> I'm"
+            ),
+            (
+                "Ill sedn you teh updated presentaion after the standup tommorow",
+                "I'll send you the updated presentation after the standup tomorrow.",
+                "Ill sedn -> I'll send, teh -> the, presentaion -> presentation, tommorow -> tomorrow."
+            ),
+            (
+                "the numbers from last week doesnt match what the dashboard show",
+                "The numbers from last week don't match what the dashboard shows.",
+                "the -> The, doesnt -> don't, show -> shows."
+            ),
+            (
+                "Please dont forget to send the invoice before the 15th, otherwise finance wont process it this month.",
+                "Please don't forget to send the invoice before the 15th, otherwise finance won't process it this month.",
+                "dont -> don't, wont -> won't"
+            ),
+            (
+                "היי, אני חושב שאנחנו צריכים לדבר על זה מחרר בבקשא",
+                "היי, אני חושב שאנחנו צריכים לדבר על זה מחר בבקשה",
+                "מחרר בבקשא -> מחר בבקשה"
+            ),
+            (
+                "אני יבדוק את זה ואחזור אליך",
+                "אני אבדוק את זה ואחזור אליך",
+                "יבדוק -> אבדוק"
+            ),
+            (
+                "תודה רבה, קיבלתי. אני עובר על זה עכשיו ומעדכן.",
+                "תודה רבה, קיבלתי. אני עובר על זה עכשיו ומעדכן.",
+                "none"
+            ),
+            (
+                "מעולה, נתראה מחר בבוקר",
+                "מעולה, נתראה מחר בבוקר",
+                "none"
+            ),
+            (
+                "אתה יכול להעביר לי את הקובץ של אתמול",
+                "אתה יכול להעביר לי את הקובץ של אתמול?",
+                "אתמול -> אתמול?"
+            ),
+            (
+                "יאללה סבבה, נדבר אח\"כ",
+                "יאללה סבבה, נדבר אח\"כ",
+                "none"
+            ),
+            (
+                "שלחתי לך את הקובץ אתמול בערב, תגדי לי אם קיבלת",
+                "שלחתי לך את הקובץ אתמול בערב, תגיד לי אם קיבלת",
+                "תגדי -> תגיד"
+            ),
+            (
+                "מה קורה אני מנסה להתקשר אליך כל הבוקר",
+                "מה קורה? אני מנסה להתקשר אליך כל הבוקר",
+                "קורה -> קורה?"
+            ),
+            (
+                "אני אשלח לך את ה-document מחר אחרי ה-standup",
+                "אני אשלח לך את ה-document מחר אחרי ה-standup",
+                "none"
+            ),
+            (
+                "העליתי את התיקון ל-staging והכל עובד, its fine",
+                "העליתי את התיקון ל-staging והכל עובד, it's fine",
+                "its -> it's"
+            ),
+            (
+                "Can you check the deployment on staging, אני חושב שיש שם באג בבקשא",
+                "Can you check the deployment on staging? אני חושב שיש שם באג, בבקשה",
+                "staging, -> staging?, באג בבקשא -> באג, בבקשה"
+            ),
+            (
+                "בוא נעשה sync קצר על ה-roadmap של Q3",
+                "בוא נעשה sync קצר על ה-roadmap של Q3",
+                "none"
+            ),
+            (
+                "אנני צריך את ה-API key בשביל ה-demo של מחר",
+                "אני צריך את ה-API key בשביל ה-demo של מחר",
+                "אנני -> אני"
+            ),
+            (
+                "צריך לעשות refactor ל-service הזה לפני ה-release",
+                "צריך לעשות refactor ל-service הזה לפני ה-release",
+                "none"
+            )
+        ]
+        for (source, reference, corrections) in corpus {
+            XCTAssertEqual(
+                EditScope.applied(reference, to: source, corrections: corrections),
+                reference,
+                "the scope check changed the reference answer for \(source.debugDescription)"
+            )
+        }
+    }
+}

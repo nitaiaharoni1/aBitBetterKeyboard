@@ -107,26 +107,50 @@ onboarding: it is something you start, not something you set up once.
 red dot and the message it read. The Screen Context screen also lists what the
 feature will not do, including protected content blacking itself out.
 
-**Full Access is optional.** Typing, autocorrect, predictions, emoji and the
-on-device AI path all work without it. It buys cloud rewrites and the system key
-click, and the onboarding says so plainly.
+**Reading a Hebrew screen means the screenshot leaves the device.** Apple's text
+recogniser has no Hebrew — 30 languages, measured on both iOS and macOS, and
+Arabic is one of them, so it is not a right-to-left limitation. Over the 30
+screens in `Bar/screen-context/` it recovers 100% of the expected message on
+English screens and 13% on Hebrew ones. So `RoutedScreenReader` reads what it
+can on device and sends the rest to the cloud, and it decides which is which
+without ever naming a script: `VNDetectTextRectanglesRequest` finds text by
+shape regardless of language, so comparing regions *found* against regions
+*read* measures "there is writing here I could not read" directly. At the
+measured thresholds no Hebrew or mixed screen is ever kept on device, at the
+price of 3 of 12 English screens going to the cloud that did not have to. That
+asymmetry is deliberate: a misread Hebrew screen produces a confident wrong
+reply in the user's name, while an unnecessary cloud call costs five seconds.
+
+**Full Access is optional in English and effectively required in Hebrew.** Typing,
+autocorrect, predictions and emoji work without it. The on-device AI path works
+without it too — but only for the 23 languages Apple's model supports, and Hebrew
+is not one of them, so every Hebrew AI action needs the network and therefore Full
+Access. Two things follow. iOS only lets a keyboard extension reach a shared
+container once Full Access is granted, so without it the keyboard falls back to
+shipped defaults instead of the settings the user chose in the app. And for the
+audience this keyboard is built for, "optional" is the wrong word.
 
 ## The mocks, and what replaces them
 
 | Mock | Real thing |
 |---|---|
 | `MockSuggestionEngine` | local autocorrect + a small next-word model |
-| `MockAI.fix/variants/replies` | Apple Foundation Models on device, cloud LLM as fallback |
-| `MockDictation` | `SpeechAnalyzer`/`SpeechTranscriber` or Deepgram, running in the main app |
-| `MockScreenContext` + `ScreenContextSession` | `SCStream` full-display capture, `screen-capture` background mode, Vision OCR |
-| `SharedStore` | same file, pointed at a real App Group suite |
+| ~~`MockAI`~~ — now `RoutedIntelligence` | **Done.** Apple Foundation Models on device for the languages it lists, a cloud LLM behind it for the rest. Hebrew is not one of Apple's supported languages, so it needs the cloud path. The cloud provider sits behind a protocol; a shipped app cannot hold cloud credentials, so it must point at your own backend. The direct-to-Vertex client used to score `Bar/ai-text/` lives in the harness and is deliberately not in the app target. |
+| `MockDictation` | Runs in the main app. **`SpeechTranscriber` cannot do Hebrew** — measured, 30 locales, none of them `he`. Legacy `SFSpeechRecognizer` has `he-IL` but reports no on-device support here, so Hebrew dictation means cloud STT (Deepgram Nova-3 is the candidate `plan.md` names). |
+| `MockScreenContext` | **Reading a frame is done and measured** — `RoutedScreenReader`, scored against `Bar/screen-context/`. **Getting** a frame is not: ScreenCaptureKit is `iOS 27.0+` and absent from the iOS 26.2 SDK this project compiles against, and the ReplayKit route needs a broadcast upload extension target that does not exist yet. `ScreenContextSession.submit(_:appName:appIcon:)` is the seam both plug into. |
+| ~~`SharedStore`~~ | **Done.** Both targets carry the App Group entitlement and share one suite. |
 | `MockTextTarget` | `UITextDocumentProxy`, already wired via `ProxyTextTarget` |
 
-`SharedStore` already asks for the App Group suite by name, so no code change is
-needed to switch it on. What is missing is the entitlement: there is no
-`.entitlements` file in the project, so `UserDefaults(suiteName:)` returns
-nothing usable and the store falls back to `.standard`. **The app and the
-keyboard do not share state today** — each process keeps its own copy.
+`SharedStore` now writes to the App Group container, and the keyboard extension
+reads what the app wrote. `SharedStore.storage` says which of the two stores an
+instance actually got: `.appGroup`, or `.processLocal` when the container was out
+of reach, which it also logs as an error rather than pretending to be shared.
+
+Verify it end to end with `Scripts/prove-app-group.sh`. The check that matters is
+the last one — it turns English off in the app, brings the keyboard up in a real
+text field, and confirms the extension process, which iOS runs separately,
+rendered Hebrew because of it. A unit test cannot show this: a process always
+sees its own writes.
 
 ## Testing
 
@@ -151,9 +175,8 @@ unit tests yet; see `.claude/docs/testing.md`.
 
 ## Not built
 
-- The keyboard extension is built and embedded but has not been exercised inside
-  a host app; all of its UI is shared with the in-app playground, which has been
-  verified end to end
-- App Group entitlements (the mock keeps per-process state instead)
+- The keyboard extension runs in a real text field — `Scripts/prove-app-group.sh`
+  drives it — but only far enough to prove it reads shared settings; the panels
+  are still exercised through the in-app playground
 - Landscape, iPad layouts, Dynamic Type above the default size
 - Real StoreKit, accounts, or any backend

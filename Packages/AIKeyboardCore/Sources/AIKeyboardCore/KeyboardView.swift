@@ -44,12 +44,15 @@ public struct KeyboardView: View {
                 spacing: Theme.Metrics.keySpacing,
                 sideInset: Theme.Metrics.sideInset
             )
-            let rows = KeyboardLayout.rows(for: controller.language, plane: controller.plane)
-                + [KeyboardLayout.bottomRow(
-                    for: controller.language,
-                    plane: controller.plane,
-                    showsGlobe: controller.showsGlobeKey
-                )]
+            let rows =
+                KeyboardLayout.rows(for: controller.language, plane: controller.plane)
+                + [
+                    KeyboardLayout.bottomRow(
+                        for: controller.language,
+                        plane: controller.plane,
+                        showsGlobe: controller.showsGlobeKey
+                    )
+                ]
 
             VStack(spacing: Theme.Metrics.rowSpacing) {
                 ForEach(rows) { row in

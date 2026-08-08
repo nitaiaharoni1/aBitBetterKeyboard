@@ -1,0 +1,382 @@
+{
+  "fix-en-01" : "I don't think we should do it because it doesn't make sense.",
+  "fix-en-02" : "Sounds good, I'll send you the deck tonight.",
+  "fix-en-03" : "The onboarding is good but it's flow breaks on the last screen.",
+  "fix-en-04" : "Can you send me the I'd for the sprint ticket.",
+  "fix-en-05" : "Sorry I was I'll last week and didn't see your message.",
+  "fix-en-06" : "He said Ii don't know\" and left it there.",
+  "fix-en-07" : "Omg that meeting was sooo long 😅 I'm gonna need coffee.",
+  "fix-en-08" : "I'll sedn you teh updated presentaion after the standup tommorow.",
+  "fix-en-09" : "The numbers from last week doesn't match what the dashboard show.",
+  "fix-en-10" : "Please don't forget to send the invoice before the 15th, otherwise finance won't process it this month.",
+  "fix-he-01" : "היי, אני חושב שאנחנו צריכים לדבר על זה מחר בבקשה.",
+  "fix-he-02" : "אני יבדוק את זה ואחזור אליך.",
+  "fix-he-03" : "תודה רבה, קיבלתי. אני עובר על זה עכשיו ומעדכן.",
+  "fix-he-04" : "מעולה, נתראה מחר בבוקר.",
+  "fix-he-05" : "אתה יכול להעביר לי את הקובץ של אתמול.",
+  "fix-he-06" : "יאללה סבבה, נדבר אח\"כ.",
+  "fix-he-07" : "שלחתי לך את הקובץ אתמול בערב, תגדי לי אם קיבלת.",
+  "fix-he-08" : "מה קורה אני מנסה להתקשר אליך כל הבוקר.",
+  "fix-mix-01" : "אני אשלח לך את ה-document מחר אחרי ה-standup.",
+  "fix-mix-02" : "העליתי את התיקון ל-staging והכל עובד, its fine.",
+  "fix-mix-03" : "Can you check the deployment on staging, אני חושב שיש שם באג בבקשא.",
+  "fix-mix-04" : "בוא נעשה sync קצר על ה-roadmap של Q3.",
+  "fix-mix-05" : "אני צריך את ה-API key בשביל ה-demo של מחר.",
+  "fix-mix-06" : "צריך לעשות refactor ל-service הזה לפני ה-release.",
+  "rp-en-01" : [
+    {
+      "intent" : "Accept",
+      "text" : "Sure, I can take it. I'll run standup at 9."
+    },
+    {
+      "intent" : "Push back",
+      "text" : "I have something at 9 too. Can we move it to 10?"
+    },
+    {
+      "intent" : "Ask first",
+      "text" : "Probably yes. Anything specific you want covered?"
+    }
+  ],
+  "rp-en-02" : [
+    {
+      "intent" : "Accept",
+      "text" : "Sure, I can take it. I'll run standup at 9."
+    },
+    {
+      "intent" : "Push back",
+      "text" : "I have something at 9 too. Can we move it to 10?"
+    },
+    {
+      "intent" : "Ask first",
+      "text" : "Probably yes. Anything specific you want covered?"
+    }
+  ],
+  "rp-en-03" : [
+    {
+      "intent" : "Accept",
+      "text" : "Sure, I can take it. I'll run standup at 9."
+    },
+    {
+      "intent" : "Push back",
+      "text" : "I have something at 9 too. Can we move it to 10?"
+    },
+    {
+      "intent" : "Ask first",
+      "text" : "Probably yes. Anything specific you want covered?"
+    }
+  ],
+  "rp-en-04" : [
+    {
+      "intent" : "Accept",
+      "text" : "Sure, I can take it. I'll run standup at 9."
+    },
+    {
+      "intent" : "Push back",
+      "text" : "I have something at 9 too. Can we move it to 10?"
+    },
+    {
+      "intent" : "Ask first",
+      "text" : "Probably yes. Anything specific you want covered?"
+    }
+  ],
+  "rp-he-01" : [
+    {
+      "intent" : "מאשר",
+      "text" : "כן, פנוי. באיזו שעה נוח לך?"
+    },
+    {
+      "intent" : "דוחה",
+      "text" : "הערב קצת צפוף לי, אפשר לדחות למחר?"
+    },
+    {
+      "intent" : "שואל",
+      "text" : "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+    }
+  ],
+  "rp-he-02" : [
+    {
+      "intent" : "מאשר",
+      "text" : "כן, פנוי. באיזו שעה נוח לך?"
+    },
+    {
+      "intent" : "דוחה",
+      "text" : "הערב קצת צפוף לי, אפשר לדחות למחר?"
+    },
+    {
+      "intent" : "שואל",
+      "text" : "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+    }
+  ],
+  "rp-he-03" : [
+    {
+      "intent" : "מאשר",
+      "text" : "כן, פנוי. באיזו שעה נוח לך?"
+    },
+    {
+      "intent" : "דוחה",
+      "text" : "הערב קצת צפוף לי, אפשר לדחות למחר?"
+    },
+    {
+      "intent" : "שואל",
+      "text" : "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+    }
+  ],
+  "rp-he-04" : [
+    {
+      "intent" : "מאשר",
+      "text" : "כן, פנוי. באיזו שעה נוח לך?"
+    },
+    {
+      "intent" : "דוחה",
+      "text" : "הערב קצת צפוף לי, אפשר לדחות למחר?"
+    },
+    {
+      "intent" : "שואל",
+      "text" : "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+    }
+  ],
+  "rp-mix-01" : [
+    {
+      "intent" : "מאשר",
+      "text" : "כן, פנוי. באיזו שעה נוח לך?"
+    },
+    {
+      "intent" : "דוחה",
+      "text" : "הערב קצת צפוף לי, אפשר לדחות למחר?"
+    },
+    {
+      "intent" : "שואל",
+      "text" : "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+    }
+  ],
+  "rp-mix-02" : [
+    {
+      "intent" : "מאשר",
+      "text" : "כן, פנוי. באיזו שעה נוח לך?"
+    },
+    {
+      "intent" : "דוחה",
+      "text" : "הערב קצת צפוף לי, אפשר לדחות למחר?"
+    },
+    {
+      "intent" : "שואל",
+      "text" : "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+    }
+  ],
+  "rp-mix-03" : [
+    {
+      "intent" : "מאשר",
+      "text" : "כן, פנוי. באיזו שעה נוח לך?"
+    },
+    {
+      "intent" : "דוחה",
+      "text" : "הערב קצת צפוף לי, אפשר לדחות למחר?"
+    },
+    {
+      "intent" : "שואל",
+      "text" : "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+    }
+  ],
+  "rp-mix-04" : [
+    {
+      "intent" : "מאשר",
+      "text" : "כן, פנוי. באיזו שעה נוח לך?"
+    },
+    {
+      "intent" : "דוחה",
+      "text" : "הערב קצת צפוף לי, אפשר לדחות למחר?"
+    },
+    {
+      "intent" : "שואל",
+      "text" : "נשמע טוב. איפה בדיוק ובאיזו שעה?"
+    }
+  ],
+  "rw-en-01" : [
+    {
+      "text" : "To be clear, I don't think we should do it because it doesn't make sense.",
+      "tone" : "clearer"
+    },
+    {
+      "text" : "I doubt we should do it, it doesn't make sense.",
+      "tone" : "shorter"
+    },
+    {
+      "text" : "Could you please make sure that I don't think we should do it because it doesn't make sense.",
+      "tone" : "professional"
+    }
+  ],
+  "rw-en-02" : [
+    {
+      "text" : "To be clear, hey I need this by tomorrow please.",
+      "tone" : "clearer"
+    },
+    {
+      "text" : "Could you please make sure that hey I need this by tomorrow please.",
+      "tone" : "professional"
+    }
+  ],
+  "rw-en-03" : [
+    {
+      "text" : "To be clear, thanks for turning that around so fast, it made a real difference today.",
+      "tone" : "clearer"
+    },
+    {
+      "text" : "Could you please make sure that thanks for turning that around so fast, it made a real difference today.",
+      "tone" : "professional"
+    }
+  ],
+  "rw-en-04" : [
+    {
+      "text" : "To be clear, I can't make the 9am standup tomorrow.",
+      "tone" : "clearer"
+    },
+    {
+      "text" : "Could you please make sure that I can't make the 9am standup tomorrow.",
+      "tone" : "professional"
+    }
+  ],
+  "rw-he-01" : [
+    {
+      "text" : "רציתי לוודא: אני לא חושב שכדאי לנו לעשות את זה.",
+      "tone" : "clearer"
+    },
+    {
+      "text" : "אני בספק שכדאי לנו לעשות את זה.",
+      "tone" : "shorter"
+    },
+    {
+      "text" : "אשמח אם נוכל להתייחס לכך: אני לא חושב שכדאי לנו לעשות את זה.",
+      "tone" : "professional"
+    }
+  ],
+  "rw-he-02" : [
+    {
+      "text" : "רציתי לוודא: אפשר לקבל את התשובה שלך עד סוף היום.",
+      "tone" : "clearer"
+    },
+    {
+      "text" : "אשמח אם נוכל להתייחס לכך: אפשר לקבל את התשובה שלך עד סוף היום.",
+      "tone" : "professional"
+    }
+  ],
+  "rw-he-03" : [
+    {
+      "text" : "רציתי לוודא: תודה רבה על העזרה אתמול, ממש הצלת אותי.",
+      "tone" : "clearer"
+    },
+    {
+      "text" : "אשמח אם נוכל להתייחס לכך: תודה רבה על העזרה אתמול, ממש הצלת אותי.",
+      "tone" : "professional"
+    }
+  ],
+  "rw-he-04" : [
+    {
+      "text" : "רציתי לוודא: אני לא יכול לקחת את זה עכשיו יש לי יותר מדי דברים.",
+      "tone" : "clearer"
+    },
+    {
+      "text" : "אשמח אם נוכל להתייחס לכך: אני לא יכול לקחת את זה עכשיו יש לי יותר מדי דברים.",
+      "tone" : "professional"
+    }
+  ],
+  "rw-mix-01" : [
+    {
+      "text" : "רציתי לוודא: צריך לדחות את ה-launch כי ה-QA לא סיים.",
+      "tone" : "clearer"
+    },
+    {
+      "text" : "אשמח אם נוכל להתייחס לכך: צריך לדחות את ה-launch כי ה-QA לא סיים.",
+      "tone" : "professional"
+    }
+  ],
+  "rw-mix-02" : [
+    {
+      "text" : "רציתי לוודא: אני אשלח לך את ה-document מחר אחרי ה-standup.",
+      "tone" : "clearer"
+    },
+    {
+      "text" : "אשמח אם נוכל להתייחס לכך: אני אשלח לך את ה-document מחר אחרי ה-standup.",
+      "tone" : "professional"
+    }
+  ],
+  "rw-mix-03" : [
+    {
+      "text" : "רציתי לוודא: תעשה את ה-review של ה-PR עד היום בערב.",
+      "tone" : "clearer"
+    },
+    {
+      "text" : "אשמח אם נוכל להתייחס לכך: תעשה את ה-review של ה-PR עד היום בערב.",
+      "tone" : "professional"
+    }
+  ],
+  "rw-mix-04" : [
+    {
+      "text" : "רציתי לוודא: ה-meeting היה waste of time, אף אחד לא הגיע מוכן.",
+      "tone" : "clearer"
+    },
+    {
+      "text" : "אשמח אם נוכל להתייחס לכך: ה-meeting היה waste of time, אף אחד לא הגיע מוכן.",
+      "tone" : "professional"
+    }
+  ],
+  "tn-en-01" : [
+    {
+      "text" : "To be clear, I think we should probably just move the meeting to next week.",
+      "tone" : "clearer"
+    }
+  ],
+  "tn-en-02" : [
+    {
+      "text" : "Because the client hasn't replied yet, I want to postpone the review that we had scheduled for friday.",
+      "tone" : "shorter"
+    }
+  ],
+  "tn-en-03" : [
+    {
+      "text" : "Could you please make sure that hey can you fix the bug in the checkout flow it's been broken since monday.",
+      "tone" : "professional"
+    }
+  ],
+  "tn-en-04" : [
+    {
+      "text" : "We are not doing that. Let's move on that.",
+      "tone" : "confident"
+    }
+  ],
+  "tn-he-01" : [
+    {
+      "text" : "היי, אני רוצה לבקש ממך לבדוק את הנתונים שהעברתי אליך.",
+      "tone" : "casual"
+    }
+  ],
+  "tn-he-02" : [
+    {
+      "text" : "אולי אפשר בבקשה לשקול לדחות את הפגישה של יום ראשון. זה מה שצריך לקרות.",
+      "tone" : "confident"
+    }
+  ],
+  "tn-he-03" : [
+    {
+      "text" : "אשמח אם נוכל להתייחס לכך: תשמע אני לא מרוצה מהתוצאה של הפרויקט הזה בכלל.",
+      "tone" : "professional"
+    }
+  ],
+  "tn-mix-01" : [
+    {
+      "text" : "תודה מראש! לא הספקתי לעשות review ל-PR שלך, סליחה.",
+      "tone" : "friendly"
+    }
+  ],
+  "tn-mix-02" : [
+    {
+      "text" : "אני חושב שאולי כדאי שנעשה עוד iteration על ה-design לפני שאנחנו שולחים את זה ל-client.",
+      "tone" : "shorter"
+    }
+  ],
+  "tn-mix-03" : [
+    {
+      "text" : "רציתי לוודא: ה-deploy נכשל שוב, אני חושב שזה קשור ל-config שהשתנה אתמול אבל אני לא בטוח.",
+      "tone" : "clearer"
+    }
+  ]
+}

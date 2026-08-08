@@ -1,0 +1,837 @@
+{
+  "corpus": "AIKeyboard dictation bar",
+  "generated": "2026-08-07",
+  "generator": "Bar/dictation/generate.py",
+  "provenance": "SYNTHETIC — 100% macOS `say` text-to-speech. Zero human recordings.",
+  "warning": "Word error rate measured on this corpus is an OPTIMISTIC CEILING, not a prediction of field accuracy. Synthetic speech is cleaner, better enunciated and more evenly paced than a person talking in a noisy room. A real bar needs 100-500 genuine Israeli recordings (plan.md section 6). Passing here is necessary, not sufficient. See README.md.",
+  "audio_format": {
+    "container": "wav",
+    "encoding": "LEI16 (16-bit signed little-endian PCM)",
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "note": "Convert to whatever SpeechTranscriber.bestAvailableAudioFormat reports before feeding SpeechAnalyzer; do not assume 16 kHz is accepted verbatim."
+  },
+  "scoring_note": "Compute WER on a normalized form: case-folded, punctuation stripped, Hebrew maqaf/hyphen treated consistently. 'ה-roadmap' vs 'ה roadmap' is a formatting difference, not a recognition error. Track named_entities separately — entity accuracy matters more than raw WER for this product.",
+  "language_mix_values": {
+    "he": "Hebrew only",
+    "en": "English only",
+    "he-en": "Hebrew sentence with English words inside it (code-switching)"
+  },
+  "counts": {
+    "he": 12,
+    "en": 12,
+    "he-en": 12,
+    "total": 36
+  },
+  "clip_count": 36,
+  "clips": [
+    {
+      "id": "he-01",
+      "file": "audio/he-01.wav",
+      "transcript": "נועה, תעדכני בבקשה את הדוח לפני הישיבה עם ההנהלה מחר בעשר וחצי",
+      "language_mix": "he",
+      "language_mix_label": "Hebrew only",
+      "duration_seconds": 4.876,
+      "word_count": 12,
+      "hebrew_tokens": 12,
+      "english_tokens": 0,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "נועה"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 175,
+        "command": "say -v 'Carmit' -r 175 -o he-01.wav --data-format LEI16@16000 --channels 1 'נועה, תעדכני בבקשה את הדוח לפני הישיבה עם ההנהלה מחר בעשר וחצי'"
+      }
+    },
+    {
+      "id": "he-02",
+      "file": "audio/he-02.wav",
+      "transcript": "דיברתי עם יואב מהצוות של מובילאיי, הם רוצים לראות הדגמה בשבוע הבא",
+      "language_mix": "he",
+      "language_mix_label": "Hebrew only",
+      "duration_seconds": 4.771,
+      "word_count": 12,
+      "hebrew_tokens": 12,
+      "english_tokens": 0,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "יואב",
+        "מובילאיי"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 160,
+        "command": "say -v 'Carmit' -r 160 -o he-02.wav --data-format LEI16@16000 --channels 1 'דיברתי עם יואב מהצוות של מובילאיי, הם רוצים לראות הדגמה בשבוע הבא'"
+      }
+    },
+    {
+      "id": "he-03",
+      "file": "audio/he-03.wav",
+      "transcript": "צריך לסגור את התקציב לרבעון הבא עד יום חמישי, אחרת זה נדחה לינואר",
+      "language_mix": "he",
+      "language_mix_label": "Hebrew only",
+      "duration_seconds": 4.489,
+      "word_count": 13,
+      "hebrew_tokens": 13,
+      "english_tokens": 0,
+      "mixed_script_tokens": 0,
+      "named_entities": [],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 190,
+        "command": "say -v 'Carmit' -r 190 -o he-03.wav --data-format LEI16@16000 --channels 1 'צריך לסגור את התקציב לרבעון הבא עד יום חמישי, אחרת זה נדחה לינואר'"
+      }
+    },
+    {
+      "id": "he-04",
+      "file": "audio/he-04.wav",
+      "transcript": "שלחתי לשירה את החוזה בווטסאפ, היא אמרה שתחזור אלי אחרי הצהריים",
+      "language_mix": "he",
+      "language_mix_label": "Hebrew only",
+      "duration_seconds": 4.872,
+      "word_count": 11,
+      "hebrew_tokens": 11,
+      "english_tokens": 0,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "שירה",
+        "ווטסאפ"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 175,
+        "command": "say -v 'Carmit' -r 175 -o he-04.wav --data-format LEI16@16000 --channels 1 'שלחתי לשירה את החוזה בווטסאפ, היא אמרה שתחזור אלי אחרי הצהריים'"
+      }
+    },
+    {
+      "id": "he-05",
+      "file": "audio/he-05.wav",
+      "transcript": "הפגישה עם המשקיעים של פיטנגו נדחתה ליום שלישי הבא בשעה תשע בבוקר",
+      "language_mix": "he",
+      "language_mix_label": "Hebrew only",
+      "duration_seconds": 5.278,
+      "word_count": 12,
+      "hebrew_tokens": 12,
+      "english_tokens": 0,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "פיטנגו"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 150,
+        "command": "say -v 'Carmit' -r 150 -o he-05.wav --data-format LEI16@16000 --channels 1 'הפגישה עם המשקיעים של פיטנגו נדחתה ליום שלישי הבא בשעה תשע בבוקר'"
+      }
+    },
+    {
+      "id": "he-06",
+      "file": "audio/he-06.wav",
+      "transcript": "אבישי ביקש שנעביר את כל הקבצים לתיקייה המשותפת לפני סוף החודש",
+      "language_mix": "he",
+      "language_mix_label": "Hebrew only",
+      "duration_seconds": 4.613,
+      "word_count": 11,
+      "hebrew_tokens": 11,
+      "english_tokens": 0,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "אבישי"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 185,
+        "command": "say -v 'Carmit' -r 185 -o he-06.wav --data-format LEI16@16000 --channels 1 'אבישי ביקש שנעביר את כל הקבצים לתיקייה המשותפת לפני סוף החודש'"
+      }
+    },
+    {
+      "id": "he-07",
+      "file": "audio/he-07.wav",
+      "transcript": "יש לנו תקלה בשרת של הלקוח בחיפה, אני נוסע לשם מחר בבוקר",
+      "language_mix": "he",
+      "language_mix_label": "Hebrew only",
+      "duration_seconds": 4.034,
+      "word_count": 12,
+      "hebrew_tokens": 12,
+      "english_tokens": 0,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "חיפה"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 200,
+        "command": "say -v 'Carmit' -r 200 -o he-07.wav --data-format LEI16@16000 --channels 1 'יש לנו תקלה בשרת של הלקוח בחיפה, אני נוסע לשם מחר בבוקר'"
+      }
+    },
+    {
+      "id": "he-08",
+      "file": "audio/he-08.wav",
+      "transcript": "תגידי לרונית שאני מאחר לישיבת הצוות, יש פקקים בכביש שש",
+      "language_mix": "he",
+      "language_mix_label": "Hebrew only",
+      "duration_seconds": 4.376,
+      "word_count": 10,
+      "hebrew_tokens": 10,
+      "english_tokens": 0,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "רונית",
+        "כביש שש"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 175,
+        "command": "say -v 'Carmit' -r 175 -o he-08.wav --data-format LEI16@16000 --channels 1 'תגידי לרונית שאני מאחר לישיבת הצוות, יש פקקים בכביש שש'"
+      }
+    },
+    {
+      "id": "he-09",
+      "file": "audio/he-09.wav",
+      "transcript": "המנהל הכללי של צ'ק פוינט אמר שהם מגייסים עוד מאתיים מהנדסים השנה",
+      "language_mix": "he",
+      "language_mix_label": "Hebrew only",
+      "duration_seconds": 6.242,
+      "word_count": 12,
+      "hebrew_tokens": 12,
+      "english_tokens": 0,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "צ'ק פוינט"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 165,
+        "command": "say -v 'Carmit' -r 165 -o he-09.wav --data-format LEI16@16000 --channels 1 \"המנהל הכללי של צ'ק פוינט אמר שהם מגייסים עוד מאתיים מהנדסים השנה\""
+      }
+    },
+    {
+      "id": "he-10",
+      "file": "audio/he-10.wav",
+      "transcript": "אני חושב שכדאי לנו לבדוק את זה עוד פעם לפני שאנחנו מעלים לאוויר",
+      "language_mix": "he",
+      "language_mix_label": "Hebrew only",
+      "duration_seconds": 3.998,
+      "word_count": 13,
+      "hebrew_tokens": 13,
+      "english_tokens": 0,
+      "mixed_script_tokens": 0,
+      "named_entities": [],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 195,
+        "command": "say -v 'Carmit' -r 195 -o he-10.wav --data-format LEI16@16000 --channels 1 'אני חושב שכדאי לנו לבדוק את זה עוד פעם לפני שאנחנו מעלים לאוויר'"
+      }
+    },
+    {
+      "id": "he-11",
+      "file": "audio/he-11.wav",
+      "transcript": "כתבי לי בבקשה סיכום קצר של השיחה עם הלקוח ותשלחי לכולם במייל",
+      "language_mix": "he",
+      "language_mix_label": "Hebrew only",
+      "duration_seconds": 4.027,
+      "word_count": 12,
+      "hebrew_tokens": 12,
+      "english_tokens": 0,
+      "mixed_script_tokens": 0,
+      "named_entities": [],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 175,
+        "command": "say -v 'Carmit' -r 175 -o he-11.wav --data-format LEI16@16000 --channels 1 'כתבי לי בבקשה סיכום קצר של השיחה עם הלקוח ותשלחי לכולם במייל'"
+      }
+    },
+    {
+      "id": "he-12",
+      "file": "audio/he-12.wav",
+      "transcript": "הגשנו את הבקשה לרשות החדשנות, התשובה אמורה להגיע תוך שישה שבועות",
+      "language_mix": "he",
+      "language_mix_label": "Hebrew only",
+      "duration_seconds": 4.895,
+      "word_count": 11,
+      "hebrew_tokens": 11,
+      "english_tokens": 0,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "רשות החדשנות"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 155,
+        "command": "say -v 'Carmit' -r 155 -o he-12.wav --data-format LEI16@16000 --channels 1 'הגשנו את הבקשה לרשות החדשנות, התשובה אמורה להגיע תוך שישה שבועות'"
+      }
+    },
+    {
+      "id": "en-01",
+      "file": "audio/en-01.wav",
+      "transcript": "Can you review the deck before the board meeting on Thursday morning?",
+      "language_mix": "en",
+      "language_mix_label": "English only",
+      "duration_seconds": 3.285,
+      "word_count": 12,
+      "hebrew_tokens": 0,
+      "english_tokens": 12,
+      "mixed_script_tokens": 0,
+      "named_entities": [],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Samantha",
+        "rate_wpm": 175,
+        "command": "say -v 'Samantha' -r 175 -o en-01.wav --data-format LEI16@16000 --channels 1 'Can you review the deck before the board meeting on Thursday morning?'"
+      }
+    },
+    {
+      "id": "en-02",
+      "file": "audio/en-02.wav",
+      "transcript": "I pushed the fix to staging, but the pipeline is still failing on the integration tests.",
+      "language_mix": "en",
+      "language_mix_label": "English only",
+      "duration_seconds": 5.114,
+      "word_count": 16,
+      "hebrew_tokens": 0,
+      "english_tokens": 16,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "staging",
+        "pipeline"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Daniel",
+        "rate_wpm": 165,
+        "command": "say -v 'Daniel' -r 165 -o en-02.wav --data-format LEI16@16000 --channels 1 'I pushed the fix to staging, but the pipeline is still failing on the integration tests.'"
+      }
+    },
+    {
+      "id": "en-03",
+      "file": "audio/en-03.wav",
+      "transcript": "Let's move the standup to nine fifteen so Yotam can join from Tel Aviv.",
+      "language_mix": "en",
+      "language_mix_label": "English only",
+      "duration_seconds": 3.857,
+      "word_count": 14,
+      "hebrew_tokens": 0,
+      "english_tokens": 14,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "Yotam",
+        "Tel Aviv"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Karen",
+        "rate_wpm": 180,
+        "command": "say -v 'Karen' -r 180 -o en-03.wav --data-format LEI16@16000 --channels 1 \"Let's move the standup to nine fifteen so Yotam can join from Tel Aviv.\""
+      }
+    },
+    {
+      "id": "en-04",
+      "file": "audio/en-04.wav",
+      "transcript": "We closed the seed round last week, twelve million led by Aleph.",
+      "language_mix": "en",
+      "language_mix_label": "English only",
+      "duration_seconds": 4.174,
+      "word_count": 12,
+      "hebrew_tokens": 0,
+      "english_tokens": 12,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "Aleph"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Moira",
+        "rate_wpm": 170,
+        "command": "say -v 'Moira' -r 170 -o en-04.wav --data-format LEI16@16000 --channels 1 'We closed the seed round last week, twelve million led by Aleph.'"
+      }
+    },
+    {
+      "id": "en-05",
+      "file": "audio/en-05.wav",
+      "transcript": "The customer in Berlin wants SOC two compliance before they sign the contract.",
+      "language_mix": "en",
+      "language_mix_label": "English only",
+      "duration_seconds": 4.652,
+      "word_count": 13,
+      "hebrew_tokens": 0,
+      "english_tokens": 13,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "SOC two"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Tessa",
+        "rate_wpm": 175,
+        "command": "say -v 'Tessa' -r 175 -o en-05.wav --data-format LEI16@16000 --channels 1 'The customer in Berlin wants SOC two compliance before they sign the contract.'"
+      }
+    },
+    {
+      "id": "en-06",
+      "file": "audio/en-06.wav",
+      "transcript": "Please send me the invoice from the vendor, I need it for the quarterly report.",
+      "language_mix": "en",
+      "language_mix_label": "English only",
+      "duration_seconds": 4.651,
+      "word_count": 15,
+      "hebrew_tokens": 0,
+      "english_tokens": 15,
+      "mixed_script_tokens": 0,
+      "named_entities": [],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Rishi",
+        "rate_wpm": 160,
+        "command": "say -v 'Rishi' -r 160 -o en-06.wav --data-format LEI16@16000 --channels 1 'Please send me the invoice from the vendor, I need it for the quarterly report.'"
+      }
+    },
+    {
+      "id": "en-07",
+      "file": "audio/en-07.wav",
+      "transcript": "I think we should ship the beta to a hundred users first and see what breaks.",
+      "language_mix": "en",
+      "language_mix_label": "English only",
+      "duration_seconds": 3.925,
+      "word_count": 16,
+      "hebrew_tokens": 0,
+      "english_tokens": 16,
+      "mixed_script_tokens": 0,
+      "named_entities": [],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Tara",
+        "rate_wpm": 190,
+        "command": "say -v 'Tara' -r 190 -o en-07.wav --data-format LEI16@16000 --channels 1 'I think we should ship the beta to a hundred users first and see what breaks.'"
+      }
+    },
+    {
+      "id": "en-08",
+      "file": "audio/en-08.wav",
+      "transcript": "Ravit is on vacation until Sunday, so ask Dor about the migration script.",
+      "language_mix": "en",
+      "language_mix_label": "English only",
+      "duration_seconds": 3.02,
+      "word_count": 13,
+      "hebrew_tokens": 0,
+      "english_tokens": 13,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "Ravit",
+        "Dor"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Aman",
+        "rate_wpm": 175,
+        "command": "say -v 'Aman' -r 175 -o en-08.wav --data-format LEI16@16000 --channels 1 'Ravit is on vacation until Sunday, so ask Dor about the migration script.'"
+      }
+    },
+    {
+      "id": "en-09",
+      "file": "audio/en-09.wav",
+      "transcript": "The latency went up after the deploy, can you check the database connection pool?",
+      "language_mix": "en",
+      "language_mix_label": "English only",
+      "duration_seconds": 4.024,
+      "word_count": 14,
+      "hebrew_tokens": 0,
+      "english_tokens": 14,
+      "mixed_script_tokens": 0,
+      "named_entities": [],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Zoe (Premium)",
+        "rate_wpm": 170,
+        "command": "say -v 'Zoe (Premium)' -r 170 -o en-09.wav --data-format LEI16@16000 --channels 1 'The latency went up after the deploy, can you check the database connection pool?'"
+      }
+    },
+    {
+      "id": "en-10",
+      "file": "audio/en-10.wav",
+      "transcript": "We need to hire two more backend engineers before the end of the quarter.",
+      "language_mix": "en",
+      "language_mix_label": "English only",
+      "duration_seconds": 3.337,
+      "word_count": 14,
+      "hebrew_tokens": 0,
+      "english_tokens": 14,
+      "mixed_script_tokens": 0,
+      "named_entities": [],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Samantha",
+        "rate_wpm": 200,
+        "command": "say -v 'Samantha' -r 200 -o en-10.wav --data-format LEI16@16000 --channels 1 'We need to hire two more backend engineers before the end of the quarter.'"
+      }
+    },
+    {
+      "id": "en-11",
+      "file": "audio/en-11.wav",
+      "transcript": "I'll be working from home tomorrow, ping me on Slack if anything urgent comes up.",
+      "language_mix": "en",
+      "language_mix_label": "English only",
+      "duration_seconds": 4.23,
+      "word_count": 15,
+      "hebrew_tokens": 0,
+      "english_tokens": 15,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "Slack"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Daniel",
+        "rate_wpm": 190,
+        "command": "say -v 'Daniel' -r 190 -o en-11.wav --data-format LEI16@16000 --channels 1 \"I'll be working from home tomorrow, ping me on Slack if anything urgent comes up.\""
+      }
+    },
+    {
+      "id": "en-12",
+      "file": "audio/en-12.wav",
+      "transcript": "The demo with Wix went well, they want to start a pilot in September.",
+      "language_mix": "en",
+      "language_mix_label": "English only",
+      "duration_seconds": 4.147,
+      "word_count": 14,
+      "hebrew_tokens": 0,
+      "english_tokens": 14,
+      "mixed_script_tokens": 0,
+      "named_entities": [
+        "Wix"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Moira",
+        "rate_wpm": 155,
+        "command": "say -v 'Moira' -r 155 -o en-12.wav --data-format LEI16@16000 --channels 1 'The demo with Wix went well, they want to start a pilot in September.'"
+      }
+    },
+    {
+      "id": "mix-01",
+      "file": "audio/mix-01.wav",
+      "transcript": "בוא נעשה sync קצר על ה-roadmap של Q3 לפני ה-standup",
+      "language_mix": "he-en",
+      "language_mix_label": "Hebrew sentence with English words inside it",
+      "duration_seconds": 3.994,
+      "word_count": 10,
+      "hebrew_tokens": 6,
+      "english_tokens": 2,
+      "mixed_script_tokens": 2,
+      "named_entities": [
+        "sync",
+        "roadmap",
+        "Q3",
+        "standup"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 175,
+        "command": "say -v 'Carmit' -r 175 -o mix-01.wav --data-format LEI16@16000 --channels 1 'בוא נעשה sync קצר על ה-roadmap של Q3 לפני ה-standup'"
+      }
+    },
+    {
+      "id": "mix-02",
+      "file": "audio/mix-02.wav",
+      "transcript": "אני אשלח לך את ה-document מחר בבוקר אחרי שאני מסיים את ה-review",
+      "language_mix": "he-en",
+      "language_mix_label": "Hebrew sentence with English words inside it",
+      "duration_seconds": 4.462,
+      "word_count": 12,
+      "hebrew_tokens": 10,
+      "english_tokens": 0,
+      "mixed_script_tokens": 2,
+      "named_entities": [
+        "document",
+        "review"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 165,
+        "command": "say -v 'Carmit' -r 165 -o mix-02.wav --data-format LEI16@16000 --channels 1 'אני אשלח לך את ה-document מחר בבוקר אחרי שאני מסיים את ה-review'"
+      }
+    },
+    {
+      "id": "mix-03",
+      "file": "audio/mix-03.wav",
+      "transcript": "צריך לעשות deploy ל-production אחרי שה-tests עוברים ב-CI",
+      "language_mix": "he-en",
+      "language_mix_label": "Hebrew sentence with English words inside it",
+      "duration_seconds": 4.102,
+      "word_count": 8,
+      "hebrew_tokens": 4,
+      "english_tokens": 1,
+      "mixed_script_tokens": 3,
+      "named_entities": [
+        "deploy",
+        "production",
+        "tests",
+        "CI"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 180,
+        "command": "say -v 'Carmit' -r 180 -o mix-03.wav --data-format LEI16@16000 --channels 1 'צריך לעשות deploy ל-production אחרי שה-tests עוברים ב-CI'"
+      }
+    },
+    {
+      "id": "mix-04",
+      "file": "audio/mix-04.wav",
+      "transcript": "שלחתי לך invite ל-meeting בזום, תאשר בבקשה ב-calendar",
+      "language_mix": "he-en",
+      "language_mix_label": "Hebrew sentence with English words inside it",
+      "duration_seconds": 4.361,
+      "word_count": 8,
+      "hebrew_tokens": 5,
+      "english_tokens": 1,
+      "mixed_script_tokens": 2,
+      "named_entities": [
+        "invite",
+        "meeting",
+        "calendar"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 175,
+        "command": "say -v 'Carmit' -r 175 -o mix-04.wav --data-format LEI16@16000 --channels 1 'שלחתי לך invite ל-meeting בזום, תאשר בבקשה ב-calendar'"
+      }
+    },
+    {
+      "id": "mix-05",
+      "file": "audio/mix-05.wav",
+      "transcript": "ה-designer העלה את ה-mockups ל-Figma, תעברי עליהם לפני ה-sprint planning",
+      "language_mix": "he-en",
+      "language_mix_label": "Hebrew sentence with English words inside it",
+      "duration_seconds": 4.93,
+      "word_count": 10,
+      "hebrew_tokens": 5,
+      "english_tokens": 1,
+      "mixed_script_tokens": 4,
+      "named_entities": [
+        "designer",
+        "mockups",
+        "Figma",
+        "sprint planning"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 160,
+        "command": "say -v 'Carmit' -r 160 -o mix-05.wav --data-format LEI16@16000 --channels 1 'ה-designer העלה את ה-mockups ל-Figma, תעברי עליהם לפני ה-sprint planning'"
+      }
+    },
+    {
+      "id": "mix-06",
+      "file": "audio/mix-06.wav",
+      "transcript": "יש bug ב-login של האפליקציה, ה-QA פתחו ticket בג'ירה",
+      "language_mix": "he-en",
+      "language_mix_label": "Hebrew sentence with English words inside it",
+      "duration_seconds": 5.415,
+      "word_count": 9,
+      "hebrew_tokens": 5,
+      "english_tokens": 2,
+      "mixed_script_tokens": 2,
+      "named_entities": [
+        "bug",
+        "login",
+        "QA",
+        "ticket",
+        "ג'ירה"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 190,
+        "command": "say -v 'Carmit' -r 190 -o mix-06.wav --data-format LEI16@16000 --channels 1 \"יש bug ב-login של האפליקציה, ה-QA פתחו ticket בג'ירה\""
+      }
+    },
+    {
+      "id": "mix-07",
+      "file": "audio/mix-07.wav",
+      "transcript": "המשקיעים רוצים לראות את ה-metrics של ה-churn ברבעון האחרון",
+      "language_mix": "he-en",
+      "language_mix_label": "Hebrew sentence with English words inside it",
+      "duration_seconds": 3.862,
+      "word_count": 9,
+      "hebrew_tokens": 7,
+      "english_tokens": 0,
+      "mixed_script_tokens": 2,
+      "named_entities": [
+        "metrics",
+        "churn"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 170,
+        "command": "say -v 'Carmit' -r 170 -o mix-07.wav --data-format LEI16@16000 --channels 1 'המשקיעים רוצים לראות את ה-metrics של ה-churn ברבעון האחרון'"
+      }
+    },
+    {
+      "id": "mix-08",
+      "file": "audio/mix-08.wav",
+      "transcript": "תעשה לי favor ותכתוב summary של ה-call עם הלקוח",
+      "language_mix": "he-en",
+      "language_mix_label": "Hebrew sentence with English words inside it",
+      "duration_seconds": 3.103,
+      "word_count": 9,
+      "hebrew_tokens": 6,
+      "english_tokens": 2,
+      "mixed_script_tokens": 1,
+      "named_entities": [
+        "favor",
+        "summary",
+        "call"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 195,
+        "command": "say -v 'Carmit' -r 195 -o mix-08.wav --data-format LEI16@16000 --channels 1 'תעשה לי favor ותכתוב summary של ה-call עם הלקוח'"
+      }
+    },
+    {
+      "id": "mix-09",
+      "file": "audio/mix-09.wav",
+      "transcript": "ה-onboarding של העובדים החדשים מתחיל ביום ראשון עם ה-HR",
+      "language_mix": "he-en",
+      "language_mix_label": "Hebrew sentence with English words inside it",
+      "duration_seconds": 3.909,
+      "word_count": 9,
+      "hebrew_tokens": 7,
+      "english_tokens": 0,
+      "mixed_script_tokens": 2,
+      "named_entities": [
+        "onboarding",
+        "HR"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 175,
+        "command": "say -v 'Carmit' -r 175 -o mix-09.wav --data-format LEI16@16000 --channels 1 'ה-onboarding של העובדים החדשים מתחיל ביום ראשון עם ה-HR'"
+      }
+    },
+    {
+      "id": "mix-10",
+      "file": "audio/mix-10.wav",
+      "transcript": "צריך לעדכן את ה-pricing באתר לפני ה-launch של הגרסה החדשה",
+      "language_mix": "he-en",
+      "language_mix_label": "Hebrew sentence with English words inside it",
+      "duration_seconds": 4.539,
+      "word_count": 10,
+      "hebrew_tokens": 8,
+      "english_tokens": 0,
+      "mixed_script_tokens": 2,
+      "named_entities": [
+        "pricing",
+        "launch"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 150,
+        "command": "say -v 'Carmit' -r 150 -o mix-10.wav --data-format LEI16@16000 --channels 1 'צריך לעדכן את ה-pricing באתר לפני ה-launch של הגרסה החדשה'"
+      }
+    },
+    {
+      "id": "mix-11",
+      "file": "audio/mix-11.wav",
+      "transcript": "אני ב-remote היום, אפשר לדבר איתי ב-Slack או ב-WhatsApp",
+      "language_mix": "he-en",
+      "language_mix_label": "Hebrew sentence with English words inside it",
+      "duration_seconds": 3.742,
+      "word_count": 9,
+      "hebrew_tokens": 6,
+      "english_tokens": 0,
+      "mixed_script_tokens": 3,
+      "named_entities": [
+        "remote",
+        "Slack",
+        "WhatsApp"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 185,
+        "command": "say -v 'Carmit' -r 185 -o mix-11.wav --data-format LEI16@16000 --channels 1 'אני ב-remote היום, אפשר לדבר איתי ב-Slack או ב-WhatsApp'"
+      }
+    },
+    {
+      "id": "mix-12",
+      "file": "audio/mix-12.wav",
+      "transcript": "ה-backend של דניאל מוכן, חסר רק ה-integration עם ה-API של החברה",
+      "language_mix": "he-en",
+      "language_mix_label": "Hebrew sentence with English words inside it",
+      "duration_seconds": 4.675,
+      "word_count": 11,
+      "hebrew_tokens": 8,
+      "english_tokens": 0,
+      "mixed_script_tokens": 3,
+      "named_entities": [
+        "backend",
+        "דניאל",
+        "integration",
+        "API"
+      ],
+      "production": {
+        "method": "macos-say-tts",
+        "speaker": "synthetic",
+        "voice": "Carmit",
+        "rate_wpm": 175,
+        "command": "say -v 'Carmit' -r 175 -o mix-12.wav --data-format LEI16@16000 --channels 1 'ה-backend של דניאל מוכן, חסר רק ה-integration עם ה-API של החברה'"
+      }
+    }
+  ]
+}

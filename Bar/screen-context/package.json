@@ -1,0 +1,12 @@
+{
+  "name": "aikeyboard-screen-context-corpus",
+  "private": true,
+  "type": "module",
+  "description": "Generates the screen-context judging corpus: chat screenshots at iPhone 17 Pro resolution plus derived ground truth.",
+  "scripts": {
+    "generate": "node generate.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.60.0"
+  }
+}

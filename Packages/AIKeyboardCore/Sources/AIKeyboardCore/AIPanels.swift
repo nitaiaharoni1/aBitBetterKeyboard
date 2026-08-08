@@ -188,7 +188,15 @@ public struct AIResultPanel: View {
 
                 if controller.isWorking {
                     loading
+                } else if let error = controller.aiError {
+                    // The tone chips are navigation, not a result: after a failed
+                    // call the user still needs them to try a different register.
+                    if case .variants = kind { toneChips }
+                    failure(error)
                 } else {
+                    if controller.aiProvenance?.isBestEffort == true {
+                        bestEffortNotice
+                    }
                     switch kind {
                     case .fix:
                         fixResult
@@ -230,6 +238,54 @@ public struct AIResultPanel: View {
         .padding(.top, Theme.Space.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityLabel("Working")
+    }
+
+    // MARK: Failure
+
+    /// Every AI action can come back with nothing, and each reason has a
+    /// different thing the user can do about it. Showing the reason is the
+    /// difference between a keyboard that looks broken and one that looks honest.
+    private func failure(_ error: AIEngineError) -> some View {
+        VStack(spacing: Theme.Space.xs) {
+            Spacer(minLength: 0)
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 22, weight: .light))
+                .foregroundStyle(Theme.Keys.secondaryLabel)
+            Text(error.title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.Keys.label)
+            Text(error.message)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.Keys.secondaryLabel)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            secondaryButton("Close") { controller.dismissOverlay() }
+                .padding(.horizontal, Theme.Space.sm)
+                .padding(.bottom, Theme.Space.sm)
+        }
+        .padding(.horizontal, Theme.Space.md)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(error.title). \(error.message)")
+    }
+
+    /// Shown when the on-device model answered in a language Apple does not list
+    /// as supported, because no cloud engine was reachable. The result is still
+    /// worth offering — the user can see their original right above it — but it
+    /// must not be presented with the same confidence as a supported language.
+    private var bestEffortNotice: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "info.circle")
+                .font(.system(size: 10, weight: .medium))
+            Text("Best effort — this language isn't fully supported on device")
+                .font(.system(size: 11))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(Theme.Keys.secondaryLabel)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Theme.Space.sm)
+        .padding(.bottom, 2)
     }
 
     // MARK: Fix
@@ -336,7 +392,9 @@ public struct AIResultPanel: View {
                 HStack(spacing: 4) {
                     Image(systemName: variant.tone.icon)
                         .font(.system(size: 10, weight: .semibold))
-                    Text(variant.tone.title.uppercased())
+                    // Rewrite labels the decision each version takes; Tone has
+                    // only the register, which is already the card's title.
+                    Text((variant.label ?? variant.tone.title).uppercased())
                         .font(.system(size: 10, weight: .semibold))
                         .tracking(0.6)
                 }
@@ -357,7 +415,7 @@ public struct AIResultPanel: View {
             .contentShape(Rectangle())
         }
         .pressable()
-        .accessibilityLabel("\(variant.tone.title): \(variant.text)")
+        .accessibilityLabel("\(variant.label ?? variant.tone.title): \(variant.text)")
         .accessibilityHint("Replaces your text")
     }
 
@@ -440,11 +498,13 @@ public struct AIResultPanel: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Keys.label)
 
-                Text("Reply needs to read the message on screen. iOS asks you to start that yourself, and it lasts until you stop it.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.Keys.secondaryLabel)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text(
+                    "Reply needs to read the message on screen. iOS asks you to start that yourself, and it lasts until you stop it."
+                )
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.Keys.secondaryLabel)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, Theme.Space.md)
 

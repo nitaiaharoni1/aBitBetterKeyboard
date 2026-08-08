@@ -2,8 +2,27 @@
 
 ## Test Runner
 
-XCUITest (XCTest) via `xcodebuild test`. There are no unit tests yet — every test
-is a UI walkthrough that drives the app in the simulator.
+XCTest via `xcodebuild test`, in two shapes:
+
+- **`AIKeyboardCoreTests`** — unit tests over `AIKeyboardCore` (42 at last count):
+  routing, language detection, `OutputGuard`, `EditScope`. Fast, no simulator UI.
+- **`AIKeyboardUITests`** — UI walkthroughs that drive the app in the simulator.
+
+**Target the simulator by UDID, not by name.** Two devices are commonly booted here
+and `name=iPhone 17 Pro` is ambiguous between `iPhone 17 Pro` and `iPhone 17 Pro
+Max`, which have diverged App Group state:
+
+```bash
+-destination "platform=iOS Simulator,id=0966F3D6-2589-4E88-BE84-4A69CD64FEE8"
+```
+
+**Never run two test targets against one device at once.** The runners kill each
+other and it reports as "crashed with signal kill", not as a test failure. Every
+phantom failure in this project so far has been contention.
+
+**A crashed UI test can print `passed`.** After a mid-run crash the harness restarts
+and may report `Executed 0 tests … passed` while the exit code is 65. Trust the exit
+code, never the summary line.
 
 ## Running Tests
 
@@ -29,9 +48,12 @@ TEST_RUNNER_SHOT_DIR=/tmp/shots xcodebuild test -project AIKeyboard.xcodeproj \
 
 - `AIKeyboardUITests/` — one file, `DemoWalkthroughTests.swift`, with four tests
   split by area: onboarding, keyboard panels, screen context, companion screens.
-- `Packages/AIKeyboardCore/` has no `Tests/` directory. The mock engines
-  (`MockSuggestionEngine`, `MockAI`) are pure, deterministic functions and are
-  the obvious first candidates for unit tests.
+- `AIKeyboardCoreTests/` — unit tests for the AI engines, in a host-less
+  unit-test target that links `AIKeyboardCore`. Like the other targets it is a
+  `PBXFileSystemSynchronizedRootGroup`, so a new file in that folder is compiled
+  with no `.pbxproj` edit. It covers language routing, prompt selection, engine
+  failover and the cloud wire format; it cannot cover on-device generation,
+  because no simulator ships model assets.
 
 ## Writing Tests
 
@@ -47,7 +69,7 @@ TEST_RUNNER_SHOT_DIR=/tmp/shots xcodebuild test -project AIKeyboard.xcodeproj \
   in `AIKeyboard/AIKeyboardApp.swift`.
 - `capture(_:)` writes a numbered PNG per screen, so a test doubles as the
   screenshot walkthrough. Keep the names descriptive; they become filenames.
-- Mock timings are real sleeps (`MockAI.simulatedLatency`, dictation streaming),
+- Dictation timings are real sleeps (streaming script),
   so `settle(_:)` waits have to exceed them or the assertion races the animation.
 
 ## Workflow

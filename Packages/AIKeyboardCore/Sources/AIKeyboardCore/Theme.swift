@@ -21,11 +21,12 @@ public extension Color {
 
     /// A color that resolves differently in light and dark appearance.
     static func adaptive(light: UInt32, dark: UInt32, alpha: Double = 1) -> Color {
-        Color(UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(hex: dark, alpha: alpha)
-                : UIColor(hex: light, alpha: alpha)
-        })
+        Color(
+            UIColor { traits in
+                traits.userInterfaceStyle == .dark
+                    ? UIColor(hex: dark, alpha: alpha)
+                    : UIColor(hex: light, alpha: alpha)
+            })
     }
 }
 
@@ -39,8 +40,8 @@ public enum Theme {
     /// The two ends of the signature gradient. Reserved for AI moments only:
     /// the sparkle key, the AI panel header, an active suggestion. Never for chrome.
     public enum Brand {
-        public static let start = Color(hex: 0x2DD4BF)   // teal
-        public static let end = Color(hex: 0x6366F1)     // indigo
+        public static let start = Color(hex: 0x2DD4BF)  // teal
+        public static let end = Color(hex: 0x6366F1)  // indigo
 
         public static let gradient = LinearGradient(
             colors: [start, end],

@@ -1,0 +1,1223 @@
+{
+  "schema": 1,
+  "name": "AIKeyboard typing corpus",
+  "device": "iPhone 17 Pro",
+  "generated": "2026-08-07",
+  "notes": [
+    "Frozen judging corpus. Each entry is one moment mid-typing: `context` is text already committed, `prefix` is the partial word under the cursor. The full field content is `context + prefix`.",
+    "`prefix` empty means the probe is next-word prediction, not completion.",
+    "`intended` is present only where the typed characters are a mistake with one obvious target word. It is what a human would have meant, not a promise about what any engine returns.",
+    "`mustNotCorrect` marks entries where changing the typed text on space is the failure. The repo's named example is `I` becoming `idea`.",
+    "`acceptable` is human judgement about what a good keyboard would offer, authored from the `probes` line without reading any captured reference. It is not a capture and does not stand in for one. `acceptableIsClosed` says how to read it: true means the list is meant to be complete and offering something else in slot one is wrong; false means the slot is genuinely open and the list is a sample of good answers, never a whitelist. `acceptableSource` is on every entry that has one so it can never be mistaken for what iOS returned. Absent on the `intended` and `mustNotCorrect` entries, which already carry a stronger criterion.",
+    "`keyboard` is the layout active while typing `prefix`, either `en_US` or `he_IL`. Code-switch entries switch layout mid-sentence, so their `keyboard` differs from the sentence's language.",
+    "`language` is the sentence, not the layout: `en`, `he`, `he-en` (Hebrew sentence, Latin word), `en-he` (English sentence, Hebrew word).",
+    "In code-switch entries a Hebrew clitic (ה, ב, ל) can sit at the end of `context` with the Latin `prefix` fused straight onto it, as in `צריך לסגור את ה` + `spri`. That is not a schema slip: it is where the layout actually changes mid-word, and it is exactly how the sequence gets typed.",
+    "Nothing here records what the stock keyboard or any engine actually offered. Captured stock behaviour lives in reference/manifest.json."
+  ],
+  "categories": {
+    "english-completion": "English word in progress, Latin keyboard, completion expected.",
+    "english-next-word": "English sentence, empty prefix, next word predicted from context.",
+    "hebrew-completion": "Hebrew word in progress, Hebrew keyboard, completion expected.",
+    "hebrew-next-word": "Hebrew sentence, empty prefix, next word predicted from context.",
+    "code-switch": "Hebrew sentence with a Latin-script word mid-sentence, or the return to Hebrew right after one.",
+    "missing-apostrophe": "English contraction typed without the apostrophe.",
+    "typo": "Plausible slip with a real intended word.",
+    "no-correct": "Short or already-correct input where changing it is the failure.",
+    "wrong-layout": "A word entered under the wrong layout, using the standard Hebrew/QWERTY key mapping, so it arrives as gibberish in the other script. On a phone this reaches the field by paste or by carrying desktop muscle memory over. Included because it is a familiar Israeli failure, not because stock iOS handles it; expect these to be uncaptured or unhelped."
+  },
+  "entries": [
+    {
+      "id": "en-comp-01",
+      "category": "english-completion",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I'll be there in ten ",
+      "prefix": "minu",
+      "probes": "Plainest possible completion; if 'minutes' is not offered nothing else matters.",
+      "acceptable": [
+        "minutes"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored",
+      "acceptableNote": "Authored after I had already seen the stock keyboard's answer for this entry (it offered minutes). The list matches the `probes` line written before any capture, but treat it as the one non-blind item here."
+    },
+    {
+      "id": "en-comp-02",
+      "category": "english-completion",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Can you send me the ",
+      "prefix": "invoi",
+      "probes": "Business vocabulary, five letters in, only one plausible ending.",
+      "acceptable": [
+        "invoice",
+        "invoices"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-comp-03",
+      "category": "english-completion",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Thanks for the quick ",
+      "prefix": "respon",
+      "probes": "Ambiguous stem: response, responses, responsible all fit the letters.",
+      "acceptable": [
+        "response",
+        "responses"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-comp-04",
+      "category": "english-completion",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Let's move the meeting to ",
+      "prefix": "Thurs",
+      "probes": "Capitalised proper noun mid-sentence; the completion has to keep the capital.",
+      "acceptable": [
+        "Thursday"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-comp-05",
+      "category": "english-completion",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I'm still waiting on the ",
+      "prefix": "approv",
+      "probes": "Stem shared by approve, approval, approved; context favours the noun.",
+      "acceptable": [
+        "approval",
+        "approvals"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-comp-06",
+      "category": "english-completion",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "The apartment is on ",
+      "prefix": "Dizeng",
+      "probes": "Israeli street name in Latin script; out-of-dictionary proper noun.",
+      "acceptable": [
+        "Dizengoff"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-comp-07",
+      "category": "english-completion",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Please confirm the ",
+      "prefix": "reservat",
+      "probes": "Long unambiguous stem; a miss here means the lexicon is thin.",
+      "acceptable": [
+        "reservation",
+        "reservations"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-comp-08",
+      "category": "english-completion",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "She works at a startup in ",
+      "prefix": "Herzl",
+      "probes": "Herzliya vs Herzl: an Israeli place name that is also a surname.",
+      "acceptable": [
+        "Herzliya"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-comp-09",
+      "category": "english-completion",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I need to reschedule my ",
+      "prefix": "appoint",
+      "probes": "Seven letters in, one dominant completion; tests ranking, not recall.",
+      "acceptable": [
+        "appointment",
+        "appointments"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-comp-10",
+      "category": "english-completion",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Just landed, walking to ",
+      "prefix": "bagga",
+      "probes": "Doubled consonant mid-stem, where a naive prefix match drops candidates.",
+      "acceptable": [
+        "baggage"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-next-01",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Happy ",
+      "prefix": "",
+      "probes": "Strongest bigram in the language; a blank bar here is disqualifying.",
+      "acceptable": [
+        "birthday",
+        "anniversary",
+        "holidays",
+        "new"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-next-02",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Thank you so ",
+      "prefix": "",
+      "probes": "Trigram with essentially one continuation.",
+      "acceptable": [
+        "much"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-next-03",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "See you ",
+      "prefix": "",
+      "probes": "Several good answers (tomorrow, soon, there); tests spread, not a single hit.",
+      "acceptable": [
+        "tomorrow",
+        "soon",
+        "there",
+        "later",
+        "then"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-next-04",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I'm on my ",
+      "prefix": "",
+      "probes": "Idiom completion where the literal reading is much weaker.",
+      "acceptable": [
+        "way"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-next-05",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Sorry for the ",
+      "prefix": "",
+      "probes": "Apology frame; delay/confusion/late are all defensible.",
+      "acceptable": [
+        "delay",
+        "confusion",
+        "inconvenience",
+        "trouble",
+        "wait"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-next-06",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Have a great ",
+      "prefix": "",
+      "probes": "Time-of-week sign-off; weekend and day compete.",
+      "acceptable": [
+        "weekend",
+        "day",
+        "week",
+        "evening",
+        "trip",
+        "night"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-next-07",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Can we push it to next ",
+      "prefix": "",
+      "probes": "Requires knowing the slot after 'next' is a time unit.",
+      "acceptable": [
+        "week",
+        "month",
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored",
+      "acceptableNote": "The slot takes a time unit or a weekday. Any of them is right; the list is the common ones."
+    },
+    {
+      "id": "en-next-08",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Attached is the signed ",
+      "prefix": "",
+      "probes": "Document nouns only; a generic frequency list will offer verbs here.",
+      "acceptable": [
+        "contract",
+        "agreement",
+        "document",
+        "copy",
+        "form",
+        "version",
+        "NDA"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored",
+      "acceptableNote": "The slot takes a document noun. Any plausible one is right, not only these."
+    },
+    {
+      "id": "he-comp-01",
+      "category": "hebrew-completion",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "אני מגיע בעוד עשר ",
+      "prefix": "דק",
+      "probes": "Two-letter Hebrew stem where דקות is far ahead of דק or דקה.",
+      "acceptable": [
+        "דקות"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-comp-02",
+      "category": "hebrew-completion",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "תשלח לי בבקשה את ",
+      "prefix": "החשבו",
+      "probes": "Definite article fused to the noun; the completion must extend past the ה.",
+      "acceptable": [
+        "החשבונית",
+        "החשבון"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-comp-03",
+      "category": "hebrew-completion",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "אני צריך לקבוע ",
+      "prefix": "תו",
+      "probes": "תור vs תודה vs תוכנית on two letters; context should decide.",
+      "acceptable": [
+        "תור"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-comp-04",
+      "category": "hebrew-completion",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "אני בדרך ",
+      "prefix": "לעבו",
+      "probes": "Preposition ל fused to the noun, the shape most Hebrew words actually take.",
+      "acceptable": [
+        "לעבודה"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-comp-05",
+      "category": "hebrew-completion",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "תודה רבה על ",
+      "prefix": "העז",
+      "probes": "העזרה, with a stem that also opens עזב and עזוב.",
+      "acceptable": [
+        "העזרה"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-comp-06",
+      "category": "hebrew-completion",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "אני לא ",
+      "prefix": "בטו",
+      "probes": "בטוח: high-frequency, and the masculine/feminine split matters.",
+      "acceptable": [
+        "בטוח",
+        "בטוחה"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-comp-07",
+      "category": "hebrew-completion",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "צריך להזמין ",
+      "prefix": "מונ",
+      "probes": "מונית against מונה and מונח on the same three letters.",
+      "acceptable": [
+        "מונית"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-comp-08",
+      "category": "hebrew-completion",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "יש לי ",
+      "prefix": "פגיש",
+      "probes": "One letter from the end; must offer פגישה rather than stopping at the stem.",
+      "acceptable": [
+        "פגישה"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-comp-09",
+      "category": "hebrew-completion",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "הילדים חוזרים ",
+      "prefix": "מהג",
+      "probes": "Two clitics stacked (מ + ה) before the noun; מהגן, and a naive tokenizer breaks here.",
+      "acceptable": [
+        "מהגן"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-comp-10",
+      "category": "hebrew-completion",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "כמה זה ",
+      "prefix": "עול",
+      "probes": "עולה, where the same letters also spell עולם and עולה the noun.",
+      "acceptable": [
+        "עולה"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-comp-11",
+      "category": "hebrew-completion",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "שלחתי לך את ",
+      "prefix": "הכתו",
+      "probes": "הכתובת; tests whether definite-article forms are in the lexicon at all.",
+      "acceptable": [
+        "הכתובת"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-comp-12",
+      "category": "hebrew-completion",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "אני אחזור אליך ",
+      "prefix": "מאו",
+      "probes": "מאוחר, a stem that also opens מאוד, one of the most common words in Hebrew.",
+      "acceptable": [
+        "מאוחר"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-next-01",
+      "category": "hebrew-next-word",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "בוקר ",
+      "prefix": "",
+      "probes": "The Hebrew equivalent of 'Happy ___'; nothing but טוב belongs in slot one.",
+      "acceptable": [
+        "טוב"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-next-02",
+      "category": "hebrew-next-word",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "שבת ",
+      "prefix": "",
+      "probes": "שלום, and the greeting sense should beat the calendar sense.",
+      "acceptable": [
+        "שלום"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-next-03",
+      "category": "hebrew-next-word",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "תודה ",
+      "prefix": "",
+      "probes": "רבה; a fixed pair that any Hebrew bigram table has.",
+      "acceptable": [
+        "רבה"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-next-04",
+      "category": "hebrew-next-word",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "מה ",
+      "prefix": "",
+      "probes": "Open question word: נשמע, קורה, השעה all live here.",
+      "acceptable": [
+        "נשמע",
+        "קורה",
+        "השעה",
+        "שלומך"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-next-05",
+      "category": "hebrew-next-word",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "בסדר ",
+      "prefix": "",
+      "probes": "גמור; an idiom that is invisible to a unigram model.",
+      "acceptable": [
+        "גמור"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-next-06",
+      "category": "hebrew-next-word",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "יום ",
+      "prefix": "",
+      "probes": "הולדת, שישי, ראשון: the answer is a whole class, so slot spread is the test.",
+      "acceptable": [
+        "הולדת",
+        "שישי",
+        "ראשון",
+        "שני",
+        "שלישי",
+        "טוב"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored",
+      "acceptableNote": "The slot takes either a weekday or the 'birthday' idiom. Both readings are right."
+    },
+    {
+      "id": "he-next-07",
+      "category": "hebrew-next-word",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "אני בדרך ",
+      "prefix": "",
+      "probes": "אליך or הביתה; the sentence is already meaningful, so the bar must add something.",
+      "acceptable": [
+        "אליך",
+        "הביתה",
+        "אליכם",
+        "לשם"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-next-08",
+      "category": "hebrew-next-word",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "חג ",
+      "prefix": "",
+      "probes": "שמח; seasonal greeting that a generic corpus will rank low.",
+      "acceptable": [
+        "שמח"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-next-09",
+      "category": "hebrew-next-word",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "אני צריך ",
+      "prefix": "",
+      "probes": "Next slot is an infinitive; offering a noun is a grammar failure, not a ranking one.",
+      "acceptable": [
+        "ללכת",
+        "לדעת",
+        "לבדוק",
+        "לדבר",
+        "להגיע",
+        "לסיים"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored",
+      "acceptableNote": "The slot takes a Hebrew infinitive (ל- prefixed). Grammar is the criterion; these are common fillers."
+    },
+    {
+      "id": "he-next-10",
+      "category": "hebrew-next-word",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "נדבר ",
+      "prefix": "",
+      "probes": "מחר, אחר כך, בהמשך: sign-off frame at the end of a message.",
+      "acceptable": [
+        "מחר",
+        "אחר",
+        "בהמשך",
+        "אחרי",
+        "עוד"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "cs-01",
+      "category": "code-switch",
+      "language": "he-en",
+      "keyboard": "en_US",
+      "context": "אני צריך לעשות ",
+      "prefix": "depl",
+      "probes": "The core claim: Latin word inside a Hebrew sentence, offered as deploy.",
+      "acceptable": [
+        "deploy",
+        "deployment"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "cs-02",
+      "category": "code-switch",
+      "language": "he-en",
+      "keyboard": "en_US",
+      "context": "יש לנו ",
+      "prefix": "meet",
+      "probes": "meeting inside Hebrew; also a real English word on its own, so no correction pressure.",
+      "acceptable": [
+        "meeting"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "cs-03",
+      "category": "code-switch",
+      "language": "he-en",
+      "keyboard": "en_US",
+      "context": "שלחתי לך את זה ב",
+      "prefix": "Sla",
+      "probes": "Brand name after a fused Hebrew preposition; the ב belongs to the Hebrew word order.",
+      "acceptable": [
+        "Slack"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "cs-04",
+      "category": "code-switch",
+      "language": "he-en",
+      "keyboard": "en_US",
+      "context": "הזמנתי אוכל ב",
+      "prefix": "Wol",
+      "probes": "Wolt: an Israeli brand that only exists in Latin script inside Hebrew sentences.",
+      "acceptable": [
+        "Wolt"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "cs-05",
+      "category": "code-switch",
+      "language": "he-en",
+      "keyboard": "en_US",
+      "context": "אני מצרף ",
+      "prefix": "screensh",
+      "probes": "Long English compound mid-Hebrew; a Hebrew-only lexicon has nothing to offer.",
+      "acceptable": [
+        "screenshot",
+        "screenshots"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "cs-06",
+      "category": "code-switch",
+      "language": "he-en",
+      "keyboard": "en_US",
+      "context": "בוא נעשה ",
+      "prefix": "standu",
+      "probes": "Workplace jargon, absent from general English lists too.",
+      "acceptable": [
+        "standup"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "cs-07",
+      "category": "code-switch",
+      "language": "he-en",
+      "keyboard": "en_US",
+      "context": "צריך לסגור את ה",
+      "prefix": "spri",
+      "probes": "sprint after the Hebrew definite article, the most common code-switch shape there is.",
+      "acceptable": [
+        "sprint"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "cs-08",
+      "category": "code-switch",
+      "language": "he-en",
+      "keyboard": "en_US",
+      "context": "תסתכל על ה",
+      "prefix": "feedb",
+      "probes": "feedback; tests whether the Hebrew ה poisons the English candidate ranking.",
+      "acceptable": [
+        "feedback"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "cs-09",
+      "category": "code-switch",
+      "language": "he-en",
+      "keyboard": "en_US",
+      "context": "אני עובד על ה",
+      "prefix": "budg",
+      "probes": "budget: an everyday loanword, not developer slang.",
+      "acceptable": [
+        "budget"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "cs-10",
+      "category": "code-switch",
+      "language": "he-en",
+      "keyboard": "he_IL",
+      "context": "אני צריך לעשות deploy ",
+      "prefix": "",
+      "probes": "The return trip: next word after a Latin loanword must come back in Hebrew.",
+      "acceptable": [
+        "היום",
+        "עכשיו",
+        "מחר",
+        "לפני",
+        "אחרי"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored",
+      "acceptableNote": "The point is the script, not the word: after a Latin loanword the next suggestion should come back in Hebrew."
+    },
+    {
+      "id": "cs-11",
+      "category": "code-switch",
+      "language": "he-en",
+      "keyboard": "he_IL",
+      "context": "הכנתי presentation ",
+      "prefix": "לפ",
+      "probes": "Hebrew resumes mid-sentence after an English noun; לפגישה is the natural continuation.",
+      "acceptable": [
+        "לפגישה",
+        "לפרויקט"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "cs-12",
+      "category": "code-switch",
+      "language": "he-en",
+      "keyboard": "he_IL",
+      "context": "בוא נעשה ",
+      "prefix": "",
+      "probes": "cs-06's context with nothing typed yet: does the bar reach for a Latin word when the Hebrew sentence is heading for one?",
+      "acceptable": [
+        "standup",
+        "sync",
+        "meeting",
+        "call",
+        "סדר",
+        "הפסקה",
+        "משהו"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored",
+      "acceptableNote": "Either script is defensible here. The probe is whether Latin candidates appear at all in a Hebrew sentence."
+    },
+    {
+      "id": "cs-13",
+      "category": "code-switch",
+      "language": "en-he",
+      "keyboard": "he_IL",
+      "context": "Can you check the ",
+      "prefix": "חשבו",
+      "probes": "The mirror case: Hebrew word inside an English sentence, which Israelis also do.",
+      "acceptable": [
+        "חשבונית",
+        "חשבון"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "cs-14",
+      "category": "code-switch",
+      "language": "he-en",
+      "keyboard": "en_US",
+      "context": "אני שולח לך ",
+      "prefix": "invi",
+      "probes": "invite as a noun, the calendar sense; the English verb reading is wrong here.",
+      "acceptable": [
+        "invite",
+        "invitation"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "apos-01",
+      "category": "missing-apostrophe",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Sorry I ",
+      "prefix": "dont",
+      "intended": "don't",
+      "probes": "The uncontroversial apostrophe insertion; 'dont' is not a word."
+    },
+    {
+      "id": "apos-02",
+      "category": "missing-apostrophe",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "",
+      "prefix": "im",
+      "intended": "I'm",
+      "probes": "Apostrophe plus capitalisation at the start of a message, in two letters."
+    },
+    {
+      "id": "apos-03",
+      "category": "missing-apostrophe",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I ",
+      "prefix": "cant",
+      "intended": "can't",
+      "probes": "'cant' is a rare real word; the frequent reading should still win."
+    },
+    {
+      "id": "apos-04",
+      "category": "missing-apostrophe",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I think ",
+      "prefix": "youre",
+      "intended": "you're",
+      "probes": "Five letters, not a word, one obvious target."
+    },
+    {
+      "id": "apos-05",
+      "category": "missing-apostrophe",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I think ",
+      "prefix": "its",
+      "intended": "it's",
+      "probes": "Genuinely ambiguous: 'its' is a word. Silently rewriting it is a bug, not a fix."
+    },
+    {
+      "id": "apos-06",
+      "category": "missing-apostrophe",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "",
+      "prefix": "ill",
+      "intended": "I'll",
+      "probes": "'ill' is a word and a common one; the sentence-start position is the only clue."
+    },
+    {
+      "id": "apos-07",
+      "category": "missing-apostrophe",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Yeah ",
+      "prefix": "thats",
+      "intended": "that's",
+      "probes": "Not a word, high frequency, mid-sentence."
+    },
+    {
+      "id": "apos-08",
+      "category": "missing-apostrophe",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I ",
+      "prefix": "havent",
+      "intended": "haven't",
+      "probes": "Six letters; length should not be what unlocks the correction."
+    },
+    {
+      "id": "apos-09",
+      "category": "missing-apostrophe",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Tomorrow ",
+      "prefix": "were",
+      "intended": "we're",
+      "probes": "'were' is a common word. Correcting it on this context is a coin flip and should be treated as one."
+    },
+    {
+      "id": "typo-01",
+      "category": "typo",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Send me ",
+      "prefix": "teh",
+      "intended": "the",
+      "probes": "The canonical transposition; if this is not caught, nothing is."
+    },
+    {
+      "id": "typo-02",
+      "category": "typo",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Did you ",
+      "prefix": "recieve",
+      "intended": "receive",
+      "probes": "i-before-e: a spelling error, not a finger slip, so key distance does not help."
+    },
+    {
+      "id": "typo-03",
+      "category": "typo",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "What's the ",
+      "prefix": "adress",
+      "intended": "address",
+      "probes": "Dropped double letter, one edit away from a very common word."
+    },
+    {
+      "id": "typo-04",
+      "category": "typo",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "See you ",
+      "prefix": "tomorow",
+      "intended": "tomorrow",
+      "probes": "Dropped letter late in a long word, where prefix matching has already committed."
+    },
+    {
+      "id": "typo-05",
+      "category": "typo",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I will ",
+      "prefix": "definately",
+      "intended": "definitely",
+      "probes": "The most common English misspelling; a vowel swap in the middle."
+    },
+    {
+      "id": "typo-06",
+      "category": "typo",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Please send a ",
+      "prefix": "seperate",
+      "intended": "separate",
+      "probes": "Second common misspelling, same shape, different word."
+    },
+    {
+      "id": "typo-07",
+      "category": "typo",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Book a table at the ",
+      "prefix": "restaraunt",
+      "intended": "restaurant",
+      "probes": "Transposition inside a long word; two edits from the target by some metrics."
+    },
+    {
+      "id": "typo-08",
+      "category": "typo",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "About the ",
+      "prefix": "meetign",
+      "intended": "meeting",
+      "probes": "Adjacent-key transposition at the end, the shape thumbs actually produce."
+    },
+    {
+      "id": "typo-09",
+      "category": "typo",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "",
+      "prefix": "thakns",
+      "intended": "thanks",
+      "probes": "Transposition at the start of a message, with no left context to lean on."
+    },
+    {
+      "id": "typo-10",
+      "category": "typo",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "",
+      "prefix": "תדוה",
+      "intended": "תודה",
+      "probes": "Hebrew transposition of the most-typed word in Israeli chat."
+    },
+    {
+      "id": "typo-11",
+      "category": "typo",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "",
+      "prefix": "שלמו",
+      "intended": "שלום",
+      "probes": "Hebrew transposition where the wrong version is itself a real word (שלמו, 'they paid')."
+    },
+    {
+      "id": "typo-12",
+      "category": "typo",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "אני מגיע בעוד ",
+      "prefix": "רבה",
+      "intended": "רבע",
+      "probes": "רבע ('a quarter') mistyped as רבה, which is itself a common word. Only the context says which one was meant."
+    },
+    {
+      "id": "nc-01",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "",
+      "prefix": "I",
+      "mustNotCorrect": true,
+      "probes": "The failure this repo names out loud: a single I turning into idea."
+    },
+    {
+      "id": "nc-02",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "That's a good ",
+      "prefix": "id",
+      "mustNotCorrect": true,
+      "probes": "Two letters, and 'idea' is the right guess. Offering it is fine; committing it on space is not."
+    },
+    {
+      "id": "nc-03",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "",
+      "prefix": "ok",
+      "mustNotCorrect": true,
+      "probes": "Two-letter real word that autocorrect likes to turn into OK or Ok."
+    },
+    {
+      "id": "nc-04",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Take the ",
+      "prefix": "bus",
+      "mustNotCorrect": true,
+      "probes": "Three-letter real word one edit from bud, but, buy, bug."
+    },
+    {
+      "id": "nc-05",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "",
+      "prefix": "Nitai",
+      "mustNotCorrect": true,
+      "probes": "Israeli given name not in any dictionary; must survive the space untouched."
+    },
+    {
+      "id": "nc-06",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Ask ",
+      "prefix": "Tzachi",
+      "mustNotCorrect": true,
+      "probes": "Transliterated name with a letter pair English never uses; prime autocorrect bait."
+    },
+    {
+      "id": "nc-07",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Meet me at ",
+      "prefix": "8",
+      "mustNotCorrect": true,
+      "probes": "A digit. Nothing should happen, and the bar should not fill with noise."
+    },
+    {
+      "id": "nc-08",
+      "category": "no-correct",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "",
+      "prefix": "לא",
+      "mustNotCorrect": true,
+      "probes": "Two-letter Hebrew word, complete as typed, one edit from לו and לך."
+    },
+    {
+      "id": "nc-09",
+      "category": "no-correct",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "אני ",
+      "prefix": "רק",
+      "mustNotCorrect": true,
+      "probes": "Hebrew two-letter word mid-sentence; Hebrew has many, so aggressive correction is worse there."
+    },
+    {
+      "id": "nc-10",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "",
+      "prefix": "Hi",
+      "mustNotCorrect": true,
+      "probes": "Opening word of half the messages ever sent. Any change is a visible bug."
+    },
+    {
+      "id": "nc-11",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Coming ",
+      "prefix": "in",
+      "mustNotCorrect": true,
+      "probes": "Real two-letter word where the sentence is mid-flight; correcting to 'I' or 'on' breaks it."
+    },
+    {
+      "id": "nc-12",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Pay with ",
+      "prefix": "Bit",
+      "mustNotCorrect": true,
+      "probes": "Israeli payment app whose name is an English word; capital B is the only signal."
+    },
+    {
+      "id": "wl-01",
+      "category": "wrong-layout",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "",
+      "prefix": "akuo",
+      "intended": "שלום",
+      "probes": "שלום typed with the Latin layout still on. Every Israeli does this daily; no stock keyboard fixes it."
+    },
+    {
+      "id": "wl-02",
+      "category": "wrong-layout",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "",
+      "prefix": ",usv",
+      "intended": "תודה",
+      "probes": "תודה on the Latin layout. Includes a comma, so it is not even all letters."
+    },
+    {
+      "id": "wl-03",
+      "category": "wrong-layout",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "",
+      "prefix": "יקךךם",
+      "intended": "hello",
+      "probes": "The reverse: hello typed with the Hebrew layout on. Real, and less often handled."
+    }
+  ]
+}

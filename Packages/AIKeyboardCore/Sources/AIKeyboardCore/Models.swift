@@ -65,7 +65,7 @@ public enum KeyboardLanguage: String, CaseIterable, Identifiable, Codable, Senda
 
 // MARK: - AI actions
 
-public enum AIAction: String, CaseIterable, Identifiable, Sendable {
+public enum AIAction: String, CaseIterable, Identifiable, Hashable, Sendable {
     /// Answers the message on screen. Only useful while a screen context session
     /// is running, so it leads the menu and explains itself when it cannot run.
     case reply
@@ -212,14 +212,20 @@ public struct ReplyOption: Identifiable, Sendable {
     }
 }
 
-/// One candidate returned by the AI. In the mock these come from a lookup table.
+/// One candidate returned by the AI.
+///
+/// `label` carries what a Rewrite variant *decides* ("Direct no", "Counter-proposal"),
+/// which is the promise the three variants make and which no `ToneStyle` can
+/// express. Tone still owns the icon, and is the whole answer for the Tone action.
 public struct RewriteVariant: Identifiable, Sendable {
     public let id = UUID()
     public let tone: ToneStyle
+    public let label: String?
     public let text: String
 
-    public init(tone: ToneStyle, text: String) {
+    public init(tone: ToneStyle, label: String? = nil, text: String) {
         self.tone = tone
+        self.label = label
         self.text = text
     }
 }

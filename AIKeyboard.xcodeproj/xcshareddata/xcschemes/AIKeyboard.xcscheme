@@ -20,6 +20,15 @@
                ReferencedContainer = "container:AIKeyboard.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry buildForTesting = "YES" buildForRunning = "NO" buildForProfiling = "NO" buildForArchiving = "NO" buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "AA00000000000000000013"
+               BuildableName = "AIKeyboardCoreTests.xctest"
+               BlueprintName = "AIKeyboardCoreTests"
+               ReferencedContainer = "container:AIKeyboard.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -35,6 +44,15 @@
                BlueprintIdentifier = "AA00000000000000000012"
                BuildableName = "AIKeyboardUITests.xctest"
                BlueprintName = "AIKeyboardUITests"
+               ReferencedContainer = "container:AIKeyboard.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "AA00000000000000000013"
+               BuildableName = "AIKeyboardCoreTests.xctest"
+               BlueprintName = "AIKeyboardCoreTests"
                ReferencedContainer = "container:AIKeyboard.xcodeproj">
             </BuildableReference>
          </TestableReference>
