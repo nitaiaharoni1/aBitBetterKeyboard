@@ -101,8 +101,15 @@ ok "project carries a development team"
 # ------------------------------------------------------------------- 2. build
 
 say "2. Building for the device"
+# `-allowProvisioningUpdates` because no profiles exist for these four bundle IDs
+# yet and only Xcode can make them. If this fails with "Revoke certificate", that
+# is not something a script should decide: the account holds an Apple Development
+# certificate whose private key is not in this keychain, and the only automatic
+# way forward revokes it, which breaks it for every other machine using it.
+# Either restore the key from a .p12 backup or revoke it deliberately in Xcode >
+# Settings > Accounts > Manage Certificates.
 xcodebuild build -project "$ROOT/AIKeyboard.xcodeproj" -scheme AIKeyboard \
-    -destination "id=$UDID" -derivedDataPath "$OUT/dd" \
+    -destination "id=$UDID" -allowProvisioningUpdates -derivedDataPath "$OUT/dd" \
     > "$OUT/build.log" 2>&1 || { bad "build failed, see $OUT/build.log"; tail -30 "$OUT/build.log"; exit 1; }
 ok "built"
 

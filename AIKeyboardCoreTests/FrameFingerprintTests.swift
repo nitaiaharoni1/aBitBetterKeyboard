@@ -44,6 +44,103 @@ final class FrameFingerprintTests: XCTestCase {
         }
     }
 
+    private func fingerprint(
+        _ pixels: [UInt8], orientation: FrameReduction.Orientation
+    ) -> FrameFingerprint? {
+        pixels.withUnsafeBytes { raw in
+            FrameFingerprint.make(
+                base: raw.baseAddress!, width: width, height: height,
+                bytesPerRow: width * 4, format: .bgra8888, orientation: orientation)
+        }
+    }
+
+    // MARK: - Rotation
+
+    /// **`.up` is the old behaviour exactly**, which is the only reason the
+    /// measured zeros in `FrameFingerprint`'s table survive this change. If this
+    /// fails, every number in that table is describing code that no longer exists.
+    func testAnUprightFrameCropsExactlyTheRowsItAlwaysDid() {
+        let rect = FrameReduction.bandRect(inWidth: width, height: height)
+
+        XCTAssertEqual(rect.rows, FrameReduction.bandRows(inHeight: height))
+        XCTAssertEqual(rect.columns, 0..<width, "upright crops no columns at all")
+    }
+
+    /// A quarter turn puts the top of the screen along a *column* edge, so the
+    /// band has to cut columns instead of rows. Expressing the crop as a row
+    /// range — which is what the code did before — keeps neither the title bar
+    /// nor the exclusion of our own keyboard.
+    func testAQuarterTurnCropsColumnsRatherThanRows() {
+        for orientation in [FrameReduction.Orientation.left, .right] {
+            let rect = FrameReduction.bandRect(
+                inWidth: width, height: height, orientation: orientation)
+
+            XCTAssertEqual(rect.rows, 0..<height, "\(orientation): no rows are cropped")
+            XCTAssertLessThan(rect.columns.count, width, "\(orientation): columns are")
+        }
+    }
+
+    /// The two quarter turns cut opposite ends, and 180° cuts the opposite end
+    /// from upright. Which *physical* rotation ReplayKit calls `.left` is the
+    /// device question; that these four are four distinct regions is arithmetic,
+    /// and it is what would break silently if someone collapsed them.
+    func testTheFourOrientationsCropFourDifferentRegions() {
+        let regions = [FrameReduction.Orientation.up, .down, .left, .right].map {
+            FrameReduction.bandRect(inWidth: width, height: height, orientation: $0)
+        }
+        let described = regions.map { "\($0.columns)|\($0.rows)" }
+
+        XCTAssertEqual(Set(described).count, 4, "two orientations crop the same region: \(described)")
+        XCTAssertEqual(regions[0].rows.count, regions[1].rows.count, "up and down cut equal amounts")
+        XCTAssertNotEqual(regions[0].rows, regions[1].rows, "…from opposite ends")
+        XCTAssertNotEqual(regions[2].columns, regions[3].columns)
+    }
+
+    /// The property the whole exclusion exists for, now holding in landscape:
+    /// paint into the region the band drops and the identity must not move. Our
+    /// keyboard repaints a shimmer there for the whole length of a read, and when
+    /// that leaked into the band it gave 30 of 30 frames a fresh identity from
+    /// nothing, so the freshness gate threw away the reading the tap paid for.
+    func testPaintingOutsideTheBandLeavesTheIdentityAloneWhenRotated() throws {
+        for orientation in [FrameReduction.Orientation.up, .down, .left, .right] {
+            let rect = FrameReduction.bandRect(
+                inWidth: width, height: height, orientation: orientation)
+            let plain = try XCTUnwrap(fingerprint(frame(white: 0..<0), orientation: orientation))
+
+            // Somewhere the band does not look at, on whichever axis it cropped.
+            let painted =
+                rect.columns == 0..<width
+                ? frame(white: outside(rect.rows, limit: height))
+                : frame(white: 0..<height, columns: outside(rect.columns, limit: width))
+            let after = try XCTUnwrap(fingerprint(painted, orientation: orientation))
+
+            XCTAssertEqual(
+                after.identity, plain.identity,
+                "\(orientation): content outside the band moved the frame identity")
+        }
+    }
+
+    /// …and the converse, or the test above would pass on a reducer that ignored
+    /// the pixels entirely.
+    func testPaintingInsideTheBandDoesMoveTheIdentityWhenRotated() throws {
+        for orientation in [FrameReduction.Orientation.up, .down, .left, .right] {
+            let rect = FrameReduction.bandRect(
+                inWidth: width, height: height, orientation: orientation)
+            let plain = try XCTUnwrap(fingerprint(frame(white: 0..<0), orientation: orientation))
+            let painted = frame(white: rect.rows, columns: rect.columns)
+            let after = try XCTUnwrap(fingerprint(painted, orientation: orientation))
+
+            XCTAssertNotEqual(
+                after.identity, plain.identity,
+                "\(orientation): the band is not reading its own region")
+        }
+    }
+
+    /// A run of indices the band excluded, taken from whichever end has room.
+    private func outside(_ band: Range<Int>, limit: Int) -> Range<Int> {
+        band.lowerBound >= 8 ? 0..<band.lowerBound : band.upperBound..<limit
+    }
+
     // MARK: - The band
 
     /// Rows the design crops away: the top 14% is the status bar and the

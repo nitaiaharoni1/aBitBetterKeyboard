@@ -117,6 +117,16 @@ public final class ScreenContextChannel: ObservableObject {
         self.timer = timer
     }
 
+    /// Rewrites the height in the intent page, leaving everything else alone.
+    ///
+    /// Only while watching: a keyboard that has gone away has already published
+    /// `keyboardVisible = false`, and putting a height back beside that flag would
+    /// tell the producer to keep cropping for a keyboard nobody can see.
+    public func updateOwnUIHeightFraction(_ fraction: Double) {
+        guard timer != nil, role.claimsKeyboardVisible else { return }
+        reader?.setKeyboardVisible(true, ownUIHeightFraction: fraction)
+    }
+
     public func stopWatching() {
         timer?.invalidate()
         timer = nil

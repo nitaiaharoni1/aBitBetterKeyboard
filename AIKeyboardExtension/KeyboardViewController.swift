@@ -74,6 +74,30 @@ final class KeyboardViewController: UIInputViewController {
             .shared, as: .keyboard, ownUIHeightFraction: ownUIHeightFraction())
     }
 
+    /// A rotation changes the screen height, so it changes the fraction of the
+    /// screen we cover, so it changes where the capture process cuts the band it
+    /// fingerprints. Republishing it is not cosmetic: the freshness gate's only
+    /// content condition is exact equality of the frame identity, so a band that
+    /// moves between the frame a reading was taken from and the frame it is
+    /// confirmed against retires that reading exactly as a real conversation
+    /// switch would. Rotate the phone while a read is in flight and the answer the
+    /// user is waiting for is silently thrown away.
+    ///
+    /// `viewWillTransition` rather than `traitCollectionDidChange`, because the
+    /// size is what matters and the traits do not always move with it — an iPad
+    /// keyboard resizing inside a split view changes neither trait. Published
+    /// after the transition rather than before it, so the height describes where
+    /// we actually ended up.
+    override func viewWillTransition(
+        to size: CGSize, with coordinator: any UIViewControllerTransitionCoordinator
+    ) {
+        super.viewWillTransition(to: size, with: coordinator)
+        coordinator.animate(alongsideTransition: nil) { [weak self] _ in
+            guard let self else { return }
+            ScreenContextSession.shared.updateOwnUIHeightFraction(ownUIHeightFraction())
+        }
+    }
+
     /// How much of the screen we are covering, for the capture process to leave
     /// out of the frame fingerprint. See `KeyboardGeometry`.
     ///

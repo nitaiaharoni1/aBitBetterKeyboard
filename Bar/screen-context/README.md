@@ -365,10 +365,20 @@ minutes; every run of a cell is listed:
 | 1206x2622 JPEG q0.70 | 3 | 176 / 254 KB | 5.2 / 5.9 s | 18, 19, 18 | 6, 6, 6 | 28 | 28 | 0 |
 | **602x1310 JPEG q0.70 — what ships** | 3 | **66 / 98 KB** | **5.0 / 6.0 s** | 18, 18, 19 | 7, 7, 7 | 29, 30, 29 | **30** | 0 |
 
-The last row is worth reading against the top of this section: at 66 KB the
-shipping configuration reaches the same 19/30 exact, 26/30 within 90% and 29/30
-sender that `cloud_outputs.json` was published for at 250 KB, and is one better
-on keyboard language.
+**Re-taken 2026-08-08 with the answers committed, and every cell reproduced.** The
+table above had no artifact behind it — the numbers were prose, and prose is what
+went stale everywhere else on this page. A fresh single run of each cell now lives
+in `size-encoder/`, scoreable with `score_cloud.py size-encoder/scale2-jpeg.json`,
+and it lands on the same four rows: 26/28, 28/29, 28/28 and 29/30 sender and
+language, with the same byte and latency medians to within a kilobyte and a tenth
+of a second, and the same lone trap in the 602x1310 PNG cell. For a bar whose
+model is served behind a moving alias, four cells reproducing across sittings is
+a stronger result than any one of them.
+
+The last row is the point: at a quarter of the bytes the shipping configuration
+is ahead on sender and keyboard language and level on message. Halving the frame
+is not a compromise that costs accuracy, which is what this 2x2 was run to find
+out.
 
 Per bucket, taking the first run of each cell:
 

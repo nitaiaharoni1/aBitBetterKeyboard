@@ -286,7 +286,9 @@ final class SampleHandler: RPBroadcastSampleHandler {
         // made the freshness gate refuse the reading the tap had just paid for.
         let intent = channel?.intent()
         let fingerprint = Self.fingerprint(
-            of: sampleBuffer, bottomCrop: intent?.frameBottomCrop ?? FrameReduction.Band.bottom)
+            of: sampleBuffer,
+            orientation: Self.band(for: orientation),
+            bottomCrop: intent?.frameBottomCrop ?? FrameReduction.Band.bottom)
         if let fingerprint {
             channel?.recordFrame(fingerprint, now: sampledAt)
             serveReadRequest(
@@ -377,8 +379,36 @@ final class SampleHandler: RPBroadcastSampleHandler {
     /// exists rather than allocating one, and the unlock is paired on every exit
     /// including the failures. Nothing survives this function except 40 bytes of
     /// hash.
+    /// Which edge of the buffer the top of the screen is on.
+    ///
+    /// The crop band is a claim about the screen — keep its top, drop everything
+    /// from the top of our own keyboard down — and that claim only survives the
+    /// translation into buffer rows while the buffer is the right way up. An
+    /// absent attachment means ReplayKit told us nothing, and `.up` is the right
+    /// reading of silence here: it is what every portrait frame is, and it is the
+    /// behaviour every measured number in `FrameFingerprint` was taken against.
+    ///
+    /// The four `CGImagePropertyOrientation` cases that involve a mirror
+    /// (`upMirrored` and friends) do not arise from a screen capture and are read
+    /// as their unmirrored twins rather than refused, because refusing would mean
+    /// no fingerprint at all, and no fingerprint means no read.
+    private static func band(
+        for orientation: CGImagePropertyOrientation?
+    )
+        -> FrameReduction.Orientation
+    {
+        switch orientation {
+        case .down, .downMirrored: return .down
+        case .left, .leftMirrored: return .left
+        case .right, .rightMirrored: return .right
+        default: return .up
+        }
+    }
+
     private static func fingerprint(
-        of sampleBuffer: CMSampleBuffer, bottomCrop: Double
+        of sampleBuffer: CMSampleBuffer,
+        orientation: FrameReduction.Orientation,
+        bottomCrop: Double
     )
         -> FrameFingerprint?
     {
@@ -420,7 +450,8 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
         return FrameFingerprint.make(
             base: UnsafeRawPointer(base), width: width, height: height,
-            bytesPerRow: bytesPerRow, format: format, bottomCrop: bottomCrop)
+            bytesPerRow: bytesPerRow, format: format, orientation: orientation,
+            bottomCrop: bottomCrop)
     }
 
     private static func orientation(of sampleBuffer: CMSampleBuffer) -> CGImagePropertyOrientation? {

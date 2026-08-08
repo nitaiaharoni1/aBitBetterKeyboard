@@ -183,8 +183,73 @@ public enum FrameReduction {
     )
         -> Range<Int>
     {
-        let first = Int((Double(height) * Band.top).rounded())
-        let last = Int((Double(height) * (1.0 - bottomCrop)).rounded())
+        slice(height, fromStart: Band.top, fromEnd: bottomCrop)
+    }
+
+    /// How the buffer's rows and columns are laid out against the screen the user
+    /// is looking at. ReplayKit hands this over as a sample attachment
+    /// (`RPVideoSampleOrientationKey`) and nothing in the pixel data says it.
+    public enum Orientation: Sendable, Equatable {
+        /// The buffer's first row is the top of the screen.
+        case up
+        /// Upside down: the buffer's *last* row is the top of the screen.
+        case down
+        /// Rotated a quarter turn, with the top of the screen along the buffer's
+        /// first column.
+        case right
+        /// Rotated a quarter turn the other way: the top of the screen is along
+        /// the buffer's last column.
+        case left
+    }
+
+    /// The region of the buffer the fingerprint is taken over, for a frame that
+    /// may not be the right way up.
+    ///
+    /// **Why this exists at all.** The band is a claim about the *screen* — keep
+    /// the top 14%, where a conversation's title sits, and drop everything from
+    /// the top of our own keyboard downwards, because our panel animates a shimmer
+    /// for the whole length of a read and would otherwise give every frame a fresh
+    /// identity. `bandRows` expressed that claim as a range of buffer *rows*,
+    /// which is only the same thing while the buffer is the right way up. Rotate
+    /// the device and the top of the screen is a column edge; the band then holds
+    /// neither the title nor an exclusion of our keyboard, and the freshness gate
+    /// starts discarding readings the user paid for — the exact failure the
+    /// exclusion was added to fix.
+    ///
+    /// **One thing here is a guess, and it is named.** Which physical rotation
+    /// ReplayKit reports as `.right` rather than `.left` is not something this
+    /// repo can settle: nothing has ever executed `processSampleBuffer`, because
+    /// the simulator runtime ships no `replayd`. The arithmetic below is pinned by
+    /// `FrameFingerprintTests` and is right by construction; the *assignment* of
+    /// the two quarter turns is a coin the device flips. Getting it backwards
+    /// swaps which end of the screen is cropped, which shows up immediately as a
+    /// landscape read that never confirms — step (f) of
+    /// `Scripts/measure-on-device.sh`. If it is backwards, swap these two cases
+    /// and nothing else.
+    public static func bandRect(
+        inWidth width: Int,
+        height: Int,
+        orientation: Orientation = .up,
+        bottomCrop: Double = Band.bottom
+    ) -> (columns: Range<Int>, rows: Range<Int>) {
+        switch orientation {
+        case .up:
+            return (0..<width, slice(height, fromStart: Band.top, fromEnd: bottomCrop))
+        case .down:
+            return (0..<width, slice(height, fromStart: bottomCrop, fromEnd: Band.top))
+        case .right:
+            return (slice(width, fromStart: Band.top, fromEnd: bottomCrop), 0..<height)
+        case .left:
+            return (slice(width, fromStart: bottomCrop, fromEnd: Band.top), 0..<height)
+        }
+    }
+
+    /// One axis of the crop. Split out so both axes round identically: the
+    /// rounding is `.rounded()`, and a caller that truncated instead put a row it
+    /// believed was cropped inside the band.
+    private static func slice(_ extent: Int, fromStart: Double, fromEnd: Double) -> Range<Int> {
+        let first = Int((Double(extent) * fromStart).rounded())
+        let last = Int((Double(extent) * (1.0 - fromEnd)).rounded())
         return first..<max(first, last)
     }
 
@@ -228,6 +293,7 @@ public enum FrameReduction {
         height: Int,
         bytesPerRow: Int,
         format: PixelFormat,
+        orientation: Orientation = .up,
         bottomCrop: Double = Band.bottom,
         into destination: UnsafeMutableBufferPointer<UInt8>
     ) -> Bool {
@@ -235,11 +301,17 @@ public enum FrameReduction {
         guard width >= columns, height >= rows else { return false }
         guard bytesPerRow >= width * format.bytesPerPixel else { return false }
 
-        let band = bandRows(inHeight: height, bottomCrop: bottomCrop)
+        // For `.up` this is exactly the old row range with every column, so the
+        // reduction is byte-identical to the one every measured zero in this file
+        // was taken against. The other three orientations move which edge is cut.
+        let (bandColumns, band) = bandRect(
+            inWidth: width, height: height, orientation: orientation, bottomCrop: bottomCrop)
         let firstRow = band.lowerBound
         let lastRow = band.upperBound
         let bandRows = band.count
-        guard bandRows >= rows else { return false }
+        let firstColumn = bandColumns.lowerBound
+        let bandWidth = bandColumns.count
+        guard bandRows >= rows, bandWidth >= columns else { return false }
 
         let stride = format.bytesPerPixel
 
@@ -247,10 +319,10 @@ public enum FrameReduction {
             sums.initialize(repeating: 0)
             defer { sums.deinitialize() }
 
-            return withUnsafeTemporaryAllocation(of: UInt16.self, capacity: width) { columnOf in
+            return withUnsafeTemporaryAllocation(of: UInt16.self, capacity: bandWidth) { columnOf in
                 // Precomputed so the inner loop is a table lookup rather than a
                 // multiply and a divide per pixel.
-                for x in 0..<width { columnOf[x] = UInt16(x * columns / width) }
+                for x in 0..<bandWidth { columnOf[x] = UInt16(x * columns / bandWidth) }
 
                 for y in firstRow..<lastRow {
                     let destinationRow = (y - firstRow) * rows / bandRows
@@ -260,16 +332,16 @@ public enum FrameReduction {
                     switch format {
                     case .luminance8:
                         let pixels = rowBase.assumingMemoryBound(to: UInt8.self)
-                        for x in 0..<width {
-                            accumulator[Int(columnOf[x])] &+= UInt32(pixels[x])
+                        for x in 0..<bandWidth {
+                            accumulator[Int(columnOf[x])] &+= UInt32(pixels[firstColumn + x])
                         }
                     case .bgra8888, .argb8888:
                         let blueOffset = format == .bgra8888 ? 0 : 3
                         let greenOffset = format == .bgra8888 ? 1 : 2
                         let redOffset = format == .bgra8888 ? 2 : 1
                         let pixels = rowBase.assumingMemoryBound(to: UInt8.self)
-                        for x in 0..<width {
-                            let pixel = x * stride
+                        for x in 0..<bandWidth {
+                            let pixel = (firstColumn + x) * stride
                             // Rec. 601 luma in integer form: the same
                             // 0.299 / 0.587 / 0.114 the harness uses, scaled by
                             // 256 so the inner loop stays in integers.
@@ -288,7 +360,8 @@ public enum FrameReduction {
                 for row in 0..<rows {
                     let rowSamples = bandRows * (row + 1) / rows - bandRows * row / rows
                     for column in 0..<columns {
-                        let columnSamples = width * (column + 1) / columns - width * column / columns
+                        let columnSamples =
+                            bandWidth * (column + 1) / columns - bandWidth * column / columns
                         let samples = rowSamples * columnSamples
                         guard samples > 0 else { return false }
                         let mean = sums[row * columns + column] / UInt32(samples)
@@ -352,6 +425,7 @@ public struct FrameFingerprint: Equatable, Sendable {
         height: Int,
         bytesPerRow: Int,
         format: FrameReduction.PixelFormat,
+        orientation: FrameReduction.Orientation = .up,
         bottomCrop: Double = FrameReduction.Band.bottom
     ) -> FrameFingerprint? {
         withUnsafeTemporaryAllocation(of: UInt8.self, capacity: FrameReduction.sampleCount) {
@@ -361,7 +435,8 @@ public struct FrameFingerprint: Equatable, Sendable {
             guard
                 FrameReduction.reduce(
                     base: base, width: width, height: height, bytesPerRow: bytesPerRow,
-                    format: format, bottomCrop: bottomCrop, into: reduction)
+                    format: format, orientation: orientation, bottomCrop: bottomCrop,
+                    into: reduction)
             else { return nil }
             return make(reduction: UnsafeBufferPointer(reduction))
         }

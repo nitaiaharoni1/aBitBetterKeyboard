@@ -157,6 +157,24 @@ public final class ScreenContextSession: ObservableObject {
         apply(channel.verdict, reading: channel.reading, status: channel.status)
     }
 
+    /// Republishes the keyboard's geometry without restarting the session.
+    ///
+    /// The height reaches the capture process once, when the keyboard appears,
+    /// and a rotation invalidates it: the fraction of the screen we cover changes,
+    /// so the band the producer cuts out of the fingerprint changes, so a frame
+    /// captured before the rotation and a frame after it have different identities
+    /// for no reason the user caused. The freshness gate reads that as a screen
+    /// change and retires the reading — a Reply that quietly answers nothing,
+    /// because the phone turned while the cloud was thinking.
+    ///
+    /// Ignored off the keyboard, for the same reason `claimsKeyboardVisible` is:
+    /// the app hosts the same view partway up its own screen, and a fraction
+    /// measured there describes nothing the capture process should act on.
+    public func updateOwnUIHeightFraction(_ fraction: Double) {
+        guard role.claimsKeyboardVisible else { return }
+        channel?.updateOwnUIHeightFraction(fraction)
+    }
+
     public func stopConsuming() {
         cancellable = nil
         channel?.stopWatching()
