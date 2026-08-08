@@ -12,11 +12,17 @@ import UniformTypeIdentifiers
 /// fallback — see `README.md`, because it means a Hebrew user's screen pixels
 /// leave the device where an English user's do not.
 ///
-/// Measured over all 30 images in `Bar/screen-context/`, three consecutive runs
-/// agreeing exactly: sender 29/30, keyboard language 29/30, message text 19/30
-/// exact and 26/30 within 90% of exact. Zero of the 30 returned a chrome string
-/// from the bar's `traps` list, and zero returned text the bar records as not
-/// being on screen. Median 5.3s, p90 6.4s.
+/// Measured over all 30 images in `Bar/screen-context/` on 2026-08-08, at the
+/// size and encoding the capture process actually sends (602x1310 JPEG q70, not
+/// the full-size PNG every earlier reading here used): sender 30/30, keyboard
+/// language 30/30, message text 18/30 exact and 25/30 within 90% of exact. Zero
+/// of the 30 returned a chrome string from the bar's `traps` list, and zero
+/// returned text the bar records as not being on screen. Median 4.9s, p90 5.7s,
+/// 66 KB median on the wire.
+///
+/// Those are a reading with a date on it, not a property of the system: a repeat
+/// run minutes later scored 29/30 sender and is committed beside it as
+/// `cloud_outputs_repeat.json`, and the two disagree on 2 of 30 frames.
 ///
 /// **Those four numbers were taken at the corpus's native 1206x2622, as a PNG,
 /// and neither is what this type sends.** `read(_:)` encodes JPEG q0.70 and the
@@ -140,10 +146,16 @@ public struct CloudScreenReader: ScreenReader {
 /// 1. **`messages` is a list, and it comes first.** Every wrong answer measured
 ///    on the bar was the model picking a bubble one to four positions above the
 ///    newest, not misreading pixels. Forcing it to enumerate every bubble before
-///    naming one turns "which is newest" from a judgement into an index, and
-///    took sender accuracy from 21/30 to 29/30.
-/// 2. **`script` and `language` are separate questions.** Collapsing them scored
-///    22/30; separating them scored 29/30. A Hebrew sentence borrowing English
+///    naming one turns "which is newest" from a judgement into an index.
+///    Re-measured 2026-08-08 with both sides run in one sitting
+///    (`Bar/screen-context/ablation/enumerate.json`): dropping the list costs 2
+///    points of sender, 3 of keyboard language and four of the near-misses, and
+///    lets a trap through that never appears with it. This comment used to claim
+///    21/30 → 29/30; the direction and the reason held, the magnitude did not.
+/// 2. **`script` and `language` are separate questions, and this is the big
+///    one.** Collapsing them scores **22/30** keyboard language against 30/30
+///    (`ablation/split.json`) — eight points, far outside the ±1 the model moves
+///    between two runs of one configuration. A Hebrew sentence borrowing English
 ///    words is *mixed* on screen and *Hebrew* to answer, and the keyboard needs
 ///    the second answer.
 ///

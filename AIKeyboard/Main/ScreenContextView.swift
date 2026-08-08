@@ -285,7 +285,7 @@ struct ScreenContextView: View {
                         number: 3,
                         title: "Only text reaches the keyboard",
                         detail:
-                            "What comes back is the sender, the message and its language. The picture is never saved — not on disk, not in the shared container, not in a backup."
+                            "What comes back is the sender, the message and its language. The picture is never saved — not on disk, not in the shared container, not in a backup. That text is handed over in a file the keyboard deletes as soon as the broadcast it came from has stopped."
                     )
 
                     Divider().overlay(Theme.Surface.separator)

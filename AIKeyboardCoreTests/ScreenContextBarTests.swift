@@ -511,11 +511,13 @@ final class ScreenContextBarTests: XCTestCase {
         // the on-device half runs the way a phone runs it. Lower bounds rather
         // than equalities so an improvement does not read as a break.
         //
-        // Every one of these is still *below* the cloud reader alone (29/30
-        // sender, 29/30 language, 19/30 exact, 26/30 near), and that is the
-        // headline finding of this file rather than a rounding error: on iOS,
-        // routing through `VisionScreenReader` costs 3 points of sender and 3 of
-        // exact message against simply asking the cloud. The eight screens it
+        // Every one of these is still *below* the cloud reader alone (30/30
+        // sender, 30/30 language, 18/30 exact, 25/30 near against the same
+        // recording), and that is the headline finding of this file rather than a
+        // rounding error: on iOS, routing through `VisionScreenReader` costs 3
+        // points of sender and 2 of exact message against simply asking the
+        // cloud. Both sides replay one recording, so the comparison survives the
+        // model drift the absolute numbers do not. The eight screens it
         // still answers include three it answers wrongly. See `disagreesWithHarness`.
         XCTAssertGreaterThanOrEqual(total.sender, 26, "sender fell below the measured routed score")
         XCTAssertGreaterThanOrEqual(

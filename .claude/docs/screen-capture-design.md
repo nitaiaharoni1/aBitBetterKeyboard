@@ -1231,8 +1231,9 @@ Three moves, in order of confidence:
    label, and never as an input to any decision about whether to upload.
 2. **Get the app from the reading, which already looks at the pixels.** Add an `app` field
    to `ScreenPrompt.fields`. It must go **last, after `language`** — the repo's field-order
-   rule is measured and load-bearing (enumeration first took sender from 21/30 to 29/30;
-   splitting `script` from `language` took 22/30 to 29/30), so nothing before it may move.
+   rule is measured and load-bearing (splitting `script` from `language` is worth 8 points
+   of keyboard language, 22/30 against 30/30, and enumerating first is worth 2 of sender
+   and 3 of language — see `Bar/screen-context/ablation/`), so nothing before it may move.
    Appended last, it is decided with every existing field already written and the current
    order is untouched. Then score it: `Bar/screen-context/` already carries WhatsApp,
    Telegram, Slack, Messages and Mail skins, so this is directly measurable, two runs per

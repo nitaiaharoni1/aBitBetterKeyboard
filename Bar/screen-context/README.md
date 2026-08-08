@@ -333,12 +333,35 @@ uploads 602x1310 as JPEG q0.70. And it is a *stored artifact*:
 in, and a fresh run of the identical configuration now disagrees with it on 9 of
 the 30. Every number on this page that comes from that file inherits both.
 
-Two prompt changes are worth more than they look, and both are recorded in
-`CloudScreenReader`'s doc comment: making the model enumerate every bubble
-before naming one took sender from 21/30 to 29/30, and splitting `script` from
-`language` took the keyboard-language call from 22/30 to 29/30. Flattening the
-enumeration into a JSON string costs 7 points of message accuracy, which is why
-`CloudField` carries nested `items`.
+Two prompt changes are worth more than they look, and a third turned out not to
+be. All three are now re-measured by `harness/ablate.py`, which moves exactly one
+thing per variant and writes the answers to `ablation/`, against the baseline
+`size-encoder/scale2-jpeg.json` from the same sitting — sender 29/30, keyboard
+language 30/30, 18 exact, 7 near, 0 traps.
+
+| variant | sender | language | exact | +near | traps |
+|---|---|---|---|---|---|
+| baseline — what ships | **29** | **30** | 18 | 7 | 0 |
+| no enumeration (`ablation/enumerate.json`) | 27 | 27 | 19 | 3 | **1** |
+| `script`+`language` collapsed (`ablation/split.json`) | 26 | **22** | 19 | 5 | **1** |
+| nested array not flat string (`ablation/flatten.json`) | 28 | 28 | 18 | 6 | 0 |
+
+**Splitting `script` from `language` is the big one and lands exactly where this
+page always said**: collapsed scores 22/30 keyboard language, eight points below,
+far outside the ±1 noise floor between two runs of one configuration.
+
+**Enumerating first is real but was overstated.** This page claimed 21/30 → 29/30.
+Re-measured it is 27 → 29 on sender, plus 3 of keyboard language, four of the
+near-misses, and a trap that only appears without it. The reason still holds —
+every wrong answer on this bar was a bubble one to four positions above the
+newest, and a list the model must finish turns "which is newest" from a judgement
+into an index — but the number was eight points too generous.
+
+**"Flattening the enumeration costs 7 points" does not survive at all.** The
+harness baseline *is* the flat JSON string, and the nested-array variant scores a
+point *worse* on sender, inside the noise. `CloudField` carries nested `items` and
+this sentence was the stated reason for it. The nesting is not wrong; the 7 points
+were never there.
 
 Two changes measured *worse* and were reverted rather than kept on the theory
 that they should help: a paragraph explaining bubble tint and edge, and "a

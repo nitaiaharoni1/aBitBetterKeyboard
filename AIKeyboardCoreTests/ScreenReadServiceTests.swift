@@ -232,9 +232,14 @@ final class ScreenReadServiceTests: XCTestCase {
 
         // The user leaves that conversation and taps Reply on another one.
         let second = tapReply()
-        XCTAssertNil(
-            sample(service, showing: otherScreen),
-            "a read is still in flight, so this frame must not start a second one")
+        // Sampled repeatedly, because that is what really happens: the deferred
+        // request is re-offered by every frame at 4 Hz until the running read
+        // releases the flag. Each one must decline without consuming the request.
+        for _ in 0..<4 {
+            XCTAssertNil(
+                sample(service, showing: otherScreen),
+                "a read is still in flight, so this frame must not start a second one")
+        }
         XCTAssertEqual(transport.calls, 1)
         XCTAssertEqual(
             try status().refusedInFlight, 0,

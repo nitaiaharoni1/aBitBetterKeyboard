@@ -2,6 +2,15 @@
 
 **Started:** 2026-08-07 · **Lead:** this session · **Status:** Round 0, building the bar
 
+> **This file is a log, not a reference.** Every number below was true when it was
+> written and several are not true now — the cloud model is served behind a moving
+> alias, so any figure taken on a different day describes a different model, and
+> three of the prompt-shape numbers recorded here were re-measured on 2026-08-08
+> and came back smaller (one of them, "flattening costs 7 points", came back as
+> nothing at all). Read it for what was tried and why. For what is true, read
+> `.claude/CLAUDE.md`, the doc comments, and the committed `*_outputs.json` files
+> that now sit under `Bar/screen-context/` — those carry their recording date.
+
 ## Goal
 
 Replace `MockSuggestionEngine`, `MockAI`, `MockDictation`, `MockScreenContext` and

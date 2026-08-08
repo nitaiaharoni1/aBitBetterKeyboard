@@ -16,11 +16,22 @@ public struct CloudField: Sendable {
     public let description: String
     /// Sub-fields, when this field is a list of objects rather than one string.
     ///
-    /// Only the screen reader uses this, and it is not decoration: asking the
-    /// model to enumerate every message bubble before naming one is what stops
-    /// it answering a message three positions above the newest. Measured over
-    /// `Bar/screen-context/`, flattening the same list into a JSON string in a
-    /// plain field costs 7 points of message accuracy and 3 of sender accuracy.
+    /// Only the screen reader uses this. **The enumeration is load-bearing; this
+    /// nesting is not, and this comment used to claim otherwise.** Making the
+    /// model list every message bubble before naming one is what stops it
+    /// answering a message three positions above the newest — dropping the list
+    /// costs 2 points of sender, 3 of keyboard language and four near-misses, and
+    /// introduces a trap (`Bar/screen-context/ablation/enumerate.json`).
+    ///
+    /// Whether that list arrives as a nested array or as a JSON string in a plain
+    /// field is a different question, and the honest answer is that it does not
+    /// measurably matter. This comment said flattening cost 7 points of message
+    /// accuracy and 3 of sender. Re-measured with both sides run in one sitting,
+    /// the nested form scores 28 sender against the flat form's 29 — a point
+    /// *worse*, inside a noise floor of ±1
+    /// (`Bar/screen-context/ablation/flatten.json` against
+    /// `size-encoder/scale2-jpeg.json`). Keep the nesting if you like it; do not
+    /// defend it with a number.
     public let items: [CloudField]?
 
     public init(_ name: String, _ description: String, items: [CloudField]? = nil) {

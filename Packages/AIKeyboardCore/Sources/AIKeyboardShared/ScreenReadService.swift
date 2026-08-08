@@ -78,6 +78,11 @@ public final class ScreenReadService: @unchecked Sendable {
         /// folded into a read whose answer would actually answer it, and that is
         /// exactly the question this settles — see `claim`.
         var readingIdentity: FrameIdentity = .absent
+        /// The last sequence a deferral was logged for. A deferred request is
+        /// re-offered by every sampled frame until the running read releases the
+        /// flag, which is four a second for the length of a cloud call; without
+        /// this the extension writes twenty identical lines per tap.
+        var lastDeferred: UInt64 = 0
     }
 
     private let channel: CaptureChannelWriter
@@ -144,6 +149,11 @@ public final class ScreenReadService: @unchecked Sendable {
             /// left unclaimed and unmarked, so the next frame after that read
             /// finishes serves it for real.
             case supersedes
+            /// The same, on every frame after the first. Identical behaviour,
+            /// silent: the deferral is re-offered four times a second for the
+            /// length of a cloud call, and saying so twenty times says nothing the
+            /// first line did not.
+            case supersedesQuietly
             case read
         }
 
@@ -185,7 +195,11 @@ public final class ScreenReadService: @unchecked Sendable {
                 // screen is not answering this tap, and stamping its record with
                 // this sequence would hand the waiting keyboard a record it has
                 // to refuse before the real answer arrives.
-                guard identity == state.readingIdentity else { return .supersedes }
+                guard identity == state.readingIdentity else {
+                    let firstTime = state.lastDeferred != intent.readNow
+                    state.lastDeferred = intent.readNow
+                    return firstTime ? .supersedes : .supersedesQuietly
+                }
                 state.answering = intent.readNow
                 state.seen = intent.readNow
                 return .inFlight
@@ -228,6 +242,8 @@ public final class ScreenReadService: @unchecked Sendable {
                 read deferred: request \(sequence, privacy: .public) is about a different \
                 screen than the read already running
                 """)
+            return nil
+        case .supersedesQuietly:
             return nil
         case .read:
             channel.count(\.readsRequested)
