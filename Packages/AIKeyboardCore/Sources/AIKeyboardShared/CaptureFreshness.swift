@@ -28,12 +28,30 @@ import Foundation
 /// record about somebody else's message. `broadcastPaused()` opens the same
 /// window from the other side, which is condition 2.
 ///
-/// **Condition 2 answers two questions and the design's table only named one.**
+/// **Condition 4 is an equality test over a band that excludes our own keyboard,
+/// and it has to be.** `AIResultPanel.loading` repaints three shimmer lines at
+/// 60 Hz for the whole five seconds of a read, and our keyboard is a third of the
+/// fingerprint band on an iPhone 17 Pro — so with our own UI inside it, this
+/// condition retired the answer to the very tap that paid for it. The frame was
+/// uploaded, the cloud call was spent, the record landed, and twelve seconds
+/// later the user was told nothing answered, non-deterministically. Nothing in
+/// this file changed for it: the keyboard publishes how much of the screen it
+/// covers in `CaptureIntent.ownUIHeightPermille` and the reduction leaves those
+/// rows out (`FrameReduction.bottomCrop(ownUI:)`), so the identity still moves on
+/// every conversation switch and no longer moves on our own animation. Measured
+/// with our panel on screen over the 30-scene corpus: 0 missed switches, 0
+/// shimmer-only invalidations.
+///
+/// **Condition 2 answers three questions and the design's table only named one.**
 /// A session that has begun and delivered no frame at all fails it exactly as a
 /// stalled one does, and the two are nothing alike to the user: the first is the
 /// picker's three-second countdown and the second is a broken pipeline. Split by
 /// `lastFrameAt` never having been written, which is a fact about the page rather
-/// than a threshold, into `.starting` and `.paused`.
+/// than a threshold, into `.starting` and the rest. The rest splits again, and
+/// that one is not a threshold either: `paused` is a *reported* fact — ReplayKit
+/// called `broadcastPaused()` — while a gap in `lastFrameAt` is an *inference*
+/// resting on a delivery rate nobody has measured. They are `.paused` and `.idle`,
+/// and `frameWindow` says what turns on the difference.
 ///
 /// There is no stale-but-shown verdict in this enumeration, deliberately. When
 /// Reply is tapped and the gate refuses, the keyboard asks for a new read and
@@ -45,7 +63,34 @@ public enum CaptureFreshness {
     /// scheduling hiccup, short enough that a killed extension is noticed before
     /// the user can act on it.
     public static let heartbeatWindow = CaptureClock.nanoseconds(3)
-    /// Condition 2. Two 250 ms samples plus slack.
+    /// Condition 2's inferred half, and **the rate it used to be justified by has
+    /// never been measured.**
+    ///
+    /// The old comment read "two 250 ms samples plus slack", which assumes
+    /// ReplayKit delivers frames on a clock. R1 in the design's open questions
+    /// says the delivery rate is unknown, and the two candidate answers put this
+    /// constant on opposite sides of a user-visible cliff:
+    ///
+    /// - **Periodic delivery** (up to 60 fps regardless of what is on screen).
+    ///   `lastFrameAt` is never more than ~17 ms old, this window is never
+    ///   reached, and it only ever fires on a genuinely stalled pipeline.
+    /// - **Change-driven delivery.** A user reading a static conversation
+    ///   generates no frames at all, so this window expires every time they stop
+    ///   scrolling — on exactly the screen the feature exists for.
+    ///
+    /// Under the second answer the old code made the Reply button disappear two
+    /// seconds after the screen stopped moving, silently, with no way for the user
+    /// or for us to tell that from the feature being broken. So the window no
+    /// longer decides whether Reply is *offered*: it produces `.idle`, which the
+    /// strip shows as watching and which keeps the button. It still decides
+    /// whether a *reading* may be certified, because there the conservative answer
+    /// is the safe one — with no frames arriving, nothing can confirm that the
+    /// conversation on screen is still the one that was read.
+    ///
+    /// What settles it is a device run: `framesDelivered` and `lastFrameAt` are
+    /// already in the page, so a session left on a still screen answers R1 by
+    /// itself. Until then a tap on Reply either works or fails out loud through
+    /// `lastReadWentUnanswered`, which is an observation; a hidden button is not.
     public static let frameWindow = CaptureClock.nanoseconds(2)
     /// Condition 5, and **it is a guess.** The right way to set it is to
     /// instrument the interval between a screen settling and the Reply tap in
@@ -71,8 +116,17 @@ public enum CaptureFreshness {
         /// stopped seeing them is paused, and only a session that has never seen
         /// one is starting.
         case starting
-        /// Condition 2. Alive, not looking. The strip says paused.
+        /// Condition 2, the reported half: `broadcastPaused()` fired and
+        /// `broadcastResumed()` has not. iOS said so, so the strip says paused and
+        /// offers nothing.
         case paused
+        /// Condition 2, the inferred half: the process is alive, iOS reported no
+        /// pause, and no frame has arrived within `frameWindow`. That is either a
+        /// stalled pipeline or a screen that has not changed, and this code cannot
+        /// tell which — see `frameWindow`. No reading may be certified in this
+        /// state, but the offer stands: the strip shows it as watching and a tap
+        /// on Reply is what turns the question into an answer.
+        case idle
         /// Condition 3. The reading is not stale, it is merely unconfirmed —
         /// no frame has been observed since it completed. The strip keeps the
         /// loading state; this normally resolves within one 250 ms sample.
@@ -138,11 +192,14 @@ public enum CaptureFreshness {
             return .ended(.lost)
         }
 
-        // 2. Liveness of delivery. Separate failure, separate field.
+        // 2. Liveness of delivery. Separate failure, separate field — and the
+        // reported pause is a separate verdict from the inferred frame gap,
+        // because one of them is a fact and the other rests on a rate nobody has
+        // measured.
         if status.isPaused { return .paused }
         guard status.lastFrameAt != 0 else { return .starting }
         guard CaptureClock.elapsed(since: status.lastFrameAt, now: now) <= frameWindow else {
-            return .paused
+            return .idle
         }
 
         return .offerable

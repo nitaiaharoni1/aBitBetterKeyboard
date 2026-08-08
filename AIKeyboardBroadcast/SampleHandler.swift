@@ -54,6 +54,13 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private let channel = CaptureChannelWriter()
     private var heartbeat: DispatchSourceTimer?
 
+    /// The self-protection half. Sampled once per sampled frame, so a read is
+    /// measured against a footprint at most 250 ms old, and it writes
+    /// `CaptureStatus.degraded` only when the answer changes. See `MemoryGovernor`
+    /// for why the watermark is bounded below by this process's own baseline
+    /// rather than by the design's placeholder.
+    private let memory = MemoryGovernor()
+
     /// The read, and the one downscale buffer it is served from.
     ///
     /// Built at `broadcastStarted` rather than here, so the backend URL is read
@@ -102,6 +109,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
         hasLoggedFormat = false
 
         let session = channel?.begin()
+        let budget = memory.begin()
         startHeartbeat()
 
         // Seeded with the intent page as it stands right now, so a Reply tap
@@ -118,7 +126,9 @@ final class SampleHandler: RPBroadcastSampleHandler {
             broadcast started intervalMs=\(Self.sampleIntervalMilliseconds, privacy: .public) \
             channel=\(self.channel == nil ? "unreachable" : "open", privacy: .public) \
             reader=\(self.reads?.canRead == true ? "cloud" : "none", privacy: .public) \
-            session=\(session?.uuidString ?? "none", privacy: .public)
+            session=\(session?.uuidString ?? "none", privacy: .public) \
+            baselineMB=\(budget.baselineMB.map { String(format: "%.1f", $0) } ?? "unmeasurable", privacy: .public) \
+            watermarkMB=\(String(format: "%.1f", budget.watermarkMB), privacy: .public)
             """
         )
     }
@@ -145,7 +155,14 @@ final class SampleHandler: RPBroadcastSampleHandler {
         // better collector than a race. A read already in flight keeps its own
         // JPEG and publishes a record the freshness gate refuses, because the
         // page it is measured against now carries an ending.
-        channel?.end(.userStopped)
+        //
+        // `.stopped`, not `.userStopped`. This callback takes no argument and
+        // `RPBroadcastSampleHandler` has no callback anywhere that carries an
+        // `NSError`, so the extension is told *that* the broadcast finished and
+        // never why — see `ScreenContextEndReason`. Writing "the user stopped it"
+        // here was a claim nothing had checked, and the keyboard acted on it by
+        // hiding the strip.
+        channel?.end(.stopped)
         Self.log.notice(
             """
             broadcast finished delivered=\(self.framesDelivered, privacy: .public) \
@@ -220,6 +237,20 @@ final class SampleHandler: RPBroadcastSampleHandler {
         lastSampledAt = now
         framesSampled &+= 1
 
+        // One `task_info` call per sampled frame — 4 Hz, no allocation — and the
+        // shared page is written only when the answer flips, so the status screen
+        // reflects the refusal without a seqlock transaction four times a second.
+        let footprint = memory.observe()
+        if footprint.changed {
+            channel?.setDegraded(footprint.isRefusing)
+            Self.log.notice(
+                """
+                memory degraded=\(footprint.isRefusing, privacy: .public) \
+                footprintMB=\(footprint.footprintMB.map { String(format: "%.1f", $0) } ?? "unmeasurable", privacy: .public)
+                """
+            )
+        }
+
         // Orientation rides as an attachment, not as a property of the image, and
         // a landscape frame read as portrait is read sideways.
         let orientation = Self.orientation(of: sampleBuffer)
@@ -248,10 +279,18 @@ final class SampleHandler: RPBroadcastSampleHandler {
         // publishes as `currentFrameSampledAt` rather than a few microseconds
         // after it.
         let sampledAt = CaptureClock.now()
-        let fingerprint = Self.fingerprint(of: sampleBuffer)
+        // One page load for both halves of this frame. The crop it carries is
+        // our own keyboard's region, which the fingerprint must leave out: our
+        // panel repaints its shimmer at 60 Hz for the whole five seconds of a
+        // read, and inside the band that moved the identity on every sample and
+        // made the freshness gate refuse the reading the tap had just paid for.
+        let intent = channel?.intent()
+        let fingerprint = Self.fingerprint(
+            of: sampleBuffer, bottomCrop: intent?.frameBottomCrop ?? FrameReduction.Band.bottom)
         if let fingerprint {
             channel?.recordFrame(fingerprint, now: sampledAt)
-            serveReadRequest(sampleBuffer, identity: fingerprint.identity, sampledAt: sampledAt)
+            serveReadRequest(
+                sampleBuffer, intent: intent, identity: fingerprint.identity, sampledAt: sampledAt)
         } else {
             // A frame we could not fingerprint is a frame the freshness gate
             // must not treat as evidence, so delivery is recorded and the
@@ -282,12 +321,30 @@ final class SampleHandler: RPBroadcastSampleHandler {
     /// `ScreenReadService.start` schedules on its own queue, and this returns
     /// without it.
     private func serveReadRequest(
-        _ sampleBuffer: CMSampleBuffer, identity: FrameIdentity, sampledAt: UInt64
+        _ sampleBuffer: CMSampleBuffer, intent: CaptureIntent?, identity: FrameIdentity,
+        sampledAt: UInt64
     ) {
         guard let channel, let reads,
             let ticket = reads.claim(
-                intent: channel.intent(), identity: identity, capturedAt: sampledAt)
+                intent: intent, identity: identity, capturedAt: sampledAt)
         else { return }
+
+        // The memory refusal is taken *after* the ticket, not before it. Refusing
+        // earlier would leave `intent.readNow` unclaimed, so the next frame would
+        // try again and the one after that, and the keyboard — which is already
+        // waiting on that sequence — would sit through its full twelve seconds and
+        // then be told nothing answered. A claimed request is always answered,
+        // here with the reason.
+        guard !memory.isRefusing else {
+            channel.count(\.refusedMemory)
+            reads.fail(
+                ticket,
+                detail: "Screen context is low on memory and did not read the screen.")
+            Self.log.error(
+                "read refused: footprint is above the watermark, request=\(ticket.sequence, privacy: .public)"
+            )
+            return
+        }
 
         guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer),
             let jpeg = scaler.jpeg(from: buffer)
@@ -312,7 +369,11 @@ final class SampleHandler: RPBroadcastSampleHandler {
     /// exists rather than allocating one, and the unlock is paired on every exit
     /// including the failures. Nothing survives this function except 40 bytes of
     /// hash.
-    private static func fingerprint(of sampleBuffer: CMSampleBuffer) -> FrameFingerprint? {
+    private static func fingerprint(
+        of sampleBuffer: CMSampleBuffer, bottomCrop: Double
+    )
+        -> FrameFingerprint?
+    {
         guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return nil }
 
         let format: FrameReduction.PixelFormat
@@ -351,7 +412,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
         return FrameFingerprint.make(
             base: UnsafeRawPointer(base), width: width, height: height,
-            bytesPerRow: bytesPerRow, format: format)
+            bytesPerRow: bytesPerRow, format: format, bottomCrop: bottomCrop)
     }
 
     private static func orientation(of sampleBuffer: CMSampleBuffer) -> CGImagePropertyOrientation? {

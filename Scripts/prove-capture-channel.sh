@@ -17,8 +17,13 @@
 #      is not, read out of the Mach-O. The whole point of the split is that a
 #      ~50 MB process does not get SwiftUI.
 #   2. The shipping fingerprint clears the §5.5 acceptance criteria: 0 misses and
-#      0 false invalidations over the corpus. Skipped only if the renders are
-#      absent and node is not installed, and it says so loudly.
+#      0 false invalidations over the corpus, in both configurations — with the
+#      host's keyboard on screen and with *our own*, panel open and its loading
+#      shimmer at two phases. The second pair is §5.5.1 and it is not decoration:
+#      over the band that keeps our keyboard, our own animation gives all 30
+#      frames a new identity, which retires the answer to the tap that paid for
+#      it. Skipped only if the renders are absent and node is not installed, and
+#      it says so loudly.
 #   3. Both processes run and the keyboard extension reports in at all.
 #   4. The keyboard extension read the session identifier the *other* process
 #      wrote. This is the one a unit test cannot do.
@@ -108,8 +113,9 @@ fi
 FINGERPRINT=$(Bar/screen-context/harness/run-fingerprint.sh 2>&1)
 RC=$?
 echo "$FINGERPRINT" | grep -E "^(identity|settleHash)" | sed 's/^/  /'
-[ $RC -eq 0 ] || { echo "$FINGERPRINT" | tail -10; fail "the fingerprint missed a conversation switch or moved on chrome"; }
-pass "0 misses, 0 false invalidations over the 30-scene corpus"
+[ $RC -eq 0 ] || { echo "$FINGERPRINT" | tail -10; fail "the fingerprint missed a conversation switch, moved on chrome, or moved on our own shimmer"; }
+pass "0 misses, 0 false invalidations over the 30-scene corpus, host keyboard and ours"
+echo "$FINGERPRINT" | grep -F "the panel variant can still see" | sed 's/^ *PASS/  witness/'
 
 # 3 -----------------------------------------------------------------------
 echo "==> 3. Both processes run"
@@ -188,7 +194,11 @@ echo "$WATCH" | grep -q 'verdict=offerable reading=Maya' \
   || fail "the extension never found the reading offerable; the gate refused a fresh reading"
 pass "verdict=offerable while the reading matched the frame on screen"
 
-OFFERABLE_LINE=$(echo "$WATCH" | grep -n 'verdict=offerable' | tail -1 | cut -d: -f1)
+# Scoped to the offerable lines that carry a reading. A trailing
+# `offerable reading=none` is an ordinary state — the gate is happy and there is
+# simply nothing published yet — and matching it here made the ordering check
+# pass or fail on which state the timeline happened to end in.
+OFFERABLE_LINE=$(echo "$WATCH" | grep -n 'verdict=offerable reading=[^n]' | tail -1 | cut -d: -f1)
 SUPERSEDED_LINE=$(echo "$WATCH" | grep -n 'verdict=superseded' | tail -1 | cut -d: -f1)
 [ -n "$SUPERSEDED_LINE" ] \
   || fail "the extension never retired the reading; a stale reply would have been offered"

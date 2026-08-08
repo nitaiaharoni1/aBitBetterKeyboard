@@ -9,7 +9,7 @@ let package = Package(
         // Linked on its own by the broadcast upload extension, which must never
         // link `AIKeyboardCore`: that target imports SwiftUI and UIKit from a
         // dozen files, and dragging both into a process capped at ~50 MB buys
-        // nothing. `AIKeyboardShared` is Foundation and CryptoKit only.
+        // nothing. `AIKeyboardShared` is Foundation, CryptoKit, CoreGraphics and ImageIO only — no UIKit, no SwiftUI.
         .library(name: "AIKeyboardShared", targets: ["AIKeyboardShared"])
     ],
     targets: [

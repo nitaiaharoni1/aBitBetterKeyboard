@@ -149,6 +149,47 @@ final class ScreenContextConsumerTests: XCTestCase {
         XCTAssertNil(session.state.context)
     }
 
+    /// **Frames stopping is not a pause, and it must not take the Reply button
+    /// away.**
+    ///
+    /// `CaptureFreshness.frameWindow` is two seconds, and the rate it was
+    /// justified against has never been measured (R1). If ReplayKit delivers on
+    /// change rather than on a clock, a user reading a still conversation
+    /// generates no frames at all — so the old code went `.paused` two seconds
+    /// after they stopped scrolling, `isLive` went false, `canReply` went false,
+    /// and the Reply button vanished from exactly the screen the feature exists
+    /// for. Silently: the user cannot tell that from the feature being broken, and
+    /// neither can we.
+    ///
+    /// The verdict is `.idle` and the strip keeps watching. The *reading* is still
+    /// withdrawn, because nothing has confirmed the conversation on screen is the
+    /// one that was read — a tap asks for a new one, and that tap is what answers
+    /// the open question either way.
+    func testAFrameGapKeepsTheOfferAndDropsTheReading() throws {
+        let sessionID = writer.begin()
+        let stale = CaptureClock.now() - CaptureClock.nanoseconds(3)
+        writer.recordFrame(screenA, now: stale)
+        try writer.publish(
+            ScreenReadingRecord(
+                sessionID: sessionID,
+                requestSequence: 0,
+                frameIdentity: screenA.identity,
+                capturedAt: stale,
+                readAt: stale,
+                provenance: "cloud",
+                sender: "Maya",
+                message: "Are we still on for 6?",
+                language: KeyboardLanguage.english.rawValue))
+        writer.heartbeat()
+
+        step()
+
+        XCTAssertEqual(channel.verdict, .idle)
+        XCTAssertEqual(session.state, .watching, "the offer stands; only the reading is withdrawn")
+        XCTAssertTrue(session.state.isLive, "a live session with a quiet screen is still live")
+        XCTAssertNil(session.state.context)
+    }
+
     /// A jetsam kill at the memory limit fires no ReplayKit callback at all, so
     /// the only evidence is a heartbeat that stopped. It has to read as an
     /// ending with a way back, never as "screen context is off".
@@ -185,24 +226,31 @@ final class ScreenContextConsumerTests: XCTestCase {
         step()
         XCTAssertEqual(session.state, .watching)
 
-        writer.end(.phoneCall, now: CaptureClock.now() - CaptureClock.nanoseconds(3_600))
+        writer.end(.stopped, now: CaptureClock.now() - CaptureClock.nanoseconds(3_600))
         step()
 
-        XCTAssertEqual(session.state, .ended(.phoneCall))
+        XCTAssertEqual(session.state, .ended(.stopped))
     }
 
-    /// The user stopping it is not an ending to report. There is nothing to
-    /// explain and nothing to restart: they did it on purpose.
-    func testTheUserStoppingReadsAsOff() {
+    /// **A stop is reported, because nothing in this build knows who did it.**
+    ///
+    /// This used to assert the opposite: `.userStopped` read as `.off`, on the
+    /// reasoning that the user did it on purpose so there was nothing to say.
+    /// That reasoning needed the extension to know that, and it does not —
+    /// `broadcastFinished()` takes no argument and carries no error, so the same
+    /// mapping erased the strip when iOS ended a session for a call or the lock
+    /// button. Redundant after a deliberate stop beats silent after an
+    /// involuntary one.
+    func testAStopIsReportedRatherThanHidden() {
         writer.begin()
         writer.recordFrame(screenA)
         step()
 
-        writer.end(.userStopped)
+        writer.end(.stopped)
         step()
 
-        XCTAssertEqual(session.state, .off)
-        XCTAssertEqual(session.source, .none)
+        XCTAssertEqual(session.state, .ended(.stopped))
+        XCTAssertEqual(session.source, .capture)
     }
 
     func testAnEndingKeepsItsReason() {
@@ -210,10 +258,10 @@ final class ScreenContextConsumerTests: XCTestCase {
         writer.recordFrame(screenA)
         step()
 
-        writer.end(.deviceLocked)
+        writer.end(.lost)
         step()
 
-        XCTAssertEqual(session.state, .ended(.deviceLocked))
+        XCTAssertEqual(session.state, .ended(.lost))
     }
 
     // MARK: Reply
@@ -324,7 +372,7 @@ final class ScreenContextConsumerTests: XCTestCase {
 
         async let reply = session.contextForReply(timeout: .seconds(5))
         try await Task.sleep(for: .milliseconds(300))
-        writer.end(.phoneCall)
+        writer.end(.stopped)
 
         do {
             let context = try await reply
@@ -333,7 +381,7 @@ final class ScreenContextConsumerTests: XCTestCase {
             guard case .screenNotRead(let reason) = error else {
                 return XCTFail("unexpected error \(error)")
             }
-            XCTAssertEqual(reason, ScreenContextEndReason.phoneCall.explanation)
+            XCTAssertEqual(reason, ScreenContextEndReason.stopped.explanation)
         }
     }
 
@@ -464,9 +512,9 @@ final class ScreenContextConsumerTests: XCTestCase {
         writer.begin()
         writer.recordFrame(screenA)
         step()
-        writer.end(.phoneCall)
+        writer.end(.stopped)
         step()
-        XCTAssertEqual(session.state, .ended(.phoneCall))
+        XCTAssertEqual(session.state, .ended(.stopped))
 
         session.start()
         step()
@@ -691,7 +739,6 @@ final class ScreenContextConsumerTests: XCTestCase {
             "the wait loop kept polling after cancellation: \(polls - atCancel) polls in one second")
     }
 
-
     // MARK: A read that answered and failed
 
     /// **A failure must end the wait, not run out the clock.**
@@ -762,6 +809,37 @@ final class ScreenContextConsumerTests: XCTestCase {
         } catch AIEngineError.screenNotRead(let reason) {
             XCTAssertEqual(reason, "There is no message on this screen to reply to.")
         }
+    }
+
+
+    /// **The playground must not photograph the playground.**
+    ///
+    /// The app hosts a real `KeyboardView` in its Playground tab and in
+    /// onboarding, so its Reply button is the same button. As an observer it may
+    /// watch the page, but a read raised from there would capture *this app* —
+    /// our own preview, with our own animation inside the fingerprint band — and
+    /// answer a question nobody asked. The scripted sample is what that screen is
+    /// for and is served before this check; anything else is refused in words.
+    func testAnObserverRefusesToReadRatherThanPhotographTheApp() async throws {
+        writer.begin()
+        writer.heartbeat()
+        writer.recordFrame(screenA)
+
+        let observing = ScreenContextSession()
+        observing.startConsuming(
+            ScreenContextChannel(reader: CaptureChannelReader(directory: directory)),
+            as: .observer)
+        defer { observing.stopConsuming() }
+
+        do {
+            _ = try await observing.contextForReply(timeout: .seconds(2))
+            XCTFail("an observer must not raise a read of the app's own screen")
+        } catch AIEngineError.screenNotRead(let reason) {
+            XCTAssertTrue(reason.contains("in the keyboard"), reason)
+        }
+        XCTAssertEqual(
+            writer.intent()?.readNow, 0,
+            "and it must not have reached the capture process at all")
     }
 
 }

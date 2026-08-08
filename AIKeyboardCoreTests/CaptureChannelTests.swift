@@ -1,4 +1,5 @@
 import XCTest
+import os
 
 @testable import AIKeyboardCore
 
@@ -418,11 +419,125 @@ final class CaptureChannelTests: XCTestCase {
         let writer = try XCTUnwrap(CaptureChannelWriter(directory: live))
         let session = writer.begin()
         try writer.publish(record(session: session))
-        // `end` deletes it too; write it back to test the sweep rather than that.
-        writer.end(.deviceLocked)
-        try writer.publish(record(session: session))
+        writer.end(.stopped)
+        // `end` deletes it, and `publish` refuses after it, so the file is put
+        // back by hand — which is also the way it really gets here: a jetsam kill
+        // fires no callback, so nothing deletes what the last read left.
+        try JSONEncoder().encode(record(session: session))
+            .write(to: live.appendingPathComponent("reading.json"))
 
         XCTAssertEqual(CaptureChannel.sweep(container: directory), ["channel/reading.json"])
+    }
+
+    // MARK: - A message must not outlive its session
+
+    /// **A read in flight when the broadcast ends must not publish.**
+    ///
+    /// `publish` runs on the read queue and `end()` on ReplayKit's lifecycle
+    /// queue, so the ordinary five-second read that was already running when the
+    /// user stopped the broadcast lands *after* `end()` deleted `reading.json`.
+    /// The sender's name and the text of their message then sit in the App Group
+    /// container — which is backed up — until the next launch or the next
+    /// broadcast. Nothing would have *shown* it, because the freshness gate
+    /// refuses a page carrying an ending; that is a different obligation from not
+    /// keeping it.
+    func testAReadingPublishedAfterTheSessionEndedIsRefused() throws {
+        let writer = try XCTUnwrap(CaptureChannelWriter(directory: directory))
+        let session = writer.begin()
+        let readingURL = url("reading.json")
+
+        try writer.publish(record(session: session))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: readingURL.path))
+
+        writer.end(.stopped)
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: readingURL.path), "end() deletes what it owns")
+
+        XCTAssertThrowsError(try writer.publish(record(session: session))) { error in
+            XCTAssertEqual(error as? CaptureChannelError, .sessionEnded)
+        }
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: readingURL.path),
+            "a message that outlived its session is a privacy leak, not untidiness")
+    }
+
+    /// The same rule under the race it exists for: `end()` and `publish()` on two
+    /// queues, over and over. Whatever the interleaving, nothing is on disk when
+    /// both have returned.
+    func testNoInterleavingOfEndAndPublishLeavesAReadingBehind() throws {
+        let writer = try XCTUnwrap(CaptureChannelWriter(directory: directory))
+        let readingURL = url("reading.json")
+
+        for _ in 0..<200 {
+            let session = writer.begin()
+            let group = DispatchGroup()
+            DispatchQueue.global(qos: .userInitiated).async(group: group) {
+                try? writer.publish(self.record(session: session))
+            }
+            DispatchQueue.global(qos: .userInitiated).async(group: group) {
+                writer.end(.stopped)
+            }
+            group.wait()
+
+            XCTAssertFalse(
+                FileManager.default.fileExists(atPath: readingURL.path),
+                "a reading survived a session that ended while it was being published")
+        }
+    }
+
+    /// A new broadcast lifts the refusal. The flag is per session, not per
+    /// process: the extension is reused across broadcasts.
+    func testANewSessionPublishesAgain() throws {
+        let writer = try XCTUnwrap(CaptureChannelWriter(directory: directory))
+        writer.end(.stopped)
+        let session = writer.begin()
+
+        XCTAssertNoThrow(try writer.publish(record(session: session)))
+        XCTAssertNotNil(CaptureChannelReader(directory: directory).reading())
+    }
+
+    // MARK: - The intent mapping is opened from two queues
+
+    /// **`intent()` is called from two threads and used to assign its mapping
+    /// without a lock.**
+    ///
+    /// `broadcastStarted` calls it on ReplayKit's lifecycle queue to seed the read
+    /// service, and `serveReadRequest` calls it on the delivery queue for every
+    /// sampled frame. ReplayKit does not document those to be the same queue. A
+    /// non-atomic store of a class reference can be torn or lost, and the losing
+    /// `SharedPage` is deallocated — `munmap` and `close` — while the winner may
+    /// be reading through it. This drives both callers at once against a page that
+    /// does not exist yet, which is the ordering that actually happens: a
+    /// broadcast started before the keyboard has ever appeared finds no
+    /// `intent.bin`.
+    ///
+    /// **What this can and cannot show.** The failure it hunts is a crash — a
+    /// `munmap`'d mapping read through — so it would fail as a signal rather than
+    /// as an assertion, and a race test that passes proves nothing on its own. The
+    /// lock in `CaptureChannelWriter` is the argument; this is the stress that
+    /// would find it missing.
+    func testIntentCanBeOpenedFromTwoQueuesAtOnce() throws {
+        for _ in 0..<50 {
+            let scratch = directory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+            let writer = try XCTUnwrap(CaptureChannelWriter(directory: scratch))
+            let reader = CaptureChannelReader(directory: scratch)
+            reader.requestRead()
+
+            let group = DispatchGroup()
+            let seen = OSAllocatedUnfairLock(initialState: [UInt64]())
+            for _ in 0..<8 {
+                DispatchQueue.global(qos: .userInitiated).async(group: group) {
+                    let readNow = writer.intent()?.readNow ?? 0
+                    seen.withLock { $0.append(readNow) }
+                }
+            }
+            group.wait()
+
+            XCTAssertTrue(
+                seen.withLock { $0.allSatisfy { $0 == 1 } },
+                "every caller sees the same page, or one of them read through a freed mapping")
+        }
     }
 
     /// `channel/` under the scratch container, created — the writer opens
@@ -482,18 +597,92 @@ final class CaptureChannelTests: XCTestCase {
 
     // MARK: - End reasons
 
-    /// The five ReplayKit codes, from `RPError.h`. A code nobody recognised is
-    /// still an ending, and reporting no reason for an ending that happened is
-    /// worse than reporting a vague one.
-    func testRecordingErrorCodesMapToEndReasons() {
-        XCTAssertEqual(ScreenContextEndReason(recordingErrorCode: -5806), .interrupted)
-        XCTAssertEqual(ScreenContextEndReason(recordingErrorCode: -5807), .contentResized)
-        XCTAssertEqual(ScreenContextEndReason(recordingErrorCode: -5809), .deviceLocked)
-        XCTAssertEqual(ScreenContextEndReason(recordingErrorCode: -5811), .phoneCall)
-        XCTAssertEqual(ScreenContextEndReason(recordingErrorCode: -5813), .carPlay)
-        XCTAssertEqual(ScreenContextEndReason(recordingErrorCode: -1), .interrupted)
+    /// **Every reason in this enumeration has something that writes it.**
+    ///
+    /// It used to carry eight, five of them mapped from `RPRecordingErrorCode`
+    /// through an initialiser whose only caller was the test that exercised it,
+    /// and a sixth for a read budget that was never built. Nothing could reach any
+    /// of them: `broadcastFinished` takes no argument, `RPBroadcastSampleHandler`
+    /// has no callback carrying an `NSError`, and `finishBroadcastWithError:` is a
+    /// method the extension calls, whose error goes to an `RPBroadcastController`
+    /// this app does not have. Meanwhile the Screen Context screen promised "this
+    /// screen says which".
+    ///
+    /// This asserts the list rather than the mapping, because the list is the
+    /// claim: re-adding a case means finding the code that writes it first.
+    func testEveryEndReasonIsOneSomethingCanWrite() {
+        XCTAssertEqual(
+            ScreenContextEndReason.allCases, [.none, .stopped, .lost],
+            "a reason nothing writes is a sentence the strip prints and nobody checked")
         XCTAssertEqual(
             ScreenContextEndReason.none.rawValue, 0,
             "a zeroed page must not claim an ending")
+        XCTAssertEqual(
+            CaptureStatus().endReason, .none,
+            "and a zeroed page reads back as running, not as an unknown ending")
+
+        var status = CaptureStatus()
+        status.endReasonRaw = 200
+        XCTAssertEqual(
+            status.endReason, .lost,
+            "a raw value from a build that knew more reasons than this one is still an ending")
     }
+
+    /// The reason `broadcastFinished()` writes never names a cause, because that
+    /// callback is not given one.
+    func testTheRecordedStopDoesNotClaimWhoStoppedIt() {
+        XCTAssertEqual(ScreenContextEndReason.stopped.explanation, "Screen context stopped.")
+        for reason in ScreenContextEndReason.allCases {
+            for cause in ["call", "lock", "CarPlay", "memory", "you", "user"] {
+                XCTAssertFalse(
+                    reason.explanation.localizedCaseInsensitiveContains(cause),
+                    "\(reason) names a cause nothing measured")
+            }
+        }
+    }
+
+    /// **An aborted transaction must not poison the page forever.**
+    ///
+    /// A writer killed between `begin_write` and `end_write` leaves the sequence
+    /// odd. `begin_write` used to compute `load + 1`, which assumes even on
+    /// entry, so the next open settled *even* over a half-written body and every
+    /// settled state after it was odd — `capture_seq_read_valid` never passed
+    /// again. Nothing repaired it: `begin()` runs two complete transactions,
+    /// which preserve parity, and `clear()` zeroes the body without touching the
+    /// counter. The page stayed poisoned across broadcasts, launches and reboots,
+    /// and the user saw "Screen context stopped unexpectedly" with no way out.
+    ///
+    /// jetsam kills a broadcast upload extension at 50 MB, so this is the
+    /// ordinary end of a session under pressure, not a hypothetical.
+    func testAPageSurvivesAWriterKilledMidTransaction() throws {
+        let writer = try XCTUnwrap(CaptureChannelWriter(directory: directory))
+        writer.begin()
+        writer.heartbeat()
+        XCTAssertNotNil(
+            try XCTUnwrap(CaptureChannelReader(directory: directory)).status().status,
+            "sanity: a healthy page reads")
+
+        // Abandon a transaction the way a SIGKILL does: leave the sequence odd
+        // with nothing to close it. Written straight into the page's first four
+        // bytes, which is where the sequence lives.
+        let statusFile = directory.appendingPathComponent("status.bin")
+        var bytes = try Data(contentsOf: statusFile)
+        let opened = bytes.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) } | 1
+        withUnsafeBytes(of: opened) { bytes.replaceSubrange(0..<4, with: $0) }
+        try bytes.write(to: statusFile)
+
+        let reader = try XCTUnwrap(CaptureChannelReader(directory: directory))
+        XCTAssertEqual(
+            reader.status(), .unsettled,
+            "a half-written page must refuse to read, not lie")
+
+        // The next session must recover the page rather than inherit its parity.
+        let recovered = try XCTUnwrap(CaptureChannelWriter(directory: directory))
+        recovered.begin()
+        recovered.heartbeat()
+        XCTAssertNotNil(
+            reader.status().status,
+            "a new session must repair an aborted transaction, not inherit it forever")
+    }
+
 }

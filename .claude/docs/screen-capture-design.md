@@ -406,10 +406,19 @@ Two consequences that must be in the code, not in a comment:
   UIKit and SwiftUI into a ~50 MB process for nothing. §4 splits out `AIKeyboardShared`.
 - **The extension polices its own footprint.** `MemoryGovernor.footprintMB()` wraps the
   same `task_info(TASK_VM_INFO)` call `memory.swift` uses. Refuse to start a read above a
-  watermark and publish `CaptureStatus.degraded` instead. The watermark cannot be set
-  until Phase 3 gives a real baseline; 35 MB is the placeholder and it is a placeholder.
-  A visible degraded state beats a jetsam kill, because a jetsam kill ends the broadcast
-  and only the user can restart it.
+  watermark and publish `CaptureStatus.degraded` instead. A visible degraded state beats a
+  jetsam kill, because a jetsam kill ends the broadcast and only the user can restart it.
+
+  **Built, and the placeholder watermark is not what shipped.** This paragraph used to say
+  35 MB and then say the watermark could not be set until Phase 3 measured a baseline — a
+  combination that refuses every read of every session if the baseline is above it, which
+  is the feature switched off by a guess with nothing in the UI to act on. What ships
+  instead is `max(ceiling - reserve, baseline + reserve)` with `ceiling` 50 MB and
+  `reserve` 10 MB, where the baseline is measured in this process at `broadcastStarted`:
+  40 MB on a normal session, and a session that starts above 40 MB raises its own
+  watermark and logs the baseline rather than refusing everything. A guess does not
+  overrule a measurement. Phase 3 replaces the two guesses; it is not needed to make the
+  rule safe.
 
 ---
 
@@ -430,7 +439,7 @@ Three processes, one shared container, no pixels between them.
   |    -> lock base addr, reduce to 32x64 grey       |  2 KB, conversation band only
   |    -> FrameFingerprint: identity + changeScore   |
   |    -> publish identity + sampledAt to status.bin |  every sampled frame, always
-  |    -> CaptureLoop.shouldRead(...) ?              |
+  |    -> ScreenReadService.claim(...) ?             |
   |         no  -> return                            |
   |         yes -> scale to 603x1311 (reused buf)    |  3.0 MB, overwritten in place
   |                encode JPEG q0.70                 |  ~66 KB median
@@ -518,12 +527,16 @@ exactly one condition:
 increasing request sequence; the extension reads the next settled frame and stamps the
 record with that sequence.
 
-Subject to four refusals, all of which publish a counter rather than failing silently:
+Subject to three refusals, all of which publish a counter rather than failing silently:
 
 - Full Access is off, so the keyboard cannot reach the container at all (§3.5).
-- `MemoryGovernor` is above the watermark.
-- A read is already in flight.
-- The session or daily read budget is exhausted.
+- `MemoryGovernor` is above the watermark (`refusedMemory`, and `degraded` while it lasts).
+- A read is already in flight (`refusedInFlight`).
+
+A fourth was listed here — a session or daily read budget, counted in `refusedBudget` and
+ending the session with `ScreenContextEndReason.overBudget`. No budget was ever built, so
+nothing could move either, and both have been deleted rather than left as a zero the
+status screen invites the user to trust. They come back with the budget.
 
 **There is no speculative trigger.** The previous version had one — T2, default on, firing
 whenever the keyboard was visible and the screen had settled. It is deleted. §5.1 is the
@@ -647,7 +660,7 @@ do here beyond not regressing it.
 |---|---|
 | `Bar/screen-context/harness/memory.swift` | The §2.3 probe. `phys_footprint` via `task_info(TASK_VM_INFO)` over all 30 bar images in one process, one image alive at a time, one reused request. Reports its deployment, `supportedComputeStageDevices` per request, and the ledger breakdown (`internal`, `external`, `graphics`, `neural`, `neural-nofootprint`, kernel footprint peak) — which is what §2.3.1 needed and the first version of the probe could not answer. `PASSES=` and `SAME_IMAGE=` produce the §2.3.2 growth table. Exits non-zero on a missing image, a failed Vision call, a `supportedComputeStageDevices` that errors, or a `task_info` that will not answer. Compiles unchanged for `arm64-apple-ios`, which is how it becomes the device measurement §1.4 asks for. |
 | `Bar/screen-context/harness/run-memory.sh` | Builds both deployments, requires a booted simulator, prints the compute-device table and **asserts that `VNDetectTextRectanglesRequest` is cpu-only on both**, and prints the labelled peak table. That assertion replaced the previous ANE-framework assertion, which asserted a true fact that explained nothing. Fails rather than skips at every step. `SCALES="1.0 0.5 0.25"` runs the resolution sweep, `CONFIGS=fast` narrows it. |
-| `Bar/screen-context/harness/frame-hash.mjs` | The §5.5/§6 probe. Renders every corpus scene four times — as-is, with every message's glyphs substituted inside its own script, with only the newest message's glyphs substituted, and with only the status-bar clock and the header presence line changed — then reports, per crop band and per fingerprint value, how many near pairs it fails to separate and how many chrome-only changes it wrongly separates. Both columns must be zero and exactly one configuration reaches that. `KEEP=1` leaves the rendered frames. |
+| `Bar/screen-context/harness/frame-hash.mjs` | The §5.5/§6 probe. Renders every corpus scene seven times — as-is, with every message's glyphs substituted inside its own script, with only the newest message's glyphs substituted, with only the status-bar clock and the header presence line changed, and three more with *our own* keyboard on screen and the AI result panel loading (shimmer phase 0.10, phase 0.60, and the newest message's glyphs changed under it) — then reports, per crop band and per fingerprint value, how many near pairs it fails to separate and how many changes it wrongly separates, with and without our keyboard up. All four columns must be zero in the pair that applies, and §5.5.1 says which band that is. `KEEP=1` leaves the rendered frames. |
 
 ### Create
 
@@ -655,14 +668,14 @@ do here beyond not regressing it.
 |---|---|
 | `AIKeyboardBroadcast/Info.plist` | `NSExtensionPointIdentifier = com.apple.broadcast-services-upload`, `RPBroadcastProcessMode = RPBroadcastProcessModeSampleBuffer`, `NSExtensionPrincipalClass = $(PRODUCT_MODULE_NAME).SampleHandler`. Verified against Xcode's own template at `iPhoneOS.platform/.../Broadcast Upload Extension.xctemplate/TemplateInfo.plist`. Needs a `membershipExceptions` entry, as `AIKeyboardExtension/Info.plist` has. |
 | `AIKeyboardBroadcast/AIKeyboardBroadcast.entitlements` | `com.apple.security.application-groups` = `group.com.nitai.aikeyboard` |
-| `AIKeyboardBroadcast/SampleHandler.swift` | `final class SampleHandler: RPBroadcastSampleHandler`. Overrides `broadcastStarted(withSetupInfo:)`, `broadcastPaused()`, `broadcastResumed()`, `broadcastFinished()`, `broadcastAnnotatedWithApplicationInfo(_:)`, `processSampleBuffer(_:with:)`. Owns a `CaptureLoop`, the heartbeat timer and the serial read queue, and nothing else. Under 150 lines. |
-| `AIKeyboardBroadcast/CaptureLoop.swift` | `final class CaptureLoop` — the throttle/settle/budget state machine. Its API takes `(identity: FrameIdentity, changeScore: Double, now: ContinuousClock.Instant, intent: CaptureIntent)` and returns `CaptureDecision`. No ReplayKit or CoreVideo types cross its boundary, so every trigger rule is unit-testable off-device. |
+| `AIKeyboardBroadcast/SampleHandler.swift` | `final class SampleHandler: RPBroadcastSampleHandler`. Overrides `broadcastStarted(withSetupInfo:)`, `broadcastPaused()`, `broadcastResumed()`, `broadcastFinished()`, `broadcastAnnotatedWithApplicationInfo(_:)`, `processSampleBuffer(_:with:)`. Owns the heartbeat timer, a `MemoryGovernor` and a `ScreenReadService`, and nothing else. |
+| ~~`AIKeyboardBroadcast/CaptureLoop.swift`~~ | **Not written, and not missing.** The throttle/settle/budget state machine this row specified has no state left to hold: the throttle is one `ContinuousClock` comparison in `sampleVideo`, the settle rule went with T2 (§5.1), and the budget was deleted with `refusedBudget`. What remained — "is this frame the one that answers a raised request" — is `ScreenReadService.claim(intent:identity:capturedAt:)`, in `AIKeyboardShared`, where `ScreenReadServiceTests` can drive it off-device. |
 | `AIKeyboardBroadcast/FrameScaler.swift` | `struct FrameScaler` — vImage. One preallocated `vImage_Buffer` per output size, created at `broadcastStarted` and reused. Scales planes *before* colour conversion when the source is 420f, so no full-size ARGB intermediate is ever allocated. |
-| `AIKeyboardBroadcast/MemoryGovernor.swift` | `enum MemoryGovernor { static func footprintMB() -> Double }` over `task_info(TASK_VM_INFO)`, plus the read watermark. Share the implementation with `memory.swift` by eye, not by import: the probe must stay outside every target. |
+| `Packages/AIKeyboardCore/Sources/AIKeyboardShared/MemoryGovernor.swift` | `final class MemoryGovernor` over `task_info(TASK_VM_INFO)`: `footprintMB()`, `begin()` (measures this session's baseline and sets the watermark from it), `observe()` (one sample, reporting the transition so the shared page is written only when the answer flips) and `isRefusing`. Shares the implementation with `memory.swift` by eye, not by import: the probe must stay outside every target. **In `AIKeyboardShared` rather than in the extension target**, against §11's original placement, because `AIKeyboardCoreTests` cannot reach an app extension and a self-protection rule nobody has run is not one. |
 | `Packages/AIKeyboardCore/Sources/AIKeyboardShared/CaptureChannel.swift` | `enum CaptureChannel` (container URLs), `struct CaptureStatus` and `struct CaptureIntent` (fixed C layouts), `final class SharedPage<T>` (the mmap + seqlock wrapper). `CaptureStatus` is **256 bytes**, not 128: §6's identity value is a 32-byte SHA-256 alongside the session UUID, the three timestamps and the counters. It carries `currentFrameIdentity` **and** `currentFrameSampledAt` **and** `lastFrameAt` **and** `paused` — §6 needs all four and a design that ships three of them has the stale-reading bug. |
 | `Packages/AIKeyboardCore/Sources/AIKeyboardShared/FrameFingerprint.swift` | `struct FrameFingerprint { let identity: FrameIdentity; let changeScore: Double }`, the 32x64 greyscale reduction, and the crop band. **Two values from one reduction and they have different jobs**: `identity` is `SHA256` of the 2,048 bytes and answers "is this the same screen" for §6 condition 4; `changeScore` is a perceptual distance over a 64-bit difference hash of the same bytes and answers "has it stopped moving" for the settle gate, and nothing else. §5.5 has the measurement that forced the split. |
 | `Packages/AIKeyboardCore/Sources/AIKeyboardShared/ScreenReadingRecord.swift` | `struct ScreenReadingRecord: Codable, Sendable` — `sessionID`, `requestSequence`, `frameIdentity`, `capturedAt`, `readAt`, `provenance`, and the `ScreenReading` fields. Text and hashes only, by construction; no reduction, no thumbnail, nothing that renders. |
-| `Packages/AIKeyboardCore/Sources/AIKeyboardShared/ScreenContextEndReason.swift` | `enum ScreenContextEndReason: UInt8` — `.userStopped`, `.deviceLocked`, `.phoneCall`, `.interrupted`, `.contentResized`, `.carPlay`, `.overBudget`, `.lost`. The middle five map from `RPRecordingErrorCode` (verified, `RPError.h`); `.lost` is the inferred one, from a stale heartbeat with no recorded end. |
+| `Packages/AIKeyboardCore/Sources/AIKeyboardShared/ScreenContextEndReason.swift` | `enum ScreenContextEndReason: UInt8` — `.none`, `.stopped`, `.lost`, and that is the whole list. The five `RPRecordingErrorCode` cases this row used to specify were unwritable: `broadcastFinished` takes no argument, `RPBroadcastSampleHandler` has no callback carrying an `NSError`, and `finishBroadcastWithError:` is a method the extension *calls*, whose error reaches an `RPBroadcastController` this app does not have (broadcasts start from `RPSystemBroadcastPickerView`). So the capture process is told *that* the broadcast ended and never why, and `.stopped` does not claim a cause. `.lost` is still the inferred one, from a stale heartbeat with no recorded end. |
 | `Packages/AIKeyboardCore/Sources/AIKeyboardCore/SecureField.swift` | The §3.3.1 guard. Takes `(secure: Bool?, contentType: UITextContentType??)` rather than the proxy, so its whole truth table is unit-testable without a host app, including the two cases the naive spelling gets wrong. |
 
 ### Modify
@@ -883,7 +896,7 @@ band and per value:
 | top 6.5% / **bottom 45%** | 64-bit dHash | **23/29** | 3/30 |
 | top 6.5% / bottom 45% | 256-bit dHash | **23/29** | **13/30** |
 | **top 14% / bottom 8.5% (`VisionScreenReader.Band`)** | **`sha256`** | **0/29** | **0/30** |
-| top 14% / bottom 8.5% | 64-bit dHash | **11/29** | 0/30 |
+| top 14% / bottom 8.5% | 64-bit dHash | **10/29** | 0/30 |
 | top 14% / bottom 8.5% | 256-bit dHash | 0/29 | 0/30 |
 
 *misses* counts scene pairs that differ only in the newest message's glyphs and produce the
@@ -912,10 +925,66 @@ Three things this settles:
    thing sitting directly under it, which the previous version missed. The pleasing
    consequence is that the fingerprint now covers exactly the region the reading is taken
    from — the same band `VisionScreenReader.interpret` filters message lines to.
-3. **64 bits is not enough even over the right band.** 11 of 29 pairs collide. The
+3. **64 bits is not enough even over the right band.** 10 of 29 pairs collide. The
    256-bit dHash and the SHA-256 both reach 0/29 and 0/30; the SHA is chosen for §5.4's
    reason, and because the miss column is what matters and an exact hash cannot regress on
    it.
+
+### 5.5.1 And our own keyboard is not part of "which screen is this"
+
+The table above was taken over frames rendered with the **host's** keyboard, or none. That
+is not the state any real reading is ever measured in. A reading exists only because the
+user tapped Reply on *our* keyboard, so our keyboard is on screen for the whole five-second
+read — with `AIResultPanel.loading` repainting three shimmer lines at `workingPhase += 0.03`
+every 16 ms. On an iPhone 17 Pro our keyboard at its tallest is 292 pt of 874 pt, which is
+**32% of the fingerprint band**, and SHA-256 moves on a one-level change in any of the 2,048
+samples.
+
+So `frame-hash.mjs` now renders three more variants per scene: the scene with our keyboard
+up and the result panel loading at shimmer phase 0.10, the same at phase 0.60, and the
+newest message's glyphs substituted under it. Two more columns, asking the same two
+questions of the deployed state — `own miss` is a conversation switch our panel is sitting
+over, `own false` is our own shimmer and nothing else:
+
+| Band removed | Value | miss | false | own miss | own false |
+|---|---|---|---|---|---|
+| top 6.5% / bottom 45% | `sha256` | **23/29** | **19/30** | 3/29 | 0/30 |
+| top 6.5% / bottom 8.5% | `sha256` | 0/29 | **19/30** | 0/29 | **30/30** |
+| top 14% / bottom 8.5% (§5.5's answer) | `sha256` | **0/29** | **0/30** | 0/29 | **30/30** |
+| top 14% / bottom 8.5% | 64-bit dHash | **10/29** | 0/30 | 4/29 | **25/30** |
+| **top 14% / bottom 33.4% (ours excluded)** | **`sha256`** | 20/29 | **0/30** | **0/29** | **0/30** |
+| top 14% / bottom 40% (`Band.maximumOwnUI`) | `sha256` | 20/29 | 0/30 | **0/29** | **0/30** |
+
+**30 of 30 is the shipping blocker this found**, and it was live: the frame was uploaded,
+the cloud call was spent, the record landed, and §6 condition 4 called it `.superseded`
+because our own shimmer had moved. Twelve seconds after the tap the user was told nothing
+answered the request to read the screen — non-deterministically, which is worse than always
+failing.
+
+The fix is one band, chosen per frame from a number only the keyboard can know. It publishes
+the fraction of the screen it covers in `CaptureIntent.ownUIHeightPermille`; the producer
+turns that into a crop with `FrameReduction.bottomCrop(ownUI:)` and reduces the frame
+without it. Four things this rests on:
+
+- **It costs no host content.** While our keyboard is up, everything below its top edge
+  *is* our keyboard. The 20/29 in the *miss* column of the last two rows is not information
+  lost: those bands are only ever used on a frame our keyboard is on, and the column that
+  applies there — `own miss` — is 0.
+- **The threat is untouched.** Condition 4 is still exact equality against the newest
+  sampled frame, and `own miss` 0/29 is that condition measured in the deployed state: a
+  user who switches conversation under our panel is still refused.
+- **The height is the *tallest* form, not the current one.** The context strip appears and
+  disappears with the capture session, including mid-read, and a band that moves retires a
+  reading exactly as a conversation switch does.
+- **The claim is bounded.** It is a number one process reads out of a page another writes.
+  Below `Band.bottom` it is ignored; above `Band.maximumOwnUI = 0.40` it is clamped, and
+  that cap is the last row of the table rather than a guess. Past it lies the 45% band and
+  23 of 29 missed switches.
+
+`Bar/screen-context/harness/fingerprint.swift` scores both configurations against the
+shipping Swift, and carries a witness check: over the band that does *not* exclude our
+keyboard, our own shimmer still moves the identity on 30/30 scenes. A harness that cannot
+fail proves nothing, and that is the number that says this one can.
 
 The reduction stays 32x64 greyscale, 2,048 bytes, as §2.2 budgets, and the margin at the
 chosen band is not thin. Over the 29 separable pairs, the number of the 2,048 samples that
@@ -1174,19 +1243,32 @@ it. Three paths, in preference order, and the first two are unverified:
    directly. That is the best restart path if it holds, and it is worth verifying early
    because it changes the onboarding script.
 
-Whatever the outcome, `.ended` is a first-class state with a reason, not an absence.
-"Screen context stopped because you took a call" is a different message from "…because it
-ran out of memory", and the second one is a bug report.
+Whatever the outcome, `.ended` is a first-class state with a way back, not an absence.
+
+**The reason it carries is thinner than this section assumed.** "Screen context stopped
+because you took a call" is indeed a different message from "…because it ran out of
+memory" — and an upload extension is told neither. See §11's row for
+`ScreenContextEndReason`: the only two endings anything can produce are "the broadcast
+finished" and "the heartbeat stopped". The second is the bug report, and it is the one a
+jetsam kill leaves. Naming a cause the platform never supplied is what §8.4 rule 1 was
+doing, and it is withdrawn.
 
 ### 8.4 Two rules Phase 6 had to add, and they are not in §8.2
 
 Built as specified, §8.2 says two things the product should not say.
 
-1. **`.userStopped` is not an ending to report.** The end reason stays in the page until
-   the next `begin()`, so a strip that renders every ending would say "screen context
-   stopped" for ever after the user stopped it on purpose. There is nothing to explain and
-   nothing to restart, so `ScreenContextSession` maps it to `.off`. Every other reason,
-   `.lost` included, keeps its ending — which is what §8.2 was actually protecting.
+1. ~~**`.userStopped` is not an ending to report.**~~ **Withdrawn.** The rule was: a strip
+   that renders every ending says "screen context stopped" for ever after the user stopped
+   it on purpose, so `ScreenContextSession` maps that one reason to `.off`. It needed the
+   capture process to know the user was the one who stopped it, and it does not.
+   `broadcastFinished()` takes no argument, and `RPBroadcastSampleHandler` has no callback
+   anywhere that carries an `NSError` (see §11's row for `ScreenContextEndReason`), so
+   writing `.userStopped` there was a claim nothing had checked — and the mapping then
+   erased the strip whenever iOS ended a session for a call or the lock button, which is
+   the one thing §8.2 exists to forbid. Now: `.stopped` names no cause, and every ending is
+   reported. Redundant after a deliberate stop beats silent after an involuntary one. What
+   §8.2 promised about *which* reason it was is a promise the platform does not let this
+   app keep, and the Screen Context screen says so instead of claiming it.
 2. **An ending decays.** A page whose producer died is `.ended(.lost)` for ever, and a
    strip still offering to restart yesterday's session is crying wolf. The session reports
    an ending if it watched that session run *or* the heartbeat stopped within the last ten
@@ -1241,13 +1323,14 @@ each sees the other's write. Do not proceed until that check passes on a real ke
 extension, because everything above it assumes it.
 
 **Phase 3 — the shutter, with no reading in it. This is the budget gate.**
-The `AIKeyboardBroadcast` target, `SampleHandler`, `FrameScaler`, `CaptureLoop`,
-`MemoryGovernor`. It throttles, fingerprints, heartbeats, and publishes `CaptureStatus` —
+The `AIKeyboardBroadcast` target, `SampleHandler`, `FrameScaler`, `MemoryGovernor`. It throttles, fingerprints, heartbeats, and publishes `CaptureStatus` —
 and calls no reader at all. Run it for ten minutes against WhatsApp on a device with a
 memory graph attached, and **record the baseline**, which §2.4 currently guesses at 20 MB.
 Gate: if baseline + one mapped frame + the downscale destination exceeds 30 MB, there is
-no room for TLS and the design changes here, before any reading code exists. Set the
-`MemoryGovernor` watermark from the measured baseline rather than the placeholder.
+no room for TLS and the design changes here, before any reading code exists. `MemoryGovernor`
+already sets its watermark from the baseline it measures at `broadcastStarted`, and logs
+both, so this phase reads the number out of the log rather than editing a constant; what it
+still has to settle is the 50 MB ceiling (R2) and the 10 MB read reserve (R7).
 
 **Phase 4 — the on-device question, answered on the right hardware.**
 This phase used to re-run `coverage.swift` with `.fast` on macOS. That measured the wrong
@@ -1326,9 +1409,12 @@ A second gotcha, because §5.5 cost a design revision to learn:
 > bits fixes none of them. Cropping `VisionScreenReader.Band` instead — top 14% for the
 > status and navigation bars, bottom 8.5% for the composer — gives 0 of 29 misses and, just
 > as importantly, 0 of 30 false invalidations from the clock ticking or the header changing
-> to "typing...". Over the right band a 64-bit difference hash still collides on 11 of 29;
+> to "typing...". Over the right band a 64-bit difference hash still collides on 10 of 29;
 > the shipped identity is a SHA-256 of the 32x64 greyscale reduction, and the perceptual
-> hash is kept only for settle detection.
+> hash is kept only for settle detection. **And our own keyboard is not part of the screen
+> either**: with the result panel loading over the same band, our shimmer alone moves the
+> identity on 30 of 30 frames, so the keyboard publishes the fraction of the screen it
+> covers and the producer crops it out (§5.5.1).
 
 ---
 
@@ -1395,16 +1481,17 @@ inverted argument in §1 survived a revision. It has been replaced, not merely r
 
 **§5.5 and §6.** `Bar/screen-context/harness/frame-hash.mjs`, Playwright/Chromium on the
 macOS host at 1206x2622, over the same 30 scenes `generate.mjs` renders the corpus from.
-120 frames in total: each scene as-is, with every message's glyphs substituted, with only
-the newest message's glyphs substituted, and with only the status-bar clock and the header
-presence line changed. Substitution is a letter-for-letter shift inside the same script, so
+210 frames in total: each scene as-is, with every message's glyphs substituted, with only
+the newest message's glyphs substituted, with only the status-bar clock and the header
+presence line changed, and three renders with our own keyboard up and the result panel
+loading. Substitution is a letter-for-letter shift inside the same script, so
 character counts, word breaks, digits, times and bubble geometry are byte-for-byte
 preserved and only the glyphs move; anything weaker also moves the line wrapping, and then
 a fingerprint separates the pair for the wrong reason.
 
 ```
 node Bar/screen-context/harness/frame-hash.mjs
-KEEP=1 node Bar/screen-context/harness/frame-hash.mjs   # keep the 120 rendered frames
+KEEP=1 node Bar/screen-context/harness/frame-hash.mjs   # keep the 210 rendered frames
 ```
 
 **The JPEG size table (§2.2).** Pillow 11.3.0 on macOS over all 30 images at quality 70,

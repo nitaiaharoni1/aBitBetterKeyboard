@@ -4,7 +4,7 @@
 
 XCTest via `xcodebuild test`, in two shapes:
 
-- **`AIKeyboardCoreTests`** — unit tests over `AIKeyboardCore` (184 at last
+- **`AIKeyboardCoreTests`** — unit tests over `AIKeyboardCore` (229 at last
   count): routing, language detection, `OutputGuard`, `EditScope`, the capture
   channel's seqlock and layouts, the frame fingerprint's crop band, the freshness
   gate. Fast, no simulator UI.

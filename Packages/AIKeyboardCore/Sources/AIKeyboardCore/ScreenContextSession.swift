@@ -59,12 +59,13 @@ public final class ScreenContextSession: ObservableObject {
     ///
     /// **This is the consumer's own observation, not a guess about the other
     /// process**, and it exists because the strip was making a promise the build
-    /// cannot keep. Reading the screen inside the capture process is not built:
-    /// `AIKeyboardBroadcast` fingerprints frames and publishes status, and it
-    /// never encodes a picture or calls a reader. So on a device today every
-    /// Reply tap raises the sequence, waits, and gets nothing — while the strip
-    /// said "Reply can read this screen" and the AI menu said "Reads the screen
-    /// when you tap", both of which describe a loop that does not run.
+    /// could not keep: it said "Reply can read this screen" while nothing in the
+    /// capture process could read one. That half is written now — a tap makes
+    /// `AIKeyboardBroadcast` encode one frame and call `CloudScreenReader` — but
+    /// the flag stays, because it never encoded the *reason*, only the fact that
+    /// a raised request went unanswered. It is still the honest signal when a
+    /// broadcast is not really running, when the read fails silently, or when
+    /// ReplayKit turns out not to deliver what this build assumes.
     ///
     /// Keying the copy off what actually happened, rather than off a hard-coded
     /// "not built", keeps it true on both sides of that work landing: the first
@@ -90,6 +91,10 @@ public final class ScreenContextSession: ObservableObject {
     private var task: Task<Void, Never>?
     private var channel: ScreenContextChannel?
     private var cancellable: AnyCancellable?
+
+    /// Which process this session consumes as. Only the keyboard may raise a
+    /// real read; see `contextForReply`.
+    private var role: ScreenContextChannel.Role = .keyboard
     /// The session this consumer has seen alive. An ending is always news for
     /// that one, however long ago the heartbeat stopped.
     private var sessionSeenLive: UUID?
@@ -125,11 +130,18 @@ public final class ScreenContextSession: ObservableObject {
     /// the same `KeyboardView` in onboarding and the playground, so a Reply tap
     /// there raises `intent.readNow` like any other. `ScreenContextChannel.Role`
     /// says why that is the contract rather than a hole in it.
+    ///
+    /// `ownUIHeightFraction` is the keyboard's own geometry, which only the
+    /// keyboard can measure and which the producer needs to keep our animating
+    /// panel out of the frame fingerprint. `KeyboardGeometry` computes it.
     public func startConsuming(
-        _ channel: ScreenContextChannel = .shared, as role: ScreenContextChannel.Role = .keyboard
+        _ channel: ScreenContextChannel = .shared,
+        as role: ScreenContextChannel.Role = .keyboard,
+        ownUIHeightFraction: Double = 0
     ) {
         self.channel = channel
-        channel.startWatching(as: role)
+        self.role = role
+        channel.startWatching(as: role, ownUIHeightFraction: ownUIHeightFraction)
 
         // `$verdict` is assigned on every poll, so this fires at the poll rate
         // even when the verdict has not moved — which is what carries a *new
@@ -156,10 +168,20 @@ public final class ScreenContextSession: ObservableObject {
     /// Two mappings here are decisions rather than plumbing. `.unconfirmed` and
     /// `.superseded` both come out as `.watching`: there is a live session and
     /// there is a reading, and the reading is not about what is on screen now,
-    /// so the offer is all that may be shown. And `.ended(.userStopped)` is
-    /// `.off` rather than an ending — the user stopped it, so there is nothing
-    /// to report and nothing to restart. Every other reason keeps its ending,
-    /// which is what makes a jetsam kill read as "stopped unexpectedly".
+    /// so the offer is all that may be shown. `.idle` joins them, and that one is
+    /// a correction: a frame gap is not a pause, it is a screen that has not
+    /// changed *or* a pipeline that has stalled, and rendering it as "paused"
+    /// took the Reply button away from a user reading a still conversation on
+    /// the strength of a delivery rate nobody has measured. See `frameWindow`.
+    ///
+    /// **Every ending is reported, including `.stopped`.** It used to map to
+    /// `.off`, on the reasoning that the user stopped it on purpose so there was
+    /// nothing to say. That reasoning needed the extension to know who stopped
+    /// it, and it does not: `broadcastFinished()` carries no reason, so the same
+    /// mapping also erased the strip when iOS ended a session for a call or the
+    /// lock button — which is the one thing §8.2 forbids. An ending that says
+    /// "stopped, restart it in AI Keyboard" after a deliberate stop is
+    /// redundant; an ending that says nothing after an involuntary one is wrong.
     private func apply(
         _ verdict: CaptureFreshness.Verdict, reading: ScreenReadingRecord?, status: CaptureStatus?
     ) {
@@ -183,12 +205,12 @@ public final class ScreenContextSession: ObservableObject {
             sessionSeenLive = status?.sessionID
             publish(.paused, from: .capture, frames: frames)
         case .ended(let reason):
-            guard reason != .userStopped, isWorthReporting(status: status) else {
+            guard isWorthReporting(status: status) else {
                 publishAbsence()
                 return
             }
             publish(.ended(reason), from: .capture, frames: frames)
-        case .unconfirmed, .superseded:
+        case .idle, .unconfirmed, .superseded:
             sessionSeenLive = status?.sessionID
             publish(.watching, from: .capture, frames: frames)
         case .offerable:
@@ -202,9 +224,8 @@ public final class ScreenContextSession: ObservableObject {
     }
 
     /// The channel has nothing to show: no producer has ever run, the container
-    /// is out of reach, the user stopped the session themselves, or the ending on
-    /// the page is too old to be news. `publish` is what keeps a running sample
-    /// on screen through this.
+    /// is out of reach, or the ending on the page is too old to be news.
+    /// `publish` is what keeps a running sample on screen through this.
     private func publishAbsence() {
         publish(.off, from: .none, frames: 0)
     }
@@ -287,6 +308,18 @@ public final class ScreenContextSession: ObservableObject {
     public func contextForReply(timeout: Duration = .seconds(12)) async throws -> ScreenContext {
         if source == .scripted, let context = state.context { return context }
 
+        // The app is an observer: it watches the page so its Screen Context
+        // screen can be honest, but it is not the keyboard and its preview is not
+        // at the bottom of anyone's screen. A read raised from the in-app
+        // playground would photograph *this app* — our own playground, with our
+        // own animation inside the fingerprint band — and answer a question
+        // nobody asked. The sample is what the playground is for, and it is
+        // handled above; anything else is refused rather than read.
+        guard role == .keyboard else {
+            throw AIEngineError.screenNotRead(
+                "Reading the screen works in the keyboard, on the app you are writing in.")
+        }
+
         guard let channel else {
             throw AIEngineError.screenNotRead("Screen context is not running.")
         }
@@ -344,7 +377,7 @@ public final class ScreenContextSession: ObservableObject {
                 throw AIEngineError.screenNotRead(reason.explanation)
             case .noSession:
                 throw AIEngineError.screenNotRead("Screen context is not running.")
-            case .starting, .paused, .unconfirmed, .superseded:
+            case .starting, .paused, .idle, .unconfirmed, .superseded:
                 continue
             }
         }

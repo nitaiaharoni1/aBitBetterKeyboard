@@ -42,7 +42,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scenes } from "../scenes.mjs";
-import { render, DEVICE } from "../skins.mjs";
+import { render, DEVICE, OWN_KEYBOARD } from "../skins.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, "frame-hash-out");
@@ -97,6 +97,25 @@ const chromeOnly = (scene) => {
   return c;
 };
 
+// The deployed state, which the four variants above never showed. A reading only
+// ever exists because the user tapped Reply on *our* keyboard, so our keyboard is
+// on screen for the whole read — with `AIResultPanel.loading` repainting three
+// shimmer lines at `workingPhase += 0.03` every 16 ms. Rendering the host's stock
+// keyboard instead is what let the harness report 0 false invalidations about a
+// configuration in which every sampled frame got a new identity.
+const ourKeyboard = (scene, phase) => {
+  const c = structuredClone(scene);
+  c.keyboard = {
+    ours: true,
+    phase,
+    lang: scene.keyboard?.lang ?? (scene.dir === "rtl" ? "he" : "en"),
+    // A scene whose keyboard is drawn over the thread keeps that: the host did
+    // not relayout for it, so our keyboard covers the newest message too.
+    overlay: scene.keyboard?.overlay ?? false,
+  };
+  return c;
+};
+
 // --- the reduction ----------------------------------------------------------
 
 // The 32x64 greyscale reduction §2.2 of the design already budgets for, taken
@@ -109,15 +128,25 @@ async function reduce(page, png, [top, bottom]) {
   const bytes = await page.evaluate(
     async ({ b64, top, bottom, w, h }) => {
       const blob = await (await fetch(`data:image/png;base64,${b64}`)).blob();
-      const bmp = await createImageBitmap(blob);
-      const y = Math.round(bmp.height * top);
-      const rows = Math.round(bmp.height * (1 - bottom)) - y;
+      const full = await createImageBitmap(blob);
+      const y = Math.round(full.height * top);
+      const rows = Math.round(full.height * (1 - bottom)) - y;
       if (rows <= 0) throw new Error("crop leaves no rows");
+      // **Cropped into its own bitmap before it is resampled, and that is not
+      // tidiness.** Passing the source rectangle to `drawImage` and letting it
+      // downscale in one step lets Skia build its mip chain from the *whole*
+      // image, so pixels outside the band bleed into every output cell: with our
+      // own keyboard on screen at two shimmer phases, two of the thirty scenes
+      // moved a cell by one grey level in a row 1,300 px above the crop. The
+      // shipping reduction is an integer box filter over `firstRow..<lastRow`
+      // and cannot read outside the band at all, so that was the harness
+      // disagreeing with the code it is supposed to be measuring.
+      const bmp = await createImageBitmap(full, 0, y, full.width, rows);
       const c = new OffscreenCanvas(w, h);
       const g = c.getContext("2d", { willReadFrequently: true });
       g.imageSmoothingEnabled = true;
       g.imageSmoothingQuality = "high";
-      g.drawImage(bmp, 0, y, bmp.width, rows, 0, 0, w, h);
+      g.drawImage(bmp, 0, 0, bmp.width, bmp.height, 0, 0, w, h);
       const d = g.getImageData(0, 0, w, h).data;
       const out = [];
       for (let i = 0; i < d.length; i += 4)
@@ -164,12 +193,19 @@ const hamming = (a, b) => a.reduce((s, v, i) => s + (v === b[i] ? 0 : 1), 0);
 // `VisionScreenReader.Band` row is the band that class already filters message
 // lines to: statusBar 0.935, navigationBar 0.86 and composer 0.085 in Vision's
 // bottom-up coordinates are the top 14% and the bottom 8.5% here.
+const OURS = OWN_KEYBOARD.screenFraction; // 292 / 874 = 0.334
 const BANDS = {
   "no crop": [0.0, 0.0],
   "status only        (top 6.5%)": [0.065, 0.0],
   "status + composer  (top 6.5% / bottom 8.5%)": [0.065, 0.085],
   "status + keyboard  (top 6.5% / bottom 45%)": [0.065, 0.45],
   "VisionScreenReader.Band (top 14% / bottom 8.5%)": [0.14, 0.085],
+  // The band the producer uses while our own keyboard is on screen, which is
+  // every frame a reading is ever measured against. The last row is the cap
+  // `FrameReduction.Band.maximumOwnUI` holds a bad claim to, measured so the cap
+  // is a number rather than a hope.
+  [`ours excluded (top 14% / bottom ${(OURS * 100).toFixed(1)}%)`]: [0.14, OURS],
+  "ours excluded, at the cap (top 14% / bottom 40%)": [0.14, 0.4],
 };
 
 // --- run --------------------------------------------------------------------
@@ -200,25 +236,43 @@ for (const scene of scenes) {
     twin: await shot(twin(scene, 7), "twin"),
     last: await shot(newestOnly(scene, 11), "last"),
     chrome: await shot(chromeOnly(scene), "chrome"),
+    // The same scene with our own keyboard up, at two shimmer phases, plus the
+    // conversation switch under it.
+    panel: await shot(ourKeyboard(scene, 0.1), "panel"),
+    panel2: await shot(ourKeyboard(scene, 0.6), "panel2"),
+    panelLast: await shot(ourKeyboard(newestOnly(scene, 11), 0.1), "panellast"),
   });
 }
 if (frames.length < 30) die(`expected the 30 corpus scenes, rendered ${frames.length}`);
 
-// A frame whose newest message is drawn under the host keyboard has no pixels to
+// A frame whose newest message is drawn under a keyboard has no pixels to
 // change, so `last` is byte-identical to `base` and no fingerprint can separate
 // them. That is a property of the screen, not of the fingerprint, and it is
-// counted apart rather than scored against any row.
+// counted apart rather than scored against any row. Counted twice, because our
+// keyboard occludes a different set of screens from the host's: a scene rendered
+// without a keyboard at all gets one when ours comes up.
 const occluded = frames.filter((f) => f.last.equals(f.base)).map((f) => f.id);
 const visible = frames.filter((f) => !occluded.includes(f.id));
+const ownOccluded = frames.filter((f) => f.panelLast.equals(f.panel)).map((f) => f.id);
+const ownVisible = frames.filter((f) => !ownOccluded.includes(f.id));
+if (frames.every((f) => f.panel.equals(f.panel2))) {
+  die("the two shimmer phases render identically; the panel variant proves nothing");
+}
 
 console.log(`deployment   macOS host (Playwright/Chromium), ${DEVICE.pixelWidth}x${DEVICE.pixelHeight}`);
-console.log(`frames       ${frames.length} scenes x 4 renders, reduced to ${W}x${H} greyscale`);
+console.log(`frames       ${frames.length} scenes x 7 renders, reduced to ${W}x${H} greyscale`);
 console.log(
   `occluded     ${occluded.length ? occluded.join(" ") : "none"}  (newest message under the host keyboard; base and last are byte-identical)`
 );
+console.log(
+  `own occluded ${ownOccluded.length ? ownOccluded.join(" ") : "none"}  (newest message under *our* keyboard; panel and panellast are byte-identical)`
+);
+console.log(
+  `our keyboard ${OWN_KEYBOARD.totalHeight} pt of ${DEVICE.cssHeight} pt = ${(OURS * 100).toFixed(1)}% of the screen, shimmer at phase 0.10 and 0.60`
+);
 console.log();
-const head = ["band", "value", "miss", "false", "twin min", "same-app min"];
-const widths = [50, 12, 6, 7, 10, 14];
+const head = ["band", "value", "miss", "false", "own miss", "own false", "twin min", "same-app min"];
+const widths = [50, 12, 6, 7, 10, 11, 10, 14];
 const row = (cells) => cells.map((c, i) => (i === 0 ? String(c).padEnd(widths[i]) : String(c).padStart(widths[i]))).join("");
 console.log(row(head));
 
@@ -230,6 +284,9 @@ for (const [label, band] of Object.entries(BANDS)) {
       twin: await reduce(worker, f.twin, band),
       last: await reduce(worker, f.last, band),
       chrome: await reduce(worker, f.chrome, band),
+      panel: await reduce(worker, f.panel, band),
+      panel2: await reduce(worker, f.panel2, band),
+      panelLast: await reduce(worker, f.panelLast, band),
     });
 
   const values = [
@@ -238,18 +295,48 @@ for (const [label, band] of Object.entries(BANDS)) {
     ["dHash 256b", (r) => dhash(r, 16), hamming],
   ];
   for (const [name, of, dist] of values) {
-    const V = new Map([...R].map(([id, v]) => [id, { base: of(v.base), twin: of(v.twin), last: of(v.last), chrome: of(v.chrome) }]));
+    const V = new Map(
+      [...R].map(([id, v]) => [
+        id,
+        {
+          base: of(v.base),
+          twin: of(v.twin),
+          last: of(v.last),
+          chrome: of(v.chrome),
+          panel: of(v.panel),
+          panel2: of(v.panel2),
+          panelLast: of(v.panelLast),
+        },
+      ])
+    );
     // miss  = newest message changed and the value did not
     const miss = visible.filter((f) => dist(V.get(f.id).base, V.get(f.id).last) === 0).length;
     // false = nothing but chrome changed and the value did
     const wrong = frames.filter((f) => dist(V.get(f.id).base, V.get(f.id).chrome) !== 0).length;
+    // The same two questions asked of the deployed state: our own keyboard is up,
+    // its result panel is loading, and the only thing that changed between the two
+    // frames is either the newest message (must separate) or our shimmer phase
+    // (must not).
+    const ownMiss = ownVisible.filter((f) => dist(V.get(f.id).panel, V.get(f.id).panelLast) === 0).length;
+    const ownWrong = frames.filter((f) => dist(V.get(f.id).panel, V.get(f.id).panel2) !== 0).length;
     const twinMin = Math.min(...visible.map((f) => dist(V.get(f.id).base, V.get(f.id).twin)));
     const sameApp = [];
     for (let i = 0; i < visible.length; i++)
       for (let j = i + 1; j < visible.length; j++)
         if (visible[i].app === visible[j].app) sameApp.push(dist(V.get(visible[i].id).base, V.get(visible[j].id).base));
     if (!sameApp.length) die("no same-app pairs to compare");
-    console.log(row([label, name, `${miss}/${visible.length}`, `${wrong}/${frames.length}`, twinMin, Math.min(...sameApp)]));
+    console.log(
+      row([
+        label,
+        name,
+        `${miss}/${visible.length}`,
+        `${wrong}/${frames.length}`,
+        `${ownMiss}/${ownVisible.length}`,
+        `${ownWrong}/${frames.length}`,
+        twinMin,
+        Math.min(...sameApp),
+      ])
+    );
   }
 }
 
@@ -261,6 +348,12 @@ console.log("       reading that stays offerable across a conversation switch. M
 console.log("false  frames where only the clock and the presence line moved and the value");
 console.log("       moved with them. Every one retires a good reading and buys a needless");
 console.log("       cloud read. Must be 0.");
+console.log("own    the same two questions asked of the deployed state: our own keyboard up,");
+console.log("       its result panel loading. `own miss` is a conversation switch under our");
+console.log("       panel that the value fails to separate; `own false` is our own shimmer");
+console.log("       moving the value. Both must be 0. A non-zero `own false` is the shipping");
+console.log("       blocker this variant was added for: the gate refuses the answer to the");
+console.log("       tap that paid for it, twelve seconds after spending the cloud call.");
 console.log("The last two columns are sanity: a wholly different conversation and a");
 console.log("different scene in the same app should both be far away, never near. For the");
 console.log("sha256 row the distance is boolean, so those two columns can only read 0 or 1");

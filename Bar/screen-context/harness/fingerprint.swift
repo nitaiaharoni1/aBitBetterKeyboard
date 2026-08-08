@@ -61,14 +61,33 @@ func decode(_ url: URL) -> Frame {
     return Frame(pixels: pixels, width: width, height: height)
 }
 
-func fingerprint(_ frame: Frame) -> FrameFingerprint {
+func fingerprint(
+    _ frame: Frame, bottomCrop: Double = FrameReduction.Band.bottom
+)
+    -> FrameFingerprint
+{
     let value = frame.pixels.withUnsafeBytes { raw -> FrameFingerprint? in
         FrameFingerprint.make(
             base: raw.baseAddress!, width: frame.width, height: frame.height,
-            bytesPerRow: frame.bytesPerRow, format: .bgra8888)
+            bytesPerRow: frame.bytesPerRow, format: .bgra8888, bottomCrop: bottomCrop)
     }
     guard let value else { die("the reduction refused a \(frame.width)x\(frame.height) frame") }
     return value
+}
+
+/// What the keyboard publishes about itself on this device, and the crop the
+/// producer derives from it. `Theme.Metrics.totalHeight(withContextStrip: true)`
+/// is 292 pt and the corpus renders an iPhone 17 Pro's 874 pt.
+let ownUIFraction = 292.0 / 874.0
+var ownIntent: CaptureIntentStandIn { CaptureIntentStandIn(fraction: ownUIFraction) }
+
+/// `CaptureIntent` lives in the same target but pulls in the shared-page code
+/// this harness does not compile, so the one line of it that matters is
+/// restated. If these two ever disagree the crop is wrong on the device, not
+/// here, so the arithmetic is deliberately the same call.
+struct CaptureIntentStandIn {
+    let fraction: Double
+    var frameBottomCrop: Double { FrameReduction.bottomCrop(ownUI: fraction) }
 }
 
 // MARK: - Run
@@ -88,6 +107,19 @@ var twinCollisions: [String] = []
 var settleMisses: [String] = []
 var identities: [String: FrameIdentity] = [:]
 
+// The same two questions asked of the deployed state: our own keyboard on
+// screen with `AIResultPanel.loading` running, because a reading only ever
+// exists because the user tapped Reply on it.
+var ownMisses: [String] = []
+var ownFalseInvalidations: [String] = []
+var ownOccluded: [String] = []
+/// Scenes the *unfixed* band would have wrongly invalidated: our own shimmer
+/// moving, nothing else, scored over the band that does not exclude us. Not an
+/// acceptance criterion — it is the proof that this harness can still see the
+/// failure it was blind to, in the same way `settleMisses` proves the 64-bit
+/// hash is still the wrong value for an identity.
+var shimmerWitness: [String] = []
+
 for scene in scenes {
     func load(_ tag: String) -> Frame {
         let url = directory.appendingPathComponent("\(scene)-\(tag).png")
@@ -101,6 +133,9 @@ for scene in scenes {
     let last = load("last")
     let chrome = load("chrome")
     let twin = load("twin")
+    let panel = load("panel")
+    let panel2 = load("panel2")
+    let panelLast = load("panellast")
 
     // A frame whose newest message is drawn under the host keyboard has no
     // pixels to change, so its two renders are byte-identical and no
@@ -123,6 +158,22 @@ for scene in scenes {
         if baseValue.settleHash == lastValue.settleHash { settleMisses.append(scene) }
     }
     if baseValue.identity != chromeValue.identity { falseInvalidations.append(scene) }
+
+    // Our own keyboard up. The crop comes from what the keyboard publishes, the
+    // same call the producer makes, so a change to `bottomCrop` scores here
+    // without this file being touched.
+    let crop = ownIntent.frameBottomCrop
+    if panel.pixels == panelLast.pixels { ownOccluded.append(scene) }
+    let panelValue = fingerprint(panel, bottomCrop: crop)
+    let panel2Value = fingerprint(panel2, bottomCrop: crop)
+    let panelLastValue = fingerprint(panelLast, bottomCrop: crop)
+    if !ownOccluded.contains(scene), panelValue.identity == panelLastValue.identity {
+        ownMisses.append(scene)
+    }
+    if panelValue.identity != panel2Value.identity { ownFalseInvalidations.append(scene) }
+    if fingerprint(panel).identity != fingerprint(panel2).identity {
+        shimmerWitness.append(scene)
+    }
 }
 
 // Two different scenes must never share an identity either; that would be the
@@ -135,14 +186,22 @@ for (a, identityA) in identities {
 }
 
 let separable = scenes.count - occluded.count
-print("deployment   macOS host, shipping FrameFingerprint.swift, \(scenes.count) scenes x 4 renders")
+let ownSeparable = scenes.count - ownOccluded.count
+print("deployment   macOS host, shipping FrameFingerprint.swift, \(scenes.count) scenes x 7 renders")
 print(
     "band         top \(FrameReduction.Band.top) / bottom \(FrameReduction.Band.bottom), reduced to \(FrameReduction.columns)x\(FrameReduction.rows) greyscale"
 )
+print(
+    "ours         top \(FrameReduction.Band.top) / bottom \(String(format: "%.3f", ownIntent.frameBottomCrop)), the band while our own keyboard is on screen"
+)
 print("occluded     \(occluded.isEmpty ? "none" : occluded.joined(separator: " "))")
+print("own occluded \(ownOccluded.isEmpty ? "none" : ownOccluded.joined(separator: " "))")
 print("")
 print("value           miss   false")
 print("identity       \(misses.count)/\(separable)    \(falseInvalidations.count)/\(scenes.count)")
+print(
+    "identity·ours  \(ownMisses.count)/\(ownSeparable)    \(ownFalseInvalidations.count)/\(scenes.count)    (our keyboard up, shimmer at two phases)"
+)
 print(
     "settleHash    \(settleMisses.count)/\(separable)    (64-bit dHash, the settle gate's value, not the identity's)"
 )
@@ -168,6 +227,17 @@ check(
         + (falseInvalidations.isEmpty
             ? "" : " — moved on \(falseInvalidations.joined(separator: " "))"))
 check(
+    ownMisses.isEmpty,
+    "0 misses with our own keyboard up: a conversation switch under the result panel still"
+        + " moves the identity"
+        + (ownMisses.isEmpty ? "" : " — collided on \(ownMisses.joined(separator: " "))"))
+check(
+    ownFalseInvalidations.isEmpty,
+    "0 false invalidations from our own shimmer: the answer to the tap is not retired by the"
+        + " loading animation it is waiting behind"
+        + (ownFalseInvalidations.isEmpty
+            ? "" : " — moved on \(ownFalseInvalidations.joined(separator: " "))"))
+check(
     crossCollisions.isEmpty,
     "no two scenes share an identity"
         + (crossCollisions.isEmpty ? "" : " — \(crossCollisions.joined(separator: " "))"))
@@ -181,5 +251,10 @@ check(
     settleMisses.count >= 1,
     "the 64-bit settle hash still collides, which is why it is not the identity"
         + " (\(settleMisses.count)/\(separable))")
+check(
+    shimmerWitness.count >= 25,
+    "the panel variant can still see the failure it was added for: over the band that does *not*"
+        + " exclude our keyboard, our own shimmer moves the identity on"
+        + " \(shimmerWitness.count)/\(scenes.count) scenes")
 
 exit(failed ? 1 : 0)

@@ -47,9 +47,23 @@
 /// fails. `SharedPage` therefore holds an ordinary in-process lock across
 /// `begin_write`/`end_write`; readers take nothing and stay lock-free, which is
 /// the point of the sequence number.
+/// The `| 1u` is load-bearing and was bought with a bug. `+ 1` alone assumes the
+/// sequence is even on entry, which a *complete* transaction guarantees and an
+/// *aborted* one does not: a writer killed between begin and end leaves it odd,
+/// and the next `+ 1` settles it even over a half-written body while every
+/// subsequent settled state is odd, so `capture_seq_read_valid` never passes
+/// again. jetsam does exactly that to a broadcast upload extension at 50 MB.
+///
+/// The state was permanent: `begin()` runs two *complete* transactions, which
+/// preserve parity rather than repair it, and `clear()` zeroes the body in place
+/// without resetting the counter, so an inverted page survived broadcasts, app
+/// launches and reboots. The user saw "Screen context stopped unexpectedly"
+/// forever, and — worse — a reader in the other process could validate a
+/// half-written struct, which is the one failure the sequence exists to prevent.
+/// Forcing odd makes the open self-healing from any prior state.
 static inline uint32_t capture_seq_begin_write(void *page) {
     _Atomic uint32_t *sequence = (_Atomic uint32_t *)page;
-    uint32_t opened = atomic_load_explicit(sequence, memory_order_relaxed) + 1u;
+    uint32_t opened = (atomic_load_explicit(sequence, memory_order_relaxed) + 1u) | 1u;
     atomic_store_explicit(sequence, opened, memory_order_relaxed);
     // Store-store: the odd sequence must be visible before the body changes, or
     // a reader sees a settled sequence over a body already being overwritten.

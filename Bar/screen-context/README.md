@@ -90,6 +90,78 @@ visible lines. The generator throws rather than emit a claim it cannot prove:
 - a message declared truncated that renders whole
 - an expected message whose text does not match the pixels on screen
 
+## The third question: can you tell two screens apart
+
+The corpus answers one more question, and it is not about OCR at all. `CaptureFreshness`
+condition 4 decides whether a reading may still be shown, and it is a single exact-equality
+test between the frame the reading was taken from and the newest frame the capture process
+has seen. Get the fingerprint wrong in one direction and a reply written about somebody
+else's message is offered as current; wrong in the other and every good reading is retired
+before it can be used.
+
+```bash
+node harness/frame-hash.mjs             # sweeps 7 bands x 3 values, ~2 min
+KEEP=1 node harness/frame-hash.mjs      # leave the 210 renders in harness/frame-hash-out/
+harness/run-fingerprint.sh              # holds the *shipping* Swift to the same bar
+```
+
+Thirty different scenes look different, so the corpus cannot answer this on its own. The
+harness builds the near pairs instead: seven renders per scene.
+
+| Render | |
+| --- | --- |
+| `base` | the scene as the corpus renders it |
+| `twin` | every message's letters substituted inside its own script — same character count, word breaks, times and bubble geometry, every glyph different |
+| `last` | the same substitution applied to the newest text message only |
+| `chrome` | no message touched: the clock ticks over and the header presence line changes |
+| `panel` | **our own keyboard** on screen, AI result panel open, `AIResultPanel.loading` at shimmer phase 0.10 |
+| `panel2` | the same frame at shimmer phase 0.60 |
+| `panellast` | `last`'s conversation switch, under our panel at phase 0.10 |
+
+`last` is the collision test and `chrome` the false-invalidation test. The three `panel`
+renders are the same two tests asked of the state a reading is *actually* measured in: a
+reading exists only because the user tapped Reply on our keyboard, so our keyboard is on
+screen for the whole five-second read, repainting three shimmer lines at 60 Hz. On an
+iPhone 17 Pro it covers 292 pt of 874 pt — 32% of the fingerprint band.
+
+Measured 2026-08-08, SHA-256 of the 32x64 reduction:
+
+| Band removed | miss | false | own miss | own false |
+| --- | --- | --- | --- | --- |
+| top 6.5% / bottom 45% | **23/29** | **19/30** | 3/29 | 0/30 |
+| top 6.5% / bottom 8.5% | 0/29 | **19/30** | 0/29 | **30/30** |
+| top 14% / bottom 8.5% | **0/29** | **0/30** | 0/29 | **30/30** |
+| **top 14% / bottom 33.4%, ours excluded** | 20/29 | **0/30** | **0/29** | **0/30** |
+| top 14% / bottom 40%, the clamp | 20/29 | 0/30 | **0/29** | **0/30** |
+
+`miss` and `false` are scored with the host's keyboard or none; `own miss` and `own false`
+with ours. `sl-05` is excluded from both miss columns and reported separately: its newest
+message is drawn under a keyboard, so those two renders are byte-identical and no
+fingerprint of any width can separate them.
+
+The `30/30` is a shipping blocker this variant was added to catch. The harness used to
+render only a static system keyboard, so its "0 misses, 0 false invalidations" was a
+statement about a frame nobody ever sees. With our own panel on it, the same band gives
+every single sampled frame a new identity from nothing but our animation — the freshness
+gate then refuses the answer to the very tap that paid for it, twelve seconds and one cloud
+call after the user asked.
+
+So the band is chosen per frame: `VisionScreenReader.Band` when no keyboard of ours is up,
+and that band with our own rows removed when one is. The keyboard publishes the fraction it
+covers in `CaptureIntent.ownUIHeightPermille` and `FrameReduction.bottomCrop(ownUI:)` acts
+on it, clamped to 0.40 — the last row of the table, measured rather than assumed, because
+past it lies the 45% band and 23 of 29 missed conversation switches. The `20/29` in the miss
+column of the last two rows is that split rather than a defect: those bands are never used
+on a frame our keyboard is absent from.
+
+`run-fingerprint.sh` compiles
+`Packages/AIKeyboardCore/Sources/AIKeyboardShared/FrameFingerprint.swift` itself and scores
+both configurations with CoreGraphics decoding and the shipping integer box filter instead
+of Chromium's resampler, so the two harnesses do not share a resampler and a design that
+only worked with one of them would show up. It also carries a witness check: over the band
+that does *not* exclude our keyboard, the shimmer still moves the identity on 30/30 scenes.
+A harness that cannot fail proves nothing.
+
 ## Coverage
 
 30 images. 15 light, 15 dark.

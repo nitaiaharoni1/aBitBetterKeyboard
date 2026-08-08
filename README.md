@@ -7,11 +7,12 @@ iOS keyboard with AI text actions, dictation, and screen-context replies.
 screen reading call real models and are scored against frozen corpora in `Bar/`.
 Typing suggestions and dictation are still mocks. Screen capture is now built up
 to the read: the app hosts Apple's broadcast picker, a broadcast upload extension
-fingerprints frames into a shared page, and the keyboard renders that page and
-asks it for a reading when you tap Reply — but the step that turns a frame into
-text inside the capture process is not written, and none of the ReplayKit half
-has ever run, because the iOS Simulator ships no `replayd`. The table at the end
-says which is which.
+fingerprints frames into a shared page, the keyboard asks it for a reading when
+you tap Reply, and the capture process answers by encoding one frame and reading
+it in the cloud. The whole loop is written. **None of the ReplayKit half has ever
+run**, because the iOS Simulator ships no `replayd`, so no frame has ever reached
+any of it. The table at the end says which parts are measured and which are only
+compiled.
 
 ```
 AIKeyboard.xcodeproj
@@ -195,7 +196,7 @@ audience this keyboard is built for, "optional" is the wrong word.
 | `MockSuggestionEngine` | local autocorrect + a small next-word model |
 | ~~`MockAI`~~ — now `RoutedIntelligence` | **Done.** Apple Foundation Models on device for the languages it lists, a cloud LLM behind it for the rest. Hebrew is not one of Apple's supported languages, so it needs the cloud path. The cloud provider sits behind a protocol; a shipped app cannot hold cloud credentials, so it must point at your own backend. The direct-to-Vertex client used to score `Bar/ai-text/` lives in the harness and is deliberately not in the app target. |
 | `MockDictation` | Runs in the main app. **`SpeechTranscriber` cannot do Hebrew** — measured, 30 locales, none of them `he`. Legacy `SFSpeechRecognizer` has `he-IL` but reports no on-device support here, so Hebrew dictation means cloud STT (Deepgram Nova-3 is the candidate `plan.md` names). |
-| `MockScreenContext` | **Reading a frame is done and measured** — `RoutedScreenReader`, scored against `Bar/screen-context/`. **Getting** one is not. ScreenCaptureKit is `iOS 27.0+` and absent from the iOS 26.2 SDK this project compiles against. The ReplayKit route is built except for the read: the app hosts `RPSystemBroadcastPickerView` so a user can start a broadcast, `AIKeyboardBroadcast` fingerprints every sampled frame and publishes a `CaptureStatus` page, and `ScreenContextSession` consumes that page — the strip and the app screen render no session, starting, watching, a reading, paused and stopped-unexpectedly from it, and Reply raises `intent.readNow` and waits for a reading the freshness gate accepts. What is missing is the half that turns a frame into text inside the capture process. **And none of it has ever run**: the iOS Simulator ships no `replayd`, so no broadcast session starts here and `SampleHandler` has never been called. The scripted sample stays behind a button on the Screen Context screen, labelled as a sample, and yields to a real session the moment one appears. `ScreenContextSession.submit(_:appName:appIcon:)` is the in-app seam. |
+| `MockScreenContext` | **Reading a frame is done and measured** — `RoutedScreenReader`, scored against `Bar/screen-context/`. **Getting** one is not. ScreenCaptureKit is `iOS 27.0+` and absent from the iOS 26.2 SDK this project compiles against. The ReplayKit route is built except for the read: the app hosts `RPSystemBroadcastPickerView` so a user can start a broadcast, `AIKeyboardBroadcast` fingerprints every sampled frame and publishes a `CaptureStatus` page, and `ScreenContextSession` consumes that page — the strip and the app screen render no session, starting, watching, a reading, paused and stopped-unexpectedly from it, and Reply raises `intent.readNow` and waits for a reading the freshness gate accepts. The read is there too: a tap makes `AIKeyboardBroadcast` encode one frame and call `CloudScreenReader` on its own serial queue, then publish the text with the identity of the frame it read. **And none of it has ever run**: the iOS Simulator ships no `replayd`, so no broadcast session starts here and `SampleHandler` has never been called. The scripted sample stays behind a button on the Screen Context screen, labelled as a sample, and yields to a real session the moment one appears. `ScreenContextSession.submit(_:appName:appIcon:)` is the in-app seam. |
 | ~~`SharedStore`~~ | **Done.** Both targets carry the App Group entitlement and share one suite. |
 | `MockTextTarget` | `UITextDocumentProxy`, already wired via `ProxyTextTarget` |
 
@@ -243,7 +244,7 @@ xcodebuild test -project AIKeyboard.xcodeproj -scheme AIKeyboard \
 xcrun xccov view --report /tmp/AIKeyboard.xcresult
 ```
 
-Four tests live in `AIKeyboardUITests/DemoWalkthroughTests.swift`, and 184 unit
+Four tests live in `AIKeyboardUITests/DemoWalkthroughTests.swift`, and 229 unit
 tests in `AIKeyboardCoreTests`. The two cross-process suites,
 `AppGroupCrossProcessTests` and `CaptureChannelCrossProcessTests`, are driven by
 the `Scripts/prove-*.sh` scripts rather than judged by their own assertions; see
@@ -251,10 +252,6 @@ the `Scripts/prove-*.sh` scripts rather than judged by their own assertions; see
 
 ## Not built
 
-- The read inside the capture process. `AIKeyboardBroadcast` fingerprints frames
-  and publishes status; it never encodes a JPEG and never calls
-  `CloudScreenReader`, so a Reply tap on a device today raises `intent.readNow`
-  and times out rather than answering
 - Anything about ReplayKit that a device would settle: that frames arrive, in
   what pixel format and size, whether the extension fits its ~50 MB cap, and
   whether the picker's button works from inside a keyboard extension

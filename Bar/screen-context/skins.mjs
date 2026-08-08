@@ -124,10 +124,107 @@ const KB_SUGGESTIONS = {
   he: ["אני", "תודה", "בסדר"],
 };
 
+// ---------------------------------------------------------------------------
+// Our own keyboard
+// ---------------------------------------------------------------------------
+
+/** `Theme.Metrics`, in points, as the keyboard extension asks the host for them:
+ *  context strip 30 + suggestion bar 46 + key area (42*4 + 12*3 + 8 + 4) 216. */
+export const OWN_KEYBOARD = {
+  stripHeight: 30,
+  suggestionHeight: 46,
+  keyAreaHeight: 216,
+  get totalHeight() {
+    return this.stripHeight + this.suggestionHeight + this.keyAreaHeight;
+  },
+  /** What `CaptureIntent.ownUIHeightPermille` carries on this device. */
+  get screenFraction() {
+    return this.totalHeight / DEVICE.cssHeight;
+  },
+};
+
+const OWN_CSS = `
+.own{--bg:#D1D3D9;--panel:#E6E8ED;--label:#000;--sub:#3C3C43;--fn:#ADB3BE;--txt2:#60636B;--txt1:#0B0B0F}
+[data-appearance="dark"] .own{--bg:#161618;--panel:#1C1C1F;--label:#fff;--sub:#C7C7CC;--fn:#2C2C2E;
+  --txt2:#9C9CA6;--txt1:#F5F5F7}
+.own{flex:0 0 auto;z-index:45;height:${OWN_KEYBOARD.totalHeight}px;background:var(--bg);
+  color:var(--label);display:flex;flex-direction:column;direction:ltr}
+.own.overlay{position:absolute;left:0;right:0;bottom:0}
+.own .strip{flex:0 0 ${OWN_KEYBOARD.stripHeight}px;background:var(--panel);display:flex;align-items:center;
+  gap:8px;padding:0 12px;border-bottom:.5px solid rgba(60,60,67,.15)}
+.own .dot{width:7px;height:7px;border-radius:50%;background:#FF453A;flex:0 0 7px}
+.own .who{font-size:12px;font-weight:600;color:var(--label);white-space:nowrap}
+.own .said{font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.own .reply{background:linear-gradient(135deg,#2DD4BF,#6366F1);color:#fff;font-size:12px;font-weight:600;
+  border-radius:999px;padding:5px 9px;white-space:nowrap}
+.own .sugg{flex:0 0 ${OWN_KEYBOARD.suggestionHeight}px;display:flex;align-items:center;padding:0 4px}
+.own .sugg .cand{flex:1;text-align:center;font-size:17px;color:var(--label)}
+.own .sugg .edge{width:44px;text-align:center;font-size:17px;color:var(--sub)}
+.own .sugg .sep{width:1px;height:22px;background:rgba(60,60,67,.22)}
+.own .panel{flex:1;background:var(--panel);display:flex;flex-direction:column}
+.own .phdr{flex:0 0 38px;display:flex;align-items:center;gap:8px;padding:0 12px}
+.own .phdr .chev{color:var(--sub);font-size:14px;font-weight:600;width:28px;text-align:center}
+.own .phdr .mark{width:14px;height:14px;border-radius:3px;background:linear-gradient(135deg,#2DD4BF,#6366F1)}
+.own .phdr .ttl{font-size:14px;font-weight:600;color:var(--label)}
+.own .phdr .x{margin-left:auto;width:30px;height:30px;border-radius:50%;background:var(--fn);opacity:.6;
+  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--sub)}
+.own .load{padding:12px 16px 0;display:flex;flex-direction:column;gap:12px}
+.own .shim{position:relative;height:11px;border-radius:4px;overflow:hidden}
+.own .shim .base{position:absolute;inset:0;background:var(--txt2);opacity:.18}
+.own .shim .glow{position:absolute;top:0;bottom:0;left:0;width:50%;
+  background:linear-gradient(90deg,rgba(0,0,0,0),var(--txt1),rgba(0,0,0,0));opacity:.16}
+`;
+
+/** Our own keyboard with the AI result panel open and `AIResultPanel.loading`
+ *  running, which is what is on screen for the whole five seconds of a read: the
+ *  user tapped Reply on this thing.
+ *
+ *  It is here because the fingerprint has to be blind to it. The three shimmer
+ *  lines repaint at `workingPhase += 0.03` every 16 ms, and the keyboard is a
+ *  third of the fingerprint band, so a harness that only ever rendered a static
+ *  system keyboard could not see the failure that cost a shipping build: every
+ *  sampled frame got a new identity and the freshness gate retired the answer to
+ *  the tap that paid for it. `phase` is `KeyboardController.workingPhase`. */
+function ownKeyboard(spec) {
+  const phase = spec.phase ?? 0;
+  const rtl = spec.lang === "he";
+  const line = (index, width) => {
+    // `ShimmerLine`: a 50%-wide gradient offset by (phase * 1.6 - 0.4) * width,
+    // with each of the three lines 0.18 further along than the one above it.
+    const p = (phase + index * 0.18) % 1;
+    const w = width ?? 370;
+    const offset = (p * 1.6 - 0.4) * w;
+    // `translateX` rather than `left`, because SwiftUI's `.offset(x:)` is a
+    // draw-time transform and does not move the view's layout box. The
+    // difference is not cosmetic here: `left` grows the panel's scrollable
+    // overflow as the phase advances, and Chromium then rasterises a tile
+    // boundary one pixel differently *above* the keyboard — a real difference in
+    // the host's pixels caused by nothing but our own animation, which is the
+    // one thing this variant must not manufacture.
+    return (
+      `<div class="shim" style="width:${w}px"><div class="base"></div>` +
+      `<div class="glow" style="transform:translateX(${offset}px)"></div></div>`
+    );
+  };
+  const cands = rtl ? ["אני", "תודה", "בסדר"] : ["I", "The", "Sure"];
+  return `<div class="own ${spec.overlay ? "overlay" : ""}">
+  <div class="strip"><div class="dot"></div>${ch(spec.sender ?? "Maya", "who")}` +
+    `${ch(spec.said ?? "Reply can read this screen", "said")}${ch("Reply", "reply")}</div>
+  <div class="sugg">${ch("☺", "edge")}<div class="sep"></div>` +
+    cands.map((c) => ch(c, "cand")).join('<div class="sep"></div>') +
+    `<div class="sep"></div>${ch("✦", "edge")}</div>
+  <div class="panel">
+    <div class="phdr">${ch("‹", "chev")}<div class="mark"></div>${ch("Reply", "ttl")}${ch("✕", "x")}</div>
+    <div class="load">${line(0, 370)}${line(1, 220)}${line(2, 160)}</div>
+  </div>
+</div>`;
+}
+
 /** The iOS keyboard. Forty-odd single letters an inch from the message text —
  *  the densest patch of chrome on any of these screens. */
 function keyboard(spec) {
   if (!spec) return "";
+  if (spec.ours) return ownKeyboard(spec);
   const lang = spec.lang ?? "en";
   const rows = KB_ROWS[lang];
   const key = (c, cls = "") => `<div class="kb-key ${cls}">${ch(c)}</div>`;
@@ -678,7 +775,7 @@ function renderMail(s) {
 
 function page(scene, css, cls, parts) {
   return `<!doctype html><html lang="${scene.dir === "rtl" ? "he" : "en"}"><head><meta charset="utf-8">
-<style>${BASE_CSS}${KB_CSS}${css}</style></head><body>
+<style>${BASE_CSS}${KB_CSS}${OWN_CSS}${css}</style></head><body>
 <div class="screen ${cls}" data-appearance="${scene.appearance}" ${scene.dir === "rtl" ? 'dir="rtl"' : ""}>
 ${parts.join("\n")}
 </div></body></html>`;

@@ -77,9 +77,16 @@ public struct ScreenContextStrip: View {
 
     // MARK: Pieces
 
-    /// Red only while a capture session is sampling frames. A recording dot over
-    /// a paused session, a dead one, or the scripted sample is the one thing this
-    /// indicator must never do — it is the capture indicator, not decoration.
+    /// Red only while a capture session is running and looking. A recording dot
+    /// over a paused session, a dead one, or the scripted sample is the one thing
+    /// this indicator must never do — it is the capture indicator, not decoration.
+    ///
+    /// "Looking" rather than "sampling frames this instant", and the difference is
+    /// `CaptureFreshness.Verdict.idle`: a live session on a screen that has not
+    /// changed delivers no frames, and greying the dot for that would say the
+    /// session had stopped watching when it had not. The three cases above are
+    /// unaffected — a pause iOS reported is still `.paused`, a dead producer is
+    /// still `.ended`, and the script is still not `.capture`.
     private var liveDot: some View {
         Circle()
             .fill(

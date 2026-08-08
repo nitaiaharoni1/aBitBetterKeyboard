@@ -70,7 +70,27 @@ final class KeyboardViewController: UIInputViewController {
     /// at, and `intent.keyboardVisible` would be a lie.
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        ScreenContextSession.shared.startConsuming(.shared, as: .keyboard)
+        ScreenContextSession.shared.startConsuming(
+            .shared, as: .keyboard, ownUIHeightFraction: ownUIHeightFraction())
+    }
+
+    /// How much of the screen we are covering, for the capture process to leave
+    /// out of the frame fingerprint. See `KeyboardGeometry`.
+    ///
+    /// The height itself comes from `Theme.Metrics`, because that is what this
+    /// class asks the host for and it is a constant. The one thing only the
+    /// runtime knows is the gap underneath us — the strip where the system draws
+    /// the home indicator over the keyboard — so that is measured and everything
+    /// else is not.
+    private func ownUIHeightFraction() -> Double {
+        guard let window = view.window else {
+            return KeyboardGeometry.ownUIHeightFraction(
+                screenHeight: KeyboardGeometry.referenceScreenHeight)
+        }
+        let screenHeight = window.screen.bounds.height
+        let ourBottom = window.frame.minY + view.convert(view.bounds, to: window).maxY
+        return KeyboardGeometry.ownUIHeightFraction(
+            screenHeight: screenHeight, gapBelow: screenHeight - ourBottom)
     }
 
     override func viewWillDisappear(_ animated: Bool) {

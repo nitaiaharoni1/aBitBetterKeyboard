@@ -78,8 +78,8 @@ final class CaptureFreshnessTests: XCTestCase {
     func testARecordedReasonBeatsTheInference() {
         XCTAssertEqual(
             CaptureFreshness.evaluate(
-                record: record(), status: liveStatus(end: .phoneCall), now: now),
-            .ended(.phoneCall))
+                record: record(), status: liveStatus(end: .stopped), now: now),
+            .ended(.stopped))
     }
 
     /// A session that has begun and delivered no frame yet fails condition 2 the
@@ -95,11 +95,11 @@ final class CaptureFreshnessTests: XCTestCase {
         XCTAssertEqual(CaptureFreshness.evaluate(status: status, now: now), .starting)
     }
 
-    /// …and a session that has seen a frame and stopped seeing them is paused,
+    /// …and a session that has seen a frame and stopped seeing them is idle,
     /// which is the case the same field decides.
-    func testASessionThatSawFramesAndStoppedIsPaused() {
+    func testASessionThatSawFramesAndStoppedIsIdle() {
         XCTAssertEqual(
-            CaptureFreshness.evaluate(status: liveStatus(lastFrame: 990), now: now), .paused)
+            CaptureFreshness.evaluate(status: liveStatus(lastFrame: 990), now: now), .idle)
     }
 
     func testNoStatusAtAllIsNoSession() {
@@ -137,11 +137,49 @@ final class CaptureFreshnessTests: XCTestCase {
     /// The failure with no callback behind it: the process is alive, the
     /// heartbeat ticks on its own timer, and frames have stopped arriving. Two
     /// fields because they are two failures.
-    func testAWedgedDeliveryPathLooksPausedRatherThanHealthy() {
+    func testAFrameGapDoesNotCertifyAReading() {
         XCTAssertEqual(
             CaptureFreshness.evaluate(
                 record: record(), status: liveStatus(lastFrame: 995), now: now),
+            .idle,
+            "nothing has confirmed that the conversation on screen is still the one that was read")
+    }
+
+    /// **The pause iOS reported and the gap this code inferred are different
+    /// verdicts, and the difference is what the second one rests on.**
+    ///
+    /// `paused` is a fact: `broadcastPaused()` fired. A gap in `lastFrameAt` is an
+    /// inference from `frameWindow`, and `frameWindow` was justified as "two
+    /// 250 ms samples plus slack" over a delivery rate that has never been
+    /// measured (R1). If ReplayKit turns out to deliver on change rather than on a
+    /// clock, a user reading a still conversation produces no frames at all — and
+    /// the old code answered `.paused` two seconds later, which took the Reply
+    /// button off exactly the screen this feature exists for, with nothing in the
+    /// UI to distinguish that from the feature being broken.
+    func testAFrameGapIsIdleRatherThanPausedBecauseNobodyHasMeasuredTheDeliveryRate() {
+        XCTAssertEqual(
+            CaptureFreshness.evaluate(status: liveStatus(paused: true), now: now), .paused,
+            "iOS said so")
+        XCTAssertEqual(
+            CaptureFreshness.evaluate(status: liveStatus(lastFrame: 995), now: now), .idle,
+            "this code inferred it, from a rate nobody has measured")
+
+        // An explicit pause outranks the inference: both hold here and the
+        // reported fact is the one reported.
+        XCTAssertEqual(
+            CaptureFreshness.evaluate(status: liveStatus(lastFrame: 995, paused: true), now: now),
             .paused)
+    }
+
+    /// The window still has to fire for a session that has genuinely gone quiet,
+    /// and it still has to not fire a moment before that.
+    func testTheFrameWindowIsStillAWindow() {
+        XCTAssertEqual(
+            CaptureFreshness.evaluate(status: liveStatus(lastFrame: 998.5), now: now), .offerable,
+            "1.5 s is inside the two-second window")
+        XCTAssertEqual(
+            CaptureFreshness.evaluate(status: liveStatus(lastFrame: 997.9), now: now), .idle,
+            "2.1 s is outside it")
     }
 
     // MARK: 3 — the reading has been confirmed since it finished

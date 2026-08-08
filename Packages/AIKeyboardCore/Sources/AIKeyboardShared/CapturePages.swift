@@ -87,9 +87,16 @@ public struct CaptureStatus: Equatable, Sendable {
     public var readsRequested: UInt32 = 0
     public var readsStarted: UInt32 = 0
     public var readsCompleted: UInt32 = 0
+    /// Reads the memory governor refused. See `MemoryGovernor`; `degraded` is the
+    /// same fact as a flag.
     public var refusedMemory: UInt32 = 0
     public var refusedInFlight: UInt32 = 0
-    public var refusedBudget: UInt32 = 0
+
+    // `refusedBudget` and `ScreenContextEndReason.overBudget` used to sit here for
+    // a session/daily read budget. No budget was ever built, so nothing could
+    // move either of them, and a counter the status screen renders but no code
+    // writes is a zero the user is invited to trust. Deleted rather than
+    // documented as aspirational; the field comes back with the budget.
 
     // The two secure-field counters the design put here are in `CaptureIntent`
     // instead, and the reason is not tidiness: this page has exactly one writing
@@ -103,9 +110,10 @@ public struct CaptureStatus: Equatable, Sendable {
 
     /// `broadcastPaused()` has fired and `broadcastResumed()` has not.
     public var paused: UInt8 = 0
-    /// The memory governor is above its watermark and refusing reads. A visible
-    /// degraded state beats a jetsam kill, because a kill ends the broadcast and
-    /// only the user can restart it.
+    /// The memory governor is above its watermark and refusing reads. Written by
+    /// `MemoryGovernor` through `CaptureChannelWriter.setDegraded`, on the
+    /// transition only. A visible degraded state beats a jetsam kill, because a
+    /// kill ends the broadcast and only the user can restart it.
     public var degraded: UInt8 = 0
     /// `ScreenContextEndReason` raw value, `.none` while running.
     public var endReasonRaw: UInt8 = ScreenContextEndReason.none.rawValue
@@ -123,8 +131,11 @@ public struct CaptureStatus: Equatable, Sendable {
         (sessionHigh, sessionLow) = id.words
     }
 
+    /// A raw value this build does not know is `.lost` rather than `.none`: the
+    /// page says *something* ended, and reporting no ending for an ending that
+    /// happened is the one direction that reads as "screen context is off".
     public var endReason: ScreenContextEndReason {
-        ScreenContextEndReason(rawValue: endReasonRaw) ?? .interrupted
+        ScreenContextEndReason(rawValue: endReasonRaw) ?? .lost
     }
 
     public var isPaused: Bool { paused != 0 }
@@ -144,7 +155,28 @@ public struct CaptureIntent: Equatable, Sendable {
     /// as in conversations.
     public var keyboardVisible: UInt8 = 0
     private var padding0: UInt8 = 0
-    private var padding1: UInt16 = 0
+
+    /// Per mille of the screen height our own keyboard is drawing on, measured
+    /// from the bottom edge. Zero while it is not on screen.
+    ///
+    /// **The one thing in this page that gates anything, and it gates the frame
+    /// fingerprint's band.** Our own UI is not part of "which screen is this":
+    /// while the keyboard is up, everything below its top edge is ours, and
+    /// `AIResultPanel.loading` repaints three shimmer lines there at 60 Hz for
+    /// the whole five seconds of a read. Left inside the band, that moved
+    /// `currentFrameIdentity` on every sample and the freshness gate retired the
+    /// answer to the very tap that paid for it. `FrameReduction.bottomCrop(ownUI:)`
+    /// is what reads this, and it bounds the claim on both sides — an absent or
+    /// tiny value leaves the band where the corpus measured it, and an over-large
+    /// one is held to `Band.maximumOwnUI`.
+    ///
+    /// Per mille rather than points because the producer sees pixels and does not
+    /// know this device's scale factor, and as an integer because this struct is
+    /// memcpy'd through a shared page and every bit pattern it can hold has to be
+    /// a value. Written as *the tallest form* the keyboard can take, not the one
+    /// it currently has: the context strip appears and disappears mid-read, and a
+    /// band that moves retires readings exactly as a conversation switch does.
+    public var ownUIHeightPermille: UInt16 = 0
     private var padding2: UInt32 = 0
 
     /// When `keyboardVisible` was last written, in `CaptureClock` nanoseconds.
@@ -188,6 +220,34 @@ public struct CaptureIntent: Equatable, Sendable {
     public init() {}
 
     public var isKeyboardVisible: Bool { keyboardVisible != 0 }
+
+    /// `ownUIHeightPermille` as the fraction the reduction wants. 0 when the
+    /// keyboard has never published one, which is a real answer: it means leave
+    /// the band alone.
+    public var ownUIHeightFraction: Double { Double(ownUIHeightPermille) / 1000 }
+
+    /// Rounded and clamped on the way in, so nothing downstream has to wonder
+    /// whether the page holds a fraction, a percentage or a NaN.
+    public mutating func setOwnUIHeightFraction(_ fraction: Double) {
+        guard fraction.isFinite, fraction > 0 else {
+            ownUIHeightPermille = 0
+            return
+        }
+        ownUIHeightPermille = UInt16((fraction * 1000).rounded().clamped(to: 0...1000))
+    }
+
+    /// The bottom fraction of a frame the fingerprint must leave out, given what
+    /// the keyboard published here. The producer reads this and nothing else, so
+    /// the bounding lives in one place.
+    public var frameBottomCrop: Double {
+        FrameReduction.bottomCrop(ownUI: ownUIHeightFraction)
+    }
+}
+
+extension Double {
+    fileprivate func clamped(to range: ClosedRange<Double>) -> Double {
+        min(max(self, range.lowerBound), range.upperBound)
+    }
 }
 
 // MARK: - UUID words

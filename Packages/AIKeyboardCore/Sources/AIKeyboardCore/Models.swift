@@ -146,14 +146,17 @@ public enum ScreenContextState: Equatable, Sendable {
     /// A reading of the frame on screen right now. Only ever set from a reading
     /// the freshness gate calls offerable.
     case ready(ScreenContext)
-    /// Alive but not looking: `broadcastPaused()`, or delivery stopped without
-    /// one. Not an ending — nothing has to be restarted — and not live either,
-    /// so no reading may be offered.
+    /// Alive but not looking, because `broadcastPaused()` said so. Not an ending
+    /// — nothing has to be restarted — and not live either, so no reading may be
+    /// offered. Frames merely *stopping* is not this: that is
+    /// `CaptureFreshness.Verdict.idle` and it arrives here as `.watching`,
+    /// because "no frame for two seconds" is an inference about a delivery rate
+    /// nobody has measured and "iOS paused the broadcast" is a fact.
     case paused
-    /// The session ended for a reason that is not the user stopping it, so it
-    /// carries the reason and the strip offers a way back. A jetsam kill arrives
-    /// here as `.lost`, never as `.off`: the user switched screen context on and
-    /// it stopped without being asked, which is a different sentence.
+    /// The session ended, so it carries the reason and the strip offers a way
+    /// back. A jetsam kill arrives here as `.lost`, never as `.off`: the user
+    /// switched screen context on and it stopped without being asked, which is a
+    /// different sentence.
     case ended(ScreenContextEndReason)
 
     /// Frames are being sampled. False for `.paused` and `.ended`, so nothing

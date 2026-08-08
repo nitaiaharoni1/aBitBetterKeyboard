@@ -106,7 +106,7 @@ struct ScreenContextView: View {
         case .watching, .ready:
             return "Nothing is sent anywhere until you tap Reply on the keyboard."
         case .paused:
-            return "iOS has stopped sending frames. It usually resumes on its own."
+            return "iOS paused the broadcast. It usually resumes on its own."
         case .ended(let reason):
             return "\(reason.explanation) Start it again below."
         }
@@ -127,6 +127,10 @@ struct ScreenContextView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.Text.primary)
                     Spacer()
+                    // Reachable: `MemoryGovernor` writes `degraded` when the
+                    // capture process's own `phys_footprint` goes above its
+                    // watermark, and reads are refused for as long as it stays
+                    // there.
                     if session.status?.isDegraded == true {
                         Text("LOW MEMORY")
                             .font(.system(size: 9, weight: .bold))
@@ -324,7 +328,7 @@ struct ScreenContextView: View {
             Card {
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
                     limit(
-                        "Run forever. Apple reserves permanent capture for remote-desktop apps, so every session is one you started — and iOS ends it for a phone call, the lock button or its own memory limit. This screen says which."
+                        "Run forever. Apple reserves permanent capture for remote-desktop apps, so every session is one you started, and iOS can end it for a phone call, the lock button or its own memory limit. This screen tells you it stopped. It cannot tell you which of those did it: iOS says only that the broadcast finished, and never why."
                     )
                     limit(
                         "Read anything by itself. A screenshot leaves the device only when you tap Reply, and never on a timer, a screen change or because the keyboard is open."

@@ -87,11 +87,19 @@ public final class ScreenContextChannel: ObservableObject {
 
     // MARK: Lifecycle
 
-    public func startWatching(as role: Role = .keyboard) {
+    /// `ownUIHeightFraction` is how much of the screen our keyboard is covering,
+    /// which the producer needs so it can leave our own animating panel out of
+    /// the frame fingerprint. Only the keyboard role publishes it, for the same
+    /// reason it is the only role that claims to be visible: the app hosts the
+    /// same view in a scroll view halfway up its own screen, and a fraction
+    /// measured there would describe nothing.
+    public func startWatching(as role: Role = .keyboard, ownUIHeightFraction: Double = 0) {
         guard timer == nil else { return }
         self.role = role
         if reader == nil { reader = CaptureChannelReader() }
-        if role.claimsKeyboardVisible { reader?.setKeyboardVisible(true) }
+        if role.claimsKeyboardVisible {
+            reader?.setKeyboardVisible(true, ownUIHeightFraction: ownUIHeightFraction)
+        }
         poll()
 
         let timer = Timer(timeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
@@ -198,6 +206,7 @@ public final class ScreenContextChannel: ObservableObject {
         case .ended(let reason): return "ended:\(reason)"
         case .starting: return "starting"
         case .paused: return "paused"
+        case .idle: return "idle"
         case .unconfirmed: return "unconfirmed"
         case .superseded: return "superseded"
         case .noSession: return "noSession"

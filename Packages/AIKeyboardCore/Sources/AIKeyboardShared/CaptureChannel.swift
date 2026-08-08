@@ -364,9 +364,21 @@ public final class CaptureChannelWriter: @unchecked Sendable {
     private let statusPage: SharedPage<CaptureStatus>
     private let intentURL: URL
     private let readingURL: URL
-    /// Opened on demand, because the file belongs to the other process. See
-    /// `intent()`.
-    private var intentPage: SharedPage<CaptureIntent>?
+
+    /// Opened on demand, because the file belongs to the other process, and
+    /// **behind a lock for the same reason `status.bin`'s writers are**: `intent()`
+    /// is called from `broadcastStarted`, on whatever queue ReplayKit runs the
+    /// lifecycle callbacks, and from `serveReadRequest` on the delivery queue.
+    /// ReplayKit does not document those to be the same queue. An unsynchronised
+    /// lazy assignment across two threads is not merely a wasted mapping: the
+    /// non-atomic store of a class reference can be observed half-written, and the
+    /// loser's `SharedPage` can be released while the winner is reading through a
+    /// pointer that came from it. See `intent()`.
+    private let intentPage = OSAllocatedUnfairLock<SharedPage<CaptureIntent>?>(initialState: nil)
+
+    /// True from `end()` until the next `begin()`. Guards `publish` — see it.
+    private let hasEnded = OSAllocatedUnfairLock(initialState: false)
+
     private static let log = Logger(
         subsystem: "com.nitai.aikeyboard", category: "CaptureChannel")
 
@@ -398,6 +410,7 @@ public final class CaptureChannelWriter: @unchecked Sendable {
     /// survives into this one, then publishes the identity and the start time.
     @discardableResult
     public func begin(sessionID: UUID = UUID(), now: UInt64 = CaptureClock.now()) -> UUID {
+        hasEnded.withLock { $0 = false }
         try? FileManager.default.removeItem(at: readingURL)
         statusPage.reset()
         var status = CaptureStatus()
@@ -453,7 +466,13 @@ public final class CaptureChannelWriter: @unchecked Sendable {
 
     /// Records an ending. The heartbeat stops with it, so a reader that misses
     /// this still concludes `.lost` within three seconds.
+    ///
+    /// **The flag is raised before the file is deleted, and that order is the
+    /// point.** A read in flight publishes from its own queue; if it wrote between
+    /// the deletion and the flag, the sender and the message would survive the
+    /// session in a container that is backed up.
     public func end(_ reason: ScreenContextEndReason, now: UInt64 = CaptureClock.now()) {
+        hasEnded.withLock { $0 = true }
         statusPage.mutate {
             $0.endReasonRaw = reason.rawValue
             $0.heartbeatAt = now
@@ -472,21 +491,56 @@ public final class CaptureChannelWriter: @unchecked Sendable {
     /// mapping taken once at init would then stay nil for the whole session and
     /// silently ignore every Reply tap.
     public func intent() -> CaptureIntent? {
-        if intentPage == nil {
-            intentPage = SharedPage<CaptureIntent>(
-                url: intentURL, bytes: CaptureChannel.intentPageBytes, writable: false)
+        intentPage.withLock { page in
+            if page == nil {
+                page = SharedPage<CaptureIntent>(
+                    url: intentURL, bytes: CaptureChannel.intentPageBytes, writable: false)
+            }
+            // `load()` inside the lock rather than outside it. It takes no lock of
+            // its own and its retry loop is bounded at sixteen, so the interval is
+            // about that of the memcpy it reads — and doing it outside would mean
+            // handing a mapping out of the lock that another thread may have
+            // replaced.
+            return page?.load()
         }
-        return intentPage?.load()
     }
 
     /// Publishes a reading. Atomic, so the keyboard never reads half a JSON
     /// document, and explicitly protected no higher than the container default
     /// for the same reason the pages are not: a file the keyboard cannot open on
     /// a locked device is a feature that stops working in a pocket.
+    ///
+    /// **Refused once the session has ended, and it deletes again afterwards.**
+    /// This is a privacy rule, not tidiness. `publish` runs on the read queue and
+    /// `end()` on ReplayKit's lifecycle queue, so a read that was already in
+    /// flight when the user stopped the broadcast lands *after* `end()` deleted
+    /// `reading.json` — and a sender's name and the text of their message then sit
+    /// in the App Group container, which is backed up, until the next launch or
+    /// the next broadcast. The flag closes the ordinary case; the second delete
+    /// closes the window between the check and the write, where `end()` can still
+    /// interleave.
     public func publish(_ record: ScreenReadingRecord) throws {
+        guard !hasEnded.withLock({ $0 }) else { throw CaptureChannelError.sessionEnded }
+
         let data = try JSONEncoder().encode(record)
         try data.write(
             to: readingURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+
+        if hasEnded.withLock({ $0 }) {
+            try? FileManager.default.removeItem(at: readingURL)
+            throw CaptureChannelError.sessionEnded
+        }
+    }
+}
+
+/// The one failure `CaptureChannelWriter` raises that is not a file-system error.
+public enum CaptureChannelError: Error, LocalizedError {
+    /// A reading finished after its session did. Nothing is published, because
+    /// the message would outlive the session it was read in.
+    case sessionEnded
+
+    public var errorDescription: String? {
+        "the capture session ended before the reading could be published"
     }
 }
 
@@ -563,10 +617,19 @@ public final class CaptureChannelReader: @unchecked Sendable {
         return try? JSONDecoder().decode(ScreenReadingRecord.self, from: data)
     }
 
-    public func setKeyboardVisible(_ visible: Bool, now: UInt64 = CaptureClock.now()) {
+    /// Says the keyboard is on screen and how much of the screen it covers.
+    ///
+    /// The height is not decoration beside the flag: it is what keeps the
+    /// producer's fingerprint blind to our own animating panel, so it is written
+    /// in the same transaction as the flag and cleared with it. See
+    /// `CaptureIntent.ownUIHeightPermille`.
+    public func setKeyboardVisible(
+        _ visible: Bool, ownUIHeightFraction: Double = 0, now: UInt64 = CaptureClock.now()
+    ) {
         intentPage?.mutate {
             $0.keyboardVisible = visible ? 1 : 0
             $0.keyboardVisibleAt = now
+            $0.setOwnUIHeightFraction(visible ? ownUIHeightFraction : 0)
         }
     }
 

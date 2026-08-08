@@ -1304,3 +1304,85 @@ and all three proof scripts, exit 0. The UI suite's one skip is by design and
 covered: the shared suite skips an uncooperative simulator, while
 `prove-capture-channel.sh` fails on skip and produced real cross-process log
 lines.
+
+## Final audit and close-out
+
+An independent auditor with no history was put over everything since `6ffa669`.
+It did **not** pass the feature, and it was right. Two blockers, both reproduced
+rather than argued, plus thirteen smaller findings. All closed.
+
+### Blocker 1 — the gate threw away the read the tap paid for
+
+`CaptureFreshness` condition 4 compares the frame identity at tap time against
+the newest frame. But the fingerprint band contained **32% of our own keyboard**,
+and `KeyboardController.beginWork` starts the shimmer *before* `contextForReply`
+runs, so our own UI animated for the whole ~5 s read. Measured on the corpus:
+
+| band | own-UI false invalidations |
+|---|---|
+| what shipped | **30/30** |
+| ours excluded | **0/30** |
+
+Every sampled frame got a fresh identity from nothing but our loading state. The
+user tapped Reply, the screenshot *was* uploaded, the cloud call *was* spent, and
+the answer was discarded — then, twelve seconds later, "nothing answered".
+Non-deterministic, which is worse than always broken.
+
+Fixed by excluding our own rows: the keyboard publishes the height it *can*
+occupy (never the current one, since the strip appearing mid-read would move the
+band and retire the reading exactly as a real switch does), clamped both ways
+because one process reads it out of a page another writes. The crop costs no host
+content — while the keyboard is up, everything below its top edge is ours.
+
+The cheaper alternative was rejected with a proof rather than a preference: the
+record's identity is *by construction* a member of "identities observed during
+the read", so confirming membership degenerates to `true` and condition 4
+disappears.
+
+**Two harness bugs found on the way**, one of which had the harness manufacturing
+the very effect it was measuring: its shimmer used `left:` (a layout change)
+where SwiftUI uses `.offset` (a draw-time transform), and the growing overflow
+rect made Chromium rasterise a pixel differently *above* the keyboard. The other
+let pixels 1,300 px outside the band bleed into cells through Skia's mip chain,
+which is why the published "64-bit missed 11 of 29" is really 10 of 29.
+
+### Blocker 2 — a killed writer poisoned the channel permanently
+
+`capture_seq_begin_write` computed `load + 1`, which assumes even parity on
+entry. A complete transaction preserves parity; an **aborted** one flips it — and
+jetsam aborts transactions, which is exactly how it ends this extension at 50 MB.
+Nothing repaired it: `begin()` runs two complete transactions, `clear()` never
+touches the counter. The page stayed poisoned across broadcasts, launches and
+reboots, showing "Screen context stopped unexpectedly" forever, and an inverted
+page publishes an **even** sequence before touching the body, so the other
+process could validate a half-written struct. One line: `| 1u`. The test fails
+without it.
+
+A comment claimed this was handled — *"there is no later event that will fix it"*
+— and it was measurably false. That sentence is why nobody looked.
+
+### The rest
+
+- **The status page advertised two safety features that did not exist.** A memory
+  governor now really samples `phys_footprint`, with a watermark that cannot
+  silently disable the feature: `max(ceiling - reserve, baseline + reserve)`,
+  where the baseline is measured in-process, so a guess never overrules a
+  measurement. `refusedBudget` and `.overBudget` were deleted instead — nothing
+  could ever have written them.
+- **The UI promised a "why" it cannot know.** Read out of the SDK:
+  `broadcastFinished` takes no argument and no callback carries an error, so the
+  five `RPRecordingErrorCode` mappings were dead code. Deleted, and the UI now
+  says it can tell you a session stopped but not why. It also stopped mapping a
+  stop to "screen context is off", which was silently removing the strip against
+  an explicit README promise.
+- **A message body could outlive its session**: a read in flight when the
+  broadcast ended republished `reading.json` after `end()` deleted it, leaving a
+  sender and message in a backed-up container.
+- **The playground would have photographed the playground.** The app hosts a real
+  `KeyboardView`, so its Reply is the same button; as an observer it now refuses
+  in words rather than reading our own preview.
+- Three documents still said the read was not built, two commits after it landed
+  — including one that keyed live UI copy off the claim.
+
+**Verified by me, not taken on report:** build, **251** unit tests, 7 UI tests,
+and all three proof scripts, exit 0.
