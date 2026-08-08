@@ -4,10 +4,12 @@
 
 XCTest via `xcodebuild test`, in two shapes:
 
-- **`AIKeyboardCoreTests`** — unit tests over `AIKeyboardCore` (229 at last
-  count): routing, language detection, `OutputGuard`, `EditScope`, the capture
-  channel's seqlock and layouts, the frame fingerprint's crop band, the freshness
-  gate. Fast, no simulator UI.
+- **`AIKeyboardCoreTests`** — unit tests over `AIKeyboardCore`: routing, language
+  detection, `OutputGuard`, `EditScope`, the capture channel's seqlock and page
+  layouts, the frame fingerprint's crop band, the freshness gate. Fast, no
+  simulator UI. No count is quoted anywhere on purpose — it went stale three
+  times in a single session, and a number that is wrong more often than it is
+  right is worse than no number. Run the target.
 - **`AIKeyboardUITests`** — UI walkthroughs that drive the app in the simulator,
   plus the two cross-process suites. Those two assert almost nothing themselves;
   they get both processes running and the verdict is read out of the log by

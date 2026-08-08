@@ -10,10 +10,31 @@ the product needs them decided. `propertyOrdering` is load-bearing for the same
 reason as in the text harness: the model fills fields in the order it emits
 them, so `sender` before `message` makes it commit to whose message it is
 reading before it transcribes it.
+
+Three knobs, and only these three, describe *what the model is shown*. Nothing
+about the prompt, the schema, the ordering, the thinking budget or the model is
+reachable from the environment, because every one of those is measured and a
+run that moves two of them at once measures nothing.
+
+    VERTEX_IMAGE_SCALE    1 (default) sends the corpus PNG untouched, which is
+                          the configuration every published score on this bar
+                          was taken at. 2 halves both dimensions and rounds
+                          down to even, exactly as `FrameScaler.target` does,
+                          which is what the capture process actually uploads.
+    VERTEX_IMAGE_FORMAT   png (default) or jpeg. The bar has always sent PNG;
+                          the shipping path sends JPEG, because
+                          `CloudScreenReader.encode` does.
+    VERTEX_JPEG_QUALITY   70, matching that encoder's default quality.
+
+Resampling is Pillow's LANCZOS against vImage's `kvImageHighQualityResampling`.
+Different implementations of the same idea; the harness does not share a
+resampler with the shipping code on purpose, so a result that only held for one
+of them would show up.
 """
 
 import base64
 import concurrent.futures
+import io
 import json
 import os
 import subprocess
@@ -29,6 +50,9 @@ BAR = HERE.parent
 MODEL = os.environ.get("VERTEX_MODEL", "gemini-2.5-flash")
 PROJECT = os.environ.get("VERTEX_PROJECT", "handi-project")
 THINKING_BUDGET = int(os.environ.get("VERTEX_THINKING_BUDGET", "512"))
+IMAGE_SCALE = int(os.environ.get("VERTEX_IMAGE_SCALE", "1"))
+IMAGE_FORMAT = os.environ.get("VERTEX_IMAGE_FORMAT", "png").lower()
+JPEG_QUALITY = int(os.environ.get("VERTEX_JPEG_QUALITY", "70"))
 
 PROMPT = """You are looking at a screenshot of a phone messaging app.
 
@@ -139,13 +163,39 @@ def token():
 ACCESS_TOKEN = token()
 
 
-def call(image_bytes):
+def frame(path):
+    """The bytes that go on the wire, and their MIME type.
+
+    Untouched at the default scale and format, so the published numbers stay
+    reproducible byte for byte without Pillow installed at all.
+    """
+    if IMAGE_SCALE == 1 and IMAGE_FORMAT == "png":
+        return path.read_bytes(), "image/png"
+
+    from PIL import Image
+
+    with Image.open(path) as image:
+        image = image.convert("RGB")
+        if IMAGE_SCALE != 1:
+            # `FrameScaler.target`: divide, then round down to even so a 4:2:0
+            # chroma plane divides exactly. 1206x2622 -> 602x1310, not 603x1311.
+            size = ((image.width // IMAGE_SCALE) & ~1, (image.height // IMAGE_SCALE) & ~1)
+            image = image.resize(size, Image.LANCZOS)
+        buffer = io.BytesIO()
+        if IMAGE_FORMAT == "jpeg":
+            image.save(buffer, format="JPEG", quality=JPEG_QUALITY)
+            return buffer.getvalue(), "image/jpeg"
+        image.save(buffer, format="PNG")
+        return buffer.getvalue(), "image/png"
+
+
+def call(image_bytes, mime_type):
     body = {
         "contents": [
             {
                 "role": "user",
                 "parts": [
-                    {"inlineData": {"mimeType": "image/png", "data": base64.b64encode(image_bytes).decode()}},
+                    {"inlineData": {"mimeType": mime_type, "data": base64.b64encode(image_bytes).decode()}},
                     {"text": PROMPT},
                 ],
             }
@@ -178,17 +228,19 @@ def call(image_bytes):
 
 
 def run(entry):
+    image_bytes, mime_type = frame(BAR / entry["file"])
     started = time.monotonic()
-    result = call((BAR / entry["file"]).read_bytes())
+    result = call(image_bytes, mime_type)
     return {
         "id": entry["id"],
         "language": entry["language"],
-        "config": MODEL,
+        "config": f"{MODEL} scale={IMAGE_SCALE} {IMAGE_FORMAT}",
         "sender": result.get("sender"),
         "message": result.get("message"),
         "messages": result.get("messages"),
         "detectedScript": result.get("script"),
         "detectedLanguage": result.get("language"),
+        "bytes": len(image_bytes),
         "seconds": round(time.monotonic() - started, 2),
     }
 
@@ -210,8 +262,14 @@ def main():
     out.write_text(json.dumps(outputs, ensure_ascii=False, indent=2))
 
     seconds = sorted(row["seconds"] for row in outputs)
+    payload = sorted(row["bytes"] for row in outputs)
     print(f"wrote {len(outputs)} results to {out}")
+    print(f"config {MODEL} scale={IMAGE_SCALE} {IMAGE_FORMAT}"
+          + (f" q{JPEG_QUALITY}" if IMAGE_FORMAT == "jpeg" else ""))
     print(f"median {seconds[len(seconds)//2]:.1f}s   p90 {seconds[int(len(seconds)*0.9)]:.1f}s   max {seconds[-1]:.1f}s")
+    print(f"bytes  median {payload[len(payload)//2]/1024:.0f} KB   "
+          f"p90 {payload[int(len(payload)*0.9)]/1024:.0f} KB   max {payload[-1]/1024:.0f} KB   "
+          f"total {sum(payload)/1024/1024:.1f} MB")
 
 
 if __name__ == "__main__":

@@ -244,7 +244,7 @@ xcodebuild test -project AIKeyboard.xcodeproj -scheme AIKeyboard \
 xcrun xccov view --report /tmp/AIKeyboard.xcresult
 ```
 
-Four tests live in `AIKeyboardUITests/DemoWalkthroughTests.swift`, and 229 unit
+Four tests live in `AIKeyboardUITests/DemoWalkthroughTests.swift`, and the unit
 tests in `AIKeyboardCoreTests`. The two cross-process suites,
 `AppGroupCrossProcessTests` and `CaptureChannelCrossProcessTests`, are driven by
 the `Scripts/prove-*.sh` scripts rather than judged by their own assertions; see

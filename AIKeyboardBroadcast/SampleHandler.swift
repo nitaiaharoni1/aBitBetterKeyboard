@@ -316,10 +316,18 @@ final class SampleHandler: RPBroadcastSampleHandler {
     /// Answers a raised request with this frame, if there is one to answer.
     ///
     /// Everything here is bounded work on the delivery queue: a page load, a
-    /// downscale into a buffer that already exists, and a JPEG encode measured at
-    /// under 0.2 MB above process base. The five-second part is the call
-    /// `ScreenReadService.start` schedules on its own queue, and this returns
-    /// without it.
+    /// downscale into a buffer that already exists, and a JPEG encode. The
+    /// five-second part is the call `ScreenReadService.start` schedules on its
+    /// own queue, and this returns without it.
+    ///
+    /// **The encode has never been measured on this path.** The "under 0.2 MB
+    /// above process base" figure this comment used to quote came from a bare
+    /// CLI process in the iOS Simulator encoding a PNG, which the design records
+    /// as a floor rather than a measurement. The shipping path is a vImage ARGB
+    /// buffer into `CGImageDestination`, inside a broadcast extension, on a
+    /// device — three differences, any of which could matter against a ~50 MB
+    /// cap. `MemoryGovernor` is what stands between this and jetsam until R2 and
+    /// R7 are measured on hardware.
     private func serveReadRequest(
         _ sampleBuffer: CMSampleBuffer, intent: CaptureIntent?, identity: FrameIdentity,
         sampledAt: UInt64
