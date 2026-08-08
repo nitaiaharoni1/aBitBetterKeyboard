@@ -2,64 +2,13 @@ import SwiftUI
 
 // MARK: - Languages
 
-public enum KeyboardLanguage: String, CaseIterable, Identifiable, Codable, Sendable {
-    case english
-    case hebrew
-
-    public var id: String { rawValue }
-
-    /// Shown on the globe key and in the language switcher.
-    public var shortName: String {
-        switch self {
-        case .english: return "EN"
-        case .hebrew: return "עב"
-        }
-    }
-
-    public var displayName: String {
-        switch self {
-        case .english: return "English"
-        case .hebrew: return "Hebrew"
-        }
-    }
-
-    public var nativeName: String {
-        switch self {
-        case .english: return "English"
-        case .hebrew: return "עברית"
-        }
-    }
-
-    public var flag: String {
-        switch self {
-        case .english: return "🇺🇸"
-        case .hebrew: return "🇮🇱"
-        }
-    }
-
+/// The one thing `KeyboardLanguage` cannot say from `AIKeyboardShared`, because
+/// saying it needs SwiftUI and the capture process must not link SwiftUI. The
+/// enum itself lives in `AIKeyboardShared/KeyboardLanguage.swift`; this is the
+/// only line of it that stayed behind.
+extension KeyboardLanguage {
     public var layoutDirection: LayoutDirection {
         self == .hebrew ? .rightToLeft : .leftToRight
-    }
-
-    public var isRightToLeft: Bool { self == .hebrew }
-
-    /// Placeholder on the space bar, the way the system keyboard names itself.
-    public var spaceLabel: String {
-        switch self {
-        case .english: return "space"
-        case .hebrew: return "רווח"
-        }
-    }
-
-    public var returnLabel: String {
-        switch self {
-        case .english: return "return"
-        case .hebrew: return "שורה"
-        }
-    }
-
-    public func next() -> KeyboardLanguage {
-        self == .english ? .hebrew : .english
     }
 }
 

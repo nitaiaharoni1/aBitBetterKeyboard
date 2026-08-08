@@ -276,6 +276,19 @@ struct ScreenContextView: View {
                         detail:
                             "What comes back is the sender, the message and its language. The picture is never saved — not on disk, not in the shared container, not in a backup."
                     )
+
+                    Divider().overlay(Theme.Surface.separator)
+
+                    // All three steps are built now. What is still missing is a
+                    // measurement, not code, and the honest thing is to say which
+                    // it is rather than let a Reply tap fail with a reason it
+                    // invented.
+                    Text(
+                        "All three steps are built, and none of them has run on a phone yet: a broadcast cannot start in the simulator, so no frame has ever reached the capture process here. Reply may not work on your device, and if it does not, the reason it gives you is the real one."
+                    )
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.Text.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -366,11 +379,22 @@ struct ScreenContextView: View {
                         SecondaryButton(title: "Stop the sample") {
                             session.stop()
                         }
-                    } else {
+                    } else if session.canPlaySample {
                         PrimaryButton(title: "Play a sample conversation", icon: "play.fill") {
                             store.screenContextAllowed = true
                             session.start()
                         }
+                    } else {
+                        // Words rather than a button that does nothing. The sample
+                        // would have to paint a message nobody sent over a session
+                        // that is watching the real screen, so it is refused — and
+                        // the one thing the user can do about it is named.
+                        Text(
+                            "Not while screen context is running: the strip is showing your real screen, and a made-up message on top of it would be the one thing this feature must never do. Stop the broadcast from the red indicator in the status bar first."
+                        )
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Text.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }

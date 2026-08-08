@@ -14,9 +14,14 @@
 set -euo pipefail
 cd /Users/nitai/REPOS/ai-keyboard/Bar/screen-context/harness
 core=../../../Packages/AIKeyboardCore/Sources/AIKeyboardCore
+# `ScreenReader.swift` and the script half of `LanguageDetector.swift` moved to
+# AIKeyboardShared when the broadcast extension became a caller: it performs the
+# read and must never link AIKeyboardCore. Same sources, one directory up.
+shared=../../../Packages/AIKeyboardCore/Sources/AIKeyboardShared
 build=$(mktemp -d)
 trap 'rm -rf "$build"' EXIT
-cp "$core/ScreenReader.swift" "$core/VisionScreenReader.swift" "$core/LanguageDetector.swift" "$build/"
+cp "$core/VisionScreenReader.swift" "$build/"
+cp "$shared/ScreenReader.swift" "$shared/LanguageDetector.swift" "$build/"
 printf 'import Foundation\npublic enum KeyboardLanguage: String, Sendable { case english, hebrew }\npublic enum AIProvenance: Sendable, Equatable { case onDevice, cloud, onDeviceBestEffort\n  public var isBestEffort: Bool { self == .onDeviceBestEffort } }\npublic struct AIOutput<Value: Sendable>: Sendable { public let value: Value; public let provenance: AIProvenance\n  public init(_ v: Value, provenance: AIProvenance) { value = v; self.provenance = provenance } }\n' > "$build/Support.swift"
 cp reader.swift "$build/main.swift"
 xcrun -sdk macosx swiftc -O "$build"/*.swift -o "$build/reader" 2>&1 | grep -E "error" | head -20 || true

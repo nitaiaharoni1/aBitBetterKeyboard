@@ -90,15 +90,14 @@ public struct CaptureStatus: Equatable, Sendable {
     public var refusedMemory: UInt32 = 0
     public var refusedInFlight: UInt32 = 0
     public var refusedBudget: UInt32 = 0
-    /// The focused field said it was a secure text entry field.
-    public var refusedSecure: UInt32 = 0
-    /// The focused field did not answer. Counted apart from `refusedSecure`
-    /// because the two mean different things about the *guard*: `isSecureTextEntry`
-    /// is an `@optional` trait, so a host that never implements it makes every
-    /// tap land here, and a first device run where this counter equals the tap
-    /// count means the guard has silently disabled the feature. That is a thing
-    /// to discover from a number rather than from a hole in shipping code.
-    public var refusedSecureUnknown: UInt32 = 0
+
+    // The two secure-field counters the design put here are in `CaptureIntent`
+    // instead, and the reason is not tidiness: this page has exactly one writing
+    // *process* and the keyboard is not it. `SharedPage`'s lock serialises
+    // threads, not processes, so a second process writing this page would tear it
+    // with nothing to catch the tear. The guard runs in the keyboard, because the
+    // keyboard is the only process that can see the focused field's traits at
+    // all, so its counters go in the page the keyboard writes.
 
     // MARK: Flags
 
@@ -165,6 +164,26 @@ public struct CaptureIntent: Equatable, Sendable {
     /// producer ignore a request that has been sitting in the page since before
     /// it started.
     public var readRequestedAt: UInt64 = 0
+
+    /// Taps on Reply the secure-field guard refused because the focused field
+    /// said it was a secure text entry field, or named a content type in
+    /// `SecureField.sensitive`.
+    public var refusedSecure: UInt32 = 0
+
+    /// Taps refused because the focused field did not answer at all.
+    ///
+    /// **Counted apart from `refusedSecure` because the two say different things
+    /// about the guard rather than about the field.** `isSecureTextEntry` is an
+    /// `@optional` trait, so a host that never implements it sends every tap
+    /// here, and the guard fails closed — meaning that on such a host the guard
+    /// has quietly switched the feature off. Whether hosts populate the trait
+    /// through a `UITextDocumentProxy` at all is an open question no simulator
+    /// can settle, and this is what turns it into a number: after a device run,
+    /// taps are `readNow + refusedSecure + refusedSecureUnknown`, so this
+    /// counter standing equal to the tap count is the answer "no host ever
+    /// answers". The resolution then is to find a different signal, never to
+    /// flip the default.
+    public var refusedSecureUnknown: UInt32 = 0
 
     public init() {}
 

@@ -5,7 +5,7 @@ import ImageIO
 import ReplayKit
 import os
 
-/// The capture shutter. It fingerprints frames and reads nothing.
+/// The capture shutter, with a phone line.
 ///
 /// ReplayKit kills a broadcast upload extension at roughly 50 MB and one BGRA
 /// frame at this device's resolution is about 12.6 MB
@@ -16,6 +16,15 @@ import os
 /// reduction lives on the stack for the length of `FrameFingerprint.make` and is
 /// never written anywhere, because at 32x64 it is a bad picture but it is still a
 /// picture.
+///
+/// **One frame in sixty thousand leaves.** A read happens on exactly one
+/// condition: `intent.readNow` went up, which is the user tapping Reply. Then
+/// this callback downscales that one frame and encodes it — CPU-bounded work
+/// that allocates one reusable buffer, `FrameScaler` — and hands ~66 KB of JPEG
+/// to `ScreenReadService`, which does the five-second cloud call on its own
+/// serial queue and publishes text. The callback returns without waiting, which
+/// is what keeps the fingerprint advancing during a read and is the whole reason
+/// `CaptureFreshness` condition 3 can confirm a reading at all.
 ///
 /// This target links `AIKeyboardShared` and **must never link `AIKeyboardCore`**:
 /// that target imports SwiftUI and UIKit from a dozen files, and dragging both
@@ -44,6 +53,18 @@ final class SampleHandler: RPBroadcastSampleHandler {
     /// `storage=processLocal` is where the user-visible diagnosis belongs.
     private let channel = CaptureChannelWriter()
     private var heartbeat: DispatchSourceTimer?
+
+    /// The read, and the one downscale buffer it is served from.
+    ///
+    /// Built at `broadcastStarted` rather than here, so the backend URL is read
+    /// from the shared store when the session starts: the user can set it in the
+    /// app between two broadcasts, and a service built at process launch would
+    /// answer "not set up" for the rest of the session. Assigned before the first
+    /// frame can arrive and never cleared, for the reason `broadcastFinished`
+    /// gives. Nil when the container is out of reach, because a reading nobody
+    /// can collect is a cloud call spent for nothing.
+    private var reads: ScreenReadService?
+    private let scaler = FrameScaler()
 
     // Mutated from ReplayKit's delivery queue by `processSampleBuffer`, and from
     // whatever queue ReplayKit uses for the lifecycle callbacks by
@@ -83,10 +104,20 @@ final class SampleHandler: RPBroadcastSampleHandler {
         let session = channel?.begin()
         startHeartbeat()
 
+        // Seeded with the intent page as it stands right now, so a Reply tap
+        // from a session that ended an hour ago cannot fire a read against
+        // whatever happens to be on screen when this one starts.
+        if let channel, let session {
+            let service = ScreenReadService.standard(channel: channel)
+            service.begin(session: session, intent: channel.intent())
+            reads = service
+        }
+
         Self.log.notice(
             """
             broadcast started intervalMs=\(Self.sampleIntervalMilliseconds, privacy: .public) \
             channel=\(self.channel == nil ? "unreachable" : "open", privacy: .public) \
+            reader=\(self.reads?.canRead == true ? "cloud" : "none", privacy: .public) \
             session=\(session?.uuidString ?? "none", privacy: .public)
             """
         )
@@ -107,6 +138,13 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     override func broadcastFinished() {
         stopHeartbeat()
+        // Neither the reader nor the downscale buffer is torn down here, and that
+        // is deliberate: ReplayKit does not document this callback to be on the
+        // delivery queue, so releasing either could free memory a frame in flight
+        // is still using. The process ends within moments of this, which is a
+        // better collector than a race. A read already in flight keeps its own
+        // JPEG and publishes a record the freshness gate refuses, because the
+        // page it is measured against now carries an ending.
         channel?.end(.userStopped)
         Self.log.notice(
             """
@@ -205,14 +243,22 @@ final class SampleHandler: RPBroadcastSampleHandler {
             )
         }
 
+        // One clock reading for the identity and for anything read off this
+        // frame, so the record's `capturedAt` is the same instant the page
+        // publishes as `currentFrameSampledAt` rather than a few microseconds
+        // after it.
+        let sampledAt = CaptureClock.now()
         let fingerprint = Self.fingerprint(of: sampleBuffer)
         if let fingerprint {
-            channel?.recordFrame(fingerprint)
+            channel?.recordFrame(fingerprint, now: sampledAt)
+            serveReadRequest(sampleBuffer, identity: fingerprint.identity, sampledAt: sampledAt)
         } else {
             // A frame we could not fingerprint is a frame the freshness gate
             // must not treat as evidence, so delivery is recorded and the
-            // identity is left alone rather than being cleared or guessed.
-            channel?.recordDelivery()
+            // identity is left alone rather than being cleared or guessed. It is
+            // also not a frame to read: a reading whose identity nothing can
+            // confirm could never be shown.
+            channel?.recordDelivery(now: sampledAt)
         }
 
         if framesSampled % Self.logEvery == 0 {
@@ -224,6 +270,37 @@ final class SampleHandler: RPBroadcastSampleHandler {
                 """
             )
         }
+    }
+
+    // MARK: - The read
+
+    /// Answers a raised request with this frame, if there is one to answer.
+    ///
+    /// Everything here is bounded work on the delivery queue: a page load, a
+    /// downscale into a buffer that already exists, and a JPEG encode measured at
+    /// under 0.2 MB above process base. The five-second part is the call
+    /// `ScreenReadService.start` schedules on its own queue, and this returns
+    /// without it.
+    private func serveReadRequest(
+        _ sampleBuffer: CMSampleBuffer, identity: FrameIdentity, sampledAt: UInt64
+    ) {
+        guard let channel, let reads,
+            let ticket = reads.claim(
+                intent: channel.intent(), identity: identity, capturedAt: sampledAt)
+        else { return }
+
+        guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer),
+            let jpeg = scaler.jpeg(from: buffer)
+        else {
+            // The request is answered rather than dropped. The keyboard is
+            // already waiting on this sequence, and twelve seconds of silence is
+            // the one outcome this pipeline is not allowed to produce.
+            reads.fail(ticket, detail: "The screen could not be prepared for reading.")
+            Self.log.error("read gave up: the frame could not be downscaled or encoded")
+            return
+        }
+
+        reads.start(ticket, jpeg: jpeg)
     }
 
     // MARK: - Reading a sample without holding it

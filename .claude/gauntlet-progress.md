@@ -1209,3 +1209,98 @@ dangling, and the red-dot rule is consistent in all three places it appears.
    screen now", which misattributes the cause: there is no reader at all yet.
 4. Design §3.3.1's secure-field guard is unimplemented. `CaptureStatus` carries
    `refusedSecure` fields nothing writes, and it is absent from "Not built".
+
+## Round 3 — closing out
+
+Two agents dispatched concurrently on **separate simulators**, because two test
+targets on one device kill each other's runners here and it reports as a crash
+rather than a failure.
+
+- **P5, the reader inside the capture process** (iPhone 17 Pro). The last
+  missing middle: today the keyboard raises `intent.readNow` and the extension
+  publishes status, and nothing ever performs a read, so on a device every Reply
+  times out. Includes the package split the design's Phase 1 calls for, because
+  the prompt and transport live in `AIKeyboardCore` and the extension must not
+  link it. One copy of the prompt, not two: it is measured against the bar and
+  two copies drift.
+- **P6, the four logged critic findings plus shared-state hygiene**
+  (iPhone 17 Pro Max). Role contract, the sample being killed by a real session,
+  the UI misattributing its own failure, and the unimplemented fail-closed
+  secure-field guard.
+
+**Shared-state finding, before either agent started.** The App Group container
+holds `channel-com.nitai.aikeyboard/` and `channel-com.nitai.aikeyboard.keyboard/`
+beside the live `channel/`. Shipping code only ever uses `channel/`; these are
+debris from a critic's deliberate break test. Inert, but stale state in a shared
+container is exactly the class of thing that makes a later run lie, so it goes to
+P6 as hygiene rather than being swept by hand.
+
+### Master review finding: the fail-closed secure guard is wrong, and it is my error
+
+I instructed "FAIL CLOSED" on the critic's reasoning that a guard permitting by
+default on unknown hosts is not a guard. Sound in the abstract, wrong here, and I
+should have checked two things before giving the instruction.
+
+1. **iOS already prevents the case.** Apple's App Extension Programming Guide:
+   *"When a user taps in a secure text input object, the system temporarily
+   replaces your custom keyboard with the system keyboard."* A custom keyboard is
+   never on screen for a password field, so `isSecureTextEntry == true` is a
+   branch that essentially cannot fire while our keyboard is visible.
+2. **`nil` is not evidence of danger.** It means the host did not implement an
+   `@optional` protocol member. Treating it as "yes, this is a password field"
+   refuses on the overwhelmingly common case.
+
+Net effect of fail-closed-on-nil: it protects against a case the OS already
+handles, and in exchange may disable Reply on every device. That is a bad trade
+in both directions at once.
+
+There is a second reason the signal is weak, independent of the above: the read
+uploads the **whole screen**, not the focused field. A password manager visible
+behind a non-secure search box is not caught by this guard at all. So it is
+narrow defence in depth, and must not be described as the thing protecting
+sensitive screens. The thing that does that is the absence of any speculative
+read: a frame leaves only in answer to a tap.
+
+Fix: refuse on a positive `true` (free, harmless), permit on `nil` with the OS
+guarantee documented as the reason, keep both counters so R14 stays measurable.
+
+### Integration: both agents merged, four corrections applied by me
+
+**The reader exists.** `ScreenReadService` claims a request on the delivery
+callback and runs the cloud call on a serial queue, so a read never blocks frame
+delivery. One claim per raised request: no retries, no read on frame arrival, no
+speculative read, and a second tap during a read folds into it rather than
+opening a second connection. Failures now publish a reason instead of leaving the
+keyboard to time out. The packaging move finished with it: one copy of the
+prompt, schema, transport and parsing serves both processes, and the appex still
+links no SwiftUI and zero `AIKeyboardCore` symbols (474 `AIKeyboardShared` ones,
+Release arm64 495,504 → 766,656 B, mostly `__LINKEDIT` metadata). Holding a
+half-size frame to serve a read costs 3.0 MiB (BGRA) or 4.1 MiB (420f); a session
+where Reply is never tapped allocates nothing.
+
+**Four corrections I made at integration, three of them to my own instructions:**
+
+1. **The secure guard's fail-closed-on-nil was my error** (see the finding
+   above). Now `secure != true` refuses. Both counters survive.
+2. **The counters would have stopped measuring the thing they exist for.** With
+   silence permitting, a silent host falls into the ordinary path, so counting
+   only on refusal made it indistinguishable from a host answering "not secure".
+   `countSecureDecision(refused:unanswered:)` now counts silence on *every*
+   decision, which is what keeps R14 answerable from the field.
+3. **A published failure was invisible.** The gate refuses to call a non-`.read`
+   record offerable, and the wait loop only acted on `.offerable`, so "no backend
+   configured" sat in the container while the user waited the full twelve seconds
+   and was then told nothing answered — the wrong reason as well as a slow one.
+   The loop now ends on any answered-and-failed record, with `.nothing` worded as
+   an answer rather than a fault.
+4. **Two passages went stale as the other agent worked.** A comment claiming
+   `KeyboardLanguage` could not be linked by the capture process (it moved to
+   `AIKeyboardShared`; the string is now for decode robustness across builds), and
+   the app's "steps 2 and 3 are not built" paragraph, which the reader landing
+   made false.
+
+**Verified by me, not taken on report:** build, **228** unit tests, 7 UI tests,
+and all three proof scripts, exit 0. The UI suite's one skip is by design and
+covered: the shared suite skips an uncooperative simulator, while
+`prove-capture-channel.sh` fails on skip and produced real cross-process log
+lines.

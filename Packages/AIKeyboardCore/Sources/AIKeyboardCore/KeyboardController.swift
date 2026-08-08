@@ -14,6 +14,22 @@ public protocol TextTarget: AnyObject {
     var documentContextBeforeInput: String? { get }
     var documentContextAfterInput: String? { get }
     var selectedText: String? { get }
+
+    /// Whether this is a password field, as the host answered.
+    ///
+    /// `Bool?` rather than `Bool`, and the optionality is the whole point:
+    /// `isSecureTextEntry` is declared inside an `@optional` block of
+    /// `UITextInputTraits`, so a host that does not implement it answers nil and
+    /// `SecureField` reads nil as "refuse". Anything conforming to this that
+    /// positively knows it is not a secure field answers `false`; nothing may
+    /// answer `false` to mean "I did not check".
+    var isSecureTextEntry: Bool? { get }
+
+    /// The second, independent refusal. `UITextContentType??` because both levels
+    /// are real: the outer nil is a host that did not implement the property, the
+    /// inner nil is one that implemented it and set nothing.
+    var textContentType: UITextContentType?? { get }
+
     func insertText(_ text: String)
     func deleteBackward()
 }
@@ -31,6 +47,13 @@ public final class ProxyTextTarget: TextTarget {
     public var documentContextBeforeInput: String? { proxy.documentContextBeforeInput }
     public var documentContextAfterInput: String? { proxy.documentContextAfterInput }
     public var selectedText: String? { proxy.selectedText }
+
+    /// Forwarded exactly as the SDK declares them, optionals and all. Widening
+    /// either of these to a non-optional here would put the "unknown permits"
+    /// hole back in a place `SecureField`'s tests cannot see.
+    public var isSecureTextEntry: Bool? { proxy.isSecureTextEntry }
+    public var textContentType: UITextContentType?? { proxy.textContentType }
+
     public func insertText(_ text: String) { proxy.insertText(text) }
     public func deleteBackward() { proxy.deleteBackward() }
 }
@@ -48,6 +71,13 @@ public final class MockTextTarget: TextTarget, ObservableObject {
     public var documentContextBeforeInput: String? { text }
     public var documentContextAfterInput: String? { "" }
     public var selectedText: String? { nil }
+
+    /// A positive `false`, not a shrug. This is a `String` in this process with
+    /// no secure-entry behaviour anywhere near it, so it answers the question
+    /// rather than declining to — which is what keeps the in-app playground and
+    /// onboarding working under a guard that refuses on silence.
+    public var isSecureTextEntry: Bool? { false }
+    public var textContentType: UITextContentType?? { .some(.none) }
 
     public func insertText(_ newText: String) { text.append(newText) }
     public func deleteBackward() { if !text.isEmpty { text.removeLast() } }
@@ -98,6 +128,12 @@ public final class KeyboardController: ObservableObject {
     /// claim without changing the state it is showing.
     @Published public var screenContextSource: ScreenContextSession.Source = .none
 
+    /// The last Reply tap asked the capture process for a read and got nothing
+    /// back. Mirrored so the strip and the AI menu can stop offering a read the
+    /// build has just demonstrated it cannot do. See
+    /// `ScreenContextSession.lastReadWentUnanswered`.
+    @Published public var screenReadWentUnanswered = false
+
     @Published public var isDictating = false
     @Published public var dictationTranscript = ""
     @Published public var dictationIsRightToLeft = false
@@ -146,6 +182,7 @@ public final class KeyboardController: ObservableObject {
         let session = ScreenContextSession.shared
         screenContext = session.state
         screenContextSource = session.source
+        screenReadWentUnanswered = session.lastReadWentUnanswered
         session.$state
             .receive(on: RunLoop.main)
             .sink { [weak self] state in
@@ -156,6 +193,10 @@ public final class KeyboardController: ObservableObject {
         session.$source
             .receive(on: RunLoop.main)
             .sink { [weak self] source in self?.screenContextSource = source }
+            .store(in: &cancellables)
+        session.$lastReadWentUnanswered
+            .receive(on: RunLoop.main)
+            .sink { [weak self] unanswered in self?.screenReadWentUnanswered = unanswered }
             .store(in: &cancellables)
 
         refreshSuggestions()
@@ -242,6 +283,14 @@ public final class KeyboardController: ObservableObject {
 
     public var hasTextToWorkWith: Bool {
         !aiTargetText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// The focused field's content type, flattened past the optional that having
+    /// no target at all adds. No target is a question nobody answered, which is
+    /// the outer nil and which `SecureField` refuses like any other silence.
+    private var fieldContentType: UITextContentType?? {
+        guard let target else { return UITextContentType??.none }
+        return target.textContentType
     }
 
     // MARK: Typing
@@ -464,10 +513,36 @@ public final class KeyboardController: ObservableObject {
             return
         }
 
+        let session = ScreenContextSession.shared
+
+        // §3.3.1's guard, asked here because this is the only process that can
+        // see the focused field and this is the only moment at which the field
+        // is the one the user tapped in. It fails closed: a host that does not
+        // answer is refused, so a Reply in a password field never becomes a
+        // screenshot of a password field, and a host that answers nothing at all
+        // disables the feature *visibly* — as a refusal the user reads and a
+        // counter the next device run can be checked against.
+        //
+        // It refuses the whole action rather than only the read, which is a
+        // little wider than §3.3.1 asks. Deliberate: the branch it would
+        // otherwise leave open is an already-offerable reading, and writing a
+        // generated sentence into a password field is not an improvement on
+        // photographing one.
+        guard session.permitsRead(secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
+        else {
+            replies = []
+            replyContext = nil
+            isWorking = false
+            aiError = .screenNotRead(
+                "Screen context does not read password fields, and this field either is one or would not say."
+            )
+            withAnimation(Theme.Motion.panel) { overlay = .aiResult(.replies) }
+            return
+        }
+
         // A reply replaces nothing; it is inserted where the cursor already is.
         aiSourceText = ""
         replyContext = nil
-        let session = ScreenContextSession.shared
         beginWork(showing: .aiResult(.replies)) { [engine, weak self] in
             let context = try await session.contextForReply()
             await MainActor.run { self?.replyContext = context }

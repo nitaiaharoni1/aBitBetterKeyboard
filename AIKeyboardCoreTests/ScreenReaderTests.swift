@@ -3,6 +3,7 @@ import Vision
 import XCTest
 
 @testable import AIKeyboardCore
+@testable import AIKeyboardShared
 
 /// Pins the constraint the whole screen-context design is built around.
 ///

@@ -11,12 +11,23 @@ set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 core="$here/../../../Packages/AIKeyboardCore/Sources/AIKeyboardCore"
+# The transport, the errors and the two enums the prompts are written against
+# live in AIKeyboardShared, because the broadcast upload extension sends through
+# the same transport and must never link AIKeyboardCore.
+shared="$here/../../../Packages/AIKeyboardCore/Sources/AIKeyboardShared"
 build="$(mktemp -d)"
 trap 'rm -rf "$build"' EXIT
 
 for source in Models.swift LanguageDetector.swift TextIntelligence.swift AIPrompts.swift \
     OutputGuard.swift EditScope.swift FoundationModelsEngine.swift CloudIntelligence.swift; do
     cp "$core/$source" "$build/"
+done
+# Renamed on the way in: both targets have a `LanguageDetector.swift`, one half
+# each, and they land in the same directory here.
+cp "$shared/LanguageDetector.swift" "$build/SharedLanguageDetector.swift"
+for source in KeyboardLanguage.swift AIOutput.swift CloudTransport.swift SharedContainer.swift \
+    ScreenContextEndReason.swift; do
+    cp "$shared/$source" "$build/"
 done
 cp "$here/VertexTransport.swift" "$build/"
 cp "$here/real.swift" "$build/main.swift"

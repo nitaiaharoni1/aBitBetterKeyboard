@@ -332,6 +332,154 @@ final class CaptureChannelTests: XCTestCase {
         XCTAssertEqual(record.keyboardLanguage, .hebrew)
     }
 
+    // MARK: - Sweeping the container
+
+    /// The container accumulates debris. Alongside the live `channel/` there were
+    /// `channel-com.nitai.aikeyboard/` and `channel-com.nitai.aikeyboard.keyboard/`,
+    /// left by an experiment that rooted the channel per process; shipping code
+    /// has only ever opened `channel/`.
+    ///
+    /// Unlinking those is safe for the same reason unlinking `channel/status.bin`
+    /// would not be: nothing has mapped them, so no reader is left holding an
+    /// inode nobody will write to again. That asymmetry is why `clear()` still
+    /// zeroes the live pages in place instead.
+    func testSweepRemovesOrphanedChannelDirectoriesAndLeavesTheLiveOne() throws {
+        let manager = FileManager.default
+        let live = directory.appendingPathComponent("channel", isDirectory: true)
+        for name in ["channel", "channel-com.nitai.aikeyboard", "channel-com.nitai.aikeyboard.keyboard"] {
+            try manager.createDirectory(
+                at: directory.appendingPathComponent(name, isDirectory: true),
+                withIntermediateDirectories: true)
+        }
+        let writer = try XCTUnwrap(CaptureChannelWriter(directory: live))
+        writer.begin()
+
+        let removed = CaptureChannel.sweep(container: directory)
+
+        XCTAssertEqual(
+            Set(removed), ["channel-com.nitai.aikeyboard", "channel-com.nitai.aikeyboard.keyboard"])
+        XCTAssertTrue(manager.fileExists(atPath: live.appendingPathComponent("status.bin").path))
+        XCTAssertNotNil(writer.status(), "the live page is still the one both processes have mapped")
+    }
+
+    /// A file that merely starts with the same letters is not a channel
+    /// directory, and the sweep does not get to guess.
+    func testSweepLeavesFilesAndUnrelatedDirectoriesAlone() throws {
+        let manager = FileManager.default
+        try manager.createDirectory(
+            at: directory.appendingPathComponent("Library", isDirectory: true),
+            withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: directory.appendingPathComponent("channel-notes.txt"))
+
+        XCTAssertEqual(CaptureChannel.sweep(container: directory), [])
+        XCTAssertTrue(manager.fileExists(atPath: directory.appendingPathComponent("Library").path))
+        XCTAssertTrue(
+            manager.fileExists(atPath: directory.appendingPathComponent("channel-notes.txt").path))
+    }
+
+    /// `reading.json` carries a sender and the text of somebody's message, in a
+    /// container that is backed up with the app. The producer deletes it in
+    /// `begin()` and `end()`, and a jetsam kill fires neither — so without this it
+    /// outlives the session it was read in by however long the phone runs.
+    ///
+    /// `CaptureFreshness` is what stops it being *shown*; this is a separate
+    /// obligation from that one.
+    func testSweepRemovesAReadingWhoseProducerIsGone() throws {
+        let live = try liveChannelDirectory()
+        let writer = try XCTUnwrap(CaptureChannelWriter(directory: live))
+        let session = writer.begin(now: CaptureClock.now() - CaptureClock.nanoseconds(3_600))
+        try writer.publish(record(session: session))
+
+        let removed = CaptureChannel.sweep(container: directory)
+
+        XCTAssertEqual(removed, ["channel/reading.json"])
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: live.appendingPathComponent("reading.json").path))
+    }
+
+    func testSweepKeepsAReadingWhileTheProducerIsStillBeating() throws {
+        let live = try liveChannelDirectory()
+        let writer = try XCTUnwrap(CaptureChannelWriter(directory: live))
+        let session = writer.begin()
+        writer.heartbeat()
+        try writer.publish(record(session: session))
+
+        XCTAssertEqual(CaptureChannel.sweep(container: directory), [])
+        XCTAssertNotNil(
+            CaptureChannelReader(directory: live).reading(),
+            "a live session's reading is the one thing in here that is still true")
+    }
+
+    /// A recorded ending is an ending even while the heartbeat is inside its
+    /// window: the producer said it stopped.
+    func testSweepRemovesAReadingAfterARecordedEnding() throws {
+        let live = try liveChannelDirectory()
+        let writer = try XCTUnwrap(CaptureChannelWriter(directory: live))
+        let session = writer.begin()
+        try writer.publish(record(session: session))
+        // `end` deletes it too; write it back to test the sweep rather than that.
+        writer.end(.deviceLocked)
+        try writer.publish(record(session: session))
+
+        XCTAssertEqual(CaptureChannel.sweep(container: directory), ["channel/reading.json"])
+    }
+
+    /// `channel/` under the scratch container, created — the writer opens
+    /// `status.bin` with `O_CREAT` but will not make the directory holding it.
+    private func liveChannelDirectory() throws -> URL {
+        let live = directory.appendingPathComponent("channel", isDirectory: true)
+        try FileManager.default.createDirectory(at: live, withIntermediateDirectories: true)
+        return live
+    }
+
+    private func record(session: UUID) -> ScreenReadingRecord {
+        let now = CaptureClock.now()
+        return ScreenReadingRecord(
+            sessionID: session,
+            requestSequence: 1,
+            frameIdentity: FrameIdentity(w0: 1, w1: 2, w2: 3, w3: 4),
+            capturedAt: now,
+            readAt: now,
+            provenance: "cloud",
+            sender: "Maya",
+            message: "Are we still on for 6?",
+            language: KeyboardLanguage.english.rawValue)
+    }
+
+    // MARK: - Settings nobody reads any more
+
+    /// The same class of debris one layer up. A deleted property is not a deleted
+    /// setting: `screenContextCloudReplies` backed a toggle that promised screen
+    /// reading could stay on the device, no code ever read it, and the value it
+    /// wrote is still in the App Group plist of every install that ran that build.
+    func testRetiredSettingsKeysAreRemoved() throws {
+        let suite = "retired-keys-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: "screenContextCloudReplies")
+        defaults.set(true, forKey: "screenContextAllowed")
+
+        SharedStore.removeRetiredKeys(from: defaults)
+
+        XCTAssertNil(defaults.object(forKey: "screenContextCloudReplies"))
+        XCTAssertNotNil(
+            defaults.object(forKey: "screenContextAllowed"),
+            "a key the store still reads is not debris")
+    }
+
+    /// Every retired key has to be one no code reads. A key in both lists is a
+    /// setting that would be wiped on the next launch.
+    func testNoRetiredKeyIsStillInUse() {
+        let live = Set(
+            [
+                "hasCompletedOnboarding", "enabledLanguages", "autocorrect", "autocapitalise",
+                "predictions", "haptics", "keySounds", "onDeviceAI", "defaultTone",
+                "personalDictionary", "isSubscribed", "screenContextAllowed", "cloudBackendURL"
+            ])
+        XCTAssertTrue(Set(SharedStore.retiredKeys).isDisjoint(with: live))
+    }
+
     // MARK: - End reasons
 
     /// The five ReplayKit codes, from `RPError.h`. A code nobody recognised is

@@ -31,17 +31,37 @@ public final class ScreenContextChannel: ObservableObject {
     /// tap is somebody else's answer.
     @Published public private(set) var requestSequence: UInt64 = 0
 
-    /// Who is watching, which decides one thing: whether this process may write
-    /// `intent.keyboardVisible`.
+    /// Who is watching. It decides exactly one thing, and the doc comment used to
+    /// claim it decided more.
+    ///
+    /// **What it gates: `intent.keyboardVisible`, and nothing else.** The flag
+    /// describes a keyboard being on screen, so only the keyboard may write it.
+    ///
+    /// **What it deliberately does not gate: `intent.readNow`.** The previous
+    /// wording said an observer "writes nothing", and the app falsified it: the
+    /// app hosts the whole `KeyboardView` — strip, Reply button and all — in
+    /// `KeyboardPreview`, which onboarding and the Playground tab both render, so
+    /// a Reply tap in the app raises the read sequence from a session started
+    /// `as: .observer`. Measured: `intent.readNow` 0 -> 1. The contract is what
+    /// changed rather than the code, because a read request is not the lie this
+    /// role exists to prevent. `keyboardVisible` is a claim about *this process*
+    /// that only the keyboard can make truthfully; `readNow` is the user's own
+    /// tap on Reply, which is the whole consent model for a read (§5.1), and it
+    /// is the same tap on the same button whichever process is drawing it. See
+    /// `requestRead()` for what refusing it would have cost.
     public enum Role: Sendable {
         /// The keyboard extension. It is the thing the flag describes, so it is
         /// the only role allowed to set it.
         case keyboard
-        /// The containing app's Screen Context screen. It reads the same page to
-        /// show the user what the capture session is doing and writes nothing:
-        /// an app claiming the keyboard is visible would make the producer
-        /// believe a keyboard that is not there.
+        /// The containing app's Screen Context screen, Home, onboarding and the
+        /// playground. It reads the same page to show the user what the capture
+        /// session is doing, and it never claims the keyboard is visible: an app
+        /// saying so would make the producer believe a keyboard that is not
+        /// there.
         case observer
+
+        /// The one write this role gates.
+        var claimsKeyboardVisible: Bool { self == .keyboard }
     }
 
     private var reader: CaptureChannelReader?
@@ -71,7 +91,7 @@ public final class ScreenContextChannel: ObservableObject {
         guard timer == nil else { return }
         self.role = role
         if reader == nil { reader = CaptureChannelReader() }
-        if role == .keyboard { reader?.setKeyboardVisible(true) }
+        if role.claimsKeyboardVisible { reader?.setKeyboardVisible(true) }
         poll()
 
         let timer = Timer(timeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
@@ -84,17 +104,34 @@ public final class ScreenContextChannel: ObservableObject {
     public func stopWatching() {
         timer?.invalidate()
         timer = nil
-        if role == .keyboard { reader?.setKeyboardVisible(false) }
+        if role.claimsKeyboardVisible { reader?.setKeyboardVisible(false) }
         lastLogged = ""
     }
 
     /// Raises `intent.readNow`. The record that answers this tap carries the
     /// number this returns; anything else is the answer to a previous one.
+    ///
+    /// **Not gated by `role`, on purpose.** The app hosts the same keyboard in
+    /// onboarding and the playground, so this is reached from an `.observer`
+    /// session, and the two ways of "fixing" that are worse than the truth.
+    /// Refusing the write would make Reply do nothing at all in the playground —
+    /// the same class of silent no-op as the sample button — and it would do it
+    /// while telling the user the wrong reason, because a zero here surfaces as
+    /// "the keyboard cannot reach screen context, it needs Full Access". What the
+    /// tap actually causes is a read of whatever is on screen, which in the app's
+    /// case is the app; that is exactly what the strip above the button offers.
     @discardableResult
     public func requestRead() -> UInt64 {
         guard let reader else { return 0 }
         requestSequence = reader.requestRead()
         return requestSequence
+    }
+
+    /// Records one secure-field decision in the page this process owns. See
+    /// `SecureField` for why the count is split in two, and why silence is
+    /// counted whether or not it refused.
+    public func countSecureDecision(refused: Bool, unanswered: Bool) {
+        reader?.countSecureDecision(refused: refused, unanswered: unanswered)
     }
 
     // MARK: The poll
@@ -171,8 +208,14 @@ public final class ScreenContextChannel: ObservableObject {
 // MARK: - Record to keyboard types
 
 extension ScreenReadingRecord {
-    /// The record carries `KeyboardLanguage.rawValue` rather than the enum,
-    /// because the producing process must not link the target the enum lives in.
+    /// The record carries `KeyboardLanguage.rawValue` rather than the enum.
+    ///
+    /// Not a linkage constraint any more — `KeyboardLanguage` moved into
+    /// `AIKeyboardShared` and the capture process links it. It stays a string for
+    /// decode robustness: the record is a file format written by one process and
+    /// read by another that may be a different build, and an unknown case must
+    /// degrade to a default rather than fail the whole decode and lose a reading
+    /// the user is waiting on.
     public var keyboardLanguage: KeyboardLanguage {
         KeyboardLanguage(rawValue: language) ?? .english
     }

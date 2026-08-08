@@ -584,13 +584,23 @@ Three rules that follow, and they are the design, not an implementation detail:
    so both fall through to whatever `isSecureTextEntry` said, and a value in the sensitive
    set refuses on its own. The five constants are verified in `UITextInputTraits.h:305-309`
    and `:324`.
-3. **A refusal for this reason is counted and named**, as `CaptureStatus.refusedSecure` and
+3. **A refusal for this reason is counted and named**, as `refusedSecure` and
    `refusedSecureUnknown` separately. This is what turns R14 from folklore into a number: if
    the field is genuinely never populated through the proxy, the second counter will be
    equal to the tap count on the first device run and the guard as written will have
    disabled the feature. That is a thing to discover from a counter in Phase 7, not from a
    silent hole in shipping code — and the resolution is then to find a different signal, not
    to flip the default.
+
+   **Corrected when it was built: the two counters are in `CaptureIntent`, not
+   `CaptureStatus`.** This section put them on the status page, and that page cannot hold
+   them. The guard runs in the keyboard, because the keyboard is the only process that can
+   see the focused field's traits at all; `status.bin` has exactly one writing *process* and
+   the keyboard is not it. `SharedPage`'s lock serialises threads, not processes, so a second
+   process writing that page would tear it with nothing to catch the tear. `intent.bin` is
+   the page the keyboard owns and the producer already reads, so the counters go there.
+   The tap arithmetic still works and is the thing to read on a device: on a first run,
+   where no reading is ever offerable, taps are `readNow + refusedSecure + refusedSecureUnknown`.
 
 This guard is not a substitute for §5.1. It narrows one case; §5.1 is why there is no
 speculative upload to narrow in the first place.
@@ -808,11 +818,23 @@ rather than absent.
 
 - `channel/status.bin`, 256 bytes: session UUID, heartbeat, last frame time, current frame
   identity (32-byte SHA-256) and the time it was sampled, paused flag, frames seen, reads
-  fired, reads refused by reason (including the two secure-field counters of §3.3.1), last
-  end reason, degraded flag.
-- `channel/intent.bin`, 64 bytes: keyboard-visible flag, read request sequence.
+  fired, reads the *producer* refused by reason, last end reason, degraded flag.
+- `channel/intent.bin`, 64 bytes: keyboard-visible flag and its timestamp, read request
+  sequence and its timestamp, and the two secure-field counters of §3.3.1 — which are here
+  rather than on the status page because the keyboard is the process that refuses and the
+  process that may write this page.
 - `channel/reading.json`: `ScreenReadingRecord`. Sender, message, language, identity,
-  timestamps. Deleted on `broadcastFinished()` and on session start.
+  timestamps. Deleted on `broadcastFinished()` and on session start — and, because a jetsam
+  kill fires neither, by `CaptureChannel.sweep()` from the containing app whenever the
+  producer that wrote it is no longer beating. Nothing in the container is allowed to outlive
+  the session it describes just because the process that owned it was killed.
+
+And what is **not** in the container, swept on every app launch by the same call: channel
+directories no shipping code opens. `channel-com.nitai.aikeyboard/` and
+`channel-com.nitai.aikeyboard.keyboard/` were left there by an experiment that rooted the
+channel per process. Unlinking those is safe precisely where unlinking `channel/status.bin`
+would not be — nothing has them mapped — which is why `clear()` still zeroes the live pages
+in place.
 
 **The frame identity is a SHA-256 of the 2,048-byte reduction, and that is a privacy
 choice as well as a matching one.** The previous version stored a 64-bit perceptual hash

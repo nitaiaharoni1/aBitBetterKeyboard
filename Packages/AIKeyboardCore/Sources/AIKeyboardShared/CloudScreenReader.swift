@@ -17,6 +17,11 @@ import UniformTypeIdentifiers
 /// exact and 26/30 within 90% of exact. Zero of the 30 returned a chrome string
 /// from the bar's `traps` list, and zero returned text the bar records as not
 /// being on screen. Median 5.3s, p90 6.4s.
+///
+/// **In `AIKeyboardShared` because the capture process is now a caller.** The
+/// broadcast upload extension performs the read, and it must never link
+/// `AIKeyboardCore`. One copy of the prompt and the parsing serves both it and
+/// the in-app playground; two copies would drift from the numbers above.
 public struct CloudScreenReader: ScreenReader {
     private let transport: any CloudTransport
     private let networkAllowed: @Sendable () -> Bool
@@ -30,10 +35,26 @@ public struct CloudScreenReader: ScreenReader {
     }
 
     public func read(_ frame: CGImage) async throws -> AIOutput<ScreenReading?> {
+        // Asked before the encode, not after: a keyboard without Full Access has
+        // no network at all, and there is no point spending a JPEG on finding
+        // that out.
         guard networkAllowed() else { throw ScreenReadError.needsFullAccess }
         guard let jpeg = Self.encode(frame) else {
             throw ScreenReadError.failed("The frame could not be encoded.")
         }
+        return try await read(jpeg: jpeg)
+    }
+
+    /// The same read, given bytes that are already encoded.
+    ///
+    /// The capture process encodes on ReplayKit's delivery callback and reads on
+    /// a serial queue, so the two halves happen on different threads and only
+    /// the ~66 KB of JPEG crosses between them
+    /// (`.claude/docs/screen-capture-design.md` §3.1). Splitting the encode out
+    /// is what lets the pixels stop existing before the five-second network call
+    /// starts: nothing here can reach a frame buffer.
+    public func read(jpeg: Data) async throws -> AIOutput<ScreenReading?> {
+        guard networkAllowed() else { throw ScreenReadError.needsFullAccess }
 
         let fields = try await transport.send(
             CloudRequest(
@@ -77,7 +98,11 @@ public struct CloudScreenReader: ScreenReader {
     /// JPEG at 70%. A screenshot is mostly flat colour, the model reads text off
     /// it rather than admiring it, and the frame is about to cross a mobile
     /// connection while the user waits.
-    static func encode(_ frame: CGImage, quality: Double = 0.7) -> Data? {
+    ///
+    /// Public because the capture process encodes on ReplayKit's delivery
+    /// callback rather than here, and it has to use the same quality this was
+    /// scored at.
+    public static func encode(_ frame: CGImage, quality: Double = 0.7) -> Data? {
         let buffer = NSMutableData()
         guard
             let destination = CGImageDestinationCreateWithData(

@@ -1,6 +1,7 @@
 import XCTest
 
 @testable import AIKeyboardCore
+@testable import AIKeyboardShared
 
 /// Records what it was asked for and answers with whatever the test supplies.
 /// The cloud path has never made a real request — there is no API key on the

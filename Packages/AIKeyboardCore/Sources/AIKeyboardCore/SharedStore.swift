@@ -9,7 +9,7 @@ import os
 /// app is visible to the keyboard extension.
 public final class SharedStore: ObservableObject {
 
-    public static let appGroupIdentifier = "group.com.nitai.aikeyboard"
+    public static let appGroupIdentifier = SharedContainer.appGroupIdentifier
 
     public static let shared = SharedStore()
 
@@ -48,10 +48,7 @@ public final class SharedStore: ObservableObject {
         // directory is the question that actually has a false answer: it is nil
         // without the entitlement, and nil in the keyboard until the user grants
         // Full Access.
-        let container = FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier)
-
-        if container != nil, let suite = UserDefaults(suiteName: Self.appGroupIdentifier) {
+        if SharedContainer.url != nil, let suite = UserDefaults(suiteName: Self.appGroupIdentifier) {
             defaults = suite
             storage = .appGroup
         } else {
@@ -79,6 +76,33 @@ public final class SharedStore: ObservableObject {
         static let personalDictionary = "personalDictionary"
         static let isSubscribed = "isSubscribed"
         static let screenContextAllowed = "screenContextAllowed"
+    }
+
+    /// Keys this store used to write and no longer reads.
+    ///
+    /// **A deleted property is not a deleted setting.** `screenContextCloudReplies`
+    /// backed a "Use the cloud for replies" toggle that promised switching it off
+    /// would keep screen reading on the device. No code ever read it, and the
+    /// property is gone rather than fixed, because reading is cloud-only in the
+    /// capture flow and the toggle promised something no code could keep. The
+    /// *value* it wrote is still in the App Group plist of every install that ran
+    /// that build, which is the same class of debris as the orphaned channel
+    /// directories `CaptureChannel.sweep` removes: a stored answer to a question
+    /// nobody asks any more, sitting in shared state where the next person to
+    /// grep for it will assume it means something.
+    ///
+    /// Removed on `load()` rather than on `resetToDefaults()`, because the whole
+    /// point is that it happens on an ordinary launch of an existing install.
+    static let retiredKeys = ["screenContextCloudReplies"]
+
+    /// Takes the retired keys out of a store. Static and explicit about its
+    /// argument so a test can drive it against a scratch suite; the singleton's
+    /// own defaults are the App Group plist and are nobody's fixture.
+    static func removeRetiredKeys(from defaults: UserDefaults) {
+        for key in retiredKeys where defaults.object(forKey: key) != nil {
+            defaults.removeObject(forKey: key)
+            Self.log.notice("retired key removed \(key, privacy: .public)")
+        }
     }
 
     // MARK: Onboarding
@@ -178,6 +202,8 @@ public final class SharedStore: ObservableObject {
 
     /// Loads persisted values without firing the `didSet` writes above.
     public func load() {
+        Self.removeRetiredKeys(from: defaults)
+
         if defaults.object(forKey: Key.hasCompletedOnboarding) != nil {
             hasCompletedOnboarding = defaults.bool(forKey: Key.hasCompletedOnboarding)
         }

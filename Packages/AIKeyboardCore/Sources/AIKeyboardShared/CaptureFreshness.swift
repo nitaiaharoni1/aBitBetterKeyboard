@@ -158,6 +158,15 @@ public enum CaptureFreshness {
         let producer = evaluate(status: status, now: now)
         guard producer == .offerable, let status else { return producer }
 
+        // 0. A record that carries no reading is never offerable, however fresh
+        // it is. It is an answer to the tap — "nothing to reply to here", or why
+        // the read failed — and `ScreenReadingRecord.detail` is what the strip
+        // shows for it. Reported as `.superseded` because that is the verdict
+        // that already means *live session, nothing to offer*; the alternative
+        // was a sixth case, and every consumer of this enumeration switches over
+        // it exhaustively.
+        guard record.outcome == .read else { return .superseded }
+
         // 5b. Same session. A restart makes every earlier reading unofferable
         // however recent it looks, because the identity space restarted with it.
         guard record.sessionID == status.sessionID else { return .superseded }

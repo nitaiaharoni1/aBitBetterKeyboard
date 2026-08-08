@@ -4,6 +4,7 @@ import ImageIO
 import XCTest
 
 @testable import AIKeyboardCore
+@testable import AIKeyboardShared
 
 // MARK: - The bar, as data
 

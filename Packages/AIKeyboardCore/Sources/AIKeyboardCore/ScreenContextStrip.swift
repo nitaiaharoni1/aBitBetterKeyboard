@@ -32,8 +32,15 @@ public struct ScreenContextStrip: View {
                 status("Starting screen context…")
             case .watching:
                 // The offer, not a claim. Nothing has been read, because a read
-                // only ever happens in answer to this button.
-                status("Reply can read this screen")
+                // only ever happens in answer to this button — and the offer is
+                // withdrawn once a tap has proved it cannot be met. Reading
+                // inside the capture process is not built, so on a device today
+                // that is what every tap proves; the button stays, because the
+                // user is the one who decides whether to try again.
+                status(
+                    controller.screenReadWentUnanswered
+                        ? "Screen context isn't reading this screen"
+                        : "Reply can read this screen")
                 Spacer(minLength: Theme.Space.xxs)
                 replyButton
             case .ready(let context):

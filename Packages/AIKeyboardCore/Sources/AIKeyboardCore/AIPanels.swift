@@ -158,11 +158,17 @@ public struct AIMenuPanel: View {
 
     /// Reply's subtitle names the sender rather than the app, because the app is
     /// the one thing this design cannot know: see `ScreenContextStrip`.
+    ///
+    /// The last line used to promise a read unconditionally. It is the same
+    /// promise the strip makes and it fails the same way: reading inside the
+    /// capture process is not built, so a tap raises the request and nothing
+    /// answers. Once that has happened, this says so.
     private func subtitle(for action: AIAction) -> String {
         guard action.needsScreenContext else { return action.subtitle }
         switch controller.screenContext {
         case _ where !controller.canReply: return "Needs screen context"
         case .ready(let context): return "To \(context.sender)"
+        case _ where controller.screenReadWentUnanswered: return "The last read got no answer"
         default: return "Reads the screen when you tap"
         }
     }

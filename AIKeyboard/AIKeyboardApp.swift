@@ -21,6 +21,13 @@ struct AIKeyboardApp: App {
             SharedStore.shared.load()
         }
 
+        // The app is the process that tidies the shared container: it has no
+        // memory cap, no keyboard's latency budget, and it is the only one of the
+        // three that is not holding a page open when it runs. Both halves are
+        // debris a previous build or a killed producer left behind — orphaned
+        // channel directories, and the text of a message whose session is over.
+        CaptureChannel.sweep()
+
         // Tests that are not about onboarding start past it. Doing this here
         // rather than by tapping through six screens keeps those tests short and
         // stops an onboarding change from breaking every unrelated test.

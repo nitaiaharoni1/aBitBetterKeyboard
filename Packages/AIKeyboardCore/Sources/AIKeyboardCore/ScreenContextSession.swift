@@ -1,6 +1,7 @@
 import Combine
 import CoreGraphics
 import Foundation
+import UIKit
 
 /// What the keyboard and the app both look at to answer "what is screen context
 /// doing right now", and the one place a reading is turned into an offer.
@@ -54,6 +55,23 @@ public final class ScreenContextSession: ObservableObject {
     /// When the session started, for the running-time label.
     @Published public private(set) var startedAt: Date?
 
+    /// The last Reply tap raised `intent.readNow` and nothing ever answered it.
+    ///
+    /// **This is the consumer's own observation, not a guess about the other
+    /// process**, and it exists because the strip was making a promise the build
+    /// cannot keep. Reading the screen inside the capture process is not built:
+    /// `AIKeyboardBroadcast` fingerprints frames and publishes status, and it
+    /// never encodes a picture or calls a reader. So on a device today every
+    /// Reply tap raises the sequence, waits, and gets nothing — while the strip
+    /// said "Reply can read this screen" and the AI menu said "Reads the screen
+    /// when you tap", both of which describe a loop that does not run.
+    ///
+    /// Keying the copy off what actually happened, rather than off a hard-coded
+    /// "not built", keeps it true on both sides of that work landing: the first
+    /// answered read clears it, and a new broadcast clears it too, because the
+    /// last session failing says nothing about this one.
+    @Published public private(set) var lastReadWentUnanswered = false
+
     /// How long after the last heartbeat an ending is still worth showing.
     ///
     /// **A guess, and it is here for a case the freshness gate cannot see.** A
@@ -88,13 +106,25 @@ public final class ScreenContextSession: ObservableObject {
 
     public var isLive: Bool { state.isLive }
 
+    /// Whether the sample conversation can be played right now.
+    ///
+    /// False for exactly one reason, and it is a reason the user can act on: a
+    /// capture session is watching the screen, and a scripted message painted
+    /// over a live one would put a sentence nobody sent where a real one belongs.
+    /// The screen that offers the sample renders this as a sentence rather than
+    /// as a disabled button with no explanation.
+    public var canPlaySample: Bool { !(source == .capture && state.isLive) }
+
     // MARK: - The real session
 
     /// Starts consuming a capture channel and publishing what it says.
     ///
-    /// The keyboard calls this while it is on screen; the app's Screen Context
-    /// screen calls it as an `.observer`, which reads the same page and writes
-    /// nothing, because only the keyboard may claim the keyboard is visible.
+    /// The keyboard calls this while it is on screen; the app calls it as an
+    /// `.observer`, which reads the same page and never claims the keyboard is
+    /// visible. `.observer` does **not** mean "writes nothing": the app renders
+    /// the same `KeyboardView` in onboarding and the playground, so a Reply tap
+    /// there raises `intent.readNow` like any other. `ScreenContextChannel.Role`
+    /// says why that is the contract rather than a hole in it.
     public func startConsuming(
         _ channel: ScreenContextChannel = .shared, as role: ScreenContextChannel.Role = .keyboard
     ) {
@@ -135,6 +165,12 @@ public final class ScreenContextSession: ObservableObject {
     ) {
         if self.status != status { self.status = status }
 
+        // A new broadcast is a new chance. Whatever the previous session failed
+        // to answer says nothing about this one.
+        if let session = status?.sessionID, session != sessionSeenLive {
+            lastReadWentUnanswered = false
+        }
+
         let frames = Int(status?.framesSampled ?? 0)
 
         switch verdict {
@@ -167,11 +203,9 @@ public final class ScreenContextSession: ObservableObject {
 
     /// The channel has nothing to show: no producer has ever run, the container
     /// is out of reach, the user stopped the session themselves, or the ending on
-    /// the page is too old to be news. The scripted demo, if one is running,
-    /// keeps the screen — a page left behind by a dead session must not stop a
-    /// sample the user just started.
+    /// the page is too old to be news. `publish` is what keeps a running sample
+    /// on screen through this.
     private func publishAbsence() {
-        guard source != .scripted else { return }
         publish(.off, from: .none, frames: 0)
     }
 
@@ -185,6 +219,18 @@ public final class ScreenContextSession: ObservableObject {
     }
 
     private func publish(_ newState: ScreenContextState, from newSource: Source, frames: Int) {
+        // **A capture session takes the screen from a running sample only while
+        // it is actually watching.** The guard used to live in `publishAbsence`
+        // alone, which covered `.off` and missed the two states that are far more
+        // common on a phone that has ever run a broadcast: a `.paused` session,
+        // and an `.ended` one still inside `endingWorthShowing`. Either of those
+        // overwrote the sample within one 250 ms poll and cancelled its task, so
+        // "Play a sample conversation" looked like a button that did nothing.
+        //
+        // Live still wins, and that half is not negotiable: a real session is the
+        // one with a red dot over it and the fiction must never sit on top of it.
+        if source == .scripted, newSource != .scripted, !newState.isLive { return }
+
         // A real session takes the screen off the script rather than racing it.
         if newSource == .capture, task != nil {
             task?.cancel()
@@ -196,6 +242,30 @@ public final class ScreenContextSession: ObservableObject {
         if newSource == .none, startedAt != nil { startedAt = nil }
         guard state != newState else { return }
         state = newState
+    }
+
+    // MARK: - The secure-field guard
+
+    /// Whether Reply may ask for a read of a field with these traits, counting
+    /// the refusal into the channel when it may not.
+    ///
+    /// The decision is `SecureField.permitsRead`, which is a pure truth table and
+    /// is tested as one. What is here is the half that cannot be pure: the
+    /// decision has to leave a number behind, or the open question this guard
+    /// rests on — whether any host populates `isSecureTextEntry` through a
+    /// `UITextDocumentProxy` at all — stays folklore.
+    ///
+    /// Both counters move on *every* decision, not only on refusals. Since
+    /// silence now permits, a silent host that only counted when it refused would
+    /// be indistinguishable from one answering "not secure", and the question
+    /// would be unanswerable from the field. `refusedSecureUnknown` standing at
+    /// the tap count after a device run is that question answered no.
+    @discardableResult
+    public func permitsRead(secure: Bool?, contentType: UITextContentType??) -> Bool {
+        let permitted = SecureField.permitsRead(secure: secure, contentType: contentType)
+        channel?.countSecureDecision(
+            refused: !permitted, unanswered: !SecureField.answered(secure: secure))
+        return permitted
     }
 
     // MARK: - Reply
@@ -225,6 +295,7 @@ public final class ScreenContextSession: ObservableObject {
         // poll, which may be 250 ms old and about the previous conversation.
         channel.poll()
         if channel.verdict == .offerable, let record = channel.reading {
+            lastReadWentUnanswered = false
             return record.screenContext
         }
 
@@ -249,9 +320,24 @@ public final class ScreenContextSession: ObservableObject {
             try await Task.sleep(for: .milliseconds(200))
             channel.poll()
 
+            // A read that answered and failed is an answer. Without this the
+            // capture process publishes "no backend configured" or "the network
+            // went away" and the user still waits out the full timeout, then gets
+            // told nothing answered — which is now the wrong reason as well as a
+            // slow one. The gate deliberately refuses to call a non-`.read`
+            // record offerable, so this has to be asked before the verdict.
+            if let record = channel.reading,
+                record.requestSequence >= sequence,
+                record.outcome != .read
+            {
+                lastReadWentUnanswered = false
+                throw AIEngineError.screenNotRead(record.failureExplanation)
+            }
+
             switch channel.verdict {
             case .offerable:
                 if let record = channel.reading, record.requestSequence >= sequence {
+                    lastReadWentUnanswered = false
                     return record.screenContext
                 }
             case .ended(let reason):
@@ -263,8 +349,14 @@ public final class ScreenContextSession: ObservableObject {
             }
         }
 
+        // The reason names what happened rather than a cause it did not check.
+        // The old wording — and the sentence `AIEngineError` glued onto it —
+        // blamed a stale reading, which is one of five things the gate can
+        // refuse and is not the one that happens here: the request was raised,
+        // the session stayed alive, and nothing came back.
+        lastReadWentUnanswered = true
         throw AIEngineError.screenNotRead(
-            "Screen context did not send back a reading of what is on screen.")
+            "Screen context is watching, but nothing answered the request to read the screen.")
     }
 
     // MARK: - Frames handed in directly
@@ -311,8 +403,15 @@ public final class ScreenContextSession: ObservableObject {
     /// **This is a demo and the app labels it as one.** Nothing here touches the
     /// capture channel and no screen is read. It yields to a real session the
     /// moment one appears.
+    ///
+    /// Refused while a capture session is watching, and `canPlaySample` is how
+    /// the app says so in words instead of leaving a button that does nothing.
+    /// The old guard was `!state.isLive`, which refused for a second reason it
+    /// never explained: a paused or recently-ended capture session left `state`
+    /// non-live but `source == .capture`, and the sample it did start was then
+    /// overwritten by the next poll.
     public func start() {
-        guard !state.isLive else { return }
+        guard canPlaySample else { return }
         Feedback.actionPress()
         startedAt = Date()
         framesRead = 0
