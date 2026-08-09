@@ -113,10 +113,13 @@ final class LanguageCatalogueTests: XCTestCase {
     }
 
     /// Every row has to fit an iPhone 17 Pro in portrait. The tolerance is one key
-    /// gap and it is not slack: the Hebrew bottom row overruns by 5.1pt because
-    /// `widths` gives delete a floor of 1.15 units on a row that has 1.0 spare,
-    /// which predates all of this. A layout that is genuinely too wide overruns by
-    /// whole keys.
+    /// gap; a layout that is genuinely too wide overruns by whole keys.
+    ///
+    /// It used to be slack for one row: Hebrew's bottom row overran by 5.1pt,
+    /// because nine letters plus delete leave `widths` less than the 1.15-unit
+    /// floor it gives a stretcher. Moving delete to the top row — which is where
+    /// Apple's own Hebrew keyboard has it — takes that to zero, and the delete key
+    /// comes out 54.3pt, the same width as English's.
     func testNoRowOverflowsTheKeyboard() {
         let width: CGFloat = 402
         let sideInset = Theme.Metrics.sideInset
@@ -189,15 +192,29 @@ final class LanguageCatalogueTests: XCTestCase {
         XCTAssertEqual(KeyboardLayout.columns(for: .english, plane: .letters), 10)
     }
 
-    /// Only the letters plane runs in the language's direction. A mirrored number
-    /// row prints 0 first, and no language writes digits backwards.
-    func testOnlyTheLettersPlaneMirrors() {
+    /// **Delete closes exactly one row, and which row is a measurement.** Sixty
+    /// three layouts put it at the end of the bottom row; Apple's Hebrew keyboard
+    /// puts it at the end of the *top* row, beside eight letters, and
+    /// `Bar/layouts/stock-rendered-rows.json` is the photograph of that.
+    ///
+    /// The wrong implementations this rejects are both real shapes: delete on
+    /// every row (a `map` that appends it unconditionally), and delete on no row
+    /// at all for Hebrew (a `deleteRow` the row builder never reads, which is what
+    /// happens when the field is added and the loop is not).
+    func testDeleteClosesOneRowAndItIsTheRowAppleUses() {
         for language in KeyboardLanguage.allCases {
+            let rows = KeyboardLayout.rows(for: language, plane: .letters)
+            let carrying = rows.filter { row in row.keys.contains { $0.cap == .backspace } }
             XCTAssertEqual(
-                KeyboardLayout.mirrorsRows(for: language, plane: .letters), language.isRightToLeft,
-                "\(language.displayName)")
-            XCTAssertFalse(KeyboardLayout.mirrorsRows(for: language, plane: .numbers))
-            XCTAssertFalse(KeyboardLayout.mirrorsRows(for: language, plane: .symbols))
+                carrying.count, 1,
+                "\(language.displayName) has delete on \(carrying.count) letter rows")
+            guard let row = carrying.first else { continue }
+            XCTAssertEqual(
+                row.id, language == .hebrew ? 0 : 2,
+                "\(language.displayName) puts delete on row \(row.id)")
+            XCTAssertEqual(
+                row.keys.last?.cap, .backspace,
+                "\(language.displayName) does not end that row with delete")
         }
     }
 

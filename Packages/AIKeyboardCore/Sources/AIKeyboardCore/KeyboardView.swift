@@ -48,17 +48,10 @@ public struct KeyboardView: View {
             )
             let available = geo.size.width - Theme.Metrics.sideInset * 2
             let characterRows = KeyboardLayout.rows(for: controller.language, plane: controller.plane)
-            // Only the letters plane runs in the language's own direction. Digits
-            // and symbols read left to right in Hebrew, Arabic and Persian, and so
-            // does the function row that carries the space bar and return.
-            let characterDirection: LayoutDirection =
-                KeyboardLayout.mirrorsRows(for: controller.language, plane: controller.plane)
-                ? .rightToLeft : .leftToRight
 
             VStack(spacing: Theme.Metrics.rowSpacing) {
                 ForEach(characterRows) { row in
                     rowView(row, availableWidth: available, unit: unit)
-                        .environment(\.layoutDirection, characterDirection)
                 }
                 rowView(
                     KeyboardLayout.bottomRow(
@@ -69,8 +62,17 @@ public struct KeyboardView: View {
                     availableWidth: available,
                     unit: unit
                 )
-                .environment(\.layoutDirection, .leftToRight)
             }
+            // **Every row is drawn in the order its keys are listed, in every
+            // language, and the letters plane is not an exception.** It was, and
+            // that shipped all six right-to-left keyboards mirrored: the rows come
+            // out of Apple's own layout data in physical key order, which is
+            // already the order Apple draws them on screen — ק at the left of the
+            // Hebrew top row, ض at the left of the Arabic one — and an RTL `HStack`
+            // draws its first element last, so it reversed rows that were right.
+            // `Bar/layouts/stock-rendered-rows.json` is the measurement and
+            // `RenderedRowOrderTests` is what holds this to it.
+            .environment(\.layoutDirection, .leftToRight)
             .padding(.horizontal, Theme.Metrics.sideInset)
             .padding(.top, Theme.Metrics.topInset)
             .padding(.bottom, Theme.Metrics.bottomInset)
@@ -95,8 +97,10 @@ public struct KeyboardView: View {
                     shift: controller.shift,
                     // Only the space bar carries the language name, and only it
                     // reports a touch instead of a press. Both because a slide
-                    // along it switches language — see `SpaceSwipe`.
+                    // along it switches language — see `SpaceSwipe`. The count is
+                    // what decides whether it wears the chevrons that say so.
                     indication: key.cap == .space ? controller.languageSwitchIndication : nil,
+                    enabledLanguageCount: controller.enabledLanguageCount,
                     onPress: { controller.press($0) },
                     onRepeat: key.cap == .backspace ? { controller.deleteBackward() } : nil,
                     // The key already inserted its own character on finger-down,

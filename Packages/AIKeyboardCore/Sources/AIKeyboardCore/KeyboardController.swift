@@ -553,6 +553,10 @@ public final class KeyboardController: ObservableObject {
         store.enabledLanguages.isEmpty ? [.english, .hebrew] : store.enabledLanguages
     }
 
+    /// How many of them there are, which is what decides whether the space bar
+    /// wears the chevrons that say it slides. See `SpaceSwipe.restingCaption`.
+    public var enabledLanguageCount: Int { enabledLanguages.count }
+
     /// The globe key. Still one step per tap, and still hands the keyboard over to
     /// iOS when the user has only enabled one of ours — the swipe is an addition
     /// to this, not a replacement, because `showsGlobeKey` is

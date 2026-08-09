@@ -85,6 +85,66 @@ final class SparkleReachabilityTests: XCTestCase {
     }
 }
 
+// MARK: - The one-tap rewrite button on an empty field
+
+/// The other button, in the state a keyboard spends most of its life in.
+///
+/// It shipped `.disabled(!canRun)` behind `Theme.Brand.softGradient` at 0.45
+/// opacity, with the icon itself drawn at full `Theme.Brand.solid` — only the
+/// background faded, so beside the fully-lit sparkle it read as live. The owner of
+/// the first device this went on tapped it on an empty field and nothing happened
+/// and nothing said why.
+///
+/// The decision is asserted rather than the pixels for the reason
+/// `SparkleReachabilityTests` gives: `.disabled()` cannot be read back off a
+/// SwiftUI view. What the assertions below reject is the shipped behaviour — the
+/// old wiring answers "do nothing" to exactly the input the first test names.
+final class ToneButtonTapTests: XCTestCase {
+
+    func testAnEmptyFieldStillAnswersTheTap() {
+        XCTAssertEqual(
+            SuggestionBar.toneTap(hasTextToWorkWith: false, isWorking: false), .openMenu,
+            "a tap on an empty field is swallowed, which is what shipped")
+    }
+
+    func testWithSomethingToRewriteItRewrites() {
+        XCTAssertEqual(
+            SuggestionBar.toneTap(hasTextToWorkWith: true, isWorking: false), .rewrite)
+    }
+
+    /// **The one state a tap may be ignored in is the one the button is a spinner
+    /// in.** `beginWork` cancels its predecessor, so a second tap would throw away
+    /// the answer the first is waiting on — and the user can see a call is running,
+    /// which is what makes ignoring it honest rather than silent.
+    func testATapIsOnlyEverIgnoredWhileTheButtonIsASpinner() {
+        for hasText in [false, true] {
+            XCTAssertNotEqual(
+                SuggestionBar.toneTap(hasTextToWorkWith: hasText, isWorking: false), .ignore,
+                "a tap goes unanswered with hasTextToWorkWith = \(hasText)")
+            XCTAssertEqual(
+                SuggestionBar.toneTap(hasTextToWorkWith: hasText, isWorking: true), .ignore)
+        }
+    }
+
+    /// The other half, and why the button cannot simply be wired to the action:
+    /// `runDefaultTone` on an empty field is a no-op and rightly so — there is
+    /// nothing to rewrite. That is the code the tap used to reach.
+    @MainActor
+    func testTheActionItselfDoesNothingOnAnEmptyFieldWhichIsWhyTheTapIsRouted() {
+        let controller = KeyboardController(target: MockTextTarget(text: ""))
+        XCTAssertFalse(controller.hasTextToWorkWith, "the state under test is an empty field")
+
+        controller.runDefaultTone()
+        XCTAssertEqual(controller.overlay, .none)
+        XCTAssertFalse(controller.isWorking)
+
+        // Where the tap goes instead, and that there is something behind it.
+        controller.show(.aiMenu)
+        XCTAssertEqual(controller.overlay, .aiMenu)
+        XCTAssertTrue(AIMenuPanel.hasRunnableAction(hasTextToWorkWith: false))
+    }
+}
+
 // MARK: - Telling the two buttons apart
 
 /// The one-tap tone button wears the tone's own SF Symbol and sits directly beside

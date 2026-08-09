@@ -101,6 +101,44 @@ public enum SpaceSwipe {
         return enabled[index]
     }
 
+    // MARK: What the space bar says before anyone touches it
+
+    /// The space bar's caption when no finger is on it.
+    ///
+    /// **The gesture had no affordance at all, and that is the defect this
+    /// answers.** `KeyboardController.announceLanguage` names the language for
+    /// 1.4s *after* a switch and `LanguageCallout` names it *during* a slide;
+    /// both of those are feedback for somebody who already knows the gesture
+    /// exists. A user who does not sees a key captioned "space" — "רווח" in
+    /// Hebrew — and no reason to think it does anything but insert a space. The
+    /// owner of the first device this shipped to had to be told.
+    ///
+    /// So at rest the key names the language it will type in, the way Gboard's
+    /// does, and `showsSlideAffordance` puts a chevron either side of it: the name
+    /// says which of the enabled languages is on, and the chevrons say there are
+    /// others that way. It costs no permanent room in the suggestion bar and it
+    /// answers a question — "which language am I in?" — that nothing at rest
+    /// answered.
+    ///
+    /// **With one language enabled there is nothing to slide to**, so the caption
+    /// goes back to the ordinary word and the chevrons go: an affordance for a
+    /// gesture that cannot move is worse than none. `SpaceSwipe.places` already
+    /// returns 0 for that case, so the two agree.
+    public static func restingCaption(
+        for language: KeyboardLanguage, languageCount: Int
+    ) -> String {
+        languageCount > 1 ? language.nativeName : language.spaceLabel
+    }
+
+    /// Whether the space bar shows the two chevrons that say it slides, and what
+    /// VoiceOver is told instead of seeing them.
+    public static func showsSlideAffordance(languageCount: Int) -> Bool { languageCount > 1 }
+
+    public static func slideHint(languageCount: Int) -> String {
+        showsSlideAffordance(languageCount: languageCount)
+            ? "Slide left or right to change language" : ""
+    }
+
     // MARK: One touch
 
     /// One touch on the space bar, from the finger landing to whatever ends it.

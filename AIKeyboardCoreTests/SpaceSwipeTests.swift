@@ -336,6 +336,56 @@ final class SpaceSwipeDistanceTests: XCTestCase {
     }
 }
 
+// MARK: - Saying the gesture is there
+
+/// **A gesture nobody can find is a gesture nobody has.** The swipe worked from
+/// the day it shipped and the owner of the first phone it went on had to be told
+/// it existed: the space bar was captioned "space" — "רווח" in Hebrew — and
+/// nothing else on the keyboard mentioned it. `announceLanguage` names the
+/// language for 1.4s *after* a switch and `LanguageCallout` names it *during* a
+/// slide, and both of those are feedback for somebody who already knows.
+final class SpaceBarAffordanceTests: XCTestCase {
+
+    /// The state the owner was in: two languages, finger nowhere near the key.
+    /// The old caption is what this rejects — `language.spaceLabel`, which is
+    /// "רווח", was what it said at two languages and at sixty-four alike.
+    func testAtTwoLanguagesTheSpaceBarNamesTheLanguageAndSaysItSlides() {
+        for count in [2, 8, 64] {
+            XCTAssertEqual(
+                SpaceSwipe.restingCaption(for: .hebrew, languageCount: count), "עברית",
+                "at \(count) languages the space bar still says nothing about which one")
+            XCTAssertEqual(SpaceSwipe.restingCaption(for: .english, languageCount: count), "English")
+            XCTAssertTrue(SpaceSwipe.showsSlideAffordance(languageCount: count))
+            XCTAssertFalse(SpaceSwipe.slideHint(languageCount: count).isEmpty)
+        }
+    }
+
+    /// With one language there is nowhere to slide, so the ordinary caption comes
+    /// back and the chevrons go. An affordance for a gesture that cannot move is
+    /// worse than none.
+    func testWithOneLanguageItIsAnOrdinarySpaceBar() {
+        XCTAssertEqual(SpaceSwipe.restingCaption(for: .hebrew, languageCount: 1), "רווח")
+        XCTAssertEqual(SpaceSwipe.restingCaption(for: .english, languageCount: 1), "space")
+        XCTAssertFalse(SpaceSwipe.showsSlideAffordance(languageCount: 1))
+        XCTAssertEqual(SpaceSwipe.slideHint(languageCount: 1), "")
+    }
+
+    /// **The chevrons and the gesture have to agree at every list length**, or the
+    /// keyboard is either promising a slide that does nothing or hiding one that
+    /// works. `places` is the code that actually moves the language, asked with a
+    /// travel far past `activation`, so this is the affordance checked against the
+    /// behaviour rather than against itself.
+    func testTheAffordanceAppearsExactlyWhenTheGestureCanMove() {
+        for count in 0...KeyboardLanguage.allCases.count {
+            let moves =
+                SpaceSwipe.places(translation: SpaceSwipe.activation + 300, languageCount: count) != 0
+            XCTAssertEqual(
+                SpaceSwipe.showsSlideAffordance(languageCount: count), moves,
+                "\(count) enabled languages: the space bar and the gesture disagree")
+        }
+    }
+}
+
 // MARK: - Through the keyboard
 
 /// `SharedStore.init` is private and the singleton is the App Group plist, so

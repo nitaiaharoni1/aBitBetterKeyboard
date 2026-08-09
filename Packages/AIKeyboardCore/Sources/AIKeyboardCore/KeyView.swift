@@ -12,6 +12,9 @@ public struct KeyView: View {
     /// What the space bar should say about the language instead of "space", and
     /// whether the finger choosing it is still down. Nil on every other key.
     private let indication: LanguageSwitchIndication?
+    /// How many languages the space bar can slide between. Read only by the space
+    /// bar, and passed to every key the way `language` and `shift` already are.
+    private let enabledLanguageCount: Int
     private let onPress: (KeyCap) -> Void
     private let onRepeat: (() -> Void)?
     private let onAlternate: ((String) -> Void)?
@@ -42,6 +45,7 @@ public struct KeyView: View {
         language: KeyboardLanguage,
         shift: ShiftState,
         indication: LanguageSwitchIndication? = nil,
+        enabledLanguageCount: Int = 1,
         onPress: @escaping (KeyCap) -> Void,
         onRepeat: (() -> Void)? = nil,
         onAlternate: ((String) -> Void)? = nil,
@@ -53,6 +57,7 @@ public struct KeyView: View {
         self.language = language
         self.shift = shift
         self.indication = indication
+        self.enabledLanguageCount = enabledLanguageCount
         self.onPress = onPress
         self.onRepeat = onRepeat
         self.onAlternate = onAlternate
@@ -92,11 +97,20 @@ public struct KeyView: View {
         // sliding along the space bar is told nothing at all about where they
         // are in the list.
         .accessibilityValue(accessibilityValue)
+        // The chevrons are the whole of the gesture's affordance and a VoiceOver
+        // user cannot see them, so they are said instead.
+        .accessibilityHint(
+            spec.cap == .space
+                ? SpaceSwipe.slideHint(languageCount: enabledLanguageCount) : ""
+        )
         .accessibilityAddTraits(.isKeyboardKey)
     }
 
     private var accessibilityValue: String {
-        guard let indication else { return "" }
+        guard spec.cap == .space else { return "" }
+        guard let indication else {
+            return enabledLanguageCount > 1 ? language.displayName : ""
+        }
         return indication.isPending
             ? "Release for \(indication.language.displayName)"
             : indication.language.displayName
@@ -304,16 +318,7 @@ public struct KeyView: View {
                 .foregroundStyle(Theme.Keys.label)
 
         case .space:
-            // Swapping the caption for a language name, the way Gboard names the
-            // language it has just moved to. A `Text` inside the key's own fixed
-            // frame, so nothing around it moves when the name appears or goes.
-            Text(indication?.language.nativeName ?? language.spaceLabel)
-                .font(.system(size: 15, weight: indication == nil ? .regular : .semibold))
-                .foregroundStyle(
-                    indication == nil ? Theme.Keys.secondaryLabel : Theme.Keys.label
-                )
-                .minimumScaleFactor(0.7)
-                .lineLimit(1)
+            spaceLabel
 
         case .ret:
             // A word only where a verified one exists. Apple ships no localised
@@ -337,6 +342,47 @@ public struct KeyView: View {
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(Theme.Brand.gradient)
         }
+    }
+
+    /// The space bar's caption, and the two chevrons that say it slides.
+    ///
+    /// **The chevrons are the only thing on this keyboard that says the gesture
+    /// exists.** Naming the language after a switch and during a slide is
+    /// feedback for somebody who already knows; a caption reading "space" is what
+    /// somebody who does not sees, and they never find it. See
+    /// `SpaceSwipe.restingCaption`. They are SF Symbols rather than the guillemets
+    /// ‹ ›, which Unicode marks as mirrored characters and which therefore swap
+    /// shape around a right-to-left name.
+    ///
+    /// One row inside the key's own fixed frame, so nothing around it moves when
+    /// the caption changes, and pinned left to right because it is a control:
+    /// the chevrons point at the two directions a finger can travel, and those do
+    /// not swap when the language does — `SpaceSwipe.language` carries why.
+    private var spaceLabel: some View {
+        HStack(spacing: 5) {
+            if SpaceSwipe.showsSlideAffordance(languageCount: enabledLanguageCount) {
+                slideChevron("chevron.compact.left")
+            }
+            Text(
+                indication?.language.nativeName
+                    ?? SpaceSwipe.restingCaption(
+                        for: language, languageCount: enabledLanguageCount)
+            )
+            .font(.system(size: 15, weight: indication == nil ? .regular : .semibold))
+            .foregroundStyle(indication == nil ? Theme.Keys.secondaryLabel : Theme.Keys.label)
+            .minimumScaleFactor(0.7)
+            .lineLimit(1)
+            if SpaceSwipe.showsSlideAffordance(languageCount: enabledLanguageCount) {
+                slideChevron("chevron.compact.right")
+            }
+        }
+        .environment(\.layoutDirection, .leftToRight)
+    }
+
+    private func slideChevron(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Theme.Keys.secondaryLabel.opacity(0.55))
     }
 
     /// Scripts carry different amounts of ink, and a twelve-column layout has

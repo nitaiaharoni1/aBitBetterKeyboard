@@ -18,3 +18,6 @@ TestResults/
 
 # Rendered by Bar/screen-context/harness/frame-hash.mjs with KEEP=1 (30 MB)
 Bar/screen-context/harness/frame-hash-out/
+
+# Scratch from Bar/layouts/capture-rendered.sh (logs and per-run screenshots)
+Bar/layouts/.capture/

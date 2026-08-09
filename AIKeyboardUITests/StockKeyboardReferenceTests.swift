@@ -88,6 +88,92 @@ final class StockKeyboardReferenceTests: XCTestCase {
         }
     }
 
+    // MARK: Where Apple puts each key on screen
+
+    /// **The rendered left-to-right order of Apple's own letter rows**, written
+    /// to `Bar/layouts/stock-rendered-rows.json`.
+    ///
+    /// `Bar/layouts/apple-layouts.json` is *physical key order*: what
+    /// `UCKeyTranslate` returns for the virtual key codes of the three letter
+    /// rows. For a left-to-right script those are the same thing and nothing in
+    /// this repository ever had to tell them apart. For Hebrew and Arabic they
+    /// are not, and every right-to-left keyboard shipped mirrored because of it —
+    /// ק drawn at the right of the top row where iOS draws it at the left.
+    ///
+    /// So this measures pixels rather than data: every key on screen, grouped
+    /// into rows by its centre y and sorted by its minimum x, plus where delete
+    /// lands. `RenderedRowOrderTests` compares this keyboard's own rendering
+    /// against the result.
+    ///
+    /// Run it through `Bar/layouts/capture-rendered.sh`, which makes the wanted
+    /// layout the simulator's *first* keyboard and resprings before each run. The
+    /// globe key is never pressed: it kills the test runner on this simulator
+    /// even with only Apple's keyboards installed — `Bar/typing/README.md`, "The
+    /// keyboard-switch crash", has the evidence.
+    func testCaptureStockLetterRows() throws {
+        let env = ProcessInfo.processInfo.environment
+        try XCTSkipIf(
+            env["STOCK_LAYOUT"] == nil,
+            "Stock-keyboard layout capture. Run Bar/layouts/capture-rendered.sh."
+        )
+        let wanted = try XCTUnwrap(env["STOCK_LAYOUT"])
+
+        try openEmptyReminder()
+        guard waitForKeyboard() else {
+            throw XCTSkip("the keyboard never became interactive")
+        }
+        // Which layout is on screen is read off the keys themselves, and nothing is
+        // written unless it is the one that was asked for. iOS drops a keyboard tag
+        // it does not recognise and comes up on English instead, which without this
+        // writes English rows under an Arabic name.
+        let onScreen = try XCTUnwrap(
+            currentKeyboard(), "no known layout is on screen; keys: \(allKeyNames())")
+        try XCTSkipIf(
+            onScreen != wanted, "the simulator came up on \(onScreen), not \(wanted)")
+
+        let rows = renderedRows()
+        XCTAssertEqual(rows.count, 4, "expected four keyboard rows, measured \(rows.count)")
+
+        try? XCUIScreen.main.screenshot().pngRepresentation
+            .write(to: refDir.appendingPathComponent("stock-\(wanted).png"))
+        write(
+            [
+                "layout": wanted,
+                "rows": rows,
+                "device": XCUIDevice.shared.description
+            ], for: "stock-\(wanted)")
+        print("STOCK-ROWS \(wanted) \(rows)")
+    }
+
+    /// Every key on screen, grouped into rows by centre y and ordered by minimum
+    /// x — which is the order a person reads them in, whatever the script.
+    private func renderedRows() -> [[String]] {
+        let keys = app.keys.allElementsBoundByIndex
+            .filter { $0.frame.height > 4 && $0.frame.width > 4 }
+            .map { (name: $0.identifier.isEmpty ? $0.label : $0.identifier, frame: $0.frame) }
+            .filter { !$0.name.isEmpty }
+            .sorted { $0.frame.midY < $1.frame.midY }
+
+        var rows: [[(name: String, frame: CGRect)]] = []
+        for key in keys {
+            // A new row starts when the centre drops by more than half a key, which
+            // is far more than the couple of points keys in one row differ by and
+            // far less than the gap between rows.
+            if let last = rows.last?.first, abs(last.frame.midY - key.frame.midY) > key.frame.height / 2 {
+                rows.append([key])
+            } else if rows.isEmpty {
+                rows.append([key])
+            } else {
+                rows[rows.count - 1].append(key)
+            }
+        }
+        return rows.map { $0.sorted { $0.frame.minX < $1.frame.minX }.map(\.name) }
+    }
+
+    private func allKeyNames() -> [String] {
+        app.keys.allElementsBoundByIndex.map { $0.identifier.isEmpty ? $0.label : $0.identifier }
+    }
+
     // MARK: One entry
 
     private func capture(_ entry: Entry) -> [String: Any] {
@@ -256,6 +342,7 @@ final class StockKeyboardReferenceTests: XCTestCase {
     /// Which layout is on screen, told by a letter only that layout has.
     private func currentKeyboard() -> String? {
         if app.keys["ק"].exists { return "he_IL" }
+        if app.keys["ض"].exists { return "ar" }
         if app.keys["q"].exists || app.keys["Q"].exists { return "en_US" }
         return nil
     }

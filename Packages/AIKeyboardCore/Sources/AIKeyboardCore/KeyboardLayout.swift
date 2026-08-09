@@ -129,23 +129,25 @@ public enum KeyboardLayout {
     /// half, not a rounding error. Belarusian overran by 9pt and Tongan by 10pt
     /// the same way. Reserving `functionKeyUnits` per stretcher fixes all three
     /// and moves no layout that was already correct: English needs 7 + 3 = 10,
-    /// which is the ten it already had.
+    /// which is the ten it already had. The budget is asked of every row rather
+    /// than of the bottom one alone, because delete does not always stand there —
+    /// see `LetterLayout.deleteRow`.
     public static func columns(for language: KeyboardLanguage, plane: KeyboardPlane) -> Int {
         guard plane == .letters, let layout = letterLayouts[language] else { return 10 }
-        let widest = layout.rows.map(\.count).max() ?? 10
-        let stretchers = layout.hasCase ? 2 : 1
-        let bottom = layout.rows[2].count + Int(CGFloat(stretchers) * functionKeyUnits)
-        return max(10, widest, bottom)
+        let needed = layout.rows.indices.map { index in
+            layout.rows[index].count + Int(stretchUnits(of: layout, row: index))
+        }
+        return max(10, needed.max() ?? 10)
     }
 
-    /// Whether the character rows run in the language's own direction.
-    ///
-    /// Only the letters plane. Digits, mathematical symbols and the function row
-    /// are written left to right in Hebrew, Arabic and Persian exactly as they are
-    /// in English, so mirroring them — which is what a single `layoutDirection` on
-    /// the whole keyboard did — printed the number row backwards, 0 first.
-    public static func mirrorsRows(for language: KeyboardLanguage, plane: KeyboardPlane) -> Bool {
-        language.isRightToLeft && plane == .letters
+    /// How much of a row is taken by the function keys standing in it. Shift is
+    /// always on the bottom row and delete is on `deleteRow`, which is not the
+    /// bottom row for every language.
+    private static func stretchUnits(of layout: LetterLayout, row index: Int) -> CGFloat {
+        var units: CGFloat = 0
+        if index == 2, layout.hasCase { units += functionKeyUnits }
+        if index == layout.deleteRow { units += functionKeyUnits }
+        return units
     }
 
     // MARK: Letters
@@ -190,17 +192,43 @@ public enum KeyboardLayout {
     /// friends) rather than the letter-plus-point sequences Yiddish is stored in,
     /// and it puts ק on two keys, which is two keys with one identity.
     private struct LetterLayout {
-        /// Exactly three rows, top to bottom, in logical order — leading edge
-        /// first, which mirrors for a right-to-left script. One entry per key.
+        /// Exactly three rows, top to bottom, **left to right on screen**. One
+        /// entry per key.
+        ///
+        /// Left to right for every script, including the six that are written
+        /// right to left, because that is what the source these rows come from
+        /// says: `UCKeyTranslate` is asked for the virtual key codes of the three
+        /// letter rows in physical order, and Apple's own iOS keyboard draws
+        /// Hebrew and Arabic on those same physical keys — ק at the left of the
+        /// top row, ض at the left of the Arabic one. Reading these as *logical*
+        /// order and mirroring them is what shipped all six right-to-left
+        /// keyboards backwards. `Bar/layouts/stock-rendered-rows.json` is Apple's
+        /// keyboard measured on screen; `RenderedRowOrderTests` compares this
+        /// keyboard's own rendering against it.
         let rows: [[String]]
         /// Whether the script has upper and lower case, and so a shift key.
         let hasCase: Bool
+        /// Which row delete stands at the end of.
+        ///
+        /// The bottom row for sixty-three of the sixty-four, and the **top** row
+        /// for Hebrew, which is where Apple puts it: its Hebrew keyboard is 8 / 10
+        /// / 9 letters and it fills the short top row rather than making the
+        /// bottom one ten wide. Measured, not remembered — the stock keyboard's
+        /// rows are in `Bar/layouts/stock-rendered-rows.json` and the photograph
+        /// they came from is `Bar/layouts/stock/he_IL.png`. Shift never moves,
+        /// because no layout that needs one needs this.
+        let deleteRow: Int
         /// Long-press alternates, keyed by the character on the key.
         let alternates: [String: [String]]
 
         /// Rows written as strings, one character per key.
-        init(_ rows: [String], hasCase: Bool = true, alternates: [String: [String]] = [:]) {
-            self.init(keys: rows.map { $0.map(String.init) }, hasCase: hasCase, alternates: alternates)
+        init(
+            _ rows: [String], hasCase: Bool = true, deleteRow: Int = 2,
+            alternates: [String: [String]] = [:]
+        ) {
+            self.init(
+                keys: rows.map { $0.map(String.init) }, hasCase: hasCase, deleteRow: deleteRow,
+                alternates: alternates)
         }
 
         /// Rows written key by key.
@@ -211,9 +239,13 @@ public enum KeyboardLayout {
         /// string, InScript's top row `ौैाीूबहगदजड` measures 7 rather than 11 —
         /// the five leading matras fuse into a single grapheme cluster and the
         /// keyboard silently draws four keys too few.
-        init(keys rows: [[String]], hasCase: Bool = true, alternates: [String: [String]] = [:]) {
+        init(
+            keys rows: [[String]], hasCase: Bool = true, deleteRow: Int = 2,
+            alternates: [String: [String]] = [:]
+        ) {
             self.rows = rows
             self.hasCase = hasCase
+            self.deleteRow = deleteRow
             self.alternates = alternates
         }
     }
@@ -235,32 +267,24 @@ public enum KeyboardLayout {
         guard let layout = letterLayouts[language] else { return letters(for: .english) }
         let columns = CGFloat(columns(for: language, plane: .letters))
 
-        var rows: [KeyRow] = []
-        for (index, row) in layout.rows.prefix(2).enumerated() {
-            rows.append(
-                KeyRow(
-                    id: index,
-                    keys: chars(row, alternates: layout.alternates),
-                    sideInsetUnits: max(0, (columns - CGFloat(row.count)) / 2)))
-        }
-
-        // The bottom row carries delete, and shift too when the script has case.
-        // Both take whatever the letters leave; the inset stops that being a
-        // half-row-wide delete key on a layout whose bottom row is short, as
-        // Arabic's seven-letter one is against twelve columns.
-        let bottom = layout.rows[2]
-        let stretchCount: CGFloat = layout.hasCase ? 2 : 1
-        var keys: [KeySpec] = []
-        if layout.hasCase { keys.append(KeySpec(.shift, width: .remainderShare)) }
-        keys += chars(bottom, alternates: layout.alternates)
-        keys.append(KeySpec(.backspace, width: .remainderShare))
-        rows.append(
-            KeyRow(
-                id: 2,
+        // Shift opens the bottom row when the script has case, and delete closes
+        // whichever row `deleteRow` names. Both take whatever the letters leave;
+        // the inset stops that being a half-row-wide delete key on a layout whose
+        // row is short, as Arabic's seven-letter bottom one is against twelve
+        // columns.
+        return layout.rows.indices.map { index in
+            var keys: [KeySpec] = []
+            if index == 2, layout.hasCase { keys.append(KeySpec(.shift, width: .remainderShare)) }
+            keys += chars(layout.rows[index], alternates: layout.alternates)
+            if index == layout.deleteRow { keys.append(KeySpec(.backspace, width: .remainderShare)) }
+            return KeyRow(
+                id: index,
                 keys: keys,
                 sideInsetUnits: max(
-                    0, (columns - CGFloat(bottom.count) - stretchCount * functionKeyUnits) / 2)))
-        return rows
+                    0,
+                    (columns - CGFloat(layout.rows[index].count)
+                        - stretchUnits(of: layout, row: index)) / 2))
+        }
     }
 
     /// How wide shift and delete want to be when the row has room to spare.
@@ -303,10 +327,15 @@ public enum KeyboardLayout {
             ["qwertyuiop", "asdfghjkl", "zxcvbnm"], alternates: latin()),
 
         // 22 letters plus 5 final forms across 8 / 10 / 9 keys, and no case, so no
-        // shift key. Delete sits at the trailing edge, which mirrors to the left
-        // of the screen.
+        // shift key. Delete stands at the right-hand end of the *top* row, which
+        // is where Apple's own Hebrew keyboard puts it — the one layout measured
+        // here that does not put it on the bottom row, and it is the short top row
+        // that makes room. The claim this comment used to make was that delete
+        // "sits at the trailing edge, which mirrors to the left of the screen";
+        // nobody had checked, and the stock keyboard says otherwise on both
+        // counts.
         .hebrew: LetterLayout(
-            ["קראטוןםפ", "שדגכעיחלךף", "זסבהנמצתץ"], hasCase: false),
+            ["קראטוןםפ", "שדגכעיחלךף", "זסבהנמצתץ"], hasCase: false, deleteRow: 0),
 
         // Apple's `Arabic`: 12 / 10 / 7. أ إ آ ء ؤ ئ ى are on its shift plane,
         // and Arabic has no case, so they are long presses here.

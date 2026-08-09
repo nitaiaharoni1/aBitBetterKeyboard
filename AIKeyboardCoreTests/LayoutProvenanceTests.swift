@@ -156,6 +156,52 @@ final class LayoutProvenanceTests: XCTestCase {
         }
     }
 
+    // MARK: Physical order is screen order
+
+    /// **The premise the right-to-left fix rests on, pinned to a photograph.**
+    ///
+    /// `apple-layouts.json` is *physical* key order — `UCKeyTranslate` over the
+    /// virtual key codes of the three letter rows. Everything in this keyboard
+    /// treats that as the order to draw in, left to right, in every script. For a
+    /// left-to-right language that is obviously right and nothing had to say so;
+    /// for Hebrew it was assumed to be *logical* order and mirrored, which drew ק
+    /// at the right of the top row where iOS draws it at the left, and did the
+    /// same to Arabic, Persian, Urdu, Pashto and Dhivehi.
+    ///
+    /// `stock-rendered-rows.json` is Apple's own keyboard photographed and
+    /// measured by `Bar/layouts/capture-rendered.sh` — key frames sorted by x, so
+    /// it is screen order by construction. Where the two artifacts cover the same
+    /// keys they have to say the same thing.
+    ///
+    /// Arabic is deliberately not here: iOS's Arabic keyboard is 11 / 11 / 9 where
+    /// macOS's is 12 / 10 / 7, so the two artifacts disagree about which row three
+    /// of its keys are on. `RenderedRowOrderTests` covers it with the check that
+    /// survives that — relative order — and the difference itself is a fidelity
+    /// gap of its own, not a reversal.
+    func testApplesPhysicalKeyOrderIsTheOrderItDrawsOnScreen() throws {
+        let byID = try artifact()
+        let rendered = try renderedArtifact()
+        for (id, layout) in [("english", "en_US"), ("hebrew", "he_IL")] {
+            let physical = try XCTUnwrap(byID[id]?.base, "\(id) is missing from the snapshot")
+            let onScreen = try XCTUnwrap(rendered[layout], "\(layout) has never been photographed")
+            XCTAssertEqual(
+                physical.map { $0.lowercased() },
+                onScreen.prefix(3).map { row in
+                    row.filter { $0.count == 1 }.map { $0.lowercased() }.joined()
+                },
+                "Apple's \(id) key order and the keyboard it draws disagree")
+        }
+    }
+
+    private func renderedArtifact() throws -> [String: [[String]]] {
+        let url = Self.artifactURL.deletingLastPathComponent()
+            .appendingPathComponent("stock-rendered-rows.json")
+        let data = try Data(contentsOf: url)
+        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let layouts = try XCTUnwrap(root["layouts"] as? [String: [String: Any]])
+        return layouts.compactMapValues { $0["rows"] as? [[String]] }
+    }
+
     // MARK: What a phone does, which is not always what a Mac does
 
     /// **The check that settles Czech, Slovak, Hungarian and Slovene at once.**
