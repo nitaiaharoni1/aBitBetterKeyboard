@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Reads the nine device-only unknowns off a real iPhone.
+# Reads the ten device-only unknowns off a real iPhone.
 #
 # Everything else in this repo has been measured against a simulator, a macOS
 # build, or a frozen corpus. None of those can answer the questions below,
@@ -27,7 +27,7 @@
 #
 # The extension already logs every fact these need. This script installs it,
 # captures the log while you drive the phone, and reads the answers back out.
-# It measures; it does not judge. A run that answers six of nine is a good run.
+# It measures; it does not judge. A run that answers six of ten is a good run.
 #
 # Usage:  Scripts/measure-on-device.sh [seconds]      (default 180)
 
@@ -79,11 +79,12 @@ if [ -z "$UDID" ]; then
     2. Tap "Trust" if it asks.
     3. Settings > Privacy & Security > Developer Mode > on, then reboot.
 
-  On this Mac, once Xcode has been opened at least once:
-    4. Xcode > Settings > Accounts: make sure an Apple ID is signed in.
-       Only "Apple Distribution" certificates exist right now, and those
-       cannot install a debug build. Xcode creates the development one
-       the first time it signs for a device.
+  Signing is already done and does not need touching: an Apple Development
+  certificate is installed (8C26A2DF..., "Apple Development: Nitai Aharoni"),
+  the three App IDs exist with the App Group on each, and this phone
+  (00008140-000A29593C62801C) is in all three provisioning profiles. If that
+  ever stops being true, `security find-identity -v -p codesigning` is the
+  first thing to check.
 
   Then run this script again.
 EOF
@@ -101,13 +102,18 @@ ok "project carries a development team"
 # ------------------------------------------------------------------- 2. build
 
 say "2. Building for the device"
-# `-allowProvisioningUpdates` because no profiles exist for these four bundle IDs
-# yet and only Xcode can make them. If this fails with "Revoke certificate", that
-# is not something a script should decide: the account holds an Apple Development
-# certificate whose private key is not in this keychain, and the only automatic
-# way forward revokes it, which breaks it for every other machine using it.
-# Either restore the key from a .p12 backup or revoke it deliberately in Xcode >
-# Settings > Accounts > Manage Certificates.
+# `-allowProvisioningUpdates` so Xcode can refresh a profile that has expired or
+# lost a device. It created the three App IDs, the App Group and the profiles on
+# 2026-08-09 and there is nothing left for it to do on a normal run.
+#
+# If it ever fails with "Revoke certificate", do not let it: that means the
+# account holds a Development certificate whose private key is missing from this
+# keychain, and revoking breaks it for every other machine using it. The fix that
+# was used here is to add a *second* certificate instead — generate a CSR with
+# openssl, upload it at developer.apple.com > Certificates > +, then bundle the
+# .cer with the key into a PKCS#12 and `security import` it. Note that OpenSSL 3
+# writes a MAC macOS cannot read, so that export needs
+# `-certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1`.
 xcodebuild build -project "$ROOT/AIKeyboard.xcodeproj" -scheme AIKeyboard \
     -destination "id=$UDID" -allowProvisioningUpdates -derivedDataPath "$OUT/dd" \
     > "$OUT/build.log" 2>&1 || { bad "build failed, see $OUT/build.log"; tail -30 "$OUT/build.log"; exit 1; }

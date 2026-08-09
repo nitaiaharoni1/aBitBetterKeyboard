@@ -69,8 +69,10 @@ simulator's empty locale list rather than pass vacuously.
 
 - **Nothing in the ReplayKit path has ever executed.** No `replayd` on the
   simulator. `Scripts/measure-on-device.sh` reads the ten device-only unknowns off
-  a phone; a device build additionally needs an Apple Development certificate this
-  Mac does not hold.
+  a phone. Signing is no longer in the way: as of 2026-08-09 a Development
+  certificate is installed, the three App IDs carry `group.com.nitai.aikeyboard`,
+  the phone is in all three profiles, and `-destination generic/platform=iOS`
+  builds clean. What is left is physically connecting it.
 - Which physical rotation ReplayKit reports as `.left` vs `.right` is a guess,
   isolated to one 6-line switch.
 - The backend's rate limit counts in-process against `--max-instances=10`.
