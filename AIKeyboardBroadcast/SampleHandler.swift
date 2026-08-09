@@ -141,6 +141,10 @@ final class SampleHandler: RPBroadcastSampleHandler {
             reads.withLock { $0 = service }
         }
 
+        // Into the page as well as the log: the app can show it, and a device
+        // that never gets near a Mac still answers R2c.
+        channel?.recordFootprint(baselineMB: budget.baselineMB, currentMB: nil)
+
         Self.log.notice(
             """
             broadcast started intervalMs=\(Self.sampleIntervalMilliseconds, privacy: .public) \
@@ -155,6 +159,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     override func broadcastPaused() {
         channel?.setPaused(true)
+        channel?.recordPause(resumed: false)
         Self.log.notice("broadcast paused")
     }
 
@@ -163,6 +168,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
         // rather than measured against an instant from before the pause.
         lastSampledAt = nil
         channel?.setPaused(false)
+        channel?.recordPause(resumed: true)
         Self.log.notice("broadcast resumed")
     }
 
@@ -261,6 +267,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
         // shared page is written only when the answer flips, so the status screen
         // reflects the refusal without a seqlock transaction four times a second.
         let footprint = memory.observe()
+        channel?.recordFootprint(baselineMB: nil, currentMB: footprint.footprintMB)
         if footprint.changed {
             channel?.setDegraded(footprint.isRefusing)
             Self.log.notice(
@@ -276,6 +283,12 @@ final class SampleHandler: RPBroadcastSampleHandler {
         let orientation = Self.orientation(of: sampleBuffer)
         if orientation != lastOrientation {
             lastOrientation = orientation
+            // `CGImagePropertyOrientation` is 1...8, so a byte holds it. Clamped
+            // rather than truncated so a value outside that range arrives as 255
+            // — visibly wrong — instead of wrapping into a different, plausible
+            // orientation.
+            channel?.recordOrientation(
+                Self.band(for: orientation), raw: UInt8(clamping: orientation?.rawValue ?? 0))
             Self.log.notice(
                 "video orientation=\(Self.name(of: orientation), privacy: .public)"
             )
@@ -285,6 +298,8 @@ final class SampleHandler: RPBroadcastSampleHandler {
             hasLoggedFormat = true
             let size = CMVideoFormatDescriptionGetDimensions(format)
             let subType = CMFormatDescriptionGetMediaSubType(format)
+            channel?.recordFrameFormat(
+                width: Int(size.width), height: Int(size.height), pixelFormat: subType)
             Self.log.notice(
                 """
                 video first-frame \(size.width, privacy: .public)x\
@@ -319,6 +334,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
             // identity is left alone rather than being cleared or guessed. It is
             // also not a frame to read: a reading whose identity nothing can
             // confirm could never be shown.
+            channel?.count(\.fingerprintFailures)
             channel?.recordDelivery(now: sampledAt)
         }
 

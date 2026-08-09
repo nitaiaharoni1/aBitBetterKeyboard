@@ -24,6 +24,11 @@ struct ScreenContextView: View {
                     demo
                     explanation
                     limits
+                    // Last, because it is for whoever is developing this rather
+                    // than for whoever is using it — and on a device with no Mac
+                    // attached it is the only way to find out whether ReplayKit
+                    // delivers anything at all. See `CaptureDiagnosticsView`.
+                    CaptureDiagnosticsView(session: session)
                 }
                 .padding(.horizontal, Theme.Space.md)
                 .padding(.bottom, Theme.Space.xl)

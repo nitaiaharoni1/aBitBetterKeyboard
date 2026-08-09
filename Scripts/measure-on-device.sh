@@ -29,6 +29,13 @@
 # captures the log while you drive the phone, and reads the answers back out.
 # It measures; it does not judge. A run that answers six of ten is a good run.
 #
+# **You may not need this script at all.** The same facts are written into the
+# shared page and rendered by the app itself, at the bottom of the Screen Context
+# screen — so a phone that never comes near this Mac still answers most of the
+# list. Install any way you like, start a broadcast, and read them off the screen.
+# This script exists for the detail the page does not carry: the full log, with
+# every progress line and error in order.
+#
 # Usage:  Scripts/measure-on-device.sh [seconds]      (default 180)
 
 set -euo pipefail

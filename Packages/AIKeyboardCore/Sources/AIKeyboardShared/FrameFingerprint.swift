@@ -200,6 +200,29 @@ public enum FrameReduction {
         /// Rotated a quarter turn the other way: the top of the screen is along
         /// the buffer's last column.
         case left
+
+        /// One bit each, so a session can record every orientation it saw in a
+        /// single byte of the shared page. See `CaptureStatus.orientationsSeen`:
+        /// a session that only ever reports `.up` cannot tell us whether the
+        /// quarter turns are mapped the right way round, and knowing *that* is
+        /// the difference between an unmeasured guess and a measured one.
+        public var bit: UInt8 {
+            switch self {
+            case .up: return 1 << 0
+            case .down: return 1 << 1
+            case .right: return 1 << 2
+            case .left: return 1 << 3
+            }
+        }
+
+        public var name: String {
+            switch self {
+            case .up: return "up"
+            case .down: return "down"
+            case .right: return "right"
+            case .left: return "left"
+            }
+        }
     }
 
     /// The region of the buffer the fingerprint is taken over, for a frame that

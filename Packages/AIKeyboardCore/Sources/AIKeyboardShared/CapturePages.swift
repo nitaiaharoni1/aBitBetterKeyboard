@@ -120,7 +120,77 @@ public struct CaptureStatus: Equatable, Sendable {
     private var padding0: UInt8 = 0
     private var padding1: UInt32 = 0
 
+    // MARK: Device facts
+    //
+    // **These exist so the phone can answer without a Mac attached.** Everything
+    // about ReplayKit in this repo is a prediction: the simulator ships no
+    // `replayd`, so `processSampleBuffer` has never executed anywhere and the
+    // frame's size, format, orientation and cost are guesses. The extension
+    // already logs all of it, but reading a device log means a cable and a Mac.
+    // Written here as well, they cross the App Group like everything else and the
+    // app can simply show them — the same page the status screen already reads.
+    //
+    // Deliberately small and fixed-width: this struct is memcpy'd through a
+    // shared page, so every field is a scalar with a defined bit pattern and the
+    // whole block costs 20 bytes of the 256 the page holds. Nothing here gates
+    // anything; it is all observation.
+
+    /// The first delivered frame's dimensions, in pixels. Zero until one arrives,
+    /// which is itself the answer to "do frames arrive at all".
+    public var frameWidth: UInt16 = 0
+    public var frameHeight: UInt16 = 0
+
+    /// `CMFormatDescription`'s media subtype as a FourCC — `BGRA`, `420f`, `420v`.
+    /// Zero means no frame has been described yet.
+    public var pixelFormat: UInt32 = 0
+
+    /// The most recent `CGImagePropertyOrientation` raw value, and a bitmask of
+    /// every one seen this session. The mask is what answers whether rotation
+    /// ever reaches us: a session that only ever reports `.up` cannot tell us
+    /// whether `FrameReduction.Orientation.left` is mapped the right way round.
+    public var orientationRaw: UInt8 = 0
+    public var orientationsSeen: UInt8 = 0
+
+    /// `broadcastPaused` / `broadcastResumed` counts. Saturating rather than
+    /// wrapping, because "did it come back" is the question and 255 answers it as
+    /// well as 300 would.
+    public var pauseCount: UInt8 = 0
+    public var resumeCount: UInt8 = 0
+
+    /// Footprint in tenths of a megabyte: the process's cost before its first
+    /// frame, and the highest it has been seen. Tenths because a broadcast upload
+    /// extension is killed at roughly 50 MB and the interesting question is how
+    /// much headroom a read leaves, which whole megabytes round away.
+    public var baselineFootprintTenthsMB: UInt16 = 0
+    public var peakFootprintTenthsMB: UInt16 = 0
+
+    /// Frames that arrived and could not be fingerprinted — an unknown pixel
+    /// format, or geometry the reduction refuses. Non-zero here means the
+    /// freshness gate is blind for those frames.
+    public var fingerprintFailures: UInt32 = 0
+
     public init() {}
+
+    /// Which of the four orientations this session has actually delivered.
+    public var orientationsDelivered: [FrameReduction.Orientation] {
+        [.up, .down, .left, .right].filter { orientationsSeen & $0.bit != 0 }
+    }
+
+    public var baselineFootprintMB: Double? {
+        baselineFootprintTenthsMB == 0 ? nil : Double(baselineFootprintTenthsMB) / 10
+    }
+
+    public var peakFootprintMB: Double? {
+        peakFootprintTenthsMB == 0 ? nil : Double(peakFootprintTenthsMB) / 10
+    }
+
+    /// The pixel format as the four characters a `CMFormatDescription` prints,
+    /// nil before any frame has been described.
+    public var pixelFormatCode: String? {
+        guard pixelFormat != 0 else { return nil }
+        let bytes = [24, 16, 8, 0].map { UInt8(truncatingIfNeeded: pixelFormat >> $0) }
+        return String(bytes: bytes, encoding: .macOSRoman)
+    }
 
     public var sessionID: UUID? {
         guard sessionHigh != 0 || sessionLow != 0 else { return nil }

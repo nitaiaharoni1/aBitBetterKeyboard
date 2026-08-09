@@ -482,6 +482,67 @@ public final class CaptureChannelWriter: @unchecked Sendable {
         statusPage.mutate { $0[keyPath: counter] &+= 1 }
     }
 
+    // MARK: Device facts
+    //
+    // The capture process is the only thing that ever sees a real frame, and
+    // until one of these is written by a phone every number this repo has about
+    // ReplayKit is a prediction. They go in the page rather than only into the
+    // log so the answer can be read off the app's own screen, with no cable and
+    // no Mac. See `CaptureStatus`'s device-facts block.
+
+    /// The shape of the first frame this session was handed. Written once —
+    /// re-writing per frame would burn a seqlock transaction at 4 Hz to restate
+    /// a constant, and a *changing* size is not something this records.
+    public func recordFrameFormat(width: Int, height: Int, pixelFormat: UInt32) {
+        statusPage.mutate {
+            guard $0.frameWidth == 0 else { return }
+            // Clamped rather than truncated: a dimension this does not fit is a
+            // fact worth seeing as "at least 65535" rather than as a wrapped
+            // number that looks plausible and is wrong.
+            $0.frameWidth = UInt16(min(width, Int(UInt16.max)))
+            $0.frameHeight = UInt16(min(height, Int(UInt16.max)))
+            $0.pixelFormat = pixelFormat
+        }
+    }
+
+    /// The current orientation, and the running set of every one seen.
+    public func recordOrientation(_ orientation: FrameReduction.Orientation, raw: UInt8) {
+        statusPage.mutate {
+            $0.orientationRaw = raw
+            $0.orientationsSeen |= orientation.bit
+        }
+    }
+
+    /// Footprint in tenths of a megabyte. `baseline` is written once, at the
+    /// start; `peak` only ever climbs, so a spike during a read survives being
+    /// sampled again a moment later when it has already been released.
+    public func recordFootprint(baselineMB: Double?, currentMB: Double?) {
+        statusPage.mutate {
+            if let baselineMB, $0.baselineFootprintTenthsMB == 0 {
+                $0.baselineFootprintTenthsMB = Self.tenths(baselineMB)
+            }
+            if let currentMB {
+                $0.peakFootprintTenthsMB = max($0.peakFootprintTenthsMB, Self.tenths(currentMB))
+            }
+        }
+    }
+
+    public func recordPause(resumed: Bool) {
+        statusPage.mutate {
+            // Saturating: "did it come back" is the question, and 255 answers it
+            // as well as 300 would, while a wrap to 0 would answer it wrongly.
+            if resumed {
+                $0.resumeCount = $0.resumeCount == .max ? .max : $0.resumeCount + 1
+            } else {
+                $0.pauseCount = $0.pauseCount == .max ? .max : $0.pauseCount + 1
+            }
+        }
+    }
+
+    private static func tenths(_ megabytes: Double) -> UInt16 {
+        UInt16(max(0, min((megabytes * 10).rounded(), Double(UInt16.max))))
+    }
+
     /// Records an ending. The heartbeat stops with it, so a reader that misses
     /// this still concludes `.lost` within three seconds.
     ///
