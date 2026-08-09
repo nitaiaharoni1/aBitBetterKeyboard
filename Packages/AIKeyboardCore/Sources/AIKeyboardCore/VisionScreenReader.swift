@@ -206,12 +206,22 @@ public struct VisionScreenReader: ScreenReader {
         // or a sticker does much the same. Requiring a script this keyboard can
         // actually reply in throws all of that out without needing to know what
         // drew it.
+        //
+        // **The test used to be Latin-or-Hebrew, and it refused Arabic for no
+        // reason.** Vision's 30 recognition languages include Arabic; it is
+        // Hebrew that is missing, which is why the readability gate above exists
+        // and why it is left exactly as it was. A screen this recogniser read at
+        // 0.97 coverage and 0.90 confidence has earned the same trust whatever
+        // script it turned out to be in, so the guard now asks the question it
+        // always meant: is this a script the keyboard can type an answer in.
+        // `.other` — which is what the waveform soup and the CJK glyphs come back
+        // as — still is not.
         let scripts = LanguageDetector.scripts(in: message)
-        guard scripts.contains(.latin) || scripts.contains(.hebrew) else { return nil }
+        guard !scripts.subtracting([.other]).isEmpty else { return nil }
         return ScreenReading(
             sender: newest.sender ?? contact ?? "",
             message: message,
-            language: scripts.contains(.hebrew) ? .hebrew : .english,
+            language: .answering(scripts),
             scripts: scripts)
     }
 

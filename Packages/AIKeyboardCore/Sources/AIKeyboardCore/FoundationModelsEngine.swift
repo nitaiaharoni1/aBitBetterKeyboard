@@ -32,8 +32,12 @@ public struct FoundationModelsEngine: TextIntelligence {
     /// Whether Apple lists every script in this text as one it supports.
     ///
     /// Derived from `supportedLanguages` rather than hard-coded, so the day
-    /// Apple adds Hebrew this starts returning true on its own. Today that
-    /// set is 23 locales across Latin, Han, Kana and Hangul — no Hebrew.
+    /// Apple adds Hebrew this starts returning true on its own. Measured on
+    /// 2026-08-09 against Xcode 26.2, on macOS 26.5 and inside the iOS 26.2
+    /// Simulator, which agree exactly: 23 locales over the language codes
+    /// `da de en es fr it ja ko nb nl pt sv tr vi zh`, whose scripts are
+    /// `Latn`, `Hans`, `Hant`, `Jpan` and `Kore`. No Hebrew, no Arabic, no
+    /// Cyrillic, no Greek, no Devanagari.
     public func canHandle(_ text: String, action: AIAction) -> Bool {
         guard Self.competentActions.contains(action) else { return false }
         let scripts = LanguageDetector.scripts(in: text)
@@ -56,14 +60,29 @@ public struct FoundationModelsEngine: TextIntelligence {
     /// whether the user gets an answer.
     static let competentActions: Set<AIAction> = [.fix, .tone]
 
+    /// The scripts Apple's list names that this product can also name.
+    ///
+    /// **A script we cannot name is never added here, and that line is the whole
+    /// fix.** This used to read `default: found.insert(.other)`, so Japanese,
+    /// Korean and Chinese — which had no case in `TextScript` — each put `.other`
+    /// into the supported set. `.other` is also what `LanguageDetector` answers
+    /// for any script it cannot name, so Russian, Greek, Arabic and Hindi all
+    /// passed `isSubset(of:)` and routed on-device to a model with no word of any
+    /// of them. Naming the shipped scripts individually fixed the detector half;
+    /// this fixes the other.
+    ///
+    /// `TextScript`'s raw values are ISO 15924 codes and `Locale.Language.script`
+    /// reports the same identifiers, so the mapping is a lookup rather than a
+    /// table that can go stale. The cost is that Japanese, Korean and Chinese now
+    /// prefer the cloud — they are outside the scripts this keyboard can type in
+    /// at all, they still get an answer, and the alternative is the bug above.
     private var supportedScripts: Set<TextScript> {
         var found: Set<TextScript> = []
         for language in model.supportedLanguages {
-            switch language.script?.identifier {
-            case "Latn": found.insert(.latin)
-            case "Hebr": found.insert(.hebrew)
-            default: found.insert(.other)
-            }
+            guard let identifier = language.script?.identifier,
+                let script = TextScript(rawValue: identifier), script != .other
+            else { continue }
+            found.insert(script)
         }
         return found
     }
@@ -127,13 +146,20 @@ public struct FoundationModelsEngine: TextIntelligence {
 
     // MARK: Rewrite and tone
 
-    public func variants(for text: String, tone: ToneStyle?) async throws -> [RewriteVariant] {
+    public func variants(
+        for text: String, tone: ToneStyle?, instruction: String? = nil
+    ) async throws -> [RewriteVariant] {
         let source = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !source.isEmpty else { throw AIEngineError.empty }
 
         if let tone {
             let draft: ToneDraft = try await generate(
-                instructions: Prompts.tone(tone, for: source),
+                // Nothing is filtered here. `Prompts.tone` drops a register whose
+                // script the instruction set it picked does not speak, which is
+                // the rule that keeps a Hebrew register out of this session — and
+                // it has to live there rather than here, because the cloud engine
+                // needs the same rule and had no filter of its own.
+                instructions: Prompts.tone(tone, for: source, instruction: instruction),
                 prompt: "Message:\n\(source)",
                 source: source
             )

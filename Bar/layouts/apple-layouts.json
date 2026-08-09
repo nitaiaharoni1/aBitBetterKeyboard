@@ -1,0 +1,1804 @@
+{
+  "generated" : "2026-08-09T14:17:42Z",
+  "iosRuntimeRoot" : "/Library/Developer/CoreSimulator/Volumes/iOS_23C54/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.2.simruntime/Contents/Resources/RuntimeRoot",
+  "languages" : [
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "english",
+      "iosHardwareLayout" : "US",
+      "iosInputMode" : "en_US",
+      "iosSoftwareLayouts" : [
+        "QWERTY",
+        "AZERTY",
+        "QWERTZ",
+        "Dvorak"
+      ],
+      "macSource" : "U.S.",
+      "option" : [
+        "œˆøπ",
+        "åßƒæ",
+        "Ωçµ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "en"
+    },
+    {
+      "adjacent" : {
+        "42" : "ֿ"
+      },
+      "base" : [
+        "קראטוןםפ",
+        "שדגכעיחלךף",
+        "זסבהנמצתץ"
+      ],
+      "id" : "hebrew",
+      "iosHardwareLayout" : "Hebrew",
+      "iosInputMode" : "he_IL",
+      "iosSoftwareLayouts" : [
+        "Hebrew",
+        "Hebrew-Niqqud"
+      ],
+      "macSource" : "Hebrew",
+      "option" : [
+        "ָ",
+        "ֲ֞֜",
+        "ּ"
+      ],
+      "shift" : [
+        "",
+        "",
+        ""
+      ],
+      "tag" : "he"
+    },
+    {
+      "adjacent" : {
+        "42" : "ё",
+        "42+shift" : "Ё"
+      },
+      "base" : [
+        "йцукенгшщзхъ",
+        "фывапролджэ",
+        "ячсмитьбю"
+      ],
+      "id" : "russian",
+      "iosHardwareLayout" : "Russian",
+      "iosInputMode" : "ru_RU",
+      "iosSoftwareLayouts" : [
+        "Russian",
+        "Russian-Phonetic"
+      ],
+      "macSource" : "Russian",
+      "option" : [
+        "јџќњѓѕўъ",
+        "ƒыћљэ",
+        "ђµи"
+      ],
+      "shift" : [
+        "ЙЦУКЕНГШЩЗХЪ",
+        "ФЫВАПРОЛДЖЭ",
+        "ЯЧСМИТЬБЮ"
+      ],
+      "tag" : "ru"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertzuiopç",
+        "asdfghjklë",
+        "yxcvbnm"
+      ],
+      "id" : "albanian",
+      "iosInputMode" : "sq",
+      "iosSoftwareLayouts" : [
+        "QWERTZ-Albanian"
+      ],
+      "macSource" : "Albanian",
+      "option" : [
+        "œþʼø",
+        "ßðƒˍæ",
+        "ˀˇ"
+      ],
+      "shift" : [
+        "QWERTZUIOPÇ",
+        "ASDFGHJKLË",
+        "YXCVBNM"
+      ],
+      "tag" : "sq"
+    },
+    {
+      "adjacent" : {
+        "50" : "ـ"
+      },
+      "base" : [
+        "ضصثقفغعهخحجة",
+        "شسيبلاتنمك",
+        "ظطذدزرو"
+      ],
+      "id" : "arabic",
+      "iosHardwareLayout" : "Arabic",
+      "iosInputMode" : "ar",
+      "iosSoftwareLayouts" : [
+        "Arabic",
+        "Arabic-PC",
+        "Arabic-With-QWERTY"
+      ],
+      "macSource" : "Arabic",
+      "option" : [
+        "ڤەچ",
+        "ےیپٰٓٹںگ",
+        "ڈڑژ"
+      ],
+      "shift" : [
+        "ًٌٍَُِّْ",
+        "ىآ",
+        "ئءأإؤ"
+      ],
+      "tag" : "ar"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qüertyuiopöğ",
+        "asdfghjklıə",
+        "zxcvbnmçş"
+      ],
+      "id" : "azerbaijani",
+      "iosInputMode" : "az_Latn",
+      "iosSoftwareLayouts" : [
+        "QWERTY-Azeri"
+      ],
+      "macSource" : "Azeri",
+      "option" : [
+        "wþʼ",
+        "äßðƒˍ",
+        "ˀˇ"
+      ],
+      "shift" : [
+        "QÜERTYUİOPÖĞ",
+        "ASDFGHJKLIƏ",
+        "ZXCVBNMÇŞ"
+      ],
+      "tag" : "az"
+    },
+    {
+      "adjacent" : {
+        "42" : "ё",
+        "42+shift" : "Ё"
+      },
+      "base" : [
+        "йцукенгшўзх",
+        "фывапролджэ",
+        "ячсмітьбю"
+      ],
+      "id" : "belarusian",
+      "iosInputMode" : "be",
+      "iosSoftwareLayouts" : [
+        "Belarusian"
+      ],
+      "macSource" : "Belarusian",
+      "option" : [
+        "јџќњѓѕўъ",
+        "ƒыћљэ",
+        "ђµиё"
+      ],
+      "shift" : [
+        "ЙЦУКЕНГШЎЗХ",
+        "ФЫВАПРОЛДЖЭ",
+        "ЯЧСМІТЬБЮ"
+      ],
+      "tag" : "be"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "уеишщксдзц",
+        "ьяаожгтнвмч",
+        "юйъэфхпрлб"
+      ],
+      "id" : "bulgarian",
+      "iosHardwareLayout" : "Bulgarian",
+      "iosInputMode" : "bg_BG",
+      "iosSoftwareLayouts" : [
+        "Bulgarian-Standard",
+        "Bulgarian"
+      ],
+      "macSource" : "Bulgarian – Standard",
+      "option" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "shift" : [
+        "ыУЕИШЩКСДЗЦ",
+        "ѝЯАОЖГТНВМЧ",
+        "ЮЙЪЭФХПРЛБ"
+      ],
+      "tag" : "bg"
+    },
+    {
+      "adjacent" : {
+        "42" : "ç",
+        "42+shift" : "Ç"
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjklñ",
+        "zxcvbnm"
+      ],
+      "id" : "catalan",
+      "iosInputMode" : "ca_ES",
+      "iosSoftwareLayouts" : [
+        "QWERTY-Catalan",
+        "QWERTY",
+        "AZERTY",
+        "QWERTZ"
+      ],
+      "macSource" : "Spanish",
+      "option" : [
+        "œæøπ",
+        "åƒ",
+        "Ωßµ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKLÑ",
+        "ZXCVBNM"
+      ],
+      "tag" : "ca"
+    },
+    {
+      "adjacent" : {
+        "42" : "ž",
+        "42+shift" : "Ž"
+      },
+      "base" : [
+        "qwertzuiopšđ",
+        "asdfghjklčć",
+        "yxcvbnm"
+      ],
+      "id" : "croatian",
+      "iosInputMode" : "hr_HR",
+      "iosSoftwareLayouts" : [
+        "QWERTZ",
+        "QWERTY",
+        "AZERTY"
+      ],
+      "macSource" : "Croatian – QWERTZ",
+      "option" : [
+        "ŧøþ",
+        "æħŋłß",
+        "̣"
+      ],
+      "shift" : [
+        "QWERTZUIOPŠĐ",
+        "ASDFGHJKLČĆ",
+        "YXCVBNM"
+      ],
+      "tag" : "hr"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertzuiopú",
+        "asdfghjklů",
+        "yxcvbnm"
+      ],
+      "id" : "czech",
+      "iosHardwareLayout" : "Czech",
+      "iosInputMode" : "cs_CZ",
+      "iosSoftwareLayouts" : [
+        "Czech-Slovak",
+        "QWERTY-Czech-Slovak"
+      ],
+      "macSource" : "Czech",
+      "option" : [
+        "ėęż",
+        "ąßł",
+        ""
+      ],
+      "shift" : [
+        "QWERTZUIOP",
+        "ASDFGHJKL",
+        "YXCVBNM"
+      ],
+      "tag" : "cs"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiopå",
+        "asdfghjklæø",
+        "zxcvbnm"
+      ],
+      "id" : "danish",
+      "iosHardwareLayout" : "Danish",
+      "iosInputMode" : "da_DK",
+      "iosSoftwareLayouts" : [
+        "QWERTY-Danish"
+      ],
+      "macSource" : "Danish",
+      "option" : [
+        "éüœπ",
+        "ªßƒäö",
+        "Ωçñµ"
+      ],
+      "shift" : [
+        "QWERTYUIOPÅ",
+        "ASDFGHJKLÆØ",
+        "ZXCVBNM"
+      ],
+      "tag" : "da"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "ްއެރތޔުިޮޕ",
+        "ަސދފގހޖކލ",
+        "ޒޱޗވބނމ"
+      ],
+      "id" : "dhivehi",
+      "iosInputMode" : "dv",
+      "iosSoftwareLayouts" : [
+        "Dhivehi-QWERTY"
+      ],
+      "macSource" : "Dhivehi",
+      "option" : [
+        "ْاءرتيُِأّ",
+        "َسدفغهجكل",
+        "ظطثوبنم"
+      ],
+      "shift" : [
+        "ޤޢޭޜޓޔޫީޯ",
+        "ާށޑޛޣޙޟޚޅ",
+        "ޡޠޘޥޝޞޏ"
+      ],
+      "tag" : "dv"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "dutch",
+      "iosHardwareLayout" : "Dutch",
+      "iosInputMode" : "nl_NL",
+      "iosSoftwareLayouts" : [
+        "QWERTY",
+        "AZERTY",
+        "QWERTZ"
+      ],
+      "macSource" : "Dutch",
+      "option" : [
+        "œøπ",
+        "åßƒæ",
+        "Ωçµ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "nl"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiopüõ",
+        "asdfghjklöä",
+        "zxcvbnm"
+      ],
+      "id" : "estonian",
+      "iosInputMode" : "et_EE",
+      "iosSoftwareLayouts" : [
+        "QWERTY",
+        "QWERTZ",
+        "AZERTY"
+      ],
+      "macSource" : "Estonian",
+      "option" : [
+        "",
+        "šßő",
+        "žč"
+      ],
+      "shift" : [
+        "QWERTYUIOPÜÕ",
+        "ASDFGHJKLÖÄ",
+        "ZXCVBNM"
+      ],
+      "tag" : "et"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiopåð",
+        "asdfghjklæø",
+        "zxcvbnm"
+      ],
+      "id" : "faroese",
+      "iosInputMode" : "fo",
+      "iosSoftwareLayouts" : [
+        "QWERTY-Faroese"
+      ],
+      "macSource" : "Faroese",
+      "option" : [
+        "éüœπ",
+        "ªßƒä",
+        "Ωçñµ"
+      ],
+      "shift" : [
+        "QWERTYUIOPÅÐ",
+        "ASDFGHJKLÆØ",
+        "ZXCVBNM"
+      ],
+      "tag" : "fo"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "filipino",
+      "macSource" : "ABC",
+      "option" : [
+        "œˆøπ",
+        "åßƒæ",
+        "Ωçµ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "fil"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiopå",
+        "asdfghjklöä",
+        "zxcvbnm"
+      ],
+      "id" : "finnish",
+      "iosHardwareLayout" : "Finnish",
+      "iosInputMode" : "fi_FI",
+      "iosSoftwareLayouts" : [
+        "QWERTY-Swedish-Finnish"
+      ],
+      "macSource" : "Finnish",
+      "option" : [
+        "Ωéµüıœπ",
+        "ßƒªﬁøæ",
+        "ç"
+      ],
+      "shift" : [
+        "QWERTYUIOPÅ",
+        "ASDFGHJKLÖÄ",
+        "ZXCVBNM"
+      ],
+      "tag" : "fi"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "azertyuiop",
+        "qsdfghjklmù",
+        "wxcvbn"
+      ],
+      "id" : "french",
+      "iosHardwareLayout" : "French",
+      "iosInputMode" : "fr_FR",
+      "iosSoftwareLayouts" : [
+        "AZERTY-French",
+        "AZERTY",
+        "QWERTY-Accents",
+        "QWERTY",
+        "QWERTZ"
+      ],
+      "macSource" : "French",
+      "option" : [
+        "æÂêÚºîœπô",
+        "ÒƒﬁÌÏÈµÙ",
+        "ß"
+      ],
+      "shift" : [
+        "AZERTYUIOP",
+        "QSDFGHJKLM",
+        "WXCVBN"
+      ],
+      "tag" : "fr"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "ქწერტყუიოპ",
+        "ასდფგჰჯკლ",
+        "ზხცვბნმ"
+      ],
+      "id" : "georgian",
+      "iosInputMode" : "ka",
+      "iosSoftwareLayouts" : [
+        "Georgian-Phonetic"
+      ],
+      "macSource" : "Georgian – QWERTY",
+      "option" : [
+        "ჱჸჲ",
+        "ჺჶჹჵჷ",
+        "ჴჳჼ"
+      ],
+      "shift" : [
+        "ჭღთ",
+        "შჟ",
+        "ძჩ"
+      ],
+      "tag" : "ka"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertzuiopü",
+        "asdfghjklöä",
+        "yxcvbnm"
+      ],
+      "id" : "german",
+      "iosHardwareLayout" : "German",
+      "iosInputMode" : "de_DE",
+      "iosSoftwareLayouts" : [
+        "QWERTZ-German",
+        "QWERTZ",
+        "QWERTY",
+        "AZERTY"
+      ],
+      "macSource" : "German",
+      "option" : [
+        "Ωøπ",
+        "åƒªºœæ",
+        "çµ"
+      ],
+      "shift" : [
+        "QWERTZUIOPÜ",
+        "ASDFGHJKLÖÄ",
+        "YXCVBNM"
+      ],
+      "tag" : "de"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "ςερτυθιοπ",
+        "ασδφγηξκλ",
+        "ζχψωβνμ"
+      ],
+      "id" : "greek",
+      "iosHardwareLayout" : "Greek",
+      "iosInputMode" : "el_GR",
+      "iosSoftwareLayouts" : [
+        "Greek"
+      ],
+      "macSource" : "Greek",
+      "option" : [
+        "œ",
+        "ßϗ",
+        "ç"
+      ],
+      "shift" : [
+        "ΕΡΤΥΘΙΟΠ",
+        "ΑΣΔΦΓΗΞΚΛ",
+        "ΖΧΨΩΒΝΜ"
+      ],
+      "tag" : "el"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "òwertyuiop",
+        "asdfghjkl",
+        "zècvbnm"
+      ],
+      "id" : "haitian",
+      "macSource" : "Haitian Creole",
+      "option" : [
+        "qþʼø",
+        "ßðƒˍæ",
+        "ˀxˇ"
+      ],
+      "shift" : [
+        "ÒWERTYUIOP",
+        "ASDFGHJKL",
+        "ZÈCVBNM"
+      ],
+      "tag" : "ht"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjklʼ",
+        "zxcvbnm"
+      ],
+      "id" : "hausa",
+      "macSource" : "Hausa",
+      "option" : [
+        "œþƴʼø",
+        "ßɗƒˍƙ",
+        "ˀˇɓ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "ha"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjklʻ",
+        "zxcvbnm"
+      ],
+      "id" : "hawaiian",
+      "iosInputMode" : "haw",
+      "iosSoftwareLayouts" : [
+        "QWERTY-Hawaiian"
+      ],
+      "macSource" : "Hawaiian",
+      "option" : [
+        "œēūīōπ",
+        "āßƒ",
+        "Ωçnµ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "haw"
+    },
+    {
+      "adjacent" : {
+        "42" : "ॉ",
+        "42+shift" : "ऑ"
+      },
+      "base" : [
+        "ौैाीूबहगदजड़",
+        "ोे्िुपरकतचट",
+        "ंमनवलसय"
+      ],
+      "id" : "hindi",
+      "macSource" : "Hindi – InScript",
+      "option" : [
+        "ॣ",
+        "ॢ",
+        "ॐ"
+      ],
+      "shift" : [
+        "औऐआईऊभङघधझढञ",
+        "ओएअइउफऱखथछठ",
+        "ँणशष"
+      ],
+      "tag" : "hi"
+    },
+    {
+      "adjacent" : {
+        "42" : "ű",
+        "42+shift" : "Ű",
+        "50" : "í",
+        "50+shift" : "Í"
+      },
+      "base" : [
+        "qwertzuiopőú",
+        "asdfghjkléá",
+        "yxcvbnm"
+      ],
+      "id" : "hungarian",
+      "iosHardwareLayout" : "Hungarian",
+      "iosInputMode" : "hu_HU",
+      "iosSoftwareLayouts" : [
+        "QWERTZ",
+        "QWERTY",
+        "AZERTY"
+      ],
+      "macSource" : "Hungarian",
+      "option" : [
+        "ęźŅĻ",
+        "ąßńķŻ",
+        "ćĶ"
+      ],
+      "shift" : [
+        "QWERTZUIOPŐÚ",
+        "ASDFGHJKLÉÁ",
+        "YXCVBNM"
+      ],
+      "tag" : "hu"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiopð",
+        "asdfghjklæ",
+        "zxcvbnmþ"
+      ],
+      "id" : "icelandic",
+      "iosHardwareLayout" : "Icelandic",
+      "iosInputMode" : "is_IS",
+      "iosSoftwareLayouts" : [
+        "Icelandic",
+        "QWERTY",
+        "QWERTZ",
+        "AZERTY"
+      ],
+      "macSource" : "Icelandic",
+      "option" : [
+        "ıˆπ",
+        "åßƒœ",
+        "Ωçµ"
+      ],
+      "shift" : [
+        "QWERTYUIOPÐ",
+        "ASDFGHJKLÆ",
+        "ZXCVBNMÞ"
+      ],
+      "tag" : "is"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "igbo",
+      "macSource" : "Igbo",
+      "option" : [
+        "ụịọɵ",
+        "ßƒɔ",
+        "Ωçṅŋ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "ig"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "indonesian",
+      "iosInputMode" : "id_ID",
+      "iosSoftwareLayouts" : [
+        "QWERTY",
+        "QWERTZ",
+        "AZERTY"
+      ],
+      "macSource" : "ABC",
+      "option" : [
+        "œˆøπ",
+        "åßƒæ",
+        "Ωçµ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "id"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "irish",
+      "iosInputMode" : "ga_IE",
+      "iosSoftwareLayouts" : [
+        "QWERTY",
+        "AZERTY",
+        "QWERTZ"
+      ],
+      "macSource" : "Irish – Extended",
+      "option" : [
+        "œéþúíó",
+        "áßðƒˍæ",
+        "ˀˇ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "ga"
+    },
+    {
+      "adjacent" : {
+        "42" : "ù"
+      },
+      "base" : [
+        "qwertyuiopè",
+        "asdfghjklòà",
+        "zxcvbnm"
+      ],
+      "id" : "italian",
+      "iosHardwareLayout" : "Italian - Pro",
+      "iosInputMode" : "it_IT",
+      "iosSoftwareLayouts" : [
+        "QWERTY",
+        "AZERTY",
+        "QWERTZ"
+      ],
+      "macSource" : "Italian",
+      "option" : [
+        "Ωæœøπ",
+        "åßƒªº",
+        "µ"
+      ],
+      "shift" : [
+        "QWERTYUIOPé",
+        "ASDFGHJKLç",
+        "ZXCVBNM"
+      ],
+      "tag" : "it"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "йцукенгшщзхъ",
+        "фывапролджэ",
+        "ячсмитьбю"
+      ],
+      "id" : "kyrgyz",
+      "iosInputMode" : "ky_Cyrl",
+      "iosSoftwareLayouts" : [
+        "Russian"
+      ],
+      "macSource" : "Kyrgyz",
+      "option" : [
+        "үң",
+        "ө",
+        ""
+      ],
+      "shift" : [
+        "ЙЦУКЕНГШЩЗХЪ",
+        "ФЫВАПРОЛДЖЭ",
+        "ЯЧСМИТЬБЮ"
+      ],
+      "tag" : "ky"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "latvian",
+      "iosInputMode" : "lv_LV",
+      "iosSoftwareLayouts" : [
+        "QWERTY",
+        "QWERTZ",
+        "AZERTY"
+      ],
+      "macSource" : "Latvian",
+      "option" : [
+        "ēŗūīō",
+        "āšģķļ",
+        "žßčņ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "lv"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "lithuanian",
+      "iosInputMode" : "lt_LT",
+      "iosSoftwareLayouts" : [
+        "QWERTY"
+      ],
+      "macSource" : "Lithuanian – QWERTY",
+      "option" : [
+        "",
+        "",
+        ""
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "lt"
+    },
+    {
+      "adjacent" : {
+        "42" : "ж",
+        "42+shift" : "Ж",
+        "50" : "ѝ",
+        "50+shift" : "Ѝ"
+      },
+      "base" : [
+        "љњертѕуиопшѓ",
+        "асдфгхјклчќ",
+        "зџцвбнм"
+      ],
+      "id" : "macedonian",
+      "iosInputMode" : "mk_MK",
+      "iosSoftwareLayouts" : [
+        "Macedonian"
+      ],
+      "macSource" : "Macedonian",
+      "option" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "shift" : [
+        "ЉЊЕРТSУИОПШЃ",
+        "АСДФГХЈКЛЧЌ",
+        "ЗЏЦВБНМ"
+      ],
+      "tag" : "mk"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "malay",
+      "iosInputMode" : "ms_MY",
+      "iosSoftwareLayouts" : [
+        "QWERTY",
+        "QWERTZ",
+        "AZERTY"
+      ],
+      "macSource" : "ABC",
+      "option" : [
+        "œˆøπ",
+        "åßƒæ",
+        "Ωçµ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "ms"
+    },
+    {
+      "adjacent" : {
+        "50" : "ż",
+        "50+shift" : "Ż"
+      },
+      "base" : [
+        "qwertyuiopġħ",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "maltese",
+      "iosInputMode" : "mt",
+      "iosSoftwareLayouts" : [
+        "QWERTY-Maltese"
+      ],
+      "macSource" : "Maltese",
+      "option" : [
+        "œéþúíó",
+        "áƒˍæ",
+        "ˀˇ"
+      ],
+      "shift" : [
+        "QWERTYUIOPĠĦ",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "mt"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "maori",
+      "iosInputMode" : "mi",
+      "iosSoftwareLayouts" : [
+        "QWERTY-Maori"
+      ],
+      "macSource" : "Māori",
+      "option" : [
+        "œēūīōπ",
+        "āßƒʻ",
+        "Ωçnµ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "mi"
+    },
+    {
+      "adjacent" : {
+        "42" : "ॉ",
+        "42+shift" : "ऑ"
+      },
+      "base" : [
+        "ौैाीूबहगदजड़",
+        "ोे्िुपरकतचट",
+        "ंमनवलसय"
+      ],
+      "id" : "marathi",
+      "macSource" : "Marathi – InScript",
+      "option" : [
+        "ॣ",
+        "ॢ",
+        "ॐ"
+      ],
+      "shift" : [
+        "औऐआईऊभङघधझढञ",
+        "ओएअइउफऱखथछठ",
+        "ँणळशष"
+      ],
+      "tag" : "mr"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "ौैाीूबहगदजड़",
+        "ोे्िुपरकतचट",
+        "ंमनवलसय"
+      ],
+      "id" : "nepali",
+      "iosInputMode" : "ne",
+      "iosSoftwareLayouts" : [
+        "Devanagari-Marathi"
+      ],
+      "macSource" : "Nepali – InScript",
+      "option" : [
+        "ॣ",
+        "ॢ",
+        "ॐ"
+      ],
+      "shift" : [
+        "औऐआईऊभङघधझढञ",
+        "ओएअइउफऱखथछठ",
+        "ँणळशष"
+      ],
+      "tag" : "ne"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiopå",
+        "asdfghjkløæ",
+        "zxcvbnm"
+      ],
+      "id" : "norwegian",
+      "iosHardwareLayout" : "Norwegian",
+      "iosInputMode" : "nb_NO",
+      "iosSoftwareLayouts" : [
+        "QWERTY-Norwegian"
+      ],
+      "macSource" : "Norwegian",
+      "option" : [
+        "Ωéµüıœπ",
+        "ßƒªﬁöä",
+        "ç"
+      ],
+      "shift" : [
+        "QWERTYUIOPÅ",
+        "ASDFGHJKLØÆ",
+        "ZXCVBNM"
+      ],
+      "tag" : "nb"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "ضصثقفغعهخحجچ",
+        "شسیبلاتنمکګ",
+        "ۍېزرذدړوږ"
+      ],
+      "id" : "pashto",
+      "iosInputMode" : "ps",
+      "iosSoftwareLayouts" : [
+        "Pashto"
+      ],
+      "macSource" : "Afghan Pashto",
+      "option" : [
+        "ٰٖٓٙ",
+        "ےىںڷٱٹكگ",
+        "ٕٔإڈڑۇۉ"
+      ],
+      "shift" : [
+        "ًٌٍَُِّْځڅ",
+        "ښئيپأآټڼة",
+        "ظطژءډؤ"
+      ],
+      "tag" : "ps"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "ضصثقفغعهخحجچ",
+        "شسیبلاتنمکگ",
+        "ظطزرذدپو"
+      ],
+      "id" : "persian",
+      "iosInputMode" : "fa",
+      "iosSoftwareLayouts" : [
+        "Persian"
+      ],
+      "macSource" : "Persian – Standard",
+      "option" : [
+        "",
+        "ىٱ",
+        "ٖٕ"
+      ],
+      "shift" : [
+        "ًٌٍَُِّْ",
+        "ؤئيإأآة",
+        "كٓژٰٔء"
+      ],
+      "tag" : "fa"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "polish",
+      "iosHardwareLayout" : "Polish",
+      "iosInputMode" : "pl_PL",
+      "iosSoftwareLayouts" : [
+        "QWERTY",
+        "QWERTZ",
+        "AZERTY"
+      ],
+      "macSource" : "Polish",
+      "option" : [
+        "ŌęīóĻ",
+        "ąśńķŻłĺ",
+        "żźćļńĶ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "pl"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiopº",
+        "asdfghjklç",
+        "zxcvbnm"
+      ],
+      "id" : "portuguese",
+      "iosInputMode" : "pt_BR",
+      "iosSoftwareLayouts" : [
+        "QWERTY",
+        "AZERTY",
+        "QWERTZ"
+      ],
+      "macSource" : "Portuguese",
+      "option" : [
+        "œæıøπ",
+        "åßƒˇ",
+        "Ωµ"
+      ],
+      "shift" : [
+        "QWERTYUIOPª",
+        "ASDFGHJKLÇ",
+        "ZXCVBNM"
+      ],
+      "tag" : "pt"
+    },
+    {
+      "adjacent" : {
+        "42" : "â",
+        "42+shift" : "Â"
+      },
+      "base" : [
+        "qwertyuiopăî",
+        "asdfghjklșț",
+        "zxcvbnm"
+      ],
+      "id" : "romanian",
+      "iosHardwareLayout" : "Romanian",
+      "iosInputMode" : "ro_RO",
+      "iosSoftwareLayouts" : [
+        "QWERTY",
+        "QWERTZ",
+        "AZERTY"
+      ],
+      "macSource" : "Romanian – Standard",
+      "option" : [
+        "œθtyiπ",
+        "åßđƒł",
+        "ƶnµ"
+      ],
+      "shift" : [
+        "QWERTYUIOPĂÎ",
+        "ASDFGHJKLȘȚ",
+        "ZXCVBNM"
+      ],
+      "tag" : "ro"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjklʻ",
+        "zxcvbnm"
+      ],
+      "id" : "samoan",
+      "macSource" : "Samoan",
+      "option" : [
+        "œēūīōπ",
+        "āßƒ",
+        "Ωçnµ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "sm"
+    },
+    {
+      "adjacent" : {
+        "42" : "ж",
+        "42+shift" : "Ж"
+      },
+      "base" : [
+        "љњертзуиопшђ",
+        "асдфгхјклчћ",
+        "ѕџцвбнм"
+      ],
+      "id" : "serbian",
+      "iosInputMode" : "sr_Cyrl",
+      "iosSoftwareLayouts" : [
+        "Serbian-Cyrillic"
+      ],
+      "macSource" : "Serbian",
+      "option" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "shift" : [
+        "ЉЊЕРТЗУИОПШЂ",
+        "АСДФГХЈКЛЧЋ",
+        "ЅЏЦВБНМ"
+      ],
+      "tag" : "sr"
+    },
+    {
+      "adjacent" : {
+        "42" : "ž",
+        "42+shift" : "Ž"
+      },
+      "base" : [
+        "qwertyuiopšđ",
+        "asdfghjklčć",
+        "zxcvbnm"
+      ],
+      "id" : "serbianLatin",
+      "macSource" : "Serbian (Latin)",
+      "option" : [
+        "œøπ",
+        "åßƒ",
+        "Ωçµ"
+      ],
+      "shift" : [
+        "QWERTYUIOPŠĐ",
+        "ASDFGHJKLČĆ",
+        "ZXCVBNM"
+      ],
+      "tag" : "sr-Latn"
+    },
+    {
+      "adjacent" : {
+        "42" : "ň"
+      },
+      "base" : [
+        "qwertzuiopúä",
+        "asdfghjklô",
+        "yxcvbnm"
+      ],
+      "id" : "slovak",
+      "iosHardwareLayout" : "Slovak",
+      "iosInputMode" : "sk_SK",
+      "iosSoftwareLayouts" : [
+        "Czech-Slovak",
+        "QWERTY-Czech-Slovak"
+      ],
+      "macSource" : "Slovak",
+      "option" : [
+        "ėęż",
+        "ąßł",
+        ""
+      ],
+      "shift" : [
+        "QWERTZUIOP",
+        "ASDFGHJKL",
+        "YXCVBNM"
+      ],
+      "tag" : "sk"
+    },
+    {
+      "adjacent" : {
+        "42" : "ž",
+        "42+shift" : "Ž"
+      },
+      "base" : [
+        "qwertzuiopšđ",
+        "asdfghjklčć",
+        "yxcvbnm"
+      ],
+      "id" : "slovenian",
+      "iosHardwareLayout" : "Slovenian",
+      "iosInputMode" : "sl_SI",
+      "iosSoftwareLayouts" : [
+        "QWERTZ",
+        "QWERTY",
+        "AZERTY"
+      ],
+      "macSource" : "Croatian – QWERTZ",
+      "option" : [
+        "ŧøþ",
+        "æħŋłß",
+        "̣"
+      ],
+      "shift" : [
+        "QWERTZUIOPŠĐ",
+        "ASDFGHJKLČĆ",
+        "YXCVBNM"
+      ],
+      "tag" : "sl"
+    },
+    {
+      "adjacent" : {
+        "42" : "ç",
+        "42+shift" : "Ç"
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjklñ",
+        "zxcvbnm"
+      ],
+      "id" : "spanish",
+      "iosHardwareLayout" : "Spanish - ISO",
+      "iosInputMode" : "es_ES",
+      "iosSoftwareLayouts" : [
+        "QWERTY-Spanish",
+        "QWERTY",
+        "AZERTY",
+        "QWERTZ"
+      ],
+      "macSource" : "Spanish",
+      "option" : [
+        "œæøπ",
+        "åƒ",
+        "Ωßµ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKLÑ",
+        "ZXCVBNM"
+      ],
+      "tag" : "es"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "swahili",
+      "iosInputMode" : "sw",
+      "iosSoftwareLayouts" : [
+        "QWERTY",
+        "AZERTY",
+        "QWERTZ"
+      ],
+      "macSource" : "ABC",
+      "option" : [
+        "œˆøπ",
+        "åßƒæ",
+        "Ωçµ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "sw"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiopå",
+        "asdfghjklöä",
+        "zxcvbnm"
+      ],
+      "id" : "swedish",
+      "iosHardwareLayout" : "Swedish - Pro",
+      "iosInputMode" : "sv_SE",
+      "iosSoftwareLayouts" : [
+        "QWERTY-Swedish-Finnish"
+      ],
+      "macSource" : "Swedish",
+      "option" : [
+        "Ωéµüıœπ",
+        "ßƒªﬁøæ",
+        "ç"
+      ],
+      "shift" : [
+        "QWERTYUIOPÅ",
+        "ASDFGHJKLÖÄ",
+        "ZXCVBNM"
+      ],
+      "tag" : "sv"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "йқукенгшҳзхъ",
+        "фҷвапролджэ",
+        "ячсмитӣбю"
+      ],
+      "id" : "tajik",
+      "iosInputMode" : "tg_Cyrl",
+      "iosSoftwareLayouts" : [
+        "Tajik-Cyrillic"
+      ],
+      "macSource" : "Tajik (Cyrillic)",
+      "option" : [
+        "",
+        "",
+        ""
+      ],
+      "shift" : [
+        "ЙҚУКЕНГШҲЗХЪ",
+        "ФҶВАПРОЛДЖЭ",
+        "ЯЧСМИТӢБЮ"
+      ],
+      "tag" : "tg"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "ஆஈஊஐஏளறனடணசஞ",
+        "அஇஉ்எகபமதநய",
+        "ஔஓஒவஙலரழ"
+      ],
+      "id" : "tamil",
+      "macSource" : "Tamil99",
+      "option" : [
+        "ாீூைே",
+        "ிு்ெæ",
+        "ௌோொ"
+      ],
+      "shift" : [
+        "ஸஷஜஹXஶஈ",
+        "ஃ",
+        ""
+      ],
+      "tag" : "ta"
+    },
+    {
+      "adjacent" : {
+        "50" : "ʻ"
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "tongan",
+      "iosInputMode" : "to",
+      "iosSoftwareLayouts" : [
+        "QWERTY-Tongan"
+      ],
+      "macSource" : "Tongan",
+      "option" : [
+        "ˆēūīōπ",
+        "āßéŋΔúíóå",
+        "áçø"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "to"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuıopğü",
+        "asdfghjklşi",
+        "zxcvbnmöç"
+      ],
+      "id" : "turkish",
+      "iosHardwareLayout" : "Turkish-QWERTY-PC",
+      "iosInputMode" : "tr_TR",
+      "iosSoftwareLayouts" : [
+        "Turkish-Q",
+        "Turkish-F",
+        "QWERTY-Turkish"
+      ],
+      "macSource" : "Turkish Q",
+      "option" : [
+        "üiöπ",
+        "æßƒğæ",
+        "Ωçµ"
+      ],
+      "shift" : [
+        "QWERTYUIOPĞÜ",
+        "ASDFGHJKLŞİ",
+        "ZXCVBNMÖÇ"
+      ],
+      "tag" : "tr"
+    },
+    {
+      "adjacent" : {
+        "42" : "ş",
+        "42+shift" : "Ş",
+        "50" : "ž",
+        "50+shift" : "Ž"
+      },
+      "base" : [
+        "äwertyuiopňö",
+        "asdfghjkl",
+        "züçýbnm"
+      ],
+      "id" : "turkmen",
+      "iosInputMode" : "tk_Latn",
+      "iosSoftwareLayouts" : [
+        "Turkmen"
+      ],
+      "macSource" : "Turkmen",
+      "option" : [
+        "qı",
+        "ğ",
+        "xcv"
+      ],
+      "shift" : [
+        "ÄWERTYUIOPŇÖ",
+        "ASDFGHJKL",
+        "ZÜÇÝBNM"
+      ],
+      "tag" : "tk"
+    },
+    {
+      "adjacent" : {
+        "42" : "ʼ",
+        "50" : "ґ",
+        "50+shift" : "Ґ"
+      },
+      "base" : [
+        "йцукенгшщзхї",
+        "фівапролджє",
+        "ячсмитьбю"
+      ],
+      "id" : "ukrainian",
+      "iosInputMode" : "uk_UA",
+      "iosSoftwareLayouts" : [
+        "Ukrainian"
+      ],
+      "macSource" : "Ukrainian",
+      "option" : [
+        "јџќёњґѕўъ",
+        "ƒыћљэ",
+        "ђµи"
+      ],
+      "shift" : [
+        "ЙЦУКЕНГШЩЗХЇ",
+        "ФІВАПРОЛДЖЄ",
+        "ЯЧСМИТЬБЮ"
+      ],
+      "tag" : "uk"
+    },
+    {
+      "adjacent" : {
+        "42" : "ِ",
+        "42+shift" : "ٍ",
+        "50+shift" : "ؔ"
+      },
+      "base" : [
+        "قوعرتےئیہپَُ",
+        "اسدفگھجکل",
+        "زشچطبنم"
+      ],
+      "id" : "urdu",
+      "iosInputMode" : "ur-Translit",
+      "iosSoftwareLayouts" : [
+        "QWERTY-Urdu"
+      ],
+      "macSource" : "Urdu",
+      "option" : [
+        "ّْؑؓؒۓُِۃ",
+        "َؐهك",
+        "٘"
+      ],
+      "shift" : [
+        "ْؤّڑٹٖءٰۂًٌٗ",
+        "آصڈغحضخ",
+        "ذژثظں"
+      ],
+      "tag" : "ur"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "welsh",
+      "iosInputMode" : "cy_GB",
+      "iosSoftwareLayouts" : [
+        "QWERTY",
+        "AZERTY",
+        "QWERTZ"
+      ],
+      "macSource" : "Welsh",
+      "option" : [
+        "œŵêþŷûîô",
+        "âßðƒˍæ",
+        "ˀˇ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "cy"
+    },
+    {
+      "adjacent" : {
+
+      },
+      "base" : [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "id" : "yoruba",
+      "macSource" : "Yoruba",
+      "option" : [
+        "ɛẹɔọ",
+        "ṣƒ",
+        "Ωçˇŋ"
+      ],
+      "shift" : [
+        "QWERTYUIOP",
+        "ASDFGHJKL",
+        "ZXCVBNM"
+      ],
+      "tag" : "yo"
+    }
+  ],
+  "missing" : [
+
+  ],
+  "note" : "Written by Bar/layouts/harness/extract-layouts.swift. base/shift/option are the letters Apple's macOS layout produces on the three letter rows, punctuation keys dropped. iosSoftwareLayouts is SWLayouts for the language's default input mode, most preferred first."
+}

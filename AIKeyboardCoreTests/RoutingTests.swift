@@ -7,6 +7,24 @@ private struct StubEngine: TextIntelligence {
     var handles: (String) -> Bool = { _ in true }
     var answer: String = "ok"
     var failure: AIEngineError?
+    /// What `canHandle` was asked about, so a test can prove the router asked
+    /// about the user's register and not only about the message.
+    let asked = Recorder()
+
+    final class Recorder: @unchecked Sendable {
+        private let lock = NSLock()
+        private var values: [String] = []
+        var texts: [String] {
+            lock.lock()
+            defer { lock.unlock() }
+            return values
+        }
+        func record(_ text: String) {
+            lock.lock()
+            values.append(text)
+            lock.unlock()
+        }
+    }
     /// Set by the test to prove which engine actually ran.
     let calls = Counter()
 
@@ -25,7 +43,10 @@ private struct StubEngine: TextIntelligence {
         }
     }
 
-    func canHandle(_ text: String, action: AIAction) -> Bool { handles(text) }
+    func canHandle(_ text: String, action: AIAction) -> Bool {
+        asked.record(text)
+        return handles(text)
+    }
 
     func fix(_ text: String) async throws -> String {
         calls.increment()
@@ -33,10 +54,14 @@ private struct StubEngine: TextIntelligence {
         return answer
     }
 
-    func variants(for text: String, tone: ToneStyle?) async throws -> [RewriteVariant] {
+    func variants(
+        for text: String, tone: ToneStyle?, instruction: String?
+    ) async throws
+        -> [RewriteVariant]
+    {
         calls.increment()
         if let failure { throw failure }
-        return [RewriteVariant(tone: .clearer, text: answer)]
+        return [RewriteVariant(tone: .clearer, text: instruction ?? answer)]
     }
 
     func replies(to context: ScreenContext) async throws -> [ReplyOption] {
@@ -150,6 +175,34 @@ final class RoutedIntelligenceTests: XCTestCase {
         }
     }
 
+    /// **The message decides the engine, and the user's register does not get a
+    /// vote.** An earlier version of this router asked `canHandle` about the two
+    /// of them concatenated, so a Hebrew register sent an English sentence to the
+    /// cloud — five seconds and a screenshot of the user's words leaving the
+    /// device, to buy a register `Prompts.tone` drops on arrival anyway. The
+    /// register still has to *reach* the engine, which is the second assertion.
+    func testTheRegisterReachesTheEngineWithoutChangingWhichEngineRuns() async throws {
+        let latinOnly: (String) -> Bool = { text in
+            LanguageDetector.scripts(in: text).isSubset(of: [.latin])
+        }
+        let onDevice = StubEngine(handles: latinOnly, answer: "on-device")
+        let cloud = StubEngine(answer: "cloud")
+        let router = RoutedIntelligence(onDevice: onDevice, cloud: cloud)
+
+        let output = try await router.variants(
+            for: "hey can you send me the deck", tone: .friendly,
+            instruction: "קצר וישיר, בלי נימוסים")
+
+        XCTAssertEqual(output.provenance, .onDevice)
+        XCTAssertEqual(cloud.calls.count, 0, "an English sentence was sent to the cloud")
+        XCTAssertEqual(
+            onDevice.asked.texts, ["hey can you send me the deck"],
+            "the register was folded into the text the router routes on")
+        XCTAssertEqual(
+            output.value.first?.text, "קצר וישיר, בלי נימוסים",
+            "the register never reached the engine")
+    }
+
     func testNoEngineAtAllReportsSomethingActionable() async {
         let router = RoutedIntelligence(onDevice: nil, cloud: nil)
         do {
@@ -224,7 +277,11 @@ private struct HangingEngine: TextIntelligence {
         try await Task.sleep(for: .seconds(600))
         return ""
     }
-    func variants(for text: String, tone: ToneStyle?) async throws -> [RewriteVariant] { [] }
+    func variants(
+        for text: String, tone: ToneStyle?, instruction: String?
+    ) async throws
+        -> [RewriteVariant]
+    { [] }
     func replies(to context: ScreenContext) async throws -> [ReplyOption] { [] }
 }
 

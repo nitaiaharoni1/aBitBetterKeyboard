@@ -21,13 +21,15 @@ struct MainTabView: View {
 struct HomeView: View {
     @EnvironmentObject private var store: SharedStore
     @StateObject private var session = ScreenContextSession.shared
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showsPlayground = false
 
-    // Nothing here can be verified from inside the app, so these stand in for the
-    // checks the real product would run against the App Group.
-    @State private var keyboardAdded = true
-    @State private var fullAccessGranted = false
-    @State private var microphoneGranted = true
+    /// Measured, never assumed. Two of the three answers come from a file only a
+    /// keyboard with Full Access could have written and the third from
+    /// AVFoundation; all three used to be hardcoded `@State` booleans, which is
+    /// how this screen came to show an unticked Full Access box with a Fix button
+    /// to somebody who had granted Full Access.
+    @State private var setup = SetupState()
 
     var body: some View {
         NavigationStack {
@@ -39,7 +41,6 @@ struct HomeView: View {
                         screenContextCard
                         setupCard
                         playgroundCard
-                        statsRow
                         if !store.isSubscribed { upgradeCard }
                     }
                     .padding(.horizontal, Theme.Space.md)
@@ -51,6 +52,14 @@ struct HomeView: View {
             .sheet(isPresented: $showsPlayground) {
                 PlaygroundView()
             }
+        }
+        // Both halves of this can change while the app is in the background — the
+        // user leaves for Settings, or types on the keyboard in another app —
+        // and neither sends a notification, so the answer is re-read every time
+        // this screen comes back rather than cached at launch.
+        .onAppear { setup = .current() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { setup = .current() }
         }
     }
 
@@ -142,20 +151,21 @@ struct HomeView: View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
                 HStack(spacing: Theme.Space.xs) {
-                    Text(isReady ? "Ready to type" : "Almost there")
+                    Text(setup.isReady ? "Ready to type" : "Almost there")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(Theme.Text.primary)
 
                     Spacer()
 
-                    Text("\(completedSteps)/3")
+                    Text("\(setup.confirmedRequirements)/\(setup.requirementCount)")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(isReady ? Theme.Semantic.success : Theme.Text.secondary)
+                        .foregroundStyle(setup.isReady ? Theme.Semantic.success : Theme.Text.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(
                             Capsule().fill(
-                                (isReady ? Theme.Semantic.success : Theme.Text.secondary).opacity(0.14)
+                                (setup.isReady ? Theme.Semantic.success : Theme.Text.secondary)
+                                    .opacity(0.14)
                             )
                         )
                 }
@@ -164,33 +174,55 @@ struct HomeView: View {
 
                 StatusRow(
                     title: "Keyboard added",
-                    detail: keyboardAdded ? "Available in every app" : "Add it in Settings",
-                    isDone: keyboardAdded,
+                    detail: setup.keyboardAddedDetail,
+                    check: setup.keyboardAdded,
                     action: openSettings
                 )
                 StatusRow(
                     title: "Full Access",
-                    detail: fullAccessGranted
-                        ? "Cloud rewrites enabled" : "Typing and local AI still work without it",
-                    isDone: fullAccessGranted,
+                    detail: setup.fullAccessDetail,
+                    check: setup.fullAccess,
                     action: openSettings
                 )
+
+                if let explanation = setup.unresolvedExplanation {
+                    Text(explanation)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Text.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Divider().overlay(Theme.Surface.separator)
+
+                // Under its own heading because it is not one of the two the
+                // badge counts, and a row that looks like a step but is not
+                // counted would make the badge look wrong.
+                SectionHeader(title: "For dictation")
+
                 StatusRow(
                     title: "Microphone",
-                    detail: microphoneGranted ? "Dictation ready" : "Needed for dictation",
-                    isDone: microphoneGranted,
-                    action: openSettings
+                    detail: setup.microphoneDetail,
+                    check: setup.microphoneAccess,
+                    // Nothing has asked iOS for the microphone yet, and Settings
+                    // shows no switch for a permission that was never requested,
+                    // so an untouched microphone gets no button to press.
+                    action: setup.microphoneAccess == .blocked ? openSettings : nil
                 )
             }
         }
     }
 
-    private var completedSteps: Int {
-        [keyboardAdded, fullAccessGranted, microphoneGranted].filter { $0 }.count
-    }
-
-    private var isReady: Bool { completedSteps == 3 }
-
+    /// Opens Settings, and nothing more precise than that is promised anywhere
+    /// the user can read.
+    ///
+    /// `UIApplication.openSettingsURLString` is the only Settings destination iOS
+    /// offers — checked against the iOS 26.2 SDK, where it is still undeprecated
+    /// and where the only other constants are
+    /// `openNotificationSettingsURLString` and
+    /// `openDefaultApplicationsSettingsURLString`. There is no constant for
+    /// General › Keyboard and no way to deep-link the Full Access switch, so the
+    /// row's own copy spells out the path from the top of Settings rather than
+    /// implying the button lands on it.
     private func openSettings() {
         if let url = URL(string: UIApplication.openSettingsURLString) {
             UIApplication.shared.open(url)
@@ -233,15 +265,14 @@ struct HomeView: View {
         .accessibilityIdentifier("home-playground")
     }
 
-    // MARK: Stats
-
-    private var statsRow: some View {
-        HStack(spacing: Theme.Space.xs) {
-            StatTile(value: "1,284", label: "Words fixed", icon: "checkmark.circle")
-            StatTile(value: "37m", label: "Time saved", icon: "clock")
-            StatTile(value: "\(store.enabledLanguages.count)", label: "Languages", icon: "globe")
-        }
-    }
+    // A row of three tiles used to sit here reading "1,284 Words fixed" and
+    // "37m Time saved". Both were invented constants on the home screen of a
+    // shipping build, and neither is measurable today: counting fixes needs a
+    // counter in the keyboard's own typing path, and "time saved" has no honest
+    // definition at all — it is a words-per-minute guess dressed as a
+    // measurement. Removed rather than replaced. The third tile, the language
+    // count, was real, and it is one tap away in the Languages tab; a stat row
+    // with one stat left in it is worse than none.
 
     // MARK: Upgrade
 
@@ -256,7 +287,15 @@ struct HomeView: View {
                         Text("AI Keyboard Pro")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(Theme.Text.primary)
-                        Text("Unlimited rewrites, cloud dictation and every tone.")
+                        // "cloud dictation" was in this list. There is no
+                        // dictation at all in this build, in either process, so a
+                        // paid tier cannot have a better one. See `MockDictation`.
+                        //
+                        // "Unlimited rewrites and every tone" went the same way and
+                        // for the same reason: nothing meters a rewrite and nothing
+                        // gates a tone, so "unlimited" is a claim about a cap that
+                        // was never built. See `SubscriptionView.features`.
+                        Text("A mock paywall. Nothing in this build is gated, for anyone.")
                             .font(.system(size: 14))
                             .foregroundStyle(Theme.Text.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -272,44 +311,6 @@ struct HomeView: View {
     }
 }
 
-struct StatTile: View {
-    let value: String
-    let label: String
-    let icon: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Theme.Brand.solid)
-
-            Text(value)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(Theme.Text.primary)
-                .minimumScaleFactor(0.7)
-                .lineLimit(1)
-
-            Text(label)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.Text.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Theme.Space.sm)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                .fill(Theme.Surface.raised)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                .strokeBorder(Theme.Surface.separator, lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(value) \(label)")
-    }
-}
-
 // MARK: - Playground
 
 struct PlaygroundView: View {
@@ -321,9 +322,19 @@ struct PlaygroundView: View {
                 // Seeded with something worth fixing. An empty playground gives
                 // the AI actions nothing to act on, so the first tap does nothing
                 // and the feature looks broken.
+                //
+                // Which is exactly why the instruction cannot be "type a
+                // sentence": the sentence is already typed, so the one thing the
+                // screen told the user to do was the one thing already done. The
+                // hint names what to do *with* it, and `KeyboardPreview` drops it
+                // the moment the text stops being the seed. The placeholder is a
+                // different sentence for a different state — it is only ever seen
+                // once the user has cleared the field, and then typing really is
+                // the next thing.
                 KeyboardPreview(
-                    seedText: "i dont think we should do it because its not make sense",
-                    placeholder: "Type in Hebrew or English, then tap ✨"
+                    seedText: PlaygroundView.seedSentence,
+                    placeholder: PlaygroundView.seedPlaceholder,
+                    hint: PlaygroundView.seedHint
                 )
             }
             .background(Theme.Surface.background)
@@ -336,4 +347,19 @@ struct PlaygroundView: View {
             }
         }
     }
+
+    /// Shared with onboarding's last step so the two places that hand the user a
+    /// keyboard hand them the same sentence and the same next move.
+    ///
+    /// **Both name the button rather than drawing it.** These said "tap ✨" above a
+    /// bar carrying two brand-tinted buttons side by side, the left one wearing the
+    /// default tone's own icon — which was SF `sparkle`, the same drawing as the
+    /// menu's `sparkles`. `ToneSetting.settingsNote` fixed exactly this in Settings
+    /// and these two were left behind; the name now comes from
+    /// `SuggestionBar.aiButtonName`, so there is one spelling of it.
+    static let seedSentence = "i dont think we should do it because its not make sense"
+    static let seedPlaceholder = "Type in Hebrew or English, then tap \(SuggestionBar.aiButtonName)"
+    static let seedHint =
+        "This sentence has mistakes in it on purpose. Tap \(SuggestionBar.aiButtonName), then Fix to "
+        + "correct it, or Tone to say it another way."
 }

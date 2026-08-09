@@ -124,6 +124,23 @@ public struct BackendTransport: CloudTransport {
         return BackendTransport(baseURL: url, token: (token?.isEmpty == false) ? token : nil)
     }
 
+    /// Where the containing app lets somebody set this up, spelled once.
+    ///
+    /// **One key, one screen, one name.** `cloudBackendURL` is read by three
+    /// processes — the keyboard's text actions, the capture extension's screen
+    /// reader, and the app itself — and for most of this project it had a single
+    /// writer, a field titled "Where the screen is read" on the Screen Context
+    /// screen. So a Hebrew Fix, Rewrite, Tone or Reply failed with "no cloud model
+    /// is set up" and named nowhere to go, while the one place that could fix it
+    /// said it was about screen reading. Every failure that dead-ends here now
+    /// prints this string, and `CloudModelView` is the row it names.
+    public static let settingsPath = "Settings › AI › Cloud model"
+
+    /// The whole sentence, for the four failures that have to say it:
+    /// `AIEngineError.unsupportedLanguage`, `.cloudNotConfigured`,
+    /// `.deviceNotSupported` and `ScreenContextEndReason.notConfigured`.
+    public static let setUpRecovery = "Set one up in AI Keyboard, under \(settingsPath)."
+
     public func send(_ request: CloudRequest) async throws -> [String: String] {
         var body: [String: Any] = [
             "instructions": request.instructions,

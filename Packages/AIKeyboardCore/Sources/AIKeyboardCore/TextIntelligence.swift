@@ -37,7 +37,18 @@ public protocol TextIntelligence: Sendable {
     func canHandle(_ text: String, action: AIAction) -> Bool
 
     func fix(_ text: String) async throws -> String
-    func variants(for text: String, tone: ToneStyle?) async throws -> [RewriteVariant]
+    /// `instruction` is the user's own register, or nil for one of the six
+    /// built-in ones. Only meaningful alongside a non-nil `tone`: Rewrite offers
+    /// three different *decisions* rather than one register, and a user-authored
+    /// register has nothing to say about which decision each version takes.
+    ///
+    /// An engine that cannot honour the instruction runs the built-in `tone`
+    /// instead. It must never fold text it cannot serve into its own
+    /// instructions — see `FoundationModelsEngine.variants`.
+    func variants(
+        for text: String, tone: ToneStyle?, instruction: String?
+    ) async throws
+        -> [RewriteVariant]
     func replies(to context: ScreenContext) async throws -> [ReplyOption]
 }
 
@@ -84,8 +95,24 @@ public struct RoutedIntelligence: Sendable {
         try await route(text, .fix) { try await $0.fix(text) }
     }
 
-    public func variants(for text: String, tone: ToneStyle?) async throws -> AIOutput<[RewriteVariant]> {
-        try await route(text, tone == nil ? .rewrite : .tone) { try await $0.variants(for: text, tone: tone) }
+    /// **The register is not part of the routing question, and that is a
+    /// decision.** It is free text going into the model's *instructions*, and
+    /// Apple's model rejects a whole session whose instructions are in a language
+    /// it does not list — so an earlier version of this routed on the message and
+    /// the register together, to keep that pair away from the on-device engine.
+    /// That put the guard in the wrong place twice over: it sent an English
+    /// sentence to the cloud and five seconds of latency to buy a register the
+    /// cloud composer then dropped anyway, and it left the composer itself free to
+    /// merge the two languages for any caller that did not route. `Prompts.tone`
+    /// drops a register the chosen instruction set does not speak, so by the time
+    /// an engine sees one it is already safe to run, and the message alone decides
+    /// which engine that is — exactly as it does for Fix and Rewrite.
+    public func variants(
+        for text: String, tone: ToneStyle?, instruction: String? = nil
+    ) async throws -> AIOutput<[RewriteVariant]> {
+        try await route(text, tone == nil ? .rewrite : .tone) {
+            try await $0.variants(for: text, tone: tone, instruction: instruction)
+        }
     }
 
     public func replies(to context: ScreenContext) async throws -> AIOutput<[ReplyOption]> {

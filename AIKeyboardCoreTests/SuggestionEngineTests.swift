@@ -180,7 +180,8 @@ extension SuggestionEngineTests {
             "the correction has to reach the bar at all: \(results.map(\.text))")
         XCTAssertEqual(
             results.first(where: \.isDefault)?.text, "שלום",
-            "and it has to be the one space commits, not \(results.first(where: \.isDefault)?.text ?? "nothing")")
+            "and it has to be the one space commits, not \(results.first(where: \.isDefault)?.text ?? "nothing")"
+        )
         XCTAssertEqual(results.first?.text, "שלומ", "the literal keystrokes stay available")
     }
 

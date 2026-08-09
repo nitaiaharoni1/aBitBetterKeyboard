@@ -651,11 +651,15 @@ final class CaptureChannelTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set(true, forKey: "screenContextCloudReplies")
+        // The second one, and the same shape: `onDeviceAI` backed a "Prefer
+        // on-device" switch in Settings › AI that no code anywhere read.
+        defaults.set(true, forKey: "onDeviceAI")
         defaults.set(true, forKey: "screenContextAllowed")
 
         SharedStore.removeRetiredKeys(from: defaults)
 
         XCTAssertNil(defaults.object(forKey: "screenContextCloudReplies"))
+        XCTAssertNil(defaults.object(forKey: "onDeviceAI"))
         XCTAssertNotNil(
             defaults.object(forKey: "screenContextAllowed"),
             "a key the store still reads is not debris")
@@ -667,8 +671,10 @@ final class CaptureChannelTests: XCTestCase {
         let live = Set(
             [
                 "hasCompletedOnboarding", "enabledLanguages", "autocorrect", "autocapitalise",
-                "predictions", "haptics", "keySounds", "onDeviceAI", "defaultTone",
-                "personalDictionary", "isSubscribed", "screenContextAllowed", "cloudBackendURL"
+                "predictions", "haptics", "keySounds", "defaultTone",
+                "customToneInstruction", "prefersCustomTone",
+                "personalDictionary", "isSubscribed", "screenContextAllowed",
+                "cloudBackendURL", "cloudBackendToken"
             ])
         XCTAssertTrue(Set(SharedStore.retiredKeys).isDisjoint(with: live))
     }
@@ -688,15 +694,21 @@ final class CaptureChannelTests: XCTestCase {
     ///
     /// This asserts the list rather than the mapping, because the list is the
     /// claim: re-adding a case means finding the code that writes it first.
+    ///
+    /// The two added since carry their writer in this list on purpose:
+    /// `.notConfigured` is written by `SampleHandler.broadcastStarted` when
+    /// `ScreenReadService.canRead` is false, and `.noFrames` by
+    /// `SampleHandler.broadcastFinished` when the page's `framesDelivered` is still
+    /// zero. Neither is inferred and neither is decorative.
     func testEveryEndReasonIsOneSomethingCanWrite() {
         XCTAssertEqual(
-            ScreenContextEndReason.allCases, [.none, .stopped, .lost],
+            ScreenContextEndReason.allCases, [.notEnded, .stopped, .lost, .notConfigured, .noFrames],
             "a reason nothing writes is a sentence the strip prints and nobody checked")
         XCTAssertEqual(
-            ScreenContextEndReason.none.rawValue, 0,
+            ScreenContextEndReason.notEnded.rawValue, 0,
             "a zeroed page must not claim an ending")
         XCTAssertEqual(
-            CaptureStatus().endReason, .none,
+            CaptureStatus().endReason, .notEnded,
             "and a zeroed page reads back as running, not as an unknown ending")
 
         var status = CaptureStatus()
@@ -708,15 +720,111 @@ final class CaptureChannelTests: XCTestCase {
 
     /// The reason `broadcastFinished()` writes never names a cause, because that
     /// callback is not given one.
+    ///
+    /// The list is the three reasons whose cause iOS withholds. `.notConfigured`
+    /// and `.noFrames` are excluded because they are the opposite case: each names
+    /// something the capture process checked about itself before writing it, and a
+    /// rule against naming causes would forbid exactly the two reasons that have
+    /// one.
     func testTheRecordedStopDoesNotClaimWhoStoppedIt() {
         XCTAssertEqual(ScreenContextEndReason.stopped.explanation, "Screen context stopped.")
-        for reason in ScreenContextEndReason.allCases {
+        for reason in [ScreenContextEndReason.notEnded, .stopped, .lost] {
             for cause in ["call", "lock", "CarPlay", "memory", "you", "user"] {
                 XCTAssertFalse(
                     reason.explanation.localizedCaseInsensitiveContains(cause),
                     "\(reason) names a cause nothing measured")
+                XCTAssertFalse(
+                    reason.recovery.localizedCaseInsensitiveContains(cause),
+                    "\(reason)'s recovery names a cause nothing measured")
             }
         }
+    }
+
+    /// **Every reason says what to do, and it says it in one place.**
+    ///
+    /// The strip appended a fixed "Restart it in AI Keyboard." to every ending and
+    /// `ScreenContextView` appended its own "Start it again below." — two surfaces
+    /// reading one page and giving different advice, both of it wrong for an
+    /// ending a restart cannot fix. `recovery` is what makes them agree by
+    /// construction. A view test cannot assert that from here, so this asserts the
+    /// property the views rest on: the advice exists, it is not the explanation
+    /// repeated, and the one reason a restart will not fix says so.
+    func testEveryEndReasonCarriesItsOwnRecovery() {
+        for reason in ScreenContextEndReason.allCases {
+            XCTAssertFalse(
+                reason.recovery.isEmpty, "\(reason) offers the user nothing to do")
+            XCTAssertNotEqual(
+                reason.recovery, reason.explanation,
+                "\(reason) restates what happened instead of what to do about it")
+            XCTAssertFalse(
+                reason.explanation.isEmpty, "\(reason) is a silent ending")
+        }
+
+        XCTAssertFalse(
+            ScreenContextEndReason.notConfigured.canRestart,
+            "a second broadcast would end the same way inside a second")
+        for reason in [ScreenContextEndReason.notEnded, .stopped, .lost, .noFrames] {
+            XCTAssertTrue(reason.canRestart, "\(reason) is fixed by starting another one")
+        }
+    }
+
+    /// **The producer's two decisions, against the versions they replaced.**
+    ///
+    /// Both used to be written inline in `SampleHandler.broadcastStarted` and
+    /// `broadcastFinished`, where nothing can reach them: `AIKeyboardCoreTests`
+    /// cannot import an app extension, and no simulator ships `replayd`. Moved into
+    /// `ScreenContextEndReason` they are two pure functions of one value each, and
+    /// each assertion below is chosen to reject the code that shipped before it:
+    ///
+    /// | Broken version | Returns | Asserted |
+    /// |---|---|---|
+    /// | no refusal at all | nil for `canRead: false` | `.notConfigured` |
+    /// | `channel.end(.stopped)` unconditionally | `.stopped` for 0 frames | `.noFrames` |
+    ///
+    /// The two `nil`/`.stopped` cases are the other half of each pair — a decision
+    /// that refused every session, or called every ending a failure, would be worse
+    /// than the bug — and they are guards rather than the point.
+    func testTheProducerNamesWhichWayASessionFailed() {
+        XCTAssertEqual(
+            ScreenContextEndReason.refusalToStart(canRead: false), .notConfigured,
+            "a broadcast that can never answer a Reply was allowed to run anyway")
+        XCTAssertNil(
+            ScreenContextEndReason.refusalToStart(canRead: true),
+            "a session with a reader behind it must not be refused")
+
+        XCTAssertEqual(
+            ScreenContextEndReason.ending(framesDelivered: 0), .noFrames,
+            "a session ReplayKit never fed reads as an ordinary stop, which is R1 failing silently")
+        XCTAssertEqual(
+            ScreenContextEndReason.ending(framesDelivered: 1), .stopped,
+            "one frame is enough: the pipeline worked and this ending names no cause")
+    }
+
+    /// **The first reason wins.**
+    ///
+    /// `SampleHandler` records `.notConfigured` and then calls
+    /// `finishBroadcastWithError:`. Nothing in `RPBroadcastExtension.h` says
+    /// whether iOS answers that with a `broadcastFinished()`, and if it does, an
+    /// unconditional write would replace the one reason the user can act on with
+    /// `.stopped`, which names nothing. This is the guard, and without it the
+    /// second `end` overwrites the first.
+    func testASecondEndingDoesNotOverwriteTheFirstReason() throws {
+        let writer = try XCTUnwrap(CaptureChannelWriter(directory: directory))
+        writer.begin()
+
+        writer.end(.notConfigured)
+        XCTAssertEqual(writer.status()?.endReason, .notConfigured)
+
+        writer.end(.stopped)
+        XCTAssertEqual(
+            writer.status()?.endReason, .notConfigured,
+            "a diagnosis was replaced by a shrug")
+
+        // And a new session starts clean, so the guard cannot wedge the channel.
+        writer.begin()
+        XCTAssertEqual(writer.status()?.endReason, ScreenContextEndReason.notEnded)
+        writer.end(.stopped)
+        XCTAssertEqual(writer.status()?.endReason, .stopped)
     }
 
     /// **An aborted transaction must not poison the page forever.**

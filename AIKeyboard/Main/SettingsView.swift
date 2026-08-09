@@ -54,14 +54,16 @@ struct SettingsView: View {
 
     // MARK: AI
 
+    /// **The cloud row leads, because without it most of this section does
+    /// nothing.** Apple's on-device model has no Hebrew, so on a stock install
+    /// every Fix, Rewrite, Tone and Reply in the keyboard's primary language fails
+    /// with "no cloud model is set up" — and this screen used to answer that with a
+    /// tone picker and a "Prefer on-device" switch nothing read. See
+    /// `CloudModelView` for why the setting lives here rather than on Screen
+    /// Context.
     private var aiSection: some View {
         section("AI") {
-            ToggleRow(
-                title: "Prefer on-device",
-                subtitle: "Uses Apple's local model when it can, and only falls back to the cloud when it cannot",
-                icon: "cpu",
-                isOn: $store.preferOnDeviceAI
-            )
+            CloudModelRow()
             divider
             HStack(spacing: Theme.Space.sm) {
                 IconBadge(systemName: "slider.horizontal.3")
@@ -69,14 +71,69 @@ struct SettingsView: View {
                     .font(.system(size: 16))
                     .foregroundStyle(Theme.Text.primary)
                 Spacer()
-                Picker("Default tone", selection: $store.defaultTone) {
+                Picker("Default tone", selection: toneChoice) {
                     ForEach(ToneStyle.allCases) { tone in
-                        Text(tone.title).tag(tone)
+                        Text(tone.title).tag(Optional(tone))
                     }
+                    Text(ToneSetting.customTitle).tag(ToneStyle?.none)
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
             }
+
+            if store.prefersCustomTone {
+                customToneField
+            }
+        }
+    }
+
+    /// The picker's seventh option. `nil` is the user's own tone rather than a
+    /// seventh `ToneStyle`, because `ToneStyle`'s raw values are the persisted
+    /// setting and its cases are the chips in the keyboard's tone panel — see
+    /// `ToneSetting`.
+    private var toneChoice: Binding<ToneStyle?> {
+        Binding(
+            get: { store.prefersCustomTone ? nil : store.defaultTone },
+            set: { choice in
+                guard let choice else {
+                    store.prefersCustomTone = true
+                    return
+                }
+                store.prefersCustomTone = false
+                store.defaultTone = choice
+            }
+        )
+    }
+
+    /// One line, in the user's words, describing how they want to sound.
+    ///
+    /// Deliberately a single-line field with a hard cap: this text is handed to a
+    /// model as its register, and a paragraph stops being a register.
+    private var customToneField: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            TextField(
+                "Short and blunt, no pleasantries",
+                text: Binding(get: { store.customTone }, set: { store.customTone = $0 })
+            )
+            .font(.system(size: 15))
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .padding(.horizontal, Theme.Space.sm)
+            .frame(height: 44)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.Surface.raised)
+            )
+            .accessibilityIdentifier("row-custom-tone")
+            .accessibilityLabel("Your own tone")
+
+            // The sentence lives on `ToneSetting`, not here: it names a control,
+            // it named the wrong one (a ✦ button nothing draws), and the app
+            // target has no test host to catch that. See `ToneSetting.settingsNote`.
+            Text(store.toneSetting.settingsNote)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.Text.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -129,7 +186,15 @@ struct SettingsView: View {
             divider
             NavigationRow(
                 title: store.isSubscribed ? "Subscription" : "Upgrade to Pro",
-                subtitle: store.isSubscribed ? "Active" : "Unlimited rewrites and cloud dictation",
+                // Not "cloud dictation". There is no dictation of any kind in this
+                // build — the mic key streams a scripted transcript — so a paid
+                // tier could not have a better one. See `MockDictation`.
+                //
+                // And not "Unlimited rewrites and every tone" either, which is the
+                // same claim `SubscriptionView` just stopped making: nothing counts
+                // a rewrite and nothing gates a tone, so "unlimited" describes a
+                // cap that does not exist.
+                subtitle: store.isSubscribed ? "Active" : "Mock paywall, nothing is gated yet",
                 icon: "sparkles"
             ) {
                 SubscriptionView()
@@ -156,9 +221,17 @@ struct SettingsView: View {
             Text("AI Keyboard 0.1")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Theme.Text.secondary)
-            Text("Mock build · no network, no model, no microphone")
+            // Was "Mock build · no network, no model, no microphone". Two of
+            // those three stopped being true when `MockAI` was replaced by
+            // `RoutedIntelligence` over Apple's on-device model and a backend
+            // transport. The third is still true and is the only one left here,
+            // because it is the one the user can feel: dictation streams a
+            // script, and a keyboard extension has no microphone with or without
+            // Full Access.
+            Text("Dictation is a scripted demo — iOS gives a keyboard no microphone")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.Text.tertiary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, Theme.Space.xs)

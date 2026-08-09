@@ -1,3 +1,4 @@
+import AVFAudio
 import SwiftUI
 import AIKeyboardCore
 
@@ -232,17 +233,50 @@ struct SecondaryButton: View {
 
 // MARK: - Status
 
+/// The three measurements behind the setup card.
+///
+/// The reading of them is `SetupState` in `AIKeyboardShared`, where it can be
+/// tested; this is the half that has to be here, because `AVAudioApplication` is
+/// AVFoundation and that target is linked on its own by the broadcast extension.
+///
+/// The third is the cloud model, and it is a measurement rather than an
+/// assumption for the same reason the first two are: the card used to print "cloud
+/// rewrites work" off a green Full Access tick alone, which on a stock install is
+/// the opposite of the truth.
+extension SetupState {
+    static func current() -> SetupState {
+        SetupState(
+            presence: KeyboardPresence.load(),
+            microphone: .current,
+            cloudConfigured: BackendTransport.configured() != nil)
+    }
+}
+
+extension MicrophonePermission {
+    /// `AVAudioApplication.recordPermission` is the iOS 17 spelling and the iOS 26
+    /// SDK still carries it undeprecated; the `AVAudioSession` property of the same
+    /// name has been deprecated since iOS 17. Reading it prompts nothing.
+    static var current: MicrophonePermission {
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted: return .granted
+        case .denied: return .denied
+        default: return .undetermined
+        }
+    }
+}
+
 struct StatusRow: View {
     let title: String
     let detail: String
-    let isDone: Bool
+    let check: SetupCheck
+    var actionTitle = "Settings"
     var action: (() -> Void)?
 
     var body: some View {
         HStack(spacing: Theme.Space.sm) {
-            Image(systemName: isDone ? "checkmark.circle.fill" : "circle.dashed")
+            Image(systemName: symbol)
                 .font(.system(size: 20))
-                .foregroundStyle(isDone ? Theme.Semantic.success : Theme.Text.tertiary)
+                .foregroundStyle(tint)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
@@ -251,18 +285,43 @@ struct StatusRow: View {
                 Text(detail)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: Theme.Space.xs)
 
-            if !isDone, let action {
-                Button("Fix", action: action)
+            if check != .confirmed, let action {
+                Button(actionTitle, action: action)
                     .font(.system(size: 14, weight: .semibold))
                     .buttonStyle(.borderless)
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityValue(isDone ? "Done" : "Not done yet")
+        .accessibilityValue(spokenValue)
+    }
+
+    private var symbol: String {
+        switch check {
+        case .confirmed: return "checkmark.circle.fill"
+        case .unknown: return "questionmark.circle"
+        case .blocked: return "exclamationmark.circle.fill"
+        }
+    }
+
+    private var tint: Color {
+        switch check {
+        case .confirmed: return Theme.Semantic.success
+        case .unknown: return Theme.Text.tertiary
+        case .blocked: return Theme.Semantic.warning
+        }
+    }
+
+    private var spokenValue: String {
+        switch check {
+        case .confirmed: return "Done"
+        case .unknown: return "Not checked yet"
+        case .blocked: return "Needs attention"
+        }
     }
 }
 
@@ -276,36 +335,71 @@ struct KeyboardPreview: View {
 
     private let showsDocument: Bool
     private let placeholder: String
+    private let seedText: String
+    private let hint: String?
 
     init(
         seedText: String = "",
         language: KeyboardLanguage = .english,
         showsDocument: Bool = true,
-        placeholder: String = "Type something…"
+        placeholder: String = "Type something…",
+        hint: String? = nil
     ) {
         let document = MockTextTarget(text: seedText)
         _target = StateObject(wrappedValue: document)
-        _controller = StateObject(wrappedValue: {
-            let controller = KeyboardController(target: document, language: language)
-            // There is no other keyboard to switch to inside the app, so the globe
-            // key cycles languages only.
-            controller.showsGlobeKey = true
-            return controller
-        }())
+        _controller = StateObject(
+            wrappedValue: {
+                let controller = KeyboardController(target: document, language: language)
+                // There is no other keyboard to switch to inside the app, so the globe
+                // key cycles languages only.
+                controller.showsGlobeKey = true
+                return controller
+            }())
         self.showsDocument = showsDocument
         self.placeholder = placeholder
+        self.seedText = seedText
+        self.hint = hint
     }
 
     var body: some View {
         VStack(spacing: 0) {
+            if let hint, showsHint {
+                hintLine(hint)
+            }
             if showsDocument {
                 document
             }
             KeyboardView(controller: controller)
         }
+        // On the container, not on the hint: the hint is removed from the tree
+        // when it stops applying, so a modifier attached to it is gone before it
+        // could animate anything.
+        .animation(Theme.Motion.quick, value: showsHint)
         .onChange(of: target.text) { _, _ in
             controller.refreshSuggestions()
         }
+    }
+
+    /// The hint names the next useful thing to do *with the sentence that is
+    /// already there*, so it has to leave the moment the user does something with
+    /// it — typing, deleting, or opening the AI menu and taking a rewrite. An
+    /// instruction that outlives the state it describes is how "type a sentence"
+    /// ended up printed above a sentence.
+    private var showsHint: Bool { !seedText.isEmpty && target.text == seedText }
+
+    private func hintLine(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            SparkleMark(size: 13)
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.Text.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Theme.Space.sm)
+        .padding(.top, Theme.Space.sm)
+        .transition(.opacity)
+        .accessibilityElement(children: .combine)
     }
 
     private var document: some View {

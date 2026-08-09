@@ -8,7 +8,7 @@ import SwiftUI
 /// only line of it that stayed behind.
 extension KeyboardLanguage {
     public var layoutDirection: LayoutDirection {
-        self == .hebrew ? .rightToLeft : .leftToRight
+        isRightToLeft ? .rightToLeft : .leftToRight
     }
 }
 
@@ -78,9 +78,15 @@ public enum ToneStyle: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
+    /// **No tone may wear a sparkle, and Clearer did.** SF `sparkle` and SF
+    /// `sparkles` are the same drawing at different counts, and the one-tap tone
+    /// button sits directly beside the AI menu's `SparkleMark` in
+    /// `SuggestionBar` — so the shipped default tone put two sparkles side by
+    /// side, one running a rewrite and one opening a panel, and every instruction
+    /// that named "✨" pointed at both. `ToneIconTests` holds the rule.
     public var icon: String {
         switch self {
-        case .clearer: return "sparkle"
+        case .clearer: return "eyeglasses"
         case .shorter: return "arrow.down.right.and.arrow.up.left"
         case .professional: return "briefcase"
         case .casual: return "figure.wave"

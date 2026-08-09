@@ -75,7 +75,9 @@ xcrun swift-format --in-place --recursive \
 
 **Companion app**
 - Six-step onboarding ending in a working keyboard
-- Home with session state, setup checklist, playground, stats
+- Home with session state, setup checklist and playground. There is no stat row;
+  it read "1,284 words fixed" and "37m time saved", both invented constants, and
+  neither is measurable today
 - Screen Context: Apple's broadcast picker, the capture process's own counters,
   a sample conversation to try it without starting anything, what it does and
   does not do
@@ -96,10 +98,19 @@ letters that are not already a word. The first version of this turned `I` into
 you the before and after and let you decline. Nothing is applied silently.
 
 **Reply leads the AI menu and explains itself when it cannot run.** Tapping it
-without a capture session says what screen context is and where to start it,
-rather than being greyed out with no reason given. It says it in words: only
-iOS's own picker can start a broadcast, so a button there would have nothing
-honest to do.
+without a capture session says what screen context is and, when a broadcast
+started now could actually get somewhere, hosts Apple's own picker so it can be
+started from the keyboard. `RPSystemBroadcastPickerView` is a plain `UIView` that
+talks to `replayd`, so it needs no `UIApplication`; what is not proven is that
+`replayd` answers a keyboard extension, which is why the words sending the user
+to the app stay under the button. With no Full Access, an unrecoverable ending or
+no cloud model, the picker is withheld and the reason is printed instead.
+
+**The AI button stays tappable on an empty field**, which is the state that
+matters: you tap the compose box in WhatsApp and want to answer the message
+above it, having typed nothing. The menu greys Fix, Rewrite and Tone itself.
+It used to be disabled by "text or a live session", so the one panel that had
+something to say in that state was behind a button that would not open.
 
 **The brand gradient only appears on AI moments.** Everything else is system
 grey, so the keyboard reads as native rather than as a web page glued to the
@@ -109,10 +120,13 @@ bottom of the screen.
 
 These shape the UI, so they are modelled rather than glossed over.
 
-**A keyboard extension cannot open the microphone.** Dictation says "Recording
-runs in the AI Keyboard app" because in the real build the audio session lives in
-the main app and hands the transcript back. This is the part most likely to break
-on an iOS update, and it is worth prototyping before anything else.
+**A keyboard extension cannot open the microphone.** In a real build the audio
+session would live in the main app and hand the transcript back. Nothing here
+does that yet, so the dictation panel says what it is — "A scripted demo — iOS
+gives a keyboard no microphone" — rather than describing the architecture it
+would need. (It used to say "Recording runs in the AI Keyboard app", which
+describes a build that does not exist.) This is the part most likely to break on
+an iOS update, and it is worth prototyping before anything else.
 
 **Screen context is a session, not a permission.** Apple's persistent-capture
 entitlement is meant for remote-desktop apps, so "allow once, works forever" is
@@ -123,10 +137,9 @@ onboarding: it is something you start, not something you set up once.
 **And the app cannot start it either.** `RPSystemBroadcastPickerView` is the only
 supported entry point and its button is system-vended, so no code can press it —
 the Screen Context screen hosts the picker, says what the three taps after it
-look like, and says plainly that only iOS can start this. The same constraint is
-why the keyboard's Reply panel, when nothing is running, is words rather than a
-button: it used to offer "Start screen context", which started the scripted
-sample and no capture at all.
+look like, and says plainly that only iOS can start this. The keyboard's Reply
+panel hosts the same picker rather than the "Start screen context" button it
+once had, which started the scripted sample and no capture at all.
 
 **Capture is never silent, and a session that ends says so.** iOS shows its own
 indicator; the keyboard shows a red dot — red only while frames are actually
@@ -208,14 +221,32 @@ without it too — but only for the 23 languages Apple's model supports, and Heb
 is not one of them, so every Hebrew AI action needs the network and therefore Full
 Access. Two things follow. iOS only lets a keyboard extension reach a shared
 container once Full Access is granted, so without it the keyboard falls back to
-shipped defaults instead of the settings the user chose in the app. And for the
-audience this keyboard is built for, "optional" is the wrong word.
+shipped defaults instead of the settings the user chose in the app — including
+the language list, which leaves a French-only user on an English/Hebrew keyboard
+with no way to change it from inside one. The app says that in both places it
+matters: `SetupState.worksWithoutFullAccess` on the Full Access step, and
+`SetupState.languagesNeedFullAccess` beside the language picker itself, in
+onboarding and in the Languages tab, withheld once Full Access is confirmed. And
+for the audience this keyboard is built for, "optional" is the wrong word.
+
+**Full Access is not sufficient either, and the app has to say so.** It buys the
+network; it does not buy somewhere to send. The cloud engine only exists when
+`cloudBackendURL` is in the shared store, which is set in one place —
+`Settings › AI › Cloud model`, `BackendTransport.settingsPath` — and nothing
+deploys a server for you, so a fresh install is honestly "not set up" rather than
+broken. Every surface that depends on it reads the same measurement: Home's Full
+Access row and onboarding's "What it turns on" both go through
+`SetupState.cloudConfigured` instead of claiming cloud rewrites work, the four
+failures that dead-end on it (`unsupportedLanguage`, `cloudNotConfigured`,
+`deviceNotSupported`, `ScreenContextEndReason.notConfigured`) all print that one
+path, and the keyboard's Reply panel withholds the broadcast picker rather than
+starting a screen recording iOS ends inside a second.
 
 ## The mocks, and what replaces them
 
 | Mock | Real thing |
 |---|---|
-| ~~`MockSuggestionEngine`~~ — now `SuggestionEngine` | **Done, with one part honestly left out.** Completions, spelling guesses and autocorrect all come from `UITextChecker`, the on-device engine the system keyboard's own autocorrect draws on, plus the user's own names and text replacements via `UILexicon`. **Hebrew works here**, unlike Foundation Models, `SpeechTranscriber` and Vision's text recogniser: `UITextChecker.availableLanguages` lists `he_IL` among 42, and `אנ` completes to `אני`. (It is not the only Apple text API here with Hebrew — `LanguageDetector` uses `NLLanguageRecognizer`, which returns `he` too.) Its Hebrew is also weaker than that sounds, and the gap is handled rather than described: `שלומ` — "hello" typed with a plain mem instead of a final mem — has twelve real completions, so Apple's spelling-guess path never runs and the bar used to offer `שלומדים`, committing "who are studying". `SuggestionEngine` corrects the five final-form letters itself, by orthography rather than by dictionary lookup, and `SuggestionEngineTests` pins that case. What is *not* real is predicting the next word from nothing typed: that is QuickType, and Apple ships no public API for it, so it remains a small fixed table and says so where it lives rather than being dressed up. |
+| ~~`MockSuggestionEngine`~~ — now `SuggestionEngine` | **Done, with one part honestly left out.** Completions, spelling guesses and autocorrect all come from `UITextChecker`, the on-device engine the system keyboard's own autocorrect draws on, plus the personal dictionary the app writes and the user's own names and text replacements via `UILexicon`. A word on either list is offered above the system dictionary and, more importantly, is never overridden by it: that check runs before every autocorrect rule, including the Hebrew final-form one, because the app's own shipped entry `בלי־פרופ` was being committed as `בלי־פרוף`. The word is compared with the marks that end a sentence taken off it, because the word under the cursor runs back to the last whitespace and so `Hi Nitai,` is one prefix — protecting `Nitai` and not `Nitai,` left the commonest shape a name is typed in exactly as broken as before. The mark itself now survives the replacement too, which is a separate repair with no dictionary in it: `recieve,` used to commit as `receive`, comma and all gone. **Hebrew works here**, unlike Foundation Models, `SpeechTranscriber` and Vision's text recogniser: `UITextChecker.availableLanguages` lists `he_IL` among 42, and `אנ` completes to `אני`. (It is not the only Apple text API here with Hebrew — `LanguageDetector` uses `NLLanguageRecognizer`, which returns `he` too.) Its Hebrew is also weaker than that sounds, and the gap is handled rather than described: `שלומ` — "hello" typed with a plain mem instead of a final mem — has twelve real completions, so Apple's spelling-guess path never runs and the bar used to offer `שלומדים`, committing "who are studying". `SuggestionEngine` corrects the five final-form letters itself, by orthography rather than by dictionary lookup, and `SuggestionEngineTests` pins that case. What is *not* real is predicting the next word from nothing typed: that is QuickType, and Apple ships no public API for it, so it remains a small fixed table and says so where it lives rather than being dressed up. |
 | ~~`MockAI`~~ — now `RoutedIntelligence` | **Done.** Apple Foundation Models on device for the languages it lists, a cloud LLM behind it for the rest. Hebrew is not one of Apple's supported languages, so it needs the cloud path. The cloud provider sits behind a protocol; a shipped app cannot hold cloud credentials, so it must point at your own backend. The direct-to-Vertex client used to score `Bar/ai-text/` lives in the harness and is deliberately not in the app target. |
 | `MockDictation` | **Still a mock, and the blocker is narrower than "keyboards cannot dictate".** The keyboard itself genuinely cannot record: Apple's guidance for custom keyboards lists, verbatim, under the standard sandbox *"No access to microphone and speaker,"* and open access does not lift it — that page says an open-access keyboard *"has all the capabilities in the preceding list"* and then adds Location, Contacts, a shared container, server-side processing, iCloud, Game Center and MDM, naming the microphone nowhere. **But Gboard ships voice typing on iOS anyway**, by handing off to the Gboard *app* and sending the text back ([TechCrunch, 2017](https://techcrunch.com/2017/02/23/googles-ios-keyboard-gets-the-one-feature-it-really-lacked-voice-typing/) — reporting, not a teardown, so read it as strong evidence the feature exists rather than proof of the mechanism), so the feature is achievable and the architecture it needs is the one screen context already uses here: sensor in the containing app, result across the App Group, keyboard as a pure reader. What is unsettled is the *trigger* — `UIApplication` is unavailable to extensions, and the usual responder-chain `openURL` workaround is explicitly disallowed and a likely rejection. Hebrew adds a second cost: `SpeechTranscriber` lists no Hebrew at all, and legacy `SFSpeechRecognizer` has `he-IL` but no on-device support here, so Hebrew means network STT. See the comment above `MockDictation`. |
 | `MockScreenContext` | **Reading a frame is done and measured** — `RoutedScreenReader`, scored against `Bar/screen-context/`. **Getting** one is not. ScreenCaptureKit is `iOS 27.0+` and absent from the iOS 26.2 SDK this project compiles against. The ReplayKit route is built except for the read: the app hosts `RPSystemBroadcastPickerView` so a user can start a broadcast, `AIKeyboardBroadcast` fingerprints every sampled frame and publishes a `CaptureStatus` page, and `ScreenContextSession` consumes that page — the strip and the app screen render no session, starting, watching, a reading, paused and stopped-unexpectedly from it, and Reply raises `intent.readNow` and waits for a reading the freshness gate accepts. The read is there too: a tap makes `AIKeyboardBroadcast` encode one frame and call `CloudScreenReader` on its own serial queue, then publish the text with the identity of the frame it read. **And none of it has ever run**: the iOS Simulator ships no `replayd`, so no broadcast session starts here and `SampleHandler` has never been called. The scripted sample stays behind a button on the Screen Context screen, labelled as a sample, and yields to a real session the moment one appears. `ScreenContextSession.submit(_:appName:appIcon:)` is the in-app seam. |

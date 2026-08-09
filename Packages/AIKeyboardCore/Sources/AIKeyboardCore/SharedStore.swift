@@ -63,7 +63,11 @@ public final class SharedStore: ObservableObject {
         }
     }
 
-    private enum Key {
+    /// Internal rather than private so `ToneSetting.swift`'s two accessors can
+    /// name their keys here instead of keeping a second copy of the strings. A
+    /// setting stored under a string that exists in two files is a setting
+    /// `resetToDefaults()` will eventually stop clearing.
+    enum Key {
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let enabledLanguages = "enabledLanguages"
         static let autocorrect = "autocorrect"
@@ -71,8 +75,16 @@ public final class SharedStore: ObservableObject {
         static let predictions = "predictions"
         static let haptics = "haptics"
         static let keySounds = "keySounds"
-        static let onDeviceAI = "onDeviceAI"
         static let defaultTone = "defaultTone"
+        /// The two `BackendTransport.configured` reads. It declares them inline in
+        /// `AIKeyboardShared`, which cannot see this enum, so they are spelled
+        /// twice on purpose and
+        /// `BackendTransportSuiteTests.testConfiguredReadsWhicheverStoreItIsGiven`
+        /// is what fails if the two spellings ever part.
+        static let cloudBackendURL = "cloudBackendURL"
+        static let cloudBackendToken = "cloudBackendToken"
+        static let customToneInstruction = "customToneInstruction"
+        static let prefersCustomTone = "prefersCustomTone"
         static let personalDictionary = "personalDictionary"
         static let isSubscribed = "isSubscribed"
         static let screenContextAllowed = "screenContextAllowed"
@@ -93,7 +105,16 @@ public final class SharedStore: ObservableObject {
     ///
     /// Removed on `load()` rather than on `resetToDefaults()`, because the whole
     /// point is that it happens on an ordinary launch of an existing install.
-    static let retiredKeys = ["screenContextCloudReplies"]
+    ///
+    /// `onDeviceAI` is the second of them and has the same shape. It backed a
+    /// "Prefer on-device" switch in Settings › AI, and **nothing anywhere read
+    /// it**: `RoutedIntelligence.route` tries the on-device model first whenever it
+    /// says it can take the language, unconditionally, so the switch was already
+    /// describing what the router does and could not change it. Removed rather than
+    /// implemented — off would have meant "always prefer the cloud", which is a
+    /// feature nobody asked for and which does nothing at all on the language this
+    /// keyboard exists for, since Apple's model has no Hebrew either way.
+    static let retiredKeys = ["screenContextCloudReplies", "onDeviceAI"]
 
     /// Takes the retired keys out of a store. Static and explicit about its
     /// argument so a test can drive it against a scratch suite; the singleton's
@@ -113,7 +134,14 @@ public final class SharedStore: ObservableObject {
 
     // MARK: Languages
 
-    @Published public var enabledLanguages: [KeyboardLanguage] = [.english, .hebrew] {
+    /// What a keyboard with no stored list draws — which, until Full Access is
+    /// granted, is every keyboard, because iOS withholds the shared container
+    /// until then. Named so the sentence that warns about that
+    /// (`SetupState.languagesNeedFullAccess`) can be checked against it rather
+    /// than against a remembered pair.
+    public static let shippedDefaultLanguages: [KeyboardLanguage] = [.english, .hebrew]
+
+    @Published public var enabledLanguages: [KeyboardLanguage] = SharedStore.shippedDefaultLanguages {
         didSet { defaults.set(enabledLanguages.map(\.rawValue), forKey: Key.enabledLanguages) }
     }
 
@@ -139,20 +167,93 @@ public final class SharedStore: ObservableObject {
 
     // MARK: AI
 
-    @Published public var preferOnDeviceAI = true {
-        didSet { defaults.set(preferOnDeviceAI, forKey: Key.onDeviceAI) }
-    }
     @Published public var defaultTone: ToneStyle = .clearer {
         didSet { defaults.set(defaultTone.rawValue, forKey: Key.defaultTone) }
     }
 
+    // MARK: The cloud model
+
+    /// The backend every cloud call goes to, exactly as typed.
+    ///
+    /// **One key, and it is the one the whole product turns on.** Three readers
+    /// live off it — `KeyboardController`'s text actions, `ScreenReadService` in the
+    /// capture process, and `ScreenContextSession` — and all three reach it through
+    /// `BackendTransport.configured`. This is the writer, and until `CloudModelView`
+    /// there was effectively only one, hidden on the Screen Context screen under a
+    /// heading about screen reading, so a Hebrew rewrite failed forever with no way
+    /// to find out why.
+    ///
+    /// Computed through `userDefaults` rather than `@Published`, exactly like
+    /// `customTone`: the value is read by another process at the moment of a tap,
+    /// and a published copy filled at launch would be the stale one. Empty removes
+    /// the key rather than storing "", because `URL(string: "")` is a URL and a
+    /// stored empty string would read back as a configured backend with no scheme.
+    public var cloudBackendURL: String {
+        get { defaults.string(forKey: Key.cloudBackendURL) ?? "" }
+        set { write(newValue, forKey: Key.cloudBackendURL) }
+    }
+
+    /// The optional bearer token sent beside it. See `BackendTransport.send` for
+    /// what it is and is not, and `CloudModelView` for where it is stored.
+    public var cloudBackendToken: String {
+        get { defaults.string(forKey: Key.cloudBackendToken) ?? "" }
+        set { write(newValue, forKey: Key.cloudBackendToken) }
+    }
+
+    /// Whether an AI action would find a cloud engine right now. The same question
+    /// `BackendTransport.configured` answers, asked of this store so a screen can
+    /// render it.
+    public var hasCloudModel: Bool { BackendTransport.configured(defaults: defaults) != nil }
+
+    private func write(_ value: String, forKey key: String) {
+        objectWillChange.send()
+        if value.isEmpty {
+            defaults.removeObject(forKey: key)
+        } else {
+            defaults.set(value, forKey: key)
+        }
+    }
+
     // MARK: Personal dictionary
 
-    @Published public var personalDictionary: [String] = [
+    /// The list a fresh install starts with.
+    ///
+    /// Named rather than left inline so `resetToDefaults()` can put it back — it
+    /// removed the key and left the in-memory list alone, which is a reset that
+    /// does not reset — and so `PersonalDictionaryTests` can hold *these* words to
+    /// surviving the space bar. They are the ones the defect was measured on:
+    /// every one of them was destroyed by this keyboard's own autocorrect.
+    public static let shippedPersonalDictionary = [
         "Nitai", "Handi", "Wispr", "KeyboardKit", "סאפא", "בלי־פרופ"
     ]
+
+    /// Names and words the keyboard must never correct. `DictionaryView` edits
+    /// this; `SuggestionEngine` is what honours it, through
+    /// `KeyboardController.refreshSuggestions`.
+    @Published public var personalDictionary: [String] = SharedStore.shippedPersonalDictionary
     {
         didSet { defaults.set(personalDictionary, forKey: Key.personalDictionary) }
+    }
+
+    /// The same list, read out of the store at the moment it is needed.
+    ///
+    /// **The keyboard has to use this one, for the reason `storedDefaultTone`
+    /// exists.** The editor is in the app and the reader is in the keyboard
+    /// extension; those are two processes, and `load()` fills the `@Published`
+    /// copy above once, when whichever process asked was launched. A keyboard
+    /// already on screen when a word was added would otherwise keep autocorrecting
+    /// it away — which, since adding a word is the only thing the dictionary
+    /// screen does, looks exactly like the feature not working.
+    ///
+    /// An empty stored array is honoured rather than treated as absent: a user who
+    /// removed every word meant it. `load()` guarded on `!words.isEmpty` and so
+    /// disagreed with this — a fresh app process re-seeded the published copy with
+    /// the six shipped words while the keyboard was correctly honouring none, so
+    /// Settings counted "6" that were not in effect and the next add wrote all six
+    /// back into effect. Harmless while nothing read the list; not once something
+    /// did.
+    public var storedPersonalDictionary: [String] {
+        defaults.array(forKey: Key.personalDictionary) as? [String] ?? personalDictionary
     }
 
     // MARK: Screen context
@@ -182,20 +283,25 @@ public final class SharedStore: ObservableObject {
         for key in [
             Key.hasCompletedOnboarding, Key.enabledLanguages, Key.autocorrect,
             Key.autocapitalise, Key.predictions, Key.haptics, Key.keySounds,
-            Key.onDeviceAI, Key.defaultTone, Key.personalDictionary,
+            Key.defaultTone, Key.customToneInstruction,
+            Key.prefersCustomTone, Key.personalDictionary,
             Key.isSubscribed, Key.screenContextAllowed
+            // Deliberately not `cloudBackendURL` or `cloudBackendToken`. A UI test
+            // run would otherwise wipe the backend whoever is developing this
+            // typed in, and it is the one setting here that cannot be recovered by
+            // tapping a switch back on.
         ] {
             defaults.removeObject(forKey: key)
         }
         hasCompletedOnboarding = false
-        enabledLanguages = [.english, .hebrew]
+        enabledLanguages = Self.shippedDefaultLanguages
         autocorrect = true
         autocapitalise = true
         predictions = true
         haptics = true
         keySounds = true
-        preferOnDeviceAI = true
         defaultTone = .clearer
+        personalDictionary = Self.shippedPersonalDictionary
         isSubscribed = false
         screenContextAllowed = false
     }
@@ -222,13 +328,15 @@ public final class SharedStore: ObservableObject {
         }
         if defaults.object(forKey: Key.haptics) != nil { haptics = defaults.bool(forKey: Key.haptics) }
         if defaults.object(forKey: Key.keySounds) != nil { keySounds = defaults.bool(forKey: Key.keySounds) }
-        if defaults.object(forKey: Key.onDeviceAI) != nil {
-            preferOnDeviceAI = defaults.bool(forKey: Key.onDeviceAI)
-        }
         if let tone = defaults.string(forKey: Key.defaultTone).flatMap(ToneStyle.init(rawValue:)) {
             defaultTone = tone
         }
-        if let words = defaults.array(forKey: Key.personalDictionary) as? [String], !words.isEmpty {
+        // No `!words.isEmpty` guard: an empty stored list is a list the user
+        // emptied, and treating it as absent made this reader and
+        // `storedPersonalDictionary` disagree about what is in force. Absent is
+        // still the shipped default, because that is what the key not existing
+        // means.
+        if let words = defaults.array(forKey: Key.personalDictionary) as? [String] {
             personalDictionary = words
         }
         if defaults.object(forKey: Key.isSubscribed) != nil {

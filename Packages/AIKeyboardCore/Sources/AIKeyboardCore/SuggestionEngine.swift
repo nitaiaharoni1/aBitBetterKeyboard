@@ -20,6 +20,27 @@ import UIKit
 // and Vision's text recognizer: `UITextChecker` is an older API with its own
 // language list, and this one has Hebrew.
 //
+// **That list does not cover every keyboard this product draws, and its shape is
+// its own.** Thirteen of the fourteen shipped languages are in it, under
+// identifiers that have to be read rather than derived — `he_IL` and `de_DE`
+// carry a region, `ar` and `hi` do not. Persian is absent altogether, so a
+// Persian keyboard gets no completions and no autocorrect: the engine returns the
+// keystrokes and stops. That is deliberate and it is the whole reason
+// `KeyboardLanguage.spellCheckerLocale` is optional. Falling back to another
+// language's dictionary would offer Arabic words to a Persian typist, which is
+// worse than offering nothing, and falling back to English would be worse again.
+//
+// **What the checker will do for a language is not what its presence in the list
+// suggests, and this was measured too.** On the iOS 26.2 Simulator
+// `completions` returns real words for English, Hebrew and Hindi and an empty
+// array for Arabic, Russian, Ukrainian, Greek, Turkish, Spanish, French, German,
+// Portuguese and Italian — the log says `Lexicon creation for <lang> failed:
+// Could not determine the location of the base unigrams file`. `guesses` still
+// corrects misspellings for the Latin languages and Russian. So on a simulator
+// most languages get spelling correction and no completion. Whether a device with
+// those keyboards installed ships the missing unigram files is not something this
+// repo has been able to check, so nothing here claims it.
+//
 // **Its Hebrew is not as good as that makes it sound, and two measured limits
 // are handled here rather than papered over.** `guesses` ranks `שלום` third for
 // the misspelling `שלומ`, behind `שלו` and `שלוש`, and the guesses branch does
@@ -47,37 +68,84 @@ public enum SuggestionEngine {
 
     // MARK: Script detection
     //
-    // Unchanged from `MockSuggestionEngine`: pure `CharacterSet` arithmetic, not
-    // a mock in the first place. Kept here because `DictationPanel` needs it and
-    // this is the type that replaces the one it used to call.
+    // Pure character arithmetic over `LanguageDetector`, not a mock in the first
+    // place. Kept here because `DictationPanel` needs it and this is the type
+    // that replaces the one it used to call.
 
     /// Which language a run of text is written in, ignoring digits and punctuation.
-    public static func dominantLanguage(in text: String) -> KeyboardLanguage? {
-        var hebrew = 0
-        var latin = 0
+    ///
+    /// Answers with a *language*, from a script, which is a step that can only be
+    /// taken with a list of candidates in hand: Cyrillic is Russian or Ukrainian
+    /// and the characters cannot say which. `candidates` is ordered, the layout on
+    /// screen first, and the first one written in the winning script takes it —
+    /// which is the only mechanism that separates the eight Latin languages, the
+    /// two Cyrillic ones and the two written in the Arabic script. When none of
+    /// them is written in the script that won, the catalogue answers instead: the
+    /// text is in that script whether or not the user enabled a keyboard for it.
+    public static func dominantLanguage(
+        in text: String, among candidates: [KeyboardLanguage] = KeyboardLanguage.allCases
+    ) -> KeyboardLanguage? {
+        guard let winner = scriptsByFrequency(in: text).first else { return nil }
+        return language(writtenIn: winner, among: candidates)
+    }
+
+    /// Every language a run of text is written in, the one with the most letters
+    /// first.
+    ///
+    /// The same arithmetic `dominantLanguage` does, without throwing away the
+    /// runners-up — because "which two languages is this sentence in" is a question
+    /// this product has to answer and there was no honest way to ask it. The
+    /// dictation panel's mixed-language badge used to take the dominant language
+    /// and step one row down the catalogue, which was the right answer while the
+    /// catalogue held English and Hebrew and became `עב ⟷ ع` the day it held
+    /// fourteen.
+    ///
+    /// A script the catalogue has no keyboard for is dropped rather than named, so
+    /// this is shorter than the list of scripts present. `dominantLanguage` keeps
+    /// the older behaviour of answering nil in that case rather than skipping to
+    /// the runner-up: the two questions differ, and a Japanese sentence with an
+    /// English word in it is not an English sentence.
+    public static func languages(
+        in text: String, among candidates: [KeyboardLanguage] = KeyboardLanguage.allCases
+    ) -> [KeyboardLanguage] {
+        scriptsByFrequency(in: text).compactMap { language(writtenIn: $0, among: candidates) }
+    }
+
+    /// Most letters first, and on a tie the script that is not Latin — a sentence
+    /// with as much Hebrew in it as English is a Hebrew sentence carrying
+    /// loanwords, and this product exists for that sentence. Beyond that, the ISO
+    /// 15924 code, only so two runs over one string cannot disagree:
+    /// `sorted(by:)` is not stable and a dictionary has no order to inherit.
+    private static func scriptsByFrequency(in text: String) -> [TextScript] {
+        var counts: [TextScript: Int] = [:]
         for scalar in text.unicodeScalars {
-            if (0x0590...0x05FF).contains(scalar.value) {
-                hebrew += 1
-            } else if CharacterSet.letters.contains(scalar) {
-                latin += 1
+            guard let script = LanguageDetector.script(ofLetter: scalar) else { continue }
+            counts[script, default: 0] += 1
+        }
+        return
+            counts
+            .sorted { lhs, rhs in
+                if lhs.value != rhs.value { return lhs.value > rhs.value }
+                let lhsIsLatin = lhs.key == .latin
+                if lhsIsLatin != (rhs.key == .latin) { return !lhsIsLatin }
+                return lhs.key.rawValue < rhs.key.rawValue
             }
-        }
-        if hebrew == 0 && latin == 0 { return nil }
-        return hebrew >= latin ? .hebrew : .english
+            .map(\.key)
     }
 
-    private static func script(of word: String) -> KeyboardLanguage? {
-        dominantLanguage(in: word)
+    /// The first candidate written in this script, else the catalogue's, else nil
+    /// — which is every script the keyboard ships no layout for, `.other` included.
+    private static func language(
+        writtenIn script: TextScript, among candidates: [KeyboardLanguage]
+    ) -> KeyboardLanguage? {
+        candidates.first { $0.script == script }
+            ?? KeyboardLanguage.allCases.first { $0.script == script }
     }
 
-    /// `UITextChecker`'s language identifiers, read off `availableLanguages`
-    /// rather than guessed: `en_US` and `he_IL`, not the bare `en`/`he` some
-    /// other Apple APIs use.
-    private static func checkerLanguage(for language: KeyboardLanguage) -> String {
-        switch language {
-        case .english: return "en_US"
-        case .hebrew: return "he_IL"
-        }
+    private static func script(
+        of word: String, among candidates: [KeyboardLanguage]
+    ) -> KeyboardLanguage? {
+        dominantLanguage(in: word, among: candidates)
     }
 
     /// Three candidates for the suggestion bar.
@@ -85,13 +153,22 @@ public enum SuggestionEngine {
     /// - Parameters:
     ///   - prefix: the word currently being typed, may be empty
     ///   - context: everything before the current word
-    ///   - languages: the languages the user turned on, in priority order
-    ///   - supplementary: names and shortcuts from `UILexicon`
-    ///     (`UIInputViewController.requestSupplementaryLexicon`), read once by
-    ///     `KeyboardViewController` and handed down. Empty in the companion
-    ///     app's playground and in every test, which is correct: the lexicon is
-    ///     the *user's* contacts and text replacements, and nothing outside a
-    ///     real keyboard session should see them.
+    ///   - languages: the languages the user turned on, **the layout on screen
+    ///     first**. The order is not decoration: characters name a script and
+    ///     never a language, so with two languages of one script enabled this
+    ///     list is the only thing that can separate them, and every resolution
+    ///     below takes the first candidate written in the script it sees.
+    ///     `KeyboardController.refreshSuggestions` builds it; passing the stored
+    ///     list instead spell-checked a French user against `en_US`.
+    ///   - supplementary: words this keyboard must not second-guess — the user's
+    ///     personal dictionary from `SharedStore`, then the names and shortcuts
+    ///     `UILexicon` hands back
+    ///     (`UIInputViewController.requestSupplementaryLexicon`). The personal
+    ///     dictionary leads because it is the list the user typed by hand; the
+    ///     lexicon is contacts and text replacements and is empty outside a real
+    ///     keyboard session, which is why the app's playground and most tests
+    ///     pass only the first half. `KeyboardController.refreshSuggestions`
+    ///     joins them.
     @MainActor
     public static func suggestions(
         prefix: String,
@@ -100,26 +177,29 @@ public enum SuggestionEngine {
         supplementary: [String] = []
     ) -> [Suggestion] {
         let trimmedPrefix = prefix.trimmingCharacters(in: .whitespacesAndNewlines)
-        let contextLanguage = dominantLanguage(in: context) ?? languages.first ?? .english
+        let contextLanguage =
+            dominantLanguage(in: context, among: languages) ?? languages.first ?? .english
 
         if trimmedPrefix.isEmpty {
-            let results = nextWordSuggestions(
-                context: context, contextLanguage: contextLanguage, languages: languages)
+            let results = nextWordSuggestions(context: context, contextLanguage: contextLanguage)
             // Nothing is being typed, so nothing is at risk of being replaced;
             // highlight the middle candidate the way the system keyboard does.
             return markDefault(results, at: min(1, results.count - 1))
         }
 
-        let typedLanguage = script(of: trimmedPrefix) ?? contextLanguage
+        let typedLanguage = script(of: trimmedPrefix, among: languages) ?? contextLanguage
         let results = completions(
             for: trimmedPrefix, typedLanguage: typedLanguage, supplementary: supplementary,
             // Latin letters inside a Hebrew sentence: the one case this product
-            // exists for, and the one `UITextChecker` ranks worst. See
-            // `codeSwitchVocabulary`.
-            codeSwitching: contextLanguage == .hebrew && typedLanguage == .english)
+            // exists for, and the one `UITextChecker` ranks worst. Scoped to
+            // Hebrew rather than to "any non-Latin context", because the list was
+            // measured against Hebrew and nothing else. See `codeSwitchVocabulary`.
+            codeSwitching: contextLanguage.script == .hebrew && typedLanguage.script == .latin)
         return markDefault(
             results,
-            at: shouldAutocorrect(trimmedPrefix, typedLanguage: typedLanguage, results: results) ? 1 : 0)
+            at: shouldAutocorrect(
+                trimmedPrefix, typedLanguage: typedLanguage, results: results,
+                supplementary: supplementary) ? 1 : 0)
     }
 
     /// Whether pressing space should replace what was typed.
@@ -129,33 +209,116 @@ public enum SuggestionEngine {
     /// reason to think they mis-typed.
     @MainActor
     private static func shouldAutocorrect(
-        _ prefix: String, typedLanguage: KeyboardLanguage, results: [Suggestion]
+        _ prefix: String, typedLanguage: KeyboardLanguage, results: [Suggestion],
+        supplementary: [String]
     ) -> Bool {
         guard results.count > 1 else { return false }
         let lower = prefix.lowercased()
+        // The word without the marks that ended the sentence. `currentWordPrefix`
+        // runs back to the last *whitespace*, so what arrives here for `Hi Nitai,`
+        // is `Nitai,`. See `wordCore`.
+        let word = wordCore(prefix)
 
-        // A missing apostrophe is unambiguous, so correct it at any length.
-        if contractions[lower] != nil { return true }
+        // **A word the user put on the list is never a mistake, and this has to be
+        // the first question asked rather than a clause on the dictionary lookup
+        // at the bottom.** Every rule below it fired on the app's own shipped
+        // entries: `Nitai` committed as `Nit`, `Handi` as `Handing`, `Wispr` as
+        // `Wiser`, `סאפא` as `ספא`, and `בלי־פרופ` as `בלי־פרוף` — that last one
+        // through the final-form rule two branches down, which never reaches the
+        // `isKnownWord` guard at all. Covers `UILexicon` too, and should: a
+        // contact's name is a word the user means.
+        let typed = comparable(prefix)
+        if !typed.isEmpty, supplementary.contains(where: { comparable($0) == typed }) { return false }
+
+        // A missing apostrophe is unambiguous, so correct it at any length. The
+        // table is English, so it only applies to English: `dont` is a French word.
+        if typedLanguage == .english, contractions[lower] != nil { return true }
 
         // So is a Hebrew word ending in a letter that has a final form: the
         // script does not allow it, so this is not a guess about what the user
         // meant. Deliberately *not* gated on `isKnownWord`, which reports
         // `שלומ` as a real word — see `hebrewFinalFormCorrection`.
-        if typedLanguage == .hebrew, hebrewFinalFormCorrection(of: prefix) != nil { return true }
+        if typedLanguage.script == .hebrew, hebrewFinalFormCorrection(of: prefix) != nil {
+            return true
+        }
+
+        // With no checker for this language there is no evidence the word is
+        // wrong, and a keyboard that overrides the user on no evidence is the one
+        // they switch off.
+        guard let checkerLocale = typedLanguage.spellCheckerLocale else { return false }
 
         // Otherwise wait until enough letters are in to be confident, and never
         // correct something `UITextChecker` already recognises as a real word —
         // a full dictionary lookup now, not 150 hardcoded entries.
-        return prefix.count >= 4 && !isKnownWord(prefix, language: typedLanguage)
+        //
+        // **Both questions are asked about the word, not the word plus whatever
+        // ended the sentence**, and asking them about the raw prefix made a comma
+        // worth a letter and made every correctly spelled word unknown: `Nit,` is
+        // four characters and `rangeOfMisspelledWord` does not recognise it, so a
+        // three-letter word one keystroke from a name on the list was a candidate
+        // for replacement. Case is deliberately *not* folded here the way it is
+        // for the list comparison above — the checker's answer for a proper noun
+        // depends on it, and lowercasing would make every capitalised word look
+        // misspelled.
+        return word.count >= 4 && !isKnownWord(word, checkerLocale: checkerLocale)
+    }
+
+    /// The word inside what was typed, with the marks that sit at its edges
+    /// without belonging to it taken off.
+    ///
+    /// **This is the second half of the personal-dictionary defect and it is the
+    /// commoner half.** `KeyboardController.currentWordPrefix` runs back to the
+    /// last *whitespace*, so the word under the cursor in `Hi Nitai,` is `Nitai,`
+    /// — and `Nitai,` is not `Nitai`, so the list never matched it. Measured, with
+    /// the shipped list in place: `Hi Nitai,` committed as `Hi Nit`, `Hi Handi,`
+    /// as `Hi Handy`, `שלום סאפא,` as `שלום ספא`, byte for byte what the same
+    /// input gives with the list emptied. Greeting somebody by name with a comma
+    /// is the single most common way a name reaches a chat field.
+    ///
+    /// Both ends are trimmed rather than only the trailing one, so an entry that
+    /// legitimately carries marks reduces the same way whichever side they are on:
+    /// `Ph.D.` and `Ph.D.,` both become `Ph.D`. `trimmingCharacters` touches only
+    /// the ends, so `בלי־פרופ` and `O'Reilly` keep their internal marks, and the
+    /// right-to-left marks the Arabic and Persian layouts type — `،` U+060C and
+    /// `؟` U+061F — are punctuation to Unicode and so are covered without being
+    /// named.
+    ///
+    /// The possessive needs its own clause: `'` is punctuation but the `s` after
+    /// it is not, so trimming leaves `Nitai's` untouched and it was committed as
+    /// `Nita's`.
+    private static func wordCore(_ typed: String) -> String {
+        let trimmed = typed.trimmingCharacters(in: .punctuationCharacters)
+        guard trimmed.hasSuffix("'s") || trimmed.hasSuffix("’s") else { return trimmed }
+        return String(trimmed.dropLast(2)).trimmingCharacters(in: .punctuationCharacters)
+    }
+
+    /// A word reduced to the form two spellings of it have in common, for
+    /// comparing what is being typed against the user's own list.
+    ///
+    /// `wordCore` first, then case, which is what makes `handi` match `Handi`.
+    /// Then the maqaf: U+05BE is Hebrew's own hyphen and the shipped list spells
+    /// `בלי־פרופ` with it, while the only hyphen this keyboard offers under a
+    /// Hebrew layout is ASCII `-` — see `KeyboardLayout.connectors`. Without that
+    /// line the one hyphenated entry the app ships could never be matched by
+    /// anything its user is able to type, which is a dictionary entry that exists
+    /// only in the dictionary screen. The curly apostrophe goes the same way, for
+    /// an entry pasted in from somewhere that autocorrected it.
+    ///
+    /// Answers "" for something that is only punctuation, which is a word every
+    /// entry would otherwise be a prefix of; both callers check for it.
+    private static func comparable(_ word: String) -> String {
+        wordCore(word).lowercased()
+            .replacingOccurrences(of: "־", with: "-")
+            .replacingOccurrences(of: "’", with: "'")
     }
 
     @MainActor
-    private static func isKnownWord(_ word: String, language: KeyboardLanguage) -> Bool {
+    private static func isKnownWord(_ word: String, checkerLocale: String) -> Bool {
         guard !word.isEmpty else { return false }
         let range = NSRange(location: 0, length: (word as NSString).length)
         let misspelled = sharedChecker.rangeOfMisspelledWord(
             in: word, range: range, startingAt: 0, wrap: false,
-            language: checkerLanguage(for: language))
+            language: checkerLocale)
         return misspelled.location == NSNotFound
     }
 
@@ -240,9 +403,14 @@ public enum SuggestionEngine {
         out.append(Suggestion(text: prefix, language: typedLanguage))
 
         // A dropped apostrophe is the most common thing worth fixing, and it
-        // should sit directly next to what was typed.
-        if let contraction = contractions[lower] {
-            out.append(Suggestion(text: matchCase(of: prefix, applyingTo: contraction), language: .english))
+        // should sit directly next to what was typed. English only: every entry
+        // in the table is an English contraction, and several of them — `dont`,
+        // `cant` — are ordinary words in other languages that use this alphabet.
+        if typedLanguage == .english, let contraction = contractions[lower] {
+            out.append(
+                Suggestion(
+                    text: matchCase(of: prefix, applyingTo: contraction, in: typedLanguage),
+                    language: .english))
         }
 
         // Hebrew's equivalent, and it has to be here for the same reason: a rule
@@ -261,18 +429,36 @@ public enum SuggestionEngine {
         // Only offered when the swap produces a word the dictionary actually
         // knows, so this cannot invent a correction for a word that was already
         // right.
-        if let final = hebrewFinalFormCorrection(of: prefix) {
+        //
+        // Scoped to the Hebrew script and nothing wider. Arabic and Persian also
+        // change letter shape at the end of a word, but they do it in the *font*
+        // rather than in the code point — there is no wrong character to correct
+        // — so a rule generalised across right-to-left scripts would fire on
+        // correctly spelled Arabic and mangle it.
+        if typedLanguage.script == .hebrew, let final = hebrewFinalFormCorrection(of: prefix) {
             out.append(Suggestion(text: final, language: .hebrew))
         }
 
-        // Names and shortcuts from the user's own lexicon outrank the system
-        // dictionary: `UITextChecker` has never heard of "Nitai", the user's
-        // contacts have.
-        out +=
-            supplementary
-            .filter { $0.lowercased().hasPrefix(lower) && $0.lowercased() != lower }
-            .prefix(2)
-            .map { Suggestion(text: $0, language: typedLanguage) }
+        // The user's own words outrank the system dictionary: `UITextChecker` has
+        // never heard of "Nitai", and the personal dictionary and the user's
+        // contacts both have. Emitted here, above the checker's completions, so
+        // the ranking is the list's rather than Apple's — and the caller puts the
+        // personal dictionary in front of `UILexicon` inside this list, so a word
+        // typed by hand into Settings leads a contact that merely starts the same
+        // way.
+        //
+        // Compared on `comparable` at both ends, so the list is still reachable
+        // once a mark has been typed after the word — otherwise `בלי-פר,` offers
+        // nothing at all. Skipped for a prefix that is only punctuation, which
+        // reduces to "" and which every entry starts with.
+        let typed = comparable(prefix)
+        if !typed.isEmpty {
+            out +=
+                supplementary
+                .filter { comparable($0).hasPrefix(typed) && comparable($0) != typed }
+                .prefix(2)
+                .map { Suggestion(text: $0, language: typedLanguage) }
+        }
 
         // Latin letters inside a Hebrew sentence, ranked before the dictionary.
         // Only here: in an English sentence Apple's ranking is the better judge
@@ -282,12 +468,22 @@ public enum SuggestionEngine {
                 codeSwitchVocabulary
                 .filter { $0.hasPrefix(lower) && $0 != lower }
                 .prefix(2)
-                .map { Suggestion(text: matchCase(of: prefix, applyingTo: $0), language: .english) }
+                .map {
+                    Suggestion(
+                        text: matchCase(of: prefix, applyingTo: $0, in: typedLanguage), language: .english)
+                }
+        }
+
+        // Apple ships no spell checker for every language this keyboard draws —
+        // Persian is not in `UITextChecker.availableLanguages` at all. There is
+        // nothing to fall back to: another language's dictionary would offer
+        // another language's words, which is worse than offering none.
+        guard let languageCode = typedLanguage.spellCheckerLocale else {
+            return dedupe(out, limit: 3)
         }
 
         let nsPrefix = prefix as NSString
         let range = NSRange(location: 0, length: nsPrefix.length)
-        let languageCode = checkerLanguage(for: typedLanguage)
 
         if let wordCompletions = sharedChecker.completions(
             forPartialWordRange: range, in: prefix, language: languageCode)
@@ -296,7 +492,11 @@ public enum SuggestionEngine {
                 wordCompletions
                 .filter { $0.lowercased() != lower }
                 .prefix(3)
-                .map { Suggestion(text: matchCase(of: prefix, applyingTo: $0), language: typedLanguage) }
+                .map {
+                    Suggestion(
+                        text: matchCase(of: prefix, applyingTo: $0, in: typedLanguage),
+                        language: typedLanguage)
+                }
         }
 
         // `completions` only extends a word already headed somewhere real. If
@@ -324,7 +524,11 @@ public enum SuggestionEngine {
                     corrections
                     .filter { $0.lowercased() != lower }
                     .prefix(2)
-                    .map { Suggestion(text: matchCase(of: prefix, applyingTo: $0), language: typedLanguage) }
+                    .map {
+                        Suggestion(
+                            text: matchCase(of: prefix, applyingTo: $0, in: typedLanguage),
+                            language: typedLanguage)
+                    }
             }
         }
 
@@ -376,37 +580,54 @@ public enum SuggestionEngine {
     private static let defaultEnglish = ["I", "The", "We"]
     private static let defaultHebrew = ["אני", "מה", "תודה"]
 
+    /// The two languages this table was written for. It is a hand-written table,
+    /// not a model, so the honest thing to do for the twelve languages it does
+    /// not cover is to offer nothing rather than to offer English words under a
+    /// Greek keyboard. That is also what the bar asks for: three candidates, in
+    /// the language being typed, or none.
+    private static let nextWordTables: [KeyboardLanguage: [String: [String]]] = [
+        .english: englishNextWord,
+        .hebrew: hebrewNextWord
+    ]
+
+    private static let nextWordDefaults: [KeyboardLanguage: [String]] = [
+        .english: defaultEnglish,
+        .hebrew: defaultHebrew
+    ]
+
     private static func nextWordSuggestions(
         context: String,
-        contextLanguage: KeyboardLanguage,
-        languages: [KeyboardLanguage]
+        contextLanguage: KeyboardLanguage
     ) -> [Suggestion] {
+        guard let table = nextWordTables[contextLanguage],
+            let defaults = nextWordDefaults[contextLanguage]
+        else { return [] }
+
         let words =
             context
             .components(separatedBy: CharacterSet.whitespacesAndNewlines)
             .filter { !$0.isEmpty }
 
         guard let last = words.last?.trimmingCharacters(in: .punctuationCharacters).lowercased(),
-            !last.isEmpty
+            !last.isEmpty, let hits = table[last]
         else {
-            let defaults = contextLanguage == .hebrew ? defaultHebrew : defaultEnglish
             return defaults.map { Suggestion(text: $0, language: contextLanguage) }
         }
-
-        let table = contextLanguage == .hebrew ? hebrewNextWord : englishNextWord
-        if let hits = table[last] {
-            return hits.map { Suggestion(text: $0, language: contextLanguage) }
-        }
-
-        let defaults = contextLanguage == .hebrew ? defaultHebrew : defaultEnglish
-        return defaults.map { Suggestion(text: $0, language: contextLanguage) }
+        return hits.map { Suggestion(text: $0, language: contextLanguage) }
     }
 
     // MARK: Shared helpers
 
-    private static func matchCase(of source: String, applyingTo candidate: String) -> String {
+    /// A candidate capitalised the way the typed prefix was.
+    ///
+    /// `language` rather than the default casing, for the same reason
+    /// `KeyboardLanguage.uppercased(_:)` exists: a Turkish user who typed `İst`
+    /// must not be offered `Istanbul`, which is a different word.
+    private static func matchCase(
+        of source: String, applyingTo candidate: String, in language: KeyboardLanguage
+    ) -> String {
         guard let first = source.first, first.isUppercase else { return candidate }
-        return candidate.prefix(1).uppercased() + candidate.dropFirst()
+        return language.uppercased(String(candidate.prefix(1))) + candidate.dropFirst()
     }
 
     private static func dedupe(_ items: [Suggestion], limit: Int) -> [Suggestion] {

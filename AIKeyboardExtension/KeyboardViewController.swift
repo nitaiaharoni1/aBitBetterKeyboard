@@ -8,8 +8,18 @@ import AIKeyboardCore
 final class KeyboardViewController: UIInputViewController {
 
     private var controller: KeyboardController!
+    /// Held here as well as by the controller. Belt and braces on the bug that
+    /// made this keyboard type nothing on a real device for its whole life: the
+    /// target used to be created inline in the call below and referenced only
+    /// weakly on the other side, so it died between `viewDidLoad` and the first
+    /// tap. See `KeyboardController.target`.
+    private var textTarget: ProxyTextTarget!
     private var heightConstraint: NSLayoutConstraint?
     private var cancellables = Set<AnyCancellable>()
+    /// Latched only once the shared container has actually taken the record, so a
+    /// keyboard that starts without Full Access and is granted it mid-process
+    /// still gets to leave one. See `recordPresence()`.
+    private var hasRecordedPresence = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -22,8 +32,15 @@ final class KeyboardViewController: UIInputViewController {
         // there is nothing to guard against here beyond the user's own setting.
         Feedback.soundEnabled = store.keySounds
 
+        // Resolved per call, so a host swapping the focused field cannot leave us
+        // typing into the old one. `weak` rather than `unowned`: `KeyView`'s
+        // key-repeat task is cancelled from `DragGesture.onEnded`, so a gesture
+        // interrupted by teardown can call back in after this controller has
+        // gone, and against `unowned` that is a crash rather than a no-op.
+        textTarget = ProxyTextTarget { [weak self] in self?.textDocumentProxy }
+
         controller = KeyboardController(
-            target: ProxyTextTarget(textDocumentProxy),
+            target: textTarget,
             store: store,
             language: store.enabledLanguages.first ?? .english
         )
@@ -84,6 +101,25 @@ final class KeyboardViewController: UIInputViewController {
         super.viewDidAppear(animated)
         ScreenContextSession.shared.startConsuming(
             .shared, as: .keyboard, ownUIHeightFraction: ownUIHeightFraction())
+        recordPresence()
+    }
+
+    /// Leaves the containing app the one piece of evidence it can have that this
+    /// keyboard is installed and has Full Access. See `KeyboardPresence`.
+    ///
+    /// From `viewDidAppear` rather than `viewDidLoad` for two reasons. It is the
+    /// moment the keyboard is genuinely in use, which is what the record claims;
+    /// and it is off the path between the keyboard being asked for and the keys
+    /// being drawn, which the write must not join. The file I/O itself goes to a
+    /// background queue for the same reason — `hasFullAccess` is UIKit state and
+    /// is read here, on the main actor, before anything is dispatched.
+    private func recordPresence() {
+        guard !hasRecordedPresence else { return }
+        let fullAccess = hasFullAccess
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let recorded = KeyboardPresence.record(hasFullAccess: fullAccess)
+            Task { @MainActor [weak self] in self?.hasRecordedPresence = recorded }
+        }
     }
 
     /// A rotation changes the screen height, so it changes the fraction of the
@@ -138,7 +174,7 @@ final class KeyboardViewController: UIInputViewController {
     /// priority is below required so the constraint never fights the system
     /// during rotation.
     private func updateKeyboardHeight() {
-        guard controller != nil else { return }
+        guard let controller else { return }
         let height = Theme.Metrics.totalHeight(withContextStrip: controller.showsScreenContextStrip)
 
         guard let heightConstraint else {
@@ -152,8 +188,14 @@ final class KeyboardViewController: UIInputViewController {
         heightConstraint.constant = height
     }
 
+    /// Guarded for the same reason `updateKeyboardHeight()` is, and the two are
+    /// written the same way on purpose: `controller` is assigned in `viewDidLoad`,
+    /// and both of these are host-driven callbacks that iOS is free to deliver
+    /// before it has run. A missed suggestion refresh is nothing; an implicitly
+    /// unwrapped nil is a crash on the first keystroke.
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
+        guard let controller else { return }
         controller.refreshSuggestions()
     }
 }

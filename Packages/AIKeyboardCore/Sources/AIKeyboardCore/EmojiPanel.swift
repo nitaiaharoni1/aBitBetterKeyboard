@@ -156,7 +156,10 @@ public struct EmojiPanel: View {
             Button {
                 controller.show(.none)
             } label: {
-                Text(controller.language == .hebrew ? "אבג" : "ABC")
+                // Off the catalogue, not off a two-way test: this key said "ABC"
+                // under twelve of the fourteen keyboards, including the Greek and
+                // Cyrillic ones whose letters plane has no A, B or C in it.
+                Text(controller.language.lettersPlaneLabel)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Theme.Keys.label)
                     .frame(width: 44, height: 38)

@@ -104,12 +104,16 @@ public enum AIEngineError: Error, Equatable, Sendable {
             return "The on-device model is still downloading. Try again in a few minutes."
         case .appleIntelligenceOff:
             return "Turn on Apple Intelligence in Settings to use AI actions on device."
+        // The three that dead-end on the same missing setting name the same row.
+        // Each of these used to end at "no cloud model is set up" and stop, which
+        // is the whole of the Hebrew experience on a stock install: every AI
+        // action fails, and none of them says where to go.
         case .deviceNotSupported:
-            return "This device can't run the on-device model, and no cloud model is set up."
-        case .unsupportedLanguage(let script):
-            let name = script == .hebrew ? "Hebrew" : "This language"
             return
-                "\(name) isn't one of the languages the on-device model supports, and no cloud model is set up."
+                "This device can't run the on-device model, and no cloud model is set up. \(BackendTransport.setUpRecovery)"
+        case .unsupportedLanguage(let script):
+            return
+                "\(script.displayName) isn't one of the languages the on-device model supports, and no cloud model is set up. \(BackendTransport.setUpRecovery)"
         case .refused:
             return "The model declined this text. Editing it slightly usually gets past it."
         case .inputTooLong:
@@ -118,7 +122,10 @@ public enum AIEngineError: Error, Equatable, Sendable {
             return
                 "This language needs the cloud model, which needs Full Access. Turn it on in Settings › Keyboards."
         case .cloudNotConfigured:
-            return "This language needs a cloud model, and none is set up in this build."
+            // Not "none is set up in this build" any more: there is a screen for
+            // it, so this is something the phone's owner can act on rather than
+            // something the build withheld from them.
+            return "This language needs a cloud model, and none is set up. \(BackendTransport.setUpRecovery)"
         case .network(let detail):
             return detail.isEmpty ? "The cloud model couldn't be reached." : detail
         case .empty:

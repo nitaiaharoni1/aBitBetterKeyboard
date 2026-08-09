@@ -23,7 +23,7 @@ final class CaptureFreshnessTests: XCTestCase {
         sampledAt: Double = 999.8,
         identity: FrameIdentity? = nil,
         paused: Bool = false,
-        end: ScreenContextEndReason = .none
+        end: ScreenContextEndReason = .notEnded
     ) -> CaptureStatus {
         var status = CaptureStatus()
         status.setSessionID(session)

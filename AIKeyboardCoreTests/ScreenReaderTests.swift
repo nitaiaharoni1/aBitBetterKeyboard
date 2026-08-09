@@ -147,6 +147,61 @@ final class CloudScreenReaderParsingTests: XCTestCase {
         XCTAssertEqual(CloudScreenReader.parse(["message": "שלום"])?.language, .hebrew)
         XCTAssertEqual(CloudScreenReader.parse(["message": "hello"])?.language, .english)
     }
+
+    /// **The fallback used to answer `.english` for every script that was not
+    /// Hebrew, and an Arabic screen came back "reply in English".** This is the
+    /// half of the widening that works whatever the model says, because it is
+    /// reached whenever the model does not say `hebrew` or `english` — which is
+    /// every answer the current prompt can produce for a screen in a third
+    /// script, since the prompt only offers it those two words.
+    func testAThirdScriptIsNoLongerCalledEnglish() {
+        XCTAssertEqual(CloudScreenReader.parse(["message": "مرحبا كيف حالك"])?.language, .arabic)
+        XCTAssertEqual(CloudScreenReader.parse(["message": "привет как дела"])?.language, .russian)
+        XCTAssertEqual(CloudScreenReader.parse(["message": "Καλημέρα"])?.language, .greek)
+        XCTAssertEqual(CloudScreenReader.parse(["message": "नमस्ते"])?.language, .hindi)
+        // And the model's own word is taken when it volunteers one, which is the
+        // half that needs the prompt widened before it can ever fire.
+        XCTAssertEqual(
+            CloudScreenReader.parse(["message": "مرحبا", "language": "persian"])?.language, .persian)
+    }
+
+    /// **The English and Hebrew answers are the ones that must not have moved**,
+    /// because `Bar/screen-context/cloud_outputs.json` was recorded against them
+    /// and `ScreenContextBarTests` replays it. Every value the prompt can produce,
+    /// against a message in each script the corpus contains.
+    func testEnglishAndHebrewParseExactlyAsTheyDidBefore() {
+        let messages = ["hello there", "שלום", "מעולה, ראית את ה-deck?", "123 😅"]
+        let answers = ["hebrew", "english", "mixed", "", "Hebrew", "latin"]
+        for message in messages {
+            for answer in answers {
+                let expected: KeyboardLanguage =
+                    switch answer {
+                    case "hebrew": .hebrew
+                    case "english": .english
+                    default: LanguageDetector.scripts(in: message).contains(.hebrew) ? .hebrew : .english
+                    }
+                XCTAssertEqual(
+                    CloudScreenReader.parse(["message": message, "language": answer])?.language,
+                    expected,
+                    "\(message) / \(answer) parses differently from the build the corpus was recorded against"
+                )
+            }
+        }
+    }
+
+    /// The rule both readers share. Latin is not evidence of a language, and the
+    /// catalogue's order is what keeps Hebrew winning over Arabic in a message
+    /// that somehow carries both.
+    func testTheKeyboardThatAnswersIsPickedOffTheCatalogue() {
+        XCTAssertEqual(KeyboardLanguage.answering([.latin]), .english)
+        XCTAssertEqual(KeyboardLanguage.answering([]), .english)
+        XCTAssertEqual(KeyboardLanguage.answering([.other]), .english)
+        XCTAssertEqual(KeyboardLanguage.answering([.latin, .hebrew]), .hebrew)
+        XCTAssertEqual(KeyboardLanguage.answering([.hebrew, .arabic]), .hebrew)
+        XCTAssertEqual(KeyboardLanguage.answering([.latin, .arabic]), .arabic)
+        XCTAssertEqual(KeyboardLanguage.answering([.cyrillic]), .russian)
+        XCTAssertEqual(KeyboardLanguage.answering([.devanagari]), .hindi)
+    }
 }
 
 final class VisionScreenReaderGeometryTests: XCTestCase {
@@ -228,5 +283,52 @@ final class VisionScreenReaderGeometryTests: XCTestCase {
             line("Go ahead, I'm reading.", x: 0.42, width: 0.54, y: 0.717)
         ])
         XCTAssertTrue(VisionScreenReader.isTwoSided(twoSided))
+    }
+
+    /// A readable two-sided conversation, built out of lines rather than pixels,
+    /// so `interpret` can be asked what it does with a page the gate already
+    /// trusted. Coverage and confidence are handed in at 1: this exercises the
+    /// mapping, and the gate itself is measured against `Bar/screen-context/` by
+    /// `ScreenContextBarTests`, which is deliberately untouched here.
+    private func page(_ incoming: String) -> VisionScreenReader.Page {
+        VisionScreenReader.Page(
+            lines: [
+                line("Sent it over.", x: 0.42, width: 0.54, y: 0.717),
+                line(incoming, x: 0.04, width: 0.60, y: 0.63)
+            ],
+            coverage: 1,
+            meanConfidence: 1)
+    }
+
+    /// **Arabic was refused on device for no reason.** Vision's 30 recognition
+    /// languages include Arabic — `VisionLanguageTests` pins that — so a screen it
+    /// read at full coverage and confidence is answerable, and the Latin-or-Hebrew
+    /// test above it threw the reading away as "nothing to reply to". The keyboard
+    /// that opens has to be Arabic too: a build that widens the guard and leaves
+    /// the mapping alone answers an Arabic message in English.
+    func testAnArabicScreenIsReadRatherThanDiscarded() throws {
+        let reading = try XCTUnwrap(
+            VisionScreenReader.interpret(page("هل يمكنك مراجعة الملف؟")),
+            "an Arabic screen this recogniser read perfectly was dropped")
+        XCTAssertEqual(reading.message, "هل يمكنك مراجعة الملف؟")
+        XCTAssertEqual(reading.language, .arabic)
+        XCTAssertEqual(reading.scripts, [.arabic])
+    }
+
+    /// The two the corpus is scored on, unchanged.
+    func testEnglishAndHebrewStillMapTheWayTheyDid() throws {
+        XCTAssertEqual(
+            try VisionScreenReader.interpret(page("Can you take the standup?"))?.language, .english)
+        XCTAssertEqual(try VisionScreenReader.interpret(page("אפשר להזיז את הפגישה?"))?.language, .hebrew)
+        XCTAssertEqual(
+            try VisionScreenReader.interpret(page("ראית את ה-deck?"))?.language, .hebrew,
+            "a code-switched message answers in Hebrew")
+    }
+
+    /// And the reason the guard existed in the first place still holds: a voice
+    /// note's waveform recognises as glyph soup, and there is nothing to reply to.
+    func testAWaveformIsStillNothingToReplyTo() throws {
+        XCTAssertNil(try VisionScreenReader.interpret(page("▶・二二ー・リリーー 0:47")))
+        XCTAssertNil(try VisionScreenReader.interpret(page("0:47")))
     }
 }

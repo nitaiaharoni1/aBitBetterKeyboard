@@ -36,8 +36,16 @@ final class LanguageDetectorTests: XCTestCase {
         XCTAssertEqual(LanguageDetector.scripts(in: "123 — !? 😅"), [])
     }
 
+    /// **This test used to assert that Cyrillic was `other`, and that was the
+    /// bug.** `other` is what routes text to the cloud, and it was also what
+    /// Japanese, Korean and Chinese contributed to the on-device model's supported
+    /// set — so "unnamed" ended up meaning "supported" and every Cyrillic, Greek,
+    /// Arabic and Devanagari message went to a model with no word of it. The
+    /// shipped scripts are named now; `other` is reserved for the ones that
+    /// genuinely are not.
     func testUnknownScriptIsReportedAsOther() {
-        XCTAssertTrue(LanguageDetector.scripts(in: "привет").contains(.other))
+        XCTAssertTrue(LanguageDetector.scripts(in: "こんにちは").contains(.other))
+        XCTAssertEqual(LanguageDetector.scripts(in: "привет"), [.cyrillic])
     }
 }
 
@@ -68,6 +76,43 @@ final class PromptSelectionTests: XCTestCase {
         let friendly = Prompts.tone(.friendly, for: "the meeting is tomorrow")
         XCTAssertNotEqual(shorter, friendly)
         XCTAssertTrue(shorter.contains("strictly fewer words"))
+    }
+
+    /// The English prompt is what `Bar/ai-text` is scored against, so Latin text
+    /// has to come out of it byte for byte unchanged. The directive is additive
+    /// and only for the scripts that need it.
+    func testTheEnglishPromptIsUntouchedForLatinText() {
+        XCTAssertEqual(Prompts.fix(for: "teh meeting"), Prompts.fix(for: "Merhaba nasılsın"))
+        XCTAssertFalse(Prompts.fix(for: "teh meeting").contains("script"))
+    }
+
+    /// A message in a script Apple's on-device model does not list goes to the
+    /// cloud, and the cloud is told which script it is looking at — the failure
+    /// this prevents is an Arabic message answered in English, or a Greek one
+    /// transliterated into Latin letters.
+    func testANonLatinScriptIsNamedInTheOtherwiseEnglishPrompt() {
+        XCTAssertTrue(Prompts.fix(for: "مرحبا كيف حالك").contains("Arabic script"))
+        XCTAssertTrue(Prompts.rewrite(for: "привет как дела").contains("Cyrillic script"))
+        XCTAssertTrue(Prompts.tone(.shorter, for: "Καλημέρα").contains("Greek script"))
+        XCTAssertTrue(Prompts.tone(.shorter, for: "Καλημέρα").contains("strictly fewer words"))
+        // Hebrew has a whole instruction set of its own and never takes the line.
+        XCTAssertFalse(Prompts.fix(for: "אני יבדוק").contains("script."))
+    }
+
+    /// A script nobody named gets no sentence at all. "The message is written in
+    /// the This language script" is worse than saying nothing.
+    func testAnUnnamedScriptIsNotDescribedToTheModel() {
+        XCTAssertEqual(Prompts.fix(for: "こんにちは"), Prompts.fix(for: "hello"))
+    }
+
+    /// Reply is the one action handed a language rather than having to read it off
+    /// the characters, so it names the language. Cyrillic cannot say whether it is
+    /// Russian or Ukrainian; the screen reading can.
+    func testReplyNamesTheLanguageTheReadingReported() {
+        let context = ScreenContext(
+            appName: "Telegram", appIcon: "message.fill", sender: "Олена",
+            message: "Привіт, як справи?", language: .ukrainian)
+        XCTAssertTrue(Prompts.reply(for: context).contains("Ukrainian"))
     }
 
     func testReplyPromptFollowsTheMessageLanguageNotTheContextLabel() {

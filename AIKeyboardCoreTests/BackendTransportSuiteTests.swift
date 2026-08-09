@@ -83,6 +83,36 @@ final class BackendTransportSuiteTests: XCTestCase {
             RecordingProtocol.lastHeaders?["Authorization"],
             "no token means no header at all, not an empty bearer")
     }
+
+    /// The regression itself: `BackendTransport.configured()`'s default store must
+    /// be the shared one, never `.standard`.
+    ///
+    /// **It was declared inside `RecordingProtocol`, a `URLProtocol` subclass, so
+    /// XCTest never ran it.** A test method only runs when it is a method on an
+    /// `XCTestCase`; anywhere else it compiles, reads correctly, and is dead. The
+    /// regression it names — the keyboard reading a store the app never wrote to —
+    /// was therefore unguarded for as long as this file has existed.
+    func testDefaultStoreIsTheSharedOneNotStandard() {
+        // In a unit-test process the App Group is usually out of reach, so
+        // SharedStore falls back to .standard and comparing the two instances
+        // proves nothing here. Assert the property that survives either way:
+        // `configured()` must consult SharedStore's store, so writing there is
+        // what makes a backend appear.
+        let store = SharedStore.shared.userDefaults
+        let original = store.string(forKey: "cloudBackendURL")
+        defer {
+            if let original {
+                store.set(original, forKey: "cloudBackendURL")
+            } else {
+                store.removeObject(forKey: "cloudBackendURL")
+            }
+        }
+
+        store.set("https://shared.example.com", forKey: "cloudBackendURL")
+        XCTAssertNotNil(
+            BackendTransport.configured(),
+            "configured() must read SharedStore.shared.userDefaults")
+    }
 }
 
 /// Answers every request with the smallest valid body and records what it was
@@ -107,29 +137,4 @@ private final class RecordingProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
-
-    /// The regression itself: the default must be the shared store, never
-    /// `.standard`. Compared by object identity, because both are `UserDefaults`
-    /// and only the instance tells them apart.
-    func testDefaultStoreIsTheSharedOneNotStandard() {
-        // In a unit-test process the App Group is usually out of reach, so
-        // SharedStore falls back to .standard and comparing the two instances
-        // proves nothing here. Assert the property that survives either way:
-        // `configured()` must consult SharedStore's store, so writing there is
-        // what makes a backend appear.
-        let store = SharedStore.shared.userDefaults
-        let original = store.string(forKey: "cloudBackendURL")
-        defer {
-            if let original {
-                store.set(original, forKey: "cloudBackendURL")
-            } else {
-                store.removeObject(forKey: "cloudBackendURL")
-            }
-        }
-
-        store.set("https://shared.example.com", forKey: "cloudBackendURL")
-        XCTAssertNotNil(
-            BackendTransport.configured(),
-            "configured() must read SharedStore.shared.userDefaults")
-    }
 }

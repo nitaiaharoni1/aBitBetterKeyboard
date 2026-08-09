@@ -185,7 +185,7 @@ public enum CaptureFreshness {
 
         // A recorded reason wins over the inference, and it wins even while the
         // heartbeat is still inside its window: the producer said it stopped.
-        if status.endReason != .none { return .ended(status.endReason) }
+        if status.endReason != .notEnded { return .ended(status.endReason) }
 
         // 1. Liveness of the process.
         guard CaptureClock.elapsed(since: status.heartbeatAt, now: now) <= heartbeatWindow else {

@@ -327,6 +327,71 @@ final class ScreenReadServiceTests: XCTestCase {
         XCTAssertTrue(record.message.isEmpty)
     }
 
+    /// **The three sentences the text engine lends this path, and what they say
+    /// instead.**
+    ///
+    /// `CloudIntelligence` and `CloudScreenReader` share `BackendTransport`, so a
+    /// screen read fails through `BackendTransport.mapped` and lands on
+    /// `AIEngineError` cases whose messages were written for a passage of text.
+    /// The table below is the whole bug: each left-hand string is what the phone's
+    /// owner was shown under "Couldn't read the screen", and every one of them is
+    /// either false or an instruction about something that does not exist here.
+    ///
+    /// | Status | Borrowed sentence | Why it is wrong |
+    /// |---|---|---|
+    /// | 401/403 | "This language needs a cloud model, and none is set up in this build." | no language in a screen read, and one *is* set up |
+    /// | 413 | "Select a shorter passage and try again." | nothing was selected; the input is a JPEG |
+    /// | 422 | "Editing it slightly usually gets past it." | there is nothing to edit |
+    ///
+    /// Asserted against the borrowed strings by name, so this fails the moment
+    /// `explain` falls back to `AIEngineError.message` for any of them again.
+    func testAFailureAboutTheServerDoesNotBorrowTheTextEngineSCopy() {
+        let cases: [(AIEngineError, String)] = [
+            (.cloudNotConfigured, ScreenReadService.tokenRejected),
+            (.failed(""), ScreenReadService.addressNotAServer),
+            (.inputTooLong, "The screen was too large for the screen reading server to accept."),
+            (.refused, "The screen reading server declined to read this screen.")
+        ]
+        for (error, expected) in cases {
+            let shown = ScreenReadService.explain(error)
+            XCTAssertEqual(shown, expected)
+            XCTAssertNotEqual(
+                shown, error.message,
+                "\(error) is still printing the sentence written for the text engine")
+        }
+
+        for banned in ["language", "passage", "Editing it"] {
+            for (error, _) in cases {
+                XCTAssertFalse(
+                    ScreenReadService.explain(error).localizedCaseInsensitiveContains(banned),
+                    "a screen read told the user about \(banned)")
+            }
+        }
+
+        // Everything else still comes from the enum, where the wording is right
+        // for both paths.
+        XCTAssertEqual(
+            ScreenReadService.explain(AIEngineError.network("The backend is unreachable.")),
+            "The backend is unreachable.")
+    }
+
+    /// **Which failures repeat**, so the strip can stop offering a read that
+    /// cannot succeed.
+    ///
+    /// A rejected token and a wrong address fail identically on the next tap, and
+    /// each of those taps costs another upload of the user's screen. A network
+    /// blip does not, and must stay offerable.
+    func testOnlySetupFailuresAreMarkedAsRepeating() {
+        XCTAssertTrue(ScreenReadService.describesSetup(ScreenReadService.tokenRejected))
+        XCTAssertTrue(ScreenReadService.describesSetup(ScreenReadService.addressNotAServer))
+        XCTAssertTrue(ScreenReadService.describesSetup(ScreenReadService.notConfigured))
+
+        XCTAssertFalse(ScreenReadService.describesSetup("The backend is unreachable."))
+        XCTAssertFalse(
+            ScreenReadService.describesSetup("The screen could not be prepared for reading."))
+        XCTAssertFalse(ScreenReadService.describesSetup(""))
+    }
+
     /// No backend in this build. The tap is still answered, at the moment it is
     /// made, and no read is attempted.
     func testWithNoReaderConfiguredTheTapIsAnsweredImmediately() async throws {

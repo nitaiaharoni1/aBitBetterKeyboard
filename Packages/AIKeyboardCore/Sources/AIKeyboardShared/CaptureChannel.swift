@@ -152,7 +152,7 @@ public enum CaptureChannel {
         // a page too short to be one, and a page a killed producer left mid-write.
         let isAlive =
             status.map {
-                $0.sessionID != nil && $0.endReason == .none
+                $0.sessionID != nil && $0.endReason == .notEnded
                     && CaptureClock.elapsed(since: $0.heartbeatAt, now: now)
                         <= CaptureFreshness.heartbeatWindow
             } ?? false
@@ -550,14 +550,34 @@ public final class CaptureChannelWriter: @unchecked Sendable {
     /// point.** A read in flight publishes from its own queue; if it wrote between
     /// the deletion and the flag, the sender and the message would survive the
     /// session in a container that is backed up.
+    ///
+    /// **The first reason wins, and that is what keeps a diagnosis from being
+    /// overwritten by a shrug.** `SampleHandler` ends a session it knows cannot
+    /// work — no screen reader configured — by recording `.notConfigured` and then
+    /// calling `finishBroadcastWithError:`. Whether iOS answers that with a
+    /// `broadcastFinished()` is not documented anywhere in `RPBroadcastExtension.h`,
+    /// and if it does, the unconditional write here would replace the reason the
+    /// user can act on with `.stopped`, which names nothing. A session only ends
+    /// once, and `begin()` zeroes the page, so ignoring the second call costs
+    /// nothing and closes a race nobody can test from here.
     public func end(_ reason: ScreenContextEndReason, now: UInt64 = CaptureClock.now()) {
         hasEnded.withLock { $0 = true }
+        var recorded = reason
         statusPage.mutate {
-            $0.endReasonRaw = reason.rawValue
+            if $0.endReason == .notEnded {
+                $0.endReasonRaw = reason.rawValue
+            } else {
+                recorded = $0.endReason
+            }
             $0.heartbeatAt = now
         }
         try? FileManager.default.removeItem(at: readingURL)
-        Self.log.notice("channel end reason=\(reason.rawValue, privacy: .public)")
+        Self.log.notice(
+            """
+            channel end reason=\(recorded.rawValue, privacy: .public) \
+            asked=\(reason.rawValue, privacy: .public)
+            """
+        )
     }
 
     public func status() -> CaptureStatus? { statusPage.load() }

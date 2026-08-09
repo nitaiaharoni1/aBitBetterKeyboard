@@ -4,7 +4,7 @@
 #
 #   Scripts/prove-broadcast-extension.sh ['platform=iOS Simulator,name=iPhone 17 Pro']
 #
-# Five checks, each able to fail on its own:
+# Six checks, each able to fail on its own:
 #
 #   1. The .appex is built and embedded inside the app's PlugIns.
 #   2. Its Info.plist declares the broadcast upload extension point, the
@@ -13,6 +13,8 @@
 #      handler is never called and the broadcast starts and delivers nothing.
 #   3. Its bundle identifier sits under the containing app's, which iOS requires
 #      of an embedded extension.
+#  3b. That same identifier is the one BroadcastPickerButton asks the picker for.
+#      A mismatch is silent: the picker lists everything or nothing.
 #   4. Its binary carries the App Group entitlement, read out of the Mach-O
 #      rather than the signature.
 #   5. The class named in the Info.plist exists in the shipped binary, under the
@@ -95,6 +97,22 @@ case "$EXT_ID" in
   "$APP_ID".*) pass "$EXT_ID" ;;
   *) fail "$EXT_ID is not under $APP_ID; iOS will refuse to load the extension" ;;
 esac
+
+# 3b ----------------------------------------------------------------------
+# RPSystemBroadcastPickerView.preferredExtension is matched against the installed
+# extensions by bundle identifier. A mismatch does not error: the picker simply
+# lists every broadcast service on the phone, or none, and the user starts
+# somebody else's or nothing at all — which on a device looks exactly like
+# "the broadcast doesn't work". The two live in different files with no compiler
+# relationship, so nothing but this notices when one moves.
+echo "==> 3b. The picker asks for the identifier the extension actually has"
+PICKER_SRC="Packages/AIKeyboardCore/Sources/AIKeyboardCore/ScreenContextStrip.swift"
+[ -f "$PICKER_SRC" ] || fail "$PICKER_SRC is gone; BroadcastPickerButton has moved"
+PREFERRED=$(sed -n 's/.*extensionBundleID = "\([^"]*\)".*/\1/p' "$PICKER_SRC" | head -1)
+[ -n "$PREFERRED" ] || fail "no extensionBundleID literal in $PICKER_SRC"
+[ "$PREFERRED" = "$EXT_ID" ] \
+  && pass "preferredExtension = $PREFERRED" \
+  || fail "preferredExtension is \"$PREFERRED\" but the extension is \"$EXT_ID\""
 
 # 4 -----------------------------------------------------------------------
 # `codesign -d --entitlements` prints an empty dict for a simulator build, so the

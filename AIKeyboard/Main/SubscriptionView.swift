@@ -17,10 +17,26 @@ struct SubscriptionView: View {
         var note: String? { self == .monthly ? nil : "₪14.90 a month · save 40%" }
     }
 
+    /// A "Cloud dictation" row used to sit second, promising something "better in
+    /// noisy places". Nothing in this build records audio anywhere — the mic key
+    /// streams a fixed script — so there is no dictation for a paid tier to
+    /// improve. Removed rather than reworded, because every rewording of it would
+    /// still be selling a feature that does not exist. See `MockDictation`.
+    ///
+    /// **The two free-tier limits are gone for the same reason, and they were a
+    /// worse case.** These rows said "Free stops at 20 a day" and "Free includes
+    /// Clearer only". Nothing anywhere counts an action or gates a tone — there is
+    /// no meter in `KeyboardController`, and `AIResultPanel` draws all six chips
+    /// whatever `isSubscribed` says — so both were describing a restriction the
+    /// build does not impose, on the one screen where a claim about what you get
+    /// for money is a claim about money. Removed rather than implemented: metering
+    /// a mock paywall is a feature nobody asked for, and rather than left inside
+    /// the "Mock paywall" framing, which sits below the CTA and off the bottom of
+    /// this scroll view while the rows sit above it. The rows now describe the
+    /// keyboard as built, and `legal` says plainly that none of it is limited.
     private let features = [
-        ("infinity", "Unlimited Fix and Rewrite", "Free stops at 20 a day"),
-        ("waveform", "Cloud dictation", "Better in noisy places and on mixed Hebrew and English"),
-        ("slider.horizontal.3", "Every tone", "Free includes Clearer only"),
+        ("infinity", "Unlimited Fix and Rewrite", "As many as you like, in every language you type in"),
+        ("slider.horizontal.3", "Every tone", "Six registers, plus one line you write yourself"),
         ("character.book.closed", "Personal dictionary", "Names and terms that survive autocorrect"),
         ("lock.shield", "Nothing kept", "Text is processed and dropped, never stored")
     ]
@@ -132,7 +148,8 @@ struct SubscriptionView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                     .strokeBorder(
-                        isSelected ? AnyShapeStyle(Theme.Brand.gradient) : AnyShapeStyle(Theme.Surface.separator),
+                        isSelected
+                            ? AnyShapeStyle(Theme.Brand.gradient) : AnyShapeStyle(Theme.Surface.separator),
                         lineWidth: isSelected ? 2 : 1
                     )
             )
@@ -155,17 +172,24 @@ struct SubscriptionView: View {
                 withAnimation { store.isSubscribed.toggle() }
             }
 
-            Text(store.isSubscribed ? "Renews \(selectedPlan.price) \(selectedPlan.period)" : "Then \(selectedPlan.price) \(selectedPlan.period) · cancel anytime")
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.Text.secondary)
+            Text(
+                store.isSubscribed
+                    ? "Renews \(selectedPlan.price) \(selectedPlan.period)"
+                    : "Then \(selectedPlan.price) \(selectedPlan.period) · cancel anytime"
+            )
+            .font(.system(size: 13))
+            .foregroundStyle(Theme.Text.secondary)
         }
     }
 
     private var legal: some View {
-        Text("Mock paywall. Nothing is charged and no purchase is made.")
-            .font(.system(size: 12))
-            .foregroundStyle(Theme.Text.tertiary)
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
+        Text(
+            "Mock paywall. Nothing is charged and no purchase is made. Nothing in the list above is "
+                + "limited either, for anyone: there is no free tier for it to be held back from."
+        )
+        .font(.system(size: 12))
+        .foregroundStyle(Theme.Text.tertiary)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
     }
 }

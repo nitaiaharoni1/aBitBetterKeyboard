@@ -6,12 +6,18 @@ import SwiftUI
 public struct SparkleMark: View {
     private let size: CGFloat
 
+    /// Named rather than inlined so `ToneIconTests` can assert that no
+    /// `ToneStyle` wears the same drawing. `ToneStyle.clearer` did — SF `sparkle`
+    /// is this symbol at one point instead of three — and the two buttons sat
+    /// side by side in `SuggestionBar`.
+    public static let symbolName = "sparkles"
+
     public init(size: CGFloat = 20) {
         self.size = size
     }
 
     public var body: some View {
-        Image(systemName: "sparkles")
+        Image(systemName: Self.symbolName)
             .font(.system(size: size, weight: .medium))
             .foregroundStyle(Theme.Brand.gradient)
             .accessibilityHidden(true)

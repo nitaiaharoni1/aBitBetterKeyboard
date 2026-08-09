@@ -70,17 +70,27 @@ public struct DictationPanel: View {
         .frame(height: 38)
     }
 
+    /// The languages actually in the transcript, in the order they dominate it.
+    ///
+    /// **Both halves used to be written for a two-language keyboard.** The badge
+    /// named the runner-up as `dominant.next()`, which is the *next row of the
+    /// catalogue* rather than the other language on screen, so the shipped first
+    /// dictation script — Hebrew with English loanwords — was badged `עב ⟷ ع`.
+    /// And "is this mixed" was a hand-rolled Hebrew-versus-Latin scan, which
+    /// answers no for a Russian sentence carrying English words. Counting scripts
+    /// answers both questions at once, for every language in the catalogue.
     private var detectedLanguageTag: some View {
-        let detected = SuggestionEngine.dominantLanguage(in: controller.dictationTranscript) ?? .english
-        let mixed = containsBothScripts(controller.dictationTranscript)
+        let detected = SuggestionEngine.languages(in: controller.dictationTranscript)
+        let primary = detected.first ?? .english
+        let secondary = detected.dropFirst().first
 
         return HStack(spacing: 3) {
-            Text(detected.shortName)
+            Text(primary.shortName)
                 .font(.system(size: 10, weight: .semibold))
-            if mixed {
+            if let secondary {
                 Image(systemName: "arrow.left.arrow.right")
                     .font(.system(size: 8, weight: .bold))
-                Text(detected.next().shortName)
+                Text(secondary.shortName)
                     .font(.system(size: 10, weight: .semibold))
             }
         }
@@ -88,20 +98,8 @@ public struct DictationPanel: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(Capsule().fill(Theme.Brand.solid.opacity(0.14)))
-        .accessibilityLabel(mixed ? "Mixed languages detected" : detected.displayName)
-    }
-
-    private func containsBothScripts(_ text: String) -> Bool {
-        var hebrew = false
-        var latin = false
-        for scalar in text.unicodeScalars {
-            if (0x0590...0x05FF).contains(scalar.value) {
-                hebrew = true
-            } else if CharacterSet.letters.contains(scalar) {
-                latin = true
-            }
-        }
-        return hebrew && latin
+        .accessibilityLabel(
+            secondary.map { "\(primary.displayName) and \($0.displayName)" } ?? primary.displayName)
     }
 
     // MARK: Waveform
@@ -184,7 +182,11 @@ public struct DictationPanel: View {
                 .opacity(controller.dictationTranscript.isEmpty ? 0.5 : 1)
             }
 
-            Text("Recording runs in the AI Keyboard app")
+            // Said, not implied. This line used to read "Recording runs in the AI
+            // Keyboard app", which is the architecture dictation *would* need and
+            // is not something this build does: nothing records anywhere, in
+            // either process. See `MockDictation`.
+            Text("A scripted demo — iOS gives a keyboard no microphone")
                 .font(.system(size: 10))
                 .foregroundStyle(Theme.Keys.secondaryLabel.opacity(0.8))
         }

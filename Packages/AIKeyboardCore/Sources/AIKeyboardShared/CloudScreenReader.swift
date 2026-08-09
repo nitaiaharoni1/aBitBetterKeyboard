@@ -100,12 +100,22 @@ public struct CloudScreenReader: ScreenReader {
         // because it is answering the question the keyboard asks — which layout
         // opens to reply — and a Hebrew sentence carrying English loanwords
         // reads as majority-Latin to any character count.
-        let language: KeyboardLanguage =
-            switch fields["language"] {
-            case "hebrew": .hebrew
-            case "english": .english
-            default: LanguageDetector.scripts(in: message).contains(.hebrew) ? .hebrew : .english
-            }
+        //
+        // **Matched against the whole catalogue, and matched raw.** The
+        // identifiers in `KeyboardLanguage` are exactly the lowercase English
+        // names the prompt asks for, so "hebrew" and "english" resolve to the two
+        // languages they always resolved to, byte for byte, and "arabic" now
+        // resolves too instead of being swept into the fallback. Nothing is
+        // lowercased or trimmed on the way in, deliberately: any other spelling
+        // reaches the script check exactly as it did before, which keeps every
+        // answer this could give for an English or a Hebrew screen unchanged.
+        // The fallback is where the widening actually bites, because it is
+        // reached whether or not the model ever learns to say "arabic": it used
+        // to answer `.english` for every script that was not Hebrew, which is how
+        // an Arabic screen came back with "reply in English".
+        let language =
+            KeyboardLanguage(rawValue: fields["language"] ?? "")
+            ?? .answering(LanguageDetector.scripts(in: message))
 
         return ScreenReading(
             sender: sender,
@@ -163,6 +173,30 @@ public struct CloudScreenReader: ScreenReader {
 /// a paragraph explaining bubble tint and edge (cost 4 points and made repeat
 /// runs disagree), and "a printed name always means the message is incoming"
 /// (gained 1 point of message accuracy, lost 3 of sender).
+///
+/// **`language` still offers the model two words, and the keyboard now draws
+/// fourteen. That gap is deliberate and it is not free.** Widening the two field
+/// descriptions is one edit; what it costs is the whole recorded corpus. Every
+/// answer in `Bar/screen-context/cloud_outputs.json` was bought with *these*
+/// bytes, `ScreenContextBarTests` replays that file to score the shipping path,
+/// and `.claude/CLAUDE.md` is explicit that a delta measured against a recording
+/// from another day is not a delta at all — two runs a day apart disagreed on
+/// roughly a third of the corpus, against 2 of 30 minutes apart. So changing the
+/// prompt without re-recording moves the thing being measured and the measuring
+/// stick in the same commit, and there is no dated model version to pin either
+/// to. Whoever changes it owes, in one sitting: a fresh `cloud_outputs.json` and
+/// `cloud_outputs_repeat.json` from `harness/vertex_vision.py`, the score from
+/// `harness/score_cloud.py`, the `ablation/split.json` baseline re-taken by
+/// `harness/ablate.py` (the script/language split is worth 8 points and is the
+/// most likely thing a rewording breaks), and a re-run of
+/// `ScreenContextBarTests` against the new recording. The corpus is 30 frames of
+/// English, Hebrew and mixed, so it cannot show the gain either — new frames in
+/// a third script are owed with it.
+///
+/// Until then the widening lives entirely in `parse`, where it can be proved
+/// rather than sampled: a message the model does not call Hebrew or English is
+/// mapped by its script instead of being called English, and the model's own
+/// answer is matched against all fourteen identifiers in case it volunteers one.
 enum ScreenPrompt {
 
     static let instructions = """

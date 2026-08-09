@@ -115,8 +115,8 @@ public struct CaptureStatus: Equatable, Sendable {
     /// transition only. A visible degraded state beats a jetsam kill, because a
     /// kill ends the broadcast and only the user can restart it.
     public var degraded: UInt8 = 0
-    /// `ScreenContextEndReason` raw value, `.none` while running.
-    public var endReasonRaw: UInt8 = ScreenContextEndReason.none.rawValue
+    /// `ScreenContextEndReason` raw value, `.notEnded` while running.
+    public var endReasonRaw: UInt8 = ScreenContextEndReason.notEnded.rawValue
     private var padding0: UInt8 = 0
     private var padding1: UInt32 = 0
 

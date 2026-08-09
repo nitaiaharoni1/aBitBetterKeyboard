@@ -55,7 +55,8 @@ public final class ScreenContextSession: ObservableObject {
     /// When the session started, for the running-time label.
     @Published public private(set) var startedAt: Date?
 
-    /// The last Reply tap raised `intent.readNow` and nothing ever answered it.
+    /// The last Reply tap could not be met, so the strip must stop promising it
+    /// can.
     ///
     /// **This is the consumer's own observation, not a guess about the other
     /// process**, and it exists because the strip was making a promise the build
@@ -66,6 +67,15 @@ public final class ScreenContextSession: ObservableObject {
     /// a raised request went unanswered. It is still the honest signal when a
     /// broadcast is not really running, when the read fails silently, or when
     /// ReplayKit turns out not to deliver what this build assumes.
+    ///
+    /// **It now also covers a read that *was* answered, with a failure about the
+    /// setup**, which is wider than the name — kept because the name is mirrored
+    /// into `KeyboardController` and read by two views, and the behaviour matters
+    /// more than the noun. A rejected access token fails the same way on every
+    /// tap; leaving the offer up meant each of those taps uploaded another
+    /// picture of the user's screen to be refused identically.
+    /// `ScreenReadService.describesSetup` is the test, and it is identity against
+    /// three constants rather than a parser.
     ///
     /// Keying the copy off what actually happened, rather than off a hard-coded
     /// "not built", keeps it true on both sides of that work landing: the first
@@ -103,6 +113,17 @@ public final class ScreenContextSession: ObservableObject {
     /// session on the scripted timeline below, which is what the in-app
     /// playground and the UI tests drive.
     public var reader: (any ScreenReader)?
+
+    /// Whether a screen-reading backend is set up, asked the same way the capture
+    /// process asks it. Only `isWorthReporting` reads it, and only for
+    /// `.notConfigured`.
+    ///
+    /// A closure rather than a direct call so a test can drive both answers:
+    /// `BackendTransport.configured()` reads the App Group suite, which a test
+    /// bundle shares with every other test in the process, and a test that wrote
+    /// a real backend URL into it would leak into the ones that assert there is
+    /// none.
+    var isScreenReadingConfigured: () -> Bool = { BackendTransport.configured() != nil }
 
     /// The app and the keyboard each have exactly one of these. Internal rather
     /// than private so a test can drive an isolated session against an isolated
@@ -223,7 +244,7 @@ public final class ScreenContextSession: ObservableObject {
             sessionSeenLive = status?.sessionID
             publish(.paused, from: .capture, frames: frames)
         case .ended(let reason):
-            guard isWorthReporting(status: status) else {
+            guard isWorthReporting(reason, status: status) else {
                 publishAbsence()
                 return
             }
@@ -251,8 +272,20 @@ public final class ScreenContextSession: ObservableObject {
     /// Whether an ending is still news. See `endingWorthShowing`: either this
     /// consumer watched the session run, or it stopped recently enough that the
     /// user still believes it is on.
-    private func isWorthReporting(status: CaptureStatus?) -> Bool {
+    ///
+    /// **`.notConfigured` is retired the moment the thing it names is
+    /// configured**, ahead of both of those. It is the one ending whose cause the
+    /// user can remove from inside this app, and until this check existed removing
+    /// it changed nothing for ten minutes: the Screen Context screen printed
+    /// "Screen context can't run yet" in its hero while the card 200 points below
+    /// said "Saved. Screen context can start.", and the keyboard withheld the
+    /// picker for the same window because `canRestart` is false. That is the first
+    /// ten minutes of somebody's first successful setup, which is the worst
+    /// available moment to contradict yourself. It self-healed on the next
+    /// broadcast, which they could not start.
+    private func isWorthReporting(_ reason: ScreenContextEndReason, status: CaptureStatus?) -> Bool {
         guard let status else { return false }
+        if reason == .notConfigured, isScreenReadingConfigured() { return false }
         if let sessionSeenLive, sessionSeenLive == status.sessionID { return true }
         return CaptureClock.elapsed(since: status.heartbeatAt) <= Self.endingWorthShowing
     }
@@ -381,7 +414,14 @@ public final class ScreenContextSession: ObservableObject {
                 record.requestSequence >= sequence,
                 record.outcome != .read
             {
-                lastReadWentUnanswered = false
+                // **A failure that describes the setup is not cleared, it is
+                // raised.** A rejected token or an address that is not this
+                // service fails identically on the next tap, and clearing the
+                // flag put "Reply can read this screen" straight back on the
+                // strip — so every further tap spent another upload of the user's
+                // screen to be told the same thing. See
+                // `ScreenReadService.describesSetup`.
+                lastReadWentUnanswered = ScreenReadService.describesSetup(record.detail)
                 throw AIEngineError.screenNotRead(record.failureExplanation)
             }
 

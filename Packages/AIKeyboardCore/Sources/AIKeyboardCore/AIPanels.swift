@@ -102,7 +102,7 @@ public struct AIMenuPanel: View {
     }
 
     private func actionCard(_ action: AIAction) -> some View {
-        let isAvailable = self.isAvailable(action)
+        let isAvailable = Self.isAvailable(action, hasTextToWorkWith: controller.hasTextToWorkWith)
 
         return Button {
             controller.run(action)
@@ -152,8 +152,29 @@ public struct AIMenuPanel: View {
 
     /// Reply stays tappable without a session so it can explain itself; the text
     /// actions genuinely have nothing to do without text.
-    private func isAvailable(_ action: AIAction) -> Bool {
-        action.needsScreenContext ? true : controller.hasTextToWorkWith
+    ///
+    /// Static and taking its input rather than reading `controller`, so the bar
+    /// that opens this panel can ask the same question — see `hasRunnableAction`.
+    static func isAvailable(_ action: AIAction, hasTextToWorkWith: Bool) -> Bool {
+        action.needsScreenContext ? true : hasTextToWorkWith
+    }
+
+    /// Whether opening this panel would put anything tappable in front of the
+    /// user.
+    ///
+    /// **`SuggestionBar` reads this instead of deciding for itself, and the two
+    /// disagreeing was D8's defect.** The bar's sparkle was enabled by
+    /// `hasTextToWorkWith || canReply`, which is false on an empty field with no
+    /// session — exactly the state the Reply panel exists for. So: open WhatsApp,
+    /// tap the compose box, tap the AI button to answer the message on screen, and
+    /// nothing happened, under a hint reading "Type something first", while the
+    /// panel one tap away held the broadcast picker and the explanation of how to
+    /// start a session. Reply is always available here, so this is always true;
+    /// it is written as a question over the actions rather than as `true` so that
+    /// a future action list cannot make it a lie without failing
+    /// `SparkleReachabilityTests`.
+    static func hasRunnableAction(hasTextToWorkWith: Bool) -> Bool {
+        AIAction.allCases.contains { isAvailable($0, hasTextToWorkWith: hasTextToWorkWith) }
     }
 
     /// Reply's subtitle names the sender rather than the app, because the app is
@@ -168,7 +189,10 @@ public struct AIMenuPanel: View {
         switch controller.screenContext {
         case _ where !controller.canReply: return "Needs screen context"
         case .ready(let context): return "To \(context.sender)"
-        case _ where controller.screenReadWentUnanswered: return "The last read got no answer"
+        // Not "got no answer" any more: the flag now also covers a read that was
+        // answered, with a failure about the setup rather than about this screen.
+        // See `ScreenContextSession.lastReadWentUnanswered`.
+        case _ where controller.screenReadWentUnanswered: return "The last read didn't work"
         default: return "Reads the screen when you tap"
         }
     }
@@ -223,7 +247,12 @@ public struct AIResultPanel: View {
     private var title: String {
         switch kind {
         case .fix: return "Fix"
-        case .variants(let tone): return tone?.title ?? "Rewrite"
+        // The overlay carries a `ToneStyle`, which for a custom tone is the
+        // built-in the answer is labelled with — right for tagging the variant,
+        // wrong for naming the register the user asked for.
+        case .variants(let tone):
+            if controller.selectedToneIsCustom { return ToneSetting.customTitle }
+            return tone?.title ?? "Rewrite"
         case .replies: return "Reply"
         case .needsScreenContext: return "Reply"
         }
@@ -360,36 +389,61 @@ public struct AIResultPanel: View {
     private var toneChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Theme.Space.xxs) {
-                ForEach(ToneStyle.allCases) { tone in
-                    let isSelected = controller.selectedTone == tone
-                    Button {
-                        controller.selectTone(tone)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: tone.icon)
-                                .font(.system(size: 11, weight: .medium))
-                            Text(tone.title)
-                                .font(.system(size: 13, weight: .medium))
-                        }
-                        .foregroundStyle(isSelected ? Theme.Text.onBrand : Theme.Keys.label)
-                        .padding(.horizontal, Theme.Space.sm)
-                        .padding(.vertical, 7)
-                        .background {
-                            if isSelected {
-                                Capsule().fill(Theme.Brand.gradient)
-                            } else {
-                                Capsule().fill(Theme.Keys.card)
-                            }
-                        }
-                        .contentShape(Capsule())
+                // The user's own tone leads, and only appears when they have
+                // written one. `ToneStyle` cannot carry it as a seventh case — its
+                // raw values are the persisted setting — so it is a chip of its
+                // own rather than a member of `allCases`. See `ToneSetting`.
+                if let custom = controller.customTone {
+                    chip(
+                        title: custom.title,
+                        icon: custom.icon,
+                        isSelected: controller.selectedToneIsCustom
+                    ) {
+                        controller.selectTone(custom)
                     }
-                    .pressable()
+                }
+
+                // A custom tone runs as one of the six on the engines that cannot
+                // take free text, so the built-in chips have to check that it is
+                // not the one running or they light up as if they had been picked.
+                ForEach(ToneStyle.allCases) { tone in
+                    let isSelected = controller.selectedTone == tone && !controller.selectedToneIsCustom
+                    chip(title: tone.title, icon: tone.icon, isSelected: isSelected) {
+                        controller.selectTone(tone)
+                    }
                 }
             }
             .padding(.horizontal, Theme.Space.sm)
             .padding(.vertical, 2)
         }
         .frame(height: 38)
+    }
+
+    /// One chip. Extracted only because there are now two kinds of them and the
+    /// body was duplicated.
+    private func chip(
+        title: String, icon: String, isSelected: Bool, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .medium))
+                Text(title)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .foregroundStyle(isSelected ? Theme.Text.onBrand : Theme.Keys.label)
+            .padding(.horizontal, Theme.Space.sm)
+            .padding(.vertical, 7)
+            .background {
+                if isSelected {
+                    Capsule().fill(Theme.Brand.gradient)
+                } else {
+                    Capsule().fill(Theme.Keys.card)
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .pressable()
     }
 
     private func variantCard(_ variant: RewriteVariant) -> some View {
@@ -498,34 +552,98 @@ public struct AIResultPanel: View {
         .accessibilityHint("Inserts this reply")
     }
 
-    /// Reply tapped with no live session.
+    /// Reply tapped with no live session, and the one place in the keyboard where
+    /// a session can be started.
     ///
-    /// **There is no button here on purpose.** Only iOS can start a screen
-    /// broadcast, through `RPSystemBroadcastPickerView`, which cannot be
-    /// triggered programmatically and lives in the app. A button here would
-    /// either do nothing or start something that is not a capture session, and
-    /// this panel used to do the second: it ran the scripted demo. Words that
-    /// send the user to the one place it works beat a button that lies.
+    /// **This is where the entry point has to be, because the strip cannot hold
+    /// it.** `ScreenContextStrip` is not rendered at all while screen context is
+    /// off, so an affordance that lived only there could start nothing; the strip
+    /// carries the restart for an *ended* session and this carries the first start.
+    ///
+    /// **The button used to be absent on purpose, and the reason turned out to be
+    /// half right.** Only iOS can start a broadcast, which is still true — but the
+    /// inference that the picker therefore belongs in the app does not follow.
+    /// `RPSystemBroadcastPickerView` is a `UIView` whose button talks to `replayd`
+    /// over XPC and touches no `UIApplication`; `BroadcastPickerButton`'s doc
+    /// comment carries the disassembly. What that does not prove is that `replayd`
+    /// answers a keyboard extension, so the words that send the user to the app
+    /// stay underneath the button rather than being replaced by it.
+    ///
+    /// **It reads the recorded state, not just whether the container is
+    /// reachable.** The first version of this branched on `CaptureChannel.isReachable`
+    /// alone and never looked at `controller.screenContext`, so after a session
+    /// ended `.notConfigured` this panel still said "Screen context is off" and
+    /// still offered the picker — while the strip, three points above it, printed
+    /// the reason and correctly withheld the button. Two surfaces reading one page
+    /// and disagreeing about it is the bug `ScreenContextEndReason.recovery` was
+    /// added to prevent, and this was the same bug one layer up: the picker there
+    /// would have looped the user through the same one-second broadcast for as
+    /// long as they kept tapping.
     private var screenContextPrompt: some View {
         VStack(spacing: Theme.Space.sm) {
             VStack(spacing: 4) {
-                Text("Screen context is off")
+                Text(prompt.title)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.Keys.label)
 
+                Text(prompt.detail)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.Keys.secondaryLabel)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, Theme.Space.md)
+
+            if prompt.offersPicker {
+                BroadcastPickerButton(width: 52, height: 52)
+                    .frame(width: 52, height: 52)
+                    // White first, brand tint over it: the system draws the glyph
+                    // black. See `BroadcastPickerButton`.
+                    .background(
+                        Circle()
+                            .fill(Theme.Text.onBrand)
+                            .overlay(Circle().fill(Theme.Brand.softGradient))
+                    )
+                    .accessibilityLabel("Start screen context")
+                    .accessibilityHint("Opens the iOS screen broadcast picker")
+                    .accessibilityIdentifier("ai-start-broadcast")
+
                 Text(
-                    "Reply answers the message in front of you. Open AI Keyboard, tap Screen Context, and start it there — iOS runs the picker itself and shows a red indicator until you stop it."
+                    "If nothing opens, do it from AI Keyboard › Screen Context. iOS shows a red indicator for as long as it runs."
                 )
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .foregroundStyle(Theme.Keys.secondaryLabel)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, Theme.Space.md)
             }
-            .padding(.horizontal, Theme.Space.md)
 
             Spacer(minLength: 0)
         }
         .padding(.top, Theme.Space.xs)
+    }
+
+    /// The ending on the page, if the last thing that happened was one. `.off` is
+    /// not an ending: it is the ordinary state of a phone that has never started a
+    /// broadcast, and it has no reason to print.
+    private var endedReason: ScreenContextEndReason? {
+        guard case .ended(let reason) = controller.screenContext else { return nil }
+        return reason
+    }
+
+    /// The two measurements this panel makes, read at render time.
+    ///
+    /// `CaptureChannel.isReachable` is whether this process can reach the App Group
+    /// at all — false in the keyboard until Full Access is granted, and the
+    /// difference between "screen context is off" and "screen context cannot work
+    /// here". `BackendTransport.configured()` is whether there is anywhere to send
+    /// a screen once one has been captured. Everything decided from them is in
+    /// `ScreenContextPrompt`, where a test can reach it.
+    private var prompt: ScreenContextPrompt {
+        ScreenContextPrompt(
+            canReachChannel: CaptureChannel.isReachable,
+            cloudConfigured: BackendTransport.configured() != nil,
+            ended: endedReason)
     }
 
     // MARK: Buttons
@@ -560,5 +678,64 @@ public struct AIResultPanel: View {
                 .contentShape(Rectangle())
         }
         .pressable()
+    }
+}
+
+// MARK: - Reply with no session behind it
+
+/// What the Reply panel says when there is nothing to reply to, and whether it
+/// offers to start a broadcast.
+///
+/// A value type rather than three computed properties on the view, because the
+/// decision is pure and the one thing worth pinning is not renderable: **the
+/// picker must be offered only when a broadcast started now could get further
+/// than the last one did.** It shipped asking two of the three questions.
+/// `SampleHandler.broadcastStarted` refuses a session outright when
+/// `ScreenReadService.canRead` is false, so with no cloud model the keyboard was
+/// putting a real screen recording in front of the user — countdown, system
+/// recording indicator and all — that iOS would end inside a second. That is the
+/// same trap `ScreenContextView` reordered its own sections to avoid, one process
+/// away.
+///
+/// The three refusals are deliberately distinct sentences. "Turn on Full Access"
+/// and "set up a cloud model" are different work, in different places, and an
+/// ending a restart cannot fix is a fourth thing again.
+struct ScreenContextPrompt: Equatable {
+    let title: String
+    let detail: String
+    let offersPicker: Bool
+
+    init(canReachChannel: Bool, cloudConfigured: Bool, ended: ScreenContextEndReason?) {
+        // The keyboard reads what the capture process writes through the App
+        // Group, and iOS hands a keyboard extension that container only once Full
+        // Access is granted. Starting a broadcast from here would run a capture
+        // this keyboard could never read.
+        guard canReachChannel else {
+            title = "Screen context needs Full Access"
+            detail =
+                "This keyboard cannot reach AI Keyboard's shared storage, so it could not read a screen even while one is being captured. Turn on Full Access for AI Keyboard in Settings, under General › Keyboard › Keyboards."
+            offersPicker = false
+            return
+        }
+        // The same two strings the strip prints, off the same reason.
+        if let ended, !ended.canRestart {
+            title = "Screen context can't run yet"
+            detail = "\(ended.explanation) \(ended.recovery)"
+            offersPicker = false
+            return
+        }
+        // The same wall as the one above, reached before the broadcast instead of
+        // one second after it.
+        guard cloudConfigured else {
+            title = "Screen context can't run yet"
+            detail =
+                "Reading a screen needs a cloud model, and none is set up. \(BackendTransport.setUpRecovery)"
+            offersPicker = false
+            return
+        }
+        title = "Screen context is off"
+        detail =
+            "Reply answers the message in front of you. Tap below and iOS shows its own list of what can record the screen — pick AI Keyboard, then Start Broadcast."
+        offersPicker = true
     }
 }

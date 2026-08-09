@@ -18,41 +18,77 @@ import SwiftUI
 /// **Everything on this screen is observation, and nothing on it gates anything.**
 /// A row that says "not yet" is not a failure; it means no frame has carried that
 /// fact yet, which for a session that has never started is the correct answer.
+///
+/// **It is collapsed, and that is the whole of the change this section needed.**
+/// The first row is "Frames delivered: 1,283, 320 sampled" and a phone's owner
+/// reads that as "this app is photographing my screen sixty times a second" — a
+/// reasonable reading of a number that is, in fact, about a counter incrementing
+/// inside a process that keeps nothing. Deleting the rows was the other option and
+/// it is the wrong one: ten of this design's open questions can only be answered
+/// on hardware, six of them (R1, R2, R3, R7, R11, R17) are answered by exactly
+/// these rows, and no device has ever run this pipeline. So the numbers stay, in
+/// full, one tap away, under a label that says whose numbers they are. Nobody
+/// opens it by accident and nobody who needs it has to go looking for a cable.
 struct CaptureDiagnosticsView: View {
 
     @ObservedObject var session: ScreenContextSession
 
+    /// Collapsed on every appearance, deliberately not remembered. A developer
+    /// disclosure that stays open is a developer disclosure the next person to
+    /// pick up the phone reads as the product.
+    @State private var isExpanded = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: 0) {
+                Divider().overlay(Theme.Surface.separator)
+                    .padding(.top, 8)
 
-            Divider().overlay(Theme.Surface.separator)
+                preamble
 
-            if let status = session.status, status.sessionID != nil {
-                rows(for: status)
-            } else {
-                waiting
+                if let status = session.status, status.sessionID != nil {
+                    rows(for: status)
+                } else {
+                    waiting
+                }
             }
+        } label: {
+            header
         }
+        .tint(Theme.Text.secondary)
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Theme.Surface.raised)
         )
+        .accessibilityIdentifier("screen-context-developer-details")
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("WHAT THE PHONE SAYS")
+        VStack(alignment: .leading, spacing: 2) {
+            Text("DEVELOPER DETAILS")
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(0.6)
                 .foregroundStyle(Theme.Text.tertiary)
-            Text("Facts only a real device can answer. Nothing here changes how the keyboard behaves.")
+            Text("Raw capture counters. Not something you need to read.")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var preamble: some View {
+        Text(
+            "These are the capture process's own counters, for whoever is building this. "
+                + "They describe a counter going up, not pictures being kept: no screenshot is "
+                + "stored anywhere, and one only leaves the device when you tap Reply. Nothing "
+                + "here changes how the keyboard behaves."
+        )
+        .font(.system(size: 12))
+        .foregroundStyle(Theme.Text.tertiary)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.top, 12)
     }
 
     private var waiting: some View {

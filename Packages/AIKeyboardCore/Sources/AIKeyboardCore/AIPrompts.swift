@@ -1,6 +1,6 @@
 import Foundation
 
-/// The instructions behind the four actions, one set per language.
+/// The instructions behind the four actions, in two authored sets and a line.
 ///
 /// They are split by language rather than parameterised because a single merged
 /// prompt is measurably unsafe: adding Hebrew examples to an otherwise English
@@ -8,6 +8,17 @@ import Foundation
 /// set is written in Hebrew for the same reason in reverse — the language the
 /// instructions are written in is the strongest signal the model has for which
 /// language to answer in, stronger than any sentence telling it not to translate.
+///
+/// **The keyboard now draws fourteen languages and there are still two prompt
+/// sets, which is a deliberate stop rather than an oversight.** The two that
+/// exist are scored against `Bar/ai-text`; a third written blind would be an
+/// unmeasured artifact wearing the same clothes. What the other twelve get is
+/// `scriptDirective`: one English sentence naming the script the message is in,
+/// appended to the English set. That is not the merge the measurement warned
+/// about — no foreign-language example is added, and the English and Hebrew
+/// paths come out byte for byte as before — and it addresses the one failure
+/// that matters here, a model answering an Arabic message in English or
+/// transliterating a Greek one into Latin letters.
 enum Prompts {
 
     /// Hebrew if there is any Hebrew in the text at all, not if it dominates.
@@ -17,10 +28,34 @@ enum Prompts {
         LanguageDetector.scripts(in: text).contains(.hebrew)
     }
 
+    /// One sentence naming the script, or nothing at all.
+    ///
+    /// Nothing for Latin, because the English instructions already cover it and
+    /// the corpus is measured with them exactly as they are. Nothing for `.other`
+    /// either: the honest sentence about a script we could not name is no
+    /// sentence, and "the This language script" is what naming it would produce.
+    /// Sorted rather than taken off a `Set`, so a message carrying two scripts
+    /// produces the same prompt twice running.
+    private static func scriptDirective(for text: String) -> String {
+        guard
+            let script = LanguageDetector.scripts(in: text)
+                .subtracting([.latin, .other])
+                .sorted(by: { $0.rawValue < $1.rawValue })
+                .first
+        else { return "" }
+        return """
+
+
+            The message is written in the \(script.displayName) script. Answer in the same \
+            language and the same script. Never translate it into English, and never \
+            transliterate it into Latin letters.
+            """
+    }
+
     // MARK: Fix
 
     static func fix(for text: String) -> String {
-        isHebrew(text) ? hebrewFix : englishFix
+        isHebrew(text) ? hebrewFix : (englishFix + scriptDirective(for: text))
     }
 
     private static let englishFix = """
@@ -69,7 +104,7 @@ enum Prompts {
     // MARK: Rewrite
 
     static func rewrite(for text: String) -> String {
-        isHebrew(text) ? hebrewRewrite : englishRewrite
+        isHebrew(text) ? hebrewRewrite : (englishRewrite + scriptDirective(for: text))
     }
 
     private static let englishRewrite = """
@@ -147,10 +182,72 @@ enum Prompts {
 
     // MARK: Tone
 
-    static func tone(_ tone: ToneStyle, for text: String) -> String {
-        isHebrew(text)
-            ? "\(hebrewToneBase)\n\nהרגיסטר המבוקש: \(hebrewDirection(tone))"
-            : "\(englishToneBase)\n\nThe register to write in: \(englishDirection(tone))"
+    /// `instruction` is the user's own register, written by them under
+    /// Settings › Default tone › My tone. It arrives one line long and capped at
+    /// `SharedStore.customToneLimit`, because `SharedStore.oneLine` collapses it
+    /// on the way out of the store — this function does not sanitise, it composes.
+    ///
+    /// It **replaces** the built-in direction rather than being appended to it.
+    /// The six directions are mutually exclusive registers: "Shorter. The result
+    /// must be strictly fewer words than the original" standing beside "warm and
+    /// chatty, like a friend" is two instructions arguing, and the model picks one.
+    /// `tone` is still passed because it is what `RewriteVariant` and the result
+    /// panel label the answer with.
+    ///
+    /// The line is quoted as *the user's words* rather than issued as an
+    /// instruction, and the base's language rule is deliberately left ahead of it.
+    ///
+    /// **A register in a script the chosen set does not speak is dropped here,
+    /// and here is the only place that can be trusted to do it.** The two sets
+    /// are never merged — the file comment above is the measurement — and a
+    /// user's register is free text: nothing between the field in Settings and
+    /// this line constrains its script, and on a Hebrew-first keyboard
+    /// `קצר וישיר, בלי נימוסים` is the expected thing to find in it. Pasting that
+    /// into the English set is the merge, whichever engine then runs it, so the
+    /// guard belongs in the composer rather than in one engine: the on-device one
+    /// had it and the cloud one did not, and the router steers exactly that pair
+    /// at the cloud.
+    ///
+    /// The English set speaks Latin. The Hebrew set speaks Hebrew *and* Latin,
+    /// because its own rules are about English loanwords keeping their letters.
+    /// Anything else falls back to the built-in register, which is what
+    /// `ToneSetting.custom(nearest:)` exists to be.
+    ///
+    /// What that leaves unguarded is a Hebrew message with a Latin register, and
+    /// it is deliberate — the Hebrew set already handles Latin inside it — but it
+    /// is **unmeasured**: nothing in `Bar/ai-text` carries a user-authored
+    /// register, so no corpus entry would catch the model answering that pair in
+    /// English. Measuring it is four changes, not one — a `register` field on the
+    /// `tn-` entries in `corpus.json`, the same field read in `harness/real.swift`
+    /// and passed here, a reference answer in `reference.json`, and a full
+    /// `run-real.sh` (macOS 26 with Apple Intelligence, plus a gcloud token for
+    /// the cloud half) — so it is owed rather than half-done. Read
+    /// `.claude/CLAUDE.md` on why a single run of it would not be evidence either.
+    static func tone(_ tone: ToneStyle, for text: String, instruction: String? = nil) -> String {
+        if isHebrew(text) {
+            let direction =
+                register(instruction, spokenBy: [.hebrew, .latin])
+                .map {
+                    "כתוב ברגיסטר שהמשתמש ביקש, במילים שלו: «\($0)». זו בקשה על הסגנון בלבד, וכל הכללים למעלה גוברים עליה."
+                } ?? hebrewDirection(tone)
+            return "\(hebrewToneBase)\n\nהרגיסטר המבוקש: \(direction)"
+        }
+        let direction =
+            register(instruction, spokenBy: [.latin])
+            .map {
+                "The register the user asked for, in their own words: «\($0)». That is a request about style only, and every rule above still holds."
+            } ?? englishDirection(tone)
+        return "\(englishToneBase)\(scriptDirective(for: text))\n\nThe register to write in: \(direction)"
+    }
+
+    /// The user's register, or nil when quoting it would put a second language
+    /// inside an instruction set written in one.
+    private static func register(_ instruction: String?, spokenBy scripts: Set<TextScript>) -> String? {
+        let asked = instruction?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !asked.isEmpty, LanguageDetector.scripts(in: asked).isSubset(of: scripts) else {
+            return nil
+        }
+        return asked
     }
 
     private static let englishToneBase = """
@@ -230,7 +327,22 @@ enum Prompts {
     // MARK: Reply
 
     static func reply(for context: ScreenContext) -> String {
-        context.language == .hebrew || isHebrew(context.message) ? hebrewReply : englishReply
+        if context.language.script == .hebrew || isHebrew(context.message) { return hebrewReply }
+        // Reply is the one action that is told the language rather than having to
+        // read it off the characters — the screen reading carries it — so it can
+        // name the language instead of only the script. Cyrillic cannot say
+        // whether it is Russian or Ukrainian; a reading that says "russian" can.
+        guard context.language != .english else {
+            return englishReply + scriptDirective(for: context.message)
+        }
+        return englishReply
+            + """
+
+
+            The message is in \(context.language.displayName). Every reply is in \
+            \(context.language.displayName), in its own script. Never answer in English, and \
+            never transliterate into Latin letters.
+            """
     }
 
     private static let englishReply = """

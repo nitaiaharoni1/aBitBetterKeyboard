@@ -264,6 +264,186 @@ final class ScreenContextConsumerTests: XCTestCase {
         XCTAssertEqual(session.state, .ended(.lost))
     }
 
+    /// **A session that ended without ever receiving a frame is a different
+    /// sentence, and it used to be the same one.**
+    ///
+    /// This is the shape a device reported: screen context switched on, the strip
+    /// says "Screen context stopped. Restart it in AI Keyboard.", and nothing
+    /// anywhere says which half broke. `broadcastFinished()` carries no reason, but
+    /// the producer knows whether ReplayKit ever handed it anything — R1, and the
+    /// single most likely way this pipeline runs and does nothing.
+    ///
+    /// **The ending is taken from `ScreenContextEndReason.ending`, not written by
+    /// hand**, and that is the difference between this test and the one it
+    /// replaced. Naming `.noFrames` in the test body would have left a
+    /// `SampleHandler` that still wrote `.stopped` unconditionally passing a test
+    /// about it not doing that. Driving the same function the producer drives, from
+    /// the same counter the producer reads, is what makes the assertion capable of
+    /// failing.
+    func testASessionThatNeverGotAFrameSaysSoRatherThanJustStopping() throws {
+        // `begin` and straight to the ending: no `recordFrame`, so the page's
+        // `framesDelivered` is 0, which is exactly what `broadcastFinished` reads.
+        writer.begin()
+        step()
+        XCTAssertEqual(session.state, .starting, "a session with no frame yet is still starting")
+
+        let delivered = try XCTUnwrap(writer.status()).framesDelivered
+        XCTAssertEqual(delivered, 0, "the page has to agree that no frame arrived")
+        writer.end(ScreenContextEndReason.ending(framesDelivered: delivered))
+        step()
+
+        XCTAssertEqual(session.state, .ended(.noFrames))
+        XCTAssertNotEqual(
+            ScreenContextEndReason.noFrames.explanation,
+            ScreenContextEndReason.stopped.explanation,
+            "the two endings must not read the same, or the diagnosis is not one")
+    }
+
+    /// The other side of the same decision: a session that *did* receive frames
+    /// ends as an ordinary stop and claims no cause.
+    func testASessionThatSawFramesEndsAsAnOrdinaryStop() throws {
+        writer.begin()
+        writer.recordFrame(screenA)
+        step()
+
+        let delivered = try XCTUnwrap(writer.status()).framesDelivered
+        XCTAssertGreaterThan(delivered, 0)
+        writer.end(ScreenContextEndReason.ending(framesDelivered: delivered))
+        step()
+
+        XCTAssertEqual(session.state, .ended(.stopped))
+    }
+
+    /// A broadcast with no screen reader behind it is refused at the start, and the
+    /// refusal is what the keyboard shows — with the fix, and without a restart it
+    /// would only repeat.
+    ///
+    /// The reason comes from `refusalToStart`, so a producer that stopped refusing
+    /// fails this rather than passing it.
+    func testASessionWithNoReaderIsReportedAsUnconfigured() throws {
+        writer.begin()
+        let refusal = try XCTUnwrap(
+            ScreenContextEndReason.refusalToStart(canRead: false),
+            "a session with no reader has to be refused")
+        writer.end(refusal)
+        step()
+
+        XCTAssertEqual(session.state, .ended(.notConfigured))
+        guard case .ended(let reason) = session.state else { return XCTFail("not an ending") }
+        XCTAssertFalse(
+            reason.canRestart,
+            "offering a restart here starts a broadcast that ends the same way in a second")
+    }
+
+    /// **A failure about the setup withdraws the offer; a failure about the moment
+    /// does not.**
+    ///
+    /// Both branches used to clear the flag, so after the screen-reading server
+    /// rejected the access token the strip went straight back to "Reply can read
+    /// this screen" — and the next tap uploaded another picture of the user's
+    /// screen to be refused in exactly the same way. The broken version returns
+    /// `false` for the first case below.
+    func testARejectedTokenWithdrawsTheOfferAndANetworkBlipDoesNot() async throws {
+        for (detail, withdraws) in [
+            (ScreenReadService.tokenRejected, true),
+            (ScreenReadService.addressNotAServer, true),
+            ("The backend is unreachable.", false)
+        ] {
+            let sessionID = writer.begin()
+            writer.recordFrame(screenA)
+            step()
+
+            async let reply = session.contextForReply(timeout: .seconds(5))
+            try await Task.sleep(for: .milliseconds(250))
+            try writer.publish(
+                ScreenReadingRecord(
+                    sessionID: sessionID,
+                    requestSequence: channel.requestSequence,
+                    frameIdentity: screenA.identity,
+                    capturedAt: CaptureClock.now(),
+                    readAt: CaptureClock.now(),
+                    provenance: "cloud",
+                    outcome: .failed,
+                    detail: detail,
+                    sender: "", message: "", language: ""))
+
+            do {
+                _ = try await reply
+                XCTFail("expected a refusal for \(detail)")
+            } catch let error as AIEngineError {
+                guard case .screenNotRead(let shown) = error else {
+                    return XCTFail("unexpected error \(error)")
+                }
+                XCTAssertEqual(shown, detail, "the strip must show the server's own reason")
+            }
+
+            XCTAssertEqual(
+                session.lastReadWentUnanswered, withdraws,
+                withdraws
+                    ? "a failure that repeats must stop the strip promising a read"
+                    : "a one-off failure must not withdraw the offer")
+        }
+    }
+
+    /// **A `.notConfigured` ending is retired the moment a backend is set.**
+    ///
+    /// Without this the Screen Context screen printed "Screen context can't run
+    /// yet" for ten minutes after the user fixed exactly that, while the card
+    /// below it said "Saved. Screen context can start." — and the keyboard
+    /// withheld the picker for the same window, so the broadcast that would have
+    /// cleared the page could not be started. The broken version reports the
+    /// ending in both halves below.
+    func testAnUnconfiguredEndingStopsBeingNewsOnceABackendIsSet() throws {
+        session.isScreenReadingConfigured = { false }
+        writer.begin()
+        writer.end(try XCTUnwrap(ScreenContextEndReason.refusalToStart(canRead: false)))
+        step()
+        XCTAssertEqual(
+            session.state, .ended(.notConfigured),
+            "with no backend the ending is exactly what the user needs to see")
+
+        session.isScreenReadingConfigured = { true }
+        step()
+        XCTAssertEqual(
+            session.state, .off,
+            "the ending names a cause the user has just removed")
+
+        // Only this reason. An ending the user cannot fix from the app is still
+        // news whatever the backend says.
+        session.isScreenReadingConfigured = { true }
+        writer.begin()
+        writer.end(.noFrames)
+        step()
+        XCTAssertEqual(session.state, .ended(.noFrames))
+    }
+
+    /// The wait on Reply ends with the ending's own words, whichever ending it is.
+    ///
+    /// **This one pins a path rather than a change**, and it is worth saying so:
+    /// `contextForReply` already threw `reason.explanation` before any of this, so
+    /// nothing in the producer's diff could break it. What it does catch is a
+    /// future `.ended` mapping that collapses the new reasons back into one
+    /// sentence on the way to the user.
+    func testReplyStopsWaitingWithTheReasonTheProducerRecorded() async throws {
+        writer.begin()
+        writer.recordFrame(screenA)
+        step()
+
+        async let reply = session.contextForReply(timeout: .seconds(5))
+        try await Task.sleep(for: .milliseconds(300))
+        writer.end(.noFrames)
+
+        do {
+            let context = try await reply
+            XCTFail("expected a refusal, got a reply about \(context.sender)")
+        } catch let error as AIEngineError {
+            guard case .screenNotRead(let reason) = error else {
+                return XCTFail("unexpected error \(error)")
+            }
+            XCTAssertEqual(reason, ScreenContextEndReason.noFrames.explanation)
+        }
+    }
+
     // MARK: Reply
 
     func testReplyActsOnTheOfferedReading() async throws {
@@ -811,7 +991,6 @@ final class ScreenContextConsumerTests: XCTestCase {
         }
     }
 
-
     /// **The playground must not photograph the playground.**
     ///
     /// The app hosts a real `KeyboardView` in its Playground tab and in
@@ -842,4 +1021,82 @@ final class ScreenContextConsumerTests: XCTestCase {
             "and it must not have reached the capture process at all")
     }
 
+}
+
+/// What the keyboard offers when Reply is tapped with no session behind it.
+///
+/// `AIResultPanel` renders three strings and one button off this, and the button
+/// is the one worth pinning: it starts a **real screen recording**, with iOS's own
+/// countdown and its own red indicator, and a broadcast started with no cloud
+/// model behind it is refused by `SampleHandler.broadcastStarted` inside a second
+/// — `ScreenContextEndReason.refusalToStart(canRead:)` is the decision. So the
+/// picker must not be offered in that state, and it was.
+final class ScreenContextPromptTests: XCTestCase {
+
+    private func prompt(
+        channel: Bool = true, cloud: Bool = true, ended: ScreenContextEndReason? = nil
+    ) -> ScreenContextPrompt {
+        ScreenContextPrompt(canReachChannel: channel, cloudConfigured: cloud, ended: ended)
+    }
+
+    /// The defect. The broken version is `canReachChannel && (ended?.canRestart ??
+    /// true)`, which is `true` here — a keyboard on a stock install offering to
+    /// record the user's screen for a session that cannot outlive the countdown.
+    func testThePickerIsWithheldWhenThereIsNoCloudModel() {
+        let withoutCloud = prompt(cloud: false)
+        XCTAssertFalse(
+            withoutCloud.offersPicker,
+            "the keyboard offers to start a broadcast that iOS ends inside a second")
+        XCTAssertTrue(
+            withoutCloud.detail.contains(BackendTransport.settingsPath),
+            "and it does not say what would make it work: \(withoutCloud.detail)")
+        XCTAssertEqual(withoutCloud.title, "Screen context can't run yet")
+    }
+
+    /// The other half, and it is not redundant: a version that simply never
+    /// offered the picker would pass the test above and leave the one entry point
+    /// into this feature dead. The keyboard is the only surface that can start a
+    /// session without a trip to the app.
+    func testThePickerIsOfferedWhenABroadcastCouldActuallyRun() {
+        let ready = prompt()
+        XCTAssertTrue(ready.offersPicker)
+        XCTAssertEqual(ready.title, "Screen context is off")
+        XCTAssertTrue(ready.detail.contains("Start Broadcast"))
+    }
+
+    /// Three refusals, three different pieces of work, in three different places.
+    /// Collapsing any pair would send somebody to Settings › General for a missing
+    /// backend, or to a backend field for a missing permission.
+    func testTheThreeRefusalsSayDifferentThings() {
+        let noChannel = prompt(channel: false, cloud: false)
+        let noCloud = prompt(cloud: false)
+        let deadEnding = prompt(ended: .notConfigured)
+
+        XCTAssertFalse(noChannel.offersPicker)
+        XCTAssertFalse(noCloud.offersPicker)
+        XCTAssertFalse(deadEnding.offersPicker)
+
+        XCTAssertEqual(noChannel.title, "Screen context needs Full Access")
+        XCTAssertTrue(noChannel.detail.contains("Full Access"))
+        // Full Access comes first, because without the App Group the keyboard
+        // could not read a reading even if one existed — and it cannot see the
+        // shared store to know whether a backend is set either.
+        XCTAssertEqual(prompt(channel: false, cloud: true).detail, noChannel.detail)
+
+        XCTAssertNotEqual(noCloud.detail, noChannel.detail)
+        XCTAssertEqual(
+            deadEnding.detail,
+            "\(ScreenContextEndReason.notConfigured.explanation) "
+                + ScreenContextEndReason.notConfigured.recovery,
+            "the panel and the strip have to print one page's ending the same way")
+    }
+
+    /// An ending a restart *would* fix still offers the restart, so the guard added
+    /// for the cloud has not quietly disabled the ordinary case.
+    func testAnEndingARestartFixesStillOffersThePicker() {
+        for reason in [ScreenContextEndReason.stopped, .lost, .noFrames, .notEnded] {
+            XCTAssertTrue(
+                prompt(ended: reason).offersPicker, "\(reason) is fixed by starting another one")
+        }
+    }
 }

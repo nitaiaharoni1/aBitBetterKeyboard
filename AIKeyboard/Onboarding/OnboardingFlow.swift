@@ -3,7 +3,14 @@ import AIKeyboardCore
 
 struct OnboardingFlow: View {
     @EnvironmentObject private var store: SharedStore
+    @Environment(\.scenePhase) private var scenePhase
     @State private var step = 0
+
+    /// The same measurement Home makes, for the same reason: three of these six
+    /// steps ask the user to change something outside the app, and two of the
+    /// three now leave evidence the app can read. Re-read on every return to the
+    /// foreground, because that is when the user comes back from Settings.
+    @State private var setup = SetupState()
 
     private let stepCount = 6
 
@@ -16,17 +23,21 @@ struct OnboardingFlow: View {
 
                 TabView(selection: $step) {
                     WelcomeStep().tag(0)
-                    LanguagesStep().tag(1)
-                    AddKeyboardStep().tag(2)
-                    FullAccessStep().tag(3)
-                    MicrophoneStep().tag(4)
-                    TryItStep().tag(5)
+                    LanguagesStep(setup: setup).tag(1)
+                    AddKeyboardStep(setup: setup).tag(2)
+                    FullAccessStep(setup: setup).tag(3)
+                    MicrophoneStep(setup: setup).tag(4)
+                    TryItStep(setup: setup).tag(5)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(.easeInOut(duration: 0.28), value: step)
 
                 footer
             }
+        }
+        .onAppear { setup = .current() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { setup = .current() }
         }
     }
 
@@ -36,7 +47,10 @@ struct OnboardingFlow: View {
         HStack(spacing: 6) {
             ForEach(0..<stepCount, id: \.self) { index in
                 Capsule()
-                    .fill(index <= step ? AnyShapeStyle(Theme.Brand.gradient) : AnyShapeStyle(Theme.Surface.separator))
+                    .fill(
+                        index <= step
+                            ? AnyShapeStyle(Theme.Brand.gradient) : AnyShapeStyle(Theme.Surface.separator)
+                    )
                     .frame(height: 4)
                     .frame(maxWidth: .infinity)
             }
@@ -58,9 +72,11 @@ struct OnboardingFlow: View {
                 }
             }
 
-            // Every step after the welcome depends on something happening in
-            // Settings, which we cannot verify from here. Skipping has to stay
-            // available or the user gets stuck.
+            // Skipping stays available even now that two of these steps can be
+            // verified, because the third cannot and because a user who has done
+            // the work in Settings but not yet switched to the keyboard has
+            // nothing the app can see. A step that cannot be proven done must not
+            // become a step that cannot be passed.
             if step > 0 && step < stepCount - 1 {
                 SecondaryButton(title: "Skip for now") {
                     withAnimation { step += 1 }
@@ -125,7 +141,8 @@ private struct WelcomeStep: View {
     var body: some View {
         StepLayout(
             title: "One keyboard for how you actually write",
-            subtitle: "Hebrew and English in the same sentence, fixed and rewritten without leaving the app you are in."
+            subtitle:
+                "Hebrew and English in the same sentence, fixed and rewritten without leaving the app you are in."
         ) {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
                 ValuePoint(
@@ -143,10 +160,15 @@ private struct WelcomeStep: View {
                     title: "Replies that read the room",
                     detail: "Turn on screen context and the keyboard answers the message you're looking at."
                 )
+                // This was a dictation promise — "Dictation that keeps up when you
+                // switch language mid-sentence" — on the first screen a new user
+                // ever sees, for a feature that streams a fixed script and records
+                // nothing (see `MockDictation`). Replaced rather than softened,
+                // with something the build actually does.
                 ValuePoint(
-                    icon: "waveform",
-                    title: "Speak when typing is slower",
-                    detail: "Dictation that keeps up when you switch language mid-sentence."
+                    icon: "globe",
+                    title: "Fourteen keyboards, one swipe apart",
+                    detail: "Slide along the space bar to change language, and it names the one you land on."
                 )
             }
             .opacity(appeared ? 1 : 0)
@@ -192,25 +214,32 @@ private struct ValuePoint: View {
 
 private struct LanguagesStep: View {
     @EnvironmentObject private var store: SharedStore
+    let setup: SetupState
 
     var body: some View {
         StepLayout(
             title: "Which languages do you type in?",
             subtitle: "Keeping the list short is what makes prediction fast. You can change this later."
         ) {
+            // A card saying "Arabic, Russian and French are on the way." used to
+            // sit here, under fourteen live switches three of which are Arabic,
+            // Russian and French. Deleted rather than rewritten to name a
+            // different set: there is no fifteenth language queued, so any
+            // sentence in this slot would be another promise nothing is keeping.
             VStack(spacing: Theme.Space.xs) {
                 ForEach(KeyboardLanguage.allCases) { language in
                     LanguageToggleRow(language: language)
                 }
             }
 
-            Card {
-                HStack(spacing: Theme.Space.sm) {
-                    IconBadge(systemName: "clock", tint: Theme.Text.secondary)
-                    Text("Arabic, Russian and French are on the way.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Theme.Text.secondary)
-                }
+            // Said here as well as on step 4, because this is the screen where the
+            // choice is made and the keyboard cannot honour it yet. Withheld once
+            // Full Access is confirmed, when it is no longer true of this phone.
+            if setup.fullAccess != .confirmed {
+                Text(SetupState.languagesNeedFullAccess)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Text.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -252,7 +281,8 @@ private struct LanguageToggleRow: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                    .strokeBorder(isOn ? Theme.Brand.solid.opacity(0.5) : Theme.Surface.separator, lineWidth: 1.5)
+                    .strokeBorder(
+                        isOn ? Theme.Brand.solid.opacity(0.5) : Theme.Surface.separator, lineWidth: 1.5)
             )
             .contentShape(Rectangle())
         }
@@ -279,39 +309,63 @@ private struct LanguageToggleRow: View {
 // MARK: - 3. Add the keyboard
 
 private struct AddKeyboardStep: View {
+    let setup: SetupState
+
     var body: some View {
         StepLayout(
-            title: "Add the keyboard",
-            subtitle: "iOS keeps custom keyboards behind Settings. It takes about twenty seconds."
+            title: setup.keyboardAdded == .confirmed ? "The keyboard is added" : "Add the keyboard",
+            subtitle: setup.keyboardAdded == .confirmed
+                ? "We can see it, so there is nothing to do here."
+                : "iOS keeps custom keyboards behind Settings. It takes about twenty seconds."
         ) {
-            VStack(spacing: Theme.Space.xs) {
-                InstructionRow(number: 1, text: "Open Settings, then General")
-                InstructionRow(number: 2, text: "Tap Keyboard, then Keyboards")
-                InstructionRow(number: 3, text: "Tap Add New Keyboard…")
-                InstructionRow(number: 4, text: "Choose AI Keyboard")
+            Card {
+                StatusRow(
+                    title: "Keyboard added",
+                    detail: setup.keyboardAddedDetail,
+                    check: setup.keyboardAdded
+                )
             }
 
-            Button {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
+            if setup.keyboardAdded != .confirmed {
+                VStack(spacing: Theme.Space.xs) {
+                    InstructionRow(number: 1, text: "Open Settings, then General")
+                    InstructionRow(number: 2, text: "Tap Keyboard, then Keyboards")
+                    InstructionRow(number: 3, text: "Tap Add New Keyboard…")
+                    InstructionRow(number: 4, text: "Choose AI Keyboard")
                 }
-            } label: {
-                HStack(spacing: Theme.Space.xs) {
-                    Image(systemName: "arrow.up.forward.app")
-                    Text("Open Settings")
-                }
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Theme.Brand.solid)
-                .frame(maxWidth: .infinity)
-                .frame(height: 50)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Theme.Brand.solid.opacity(0.12))
-                )
-                .contentShape(Rectangle())
+
+                SettingsLinkButton()
             }
-            .pressable()
         }
+    }
+}
+
+/// Opens Settings. `UIApplication.openSettingsURLString` is the only Settings
+/// destination iOS offers — there is no constant for General › Keyboard — so the
+/// numbered steps beside this button carry the path from the top of Settings and
+/// the button promises nothing more than getting the user there.
+private struct SettingsLinkButton: View {
+    var body: some View {
+        Button {
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        } label: {
+            HStack(spacing: Theme.Space.xs) {
+                Image(systemName: "arrow.up.forward.app")
+                Text("Open Settings")
+            }
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(Theme.Brand.solid)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Theme.Brand.solid.opacity(0.12))
+            )
+            .contentShape(Rectangle())
+        }
+        .pressable()
     }
 }
 
@@ -346,29 +400,58 @@ private struct InstructionRow: View {
 // MARK: - 4. Full Access
 
 private struct FullAccessStep: View {
+    let setup: SetupState
+
     var body: some View {
         StepLayout(
-            title: "Allow Full Access",
+            title: setup.fullAccess == .confirmed ? "Full Access is on" : "Allow Full Access",
             subtitle: "It sounds alarming, so here is exactly what it does and does not do."
         ) {
+            Card {
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    StatusRow(
+                        title: "Full Access",
+                        detail: setup.fullAccessDetail,
+                        check: setup.fullAccess
+                    )
+                    if let explanation = setup.unresolvedExplanation, setup.fullAccess != .confirmed {
+                        Text(explanation)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.Text.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+
             VStack(spacing: Theme.Space.xs) {
+                // Reads the measurement rather than asserting the happy case. The
+                // fixed sentence here promised "cloud rewrites for languages the
+                // on-device model cannot handle" to a user with no cloud model —
+                // which is every stock install, and is exactly the language this
+                // keyboard is for. See `SetupState.fullAccessTurnsOn`.
                 AccessRow(
                     icon: "checkmark.shield",
                     tint: Theme.Semantic.success,
                     title: "What it turns on",
-                    detail: "Cloud rewrites for languages the on-device model cannot handle, and the system key click sound."
+                    detail: setup.fullAccessTurnsOn
                 )
                 AccessRow(
                     icon: "xmark.shield",
                     tint: Theme.Semantic.warning,
                     title: "What we never send",
-                    detail: "Passwords, payment fields and anything you type in a secure field. Those never reach us, by design."
+                    detail:
+                        "Passwords, payment fields and anything you type in a secure field. Those never reach us, by design."
                 )
+                // Also read out of `SetupState` rather than written here, and for a
+                // sharper reason than the row above: the sentence this replaced
+                // said Full Access was "only for the cloud fallback", which is
+                // what silently loses a French-only user the language list they
+                // chose on step 2. See `SetupState.worksWithoutFullAccess`.
                 AccessRow(
                     icon: "iphone",
                     tint: Theme.Brand.solid,
                     title: "Works without it",
-                    detail: "Typing, autocorrect, predictions and emoji all run locally. Full Access is only for the cloud fallback."
+                    detail: SetupState.worksWithoutFullAccess
                 )
             }
         }
@@ -403,13 +486,32 @@ private struct AccessRow: View {
 // MARK: - 5. Microphone
 
 private struct MicrophoneStep: View {
+    let setup: SetupState
+
     @State private var pulse = false
 
+    /// **Nothing on this step turns anything on, so it no longer says it does.**
+    /// It was titled "Turn on dictation" and described recording happening in the
+    /// app — an architecture that is achievable and is not built: no code in either
+    /// process opens a microphone, and the mic key streams a fixed script. There is
+    /// no button here because there is nothing to grant, and the words now say
+    /// that instead of implying a missing one. `MockDictation` carries the evidence
+    /// for what is and is not possible; the blocker is a supported hand-off from
+    /// the keyboard to the app, not the microphone.
     var body: some View {
         StepLayout(
-            title: "Turn on dictation",
-            subtitle: "Recording happens here in the app, then the text is handed to the keyboard. iOS does not let a keyboard open the microphone itself."
+            title: "About dictation",
+            subtitle:
+                "The mic key plays a scripted demo today, and nothing here switches that. iOS does not let a keyboard open the microphone, so recording would have to happen in this app and be handed over — that half is not built."
         ) {
+            Card {
+                StatusRow(
+                    title: "Microphone",
+                    detail: setup.microphoneDetail,
+                    check: setup.microphoneAccess
+                )
+            }
+
             HStack {
                 Spacer()
                 ZStack {
@@ -439,10 +541,12 @@ private struct MicrophoneStep: View {
                     Text("Why it is split in two")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.Text.primary)
-                    Text("Apple isolates keyboard extensions from the microphone. Every voice keyboard on iOS works this way, and it is the part of the product most likely to change with an iOS update.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Theme.Text.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text(
+                        "Apple isolates keyboard extensions from the microphone. Every voice keyboard on iOS works this way, and it is the part of the product most likely to change with an iOS update."
+                    )
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -452,6 +556,21 @@ private struct MicrophoneStep: View {
 // MARK: - 6. Try it
 
 private struct TryItStep: View {
+    let setup: SetupState
+
+    /// "The same keyboard you just installed" is true only for the user who did
+    /// the two Settings steps; "Skip for now" is on both of them, so the other
+    /// path reaches this screen having installed nothing. The app can tell which,
+    /// so it says which — and the skipped version has to make clear that this
+    /// preview is not the keyboard appearing in other apps yet, or the next
+    /// disappointment is discovering it is not there.
+    private var subtitle: String {
+        setup.keyboardAdded == .confirmed
+            ? "The same keyboard you just installed, running inside the app."
+            : "The keyboard itself, running inside the app. It will not appear in other apps until "
+                + "it is added in Settings, but you can try it here now."
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.md) {
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
@@ -459,7 +578,12 @@ private struct TryItStep: View {
                     .font(.system(size: 30, weight: .bold))
                     .foregroundStyle(Theme.Text.primary)
 
-                Text("This is the real keyboard. Type a sentence, then tap ✨ to fix or rewrite it.")
+                // Describes the screen; it does not instruct. The instruction is
+                // the hint inside `KeyboardPreview`, which names what to do with
+                // the sentence already sitting there and disappears once the user
+                // has done something with it. Telling somebody to "type a
+                // sentence" above a sentence is the defect this replaced.
+                Text(subtitle)
                     .font(.system(size: 16))
                     .foregroundStyle(Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -468,8 +592,9 @@ private struct TryItStep: View {
             .padding(.top, Theme.Space.xl)
 
             KeyboardPreview(
-                seedText: "i dont think we should do it because its not make sense",
-                placeholder: "Type something…"
+                seedText: PlaygroundView.seedSentence,
+                placeholder: PlaygroundView.seedPlaceholder,
+                hint: PlaygroundView.seedHint
             )
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
             .padding(.horizontal, Theme.Space.xs)

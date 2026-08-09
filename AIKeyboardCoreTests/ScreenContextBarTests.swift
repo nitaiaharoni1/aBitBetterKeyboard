@@ -452,7 +452,12 @@ final class ScreenContextBarTests: XCTestCase {
                 $0.scripts.contains(.hebrew) && $0.scripts.contains(.latin)
                     ? "mixed" : ($0.scripts.contains(.hebrew) ? "hebrew" : "latin")
             }
-            let detectedLanguage = context.map { $0.language == .hebrew ? "hebrew" : "english" }
+            // `KeyboardLanguage`'s identifiers are the same lowercase words the
+            // ground truth uses, so this is what the old two-way collapse said for
+            // all 30 frames — and it stops being a lie the day a frame in a third
+            // script is added, where the collapse would have scored an Arabic
+            // reading as "english" and called it right.
+            let detectedLanguage = context.map(\.language.rawValue)
 
             let tally = BarScorer.score(
                 entry, sender: context?.sender, message: context?.message,

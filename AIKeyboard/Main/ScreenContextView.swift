@@ -20,6 +20,11 @@ struct ScreenContextView: View {
                 VStack(spacing: Theme.Space.md) {
                     hero
                     if session.source == .capture { liveDetail }
+                    // Above `starter`, because a broadcast started without this
+                    // set ends inside a second with `.notConfigured`. Putting the
+                    // fix below the thing it blocks would be a screen that lets
+                    // the user fail first.
+                    backend
                     starter
                     demo
                     explanation
@@ -36,6 +41,46 @@ struct ScreenContextView: View {
         }
         .navigationTitle("Screen Context")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: The backend
+
+    /// A pointer, not a field, and **the move is the point.**
+    ///
+    /// `BackendTransport.configured()` is the only thing that turns a captured
+    /// frame into text, and it returns nil unless `cloudBackendURL` is in the
+    /// shared store. This screen used to be the one place in the whole app that
+    /// wrote that key, under a heading about screen reading — which made the
+    /// *other* three readers of it invisible. The same key is what every Hebrew
+    /// Fix, Rewrite, Tone and Reply needs, and a user whose keyboard failed at all
+    /// four had no reason on earth to look for the fix inside a screen-recording
+    /// feature they had never turned on. The editor now lives in Settings › AI and
+    /// this points at it; see `CloudModelView` for why that direction and not the
+    /// other one.
+    ///
+    /// Still above `starter`, unchanged: a broadcast started with no cloud model
+    /// ends inside a second with `.notConfigured`, so the fix has to be reachable
+    /// before the button that fails.
+    private var backend: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            // Not "Where the screen is read" any more. That title was true of one
+            // of the four things this setting switches on, and it is what made the
+            // other three impossible to find.
+            SectionHeader(title: "Before you start: the cloud model")
+
+            Card {
+                VStack(alignment: .leading, spacing: Theme.Space.sm) {
+                    Text(
+                        "Reading a screen needs a server to send it to, and it is the same one the keyboard's AI actions use. Until it is set, screen context will not start."
+                    )
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    CloudModelRow()
+                }
+            }
+        }
     }
 
     // MARK: Hero
@@ -94,7 +139,8 @@ struct ScreenContextView: View {
         case .starting: return "Starting"
         case .watching, .ready: return "Watching your screen"
         case .paused: return "Paused"
-        case .ended: return "Screen context stopped"
+        case .ended(let reason):
+            return reason.canRestart ? "Screen context stopped" : "Screen context can't run yet"
         }
     }
 
@@ -113,14 +159,33 @@ struct ScreenContextView: View {
         case .paused:
             return "iOS paused the broadcast. It usually resumes on its own."
         case .ended(let reason):
-            return "\(reason.explanation) Start it again below."
+            // Word for word what the keyboard's strip prints, because it is the
+            // same two strings off the same reason. This screen used to append its
+            // own "Start it again below." to `explanation` while the strip appended
+            // "Restart it in AI Keyboard.", so one page in the shared container
+            // produced two different pieces of advice — and both were wrong for an
+            // ending a restart cannot fix. See `ScreenContextEndReason.recovery`.
+            return "\(reason.explanation) \(reason.recovery)"
         }
     }
 
     // MARK: Live detail
 
-    /// The capture process's own numbers, not a paraphrase of them. Every figure
-    /// here is read out of the shared status page written by the other process.
+    /// What this session has done *for the user*, and nothing about frames.
+    ///
+    /// **A frame count is the wrong unit to put in front of somebody.** This card
+    /// used to lead with "Frames seen: 1,283", read straight out of
+    /// `CaptureStatus.framesSampled`, which is true and reads as "this app is
+    /// photographing my phone sixty times a second". It is not a privacy fact at
+    /// all: a sampled frame is reduced to 2,048 greyscale samples inside the
+    /// capture process, hashed, and discarded inside the callback it arrived in —
+    /// nothing about it ever leaves, and nothing about it is stored. The number
+    /// that *is* a privacy fact is how many screenshots left the device, which is
+    /// one per Reply tap, and how many pictures are kept, which is none.
+    ///
+    /// The frame counters are not deleted; they moved to `CaptureDiagnosticsView`,
+    /// which is now behind a disclosure that says whose numbers they are. They are
+    /// the only answer this project has to R1 and nobody has run it yet.
     private var liveDetail: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
@@ -150,8 +215,8 @@ struct ScreenContextView: View {
                 Divider().overlay(Theme.Surface.separator)
 
                 HStack(spacing: 0) {
-                    metric(value: "\(session.framesRead)", label: "Frames seen")
                     metric(value: "\(session.status?.readsStarted ?? 0)", label: "Screens sent")
+                    metric(value: "\(session.status?.readsCompleted ?? 0)", label: "Answers back")
                     metric(value: "0", label: "Pictures kept")
                 }
 
@@ -241,10 +306,19 @@ struct ScreenContextView: View {
                         Spacer()
                         BroadcastPickerButton()
                             .frame(width: 60, height: 60)
+                            // White under the soft gradient, which is 18% opacity
+                            // and therefore takes on whatever is behind it. The
+                            // system draws the glyph black — see
+                            // `BroadcastPickerButton` — so over `Surface.raised` in
+                            // dark mode the button was a black glyph on a near-black
+                            // circle.
                             .background(
-                                Circle().fill(Theme.Brand.softGradient)
+                                Circle()
+                                    .fill(Theme.Text.onBrand)
+                                    .overlay(Circle().fill(Theme.Brand.softGradient))
                             )
                             .accessibilityLabel("Start a screen broadcast")
+                            .accessibilityIdentifier("screen-context-start-broadcast")
                         Spacer()
                     }
 

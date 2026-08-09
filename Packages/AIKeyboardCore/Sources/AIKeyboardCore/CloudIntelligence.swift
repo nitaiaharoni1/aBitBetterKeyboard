@@ -50,13 +50,20 @@ public struct CloudIntelligence: TextIntelligence {
             corrected, to: source, corrections: fields["corrections"]?.trimmed ?? "")
     }
 
-    public func variants(for text: String, tone: ToneStyle?) async throws -> [RewriteVariant] {
+    /// The engine that can honour a user-authored register, because the cloud
+    /// model has no supported-language list to fall outside of. Nothing else
+    /// changes with one: `OutputGuard.addedSpecifics` still vets the answer, so a
+    /// register the user wrote does not get to loosen the rule that Tone may not
+    /// invent a time, a day or a number.
+    public func variants(
+        for text: String, tone: ToneStyle?, instruction: String? = nil
+    ) async throws -> [RewriteVariant] {
         let source = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !source.isEmpty else { throw AIEngineError.empty }
 
         if let tone {
             let fields = try await run(
-                instructions: Prompts.tone(tone, for: source),
+                instructions: Prompts.tone(tone, for: source, instruction: instruction),
                 prompt: "Message:\n\(source)",
                 fields: [CloudField("text", "The message rewritten in the requested register.")]
             )
@@ -171,4 +178,3 @@ public struct CloudIntelligence: TextIntelligence {
 extension String {
     fileprivate var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
 }
-

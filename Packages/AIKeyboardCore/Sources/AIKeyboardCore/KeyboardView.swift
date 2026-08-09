@@ -39,25 +39,37 @@ public struct KeyboardView: View {
 
     private var keyGrid: some View {
         GeometryReader { geo in
+            let columns = KeyboardLayout.columns(for: controller.language, plane: controller.plane)
             let unit = KeyboardLayout.unitWidth(
                 totalWidth: geo.size.width,
                 spacing: Theme.Metrics.keySpacing,
-                sideInset: Theme.Metrics.sideInset
+                sideInset: Theme.Metrics.sideInset,
+                columns: columns
             )
-            let rows =
-                KeyboardLayout.rows(for: controller.language, plane: controller.plane)
-                + [
+            let available = geo.size.width - Theme.Metrics.sideInset * 2
+            let characterRows = KeyboardLayout.rows(for: controller.language, plane: controller.plane)
+            // Only the letters plane runs in the language's own direction. Digits
+            // and symbols read left to right in Hebrew, Arabic and Persian, and so
+            // does the function row that carries the space bar and return.
+            let characterDirection: LayoutDirection =
+                KeyboardLayout.mirrorsRows(for: controller.language, plane: controller.plane)
+                ? .rightToLeft : .leftToRight
+
+            VStack(spacing: Theme.Metrics.rowSpacing) {
+                ForEach(characterRows) { row in
+                    rowView(row, availableWidth: available, unit: unit)
+                        .environment(\.layoutDirection, characterDirection)
+                }
+                rowView(
                     KeyboardLayout.bottomRow(
                         for: controller.language,
                         plane: controller.plane,
                         showsGlobe: controller.showsGlobeKey
-                    )
-                ]
-
-            VStack(spacing: Theme.Metrics.rowSpacing) {
-                ForEach(rows) { row in
-                    rowView(row, availableWidth: geo.size.width - Theme.Metrics.sideInset * 2, unit: unit)
-                }
+                    ),
+                    availableWidth: available,
+                    unit: unit
+                )
+                .environment(\.layoutDirection, .leftToRight)
             }
             .padding(.horizontal, Theme.Metrics.sideInset)
             .padding(.top, Theme.Metrics.topInset)
@@ -81,8 +93,22 @@ public struct KeyboardView: View {
                     height: Theme.Metrics.keyHeight,
                     language: controller.language,
                     shift: controller.shift,
+                    // Only the space bar carries the language name, and only it
+                    // reports a touch instead of a press. Both because a slide
+                    // along it switches language — see `SpaceSwipe`.
+                    indication: key.cap == .space ? controller.languageSwitchIndication : nil,
                     onPress: { controller.press($0) },
-                    onRepeat: key.cap == .backspace ? { controller.deleteBackward() } : nil
+                    onRepeat: key.cap == .backspace ? { controller.deleteBackward() } : nil,
+                    // The key already inserted its own character on finger-down,
+                    // so choosing an alternate is a replacement rather than an
+                    // insertion.
+                    onAlternate: key.alternates.isEmpty
+                        ? nil
+                        : { alternate in
+                            controller.deleteBackward()
+                            controller.press(.character(alternate))
+                        },
+                    onSpaceTouch: key.cap == .space ? { controller.spaceBarTouch($0) } : nil
                 )
             }
         }
