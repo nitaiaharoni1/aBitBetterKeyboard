@@ -79,5 +79,6 @@ struct RootView: View {
         // writes `intent.keyboardVisible`, because the keyboard is the only
         // thing that can honestly claim to be on screen.
         .onAppear { ScreenContextSession.shared.startConsuming(.shared, as: .observer) }
+        .task { await AppAttestation.refreshIfNeeded(store: store) }
     }
 }
