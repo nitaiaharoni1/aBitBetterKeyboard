@@ -1,0 +1,135 @@
+// A valid attestation, minted locally, so the verifier can be shown to *accept*
+// as well as reject.
+//
+// **There is no other way to get one.** A real attestation needs a real Secure
+// Enclave, which no CI machine and no simulator has, and a blob recorded off a
+// device is frozen at one app id, one environment and one nonce — useless for
+// testing the checks that are supposed to reject. So the tests bring their own
+// certificate authority and the verifier takes its root as a parameter.
+//
+// Every `...Override` below breaks exactly one of the verifier's ten checks, so
+// a rejection test can say which one it is exercising rather than feeding in
+// noise and asserting that something failed.
+
+// `reflect-metadata` must be imported before `@peculiar/x509`, not beside it.
+// That library resolves its own internals through tsyringe, which throws on
+// load without the polyfill — so an import sorter that moves this line below
+// the one under it breaks the whole suite with an error that names neither
+// file.
+import "reflect-metadata";
+
+import { createHash, randomBytes, webcrypto } from "node:crypto";
+import { encode } from "cbor-x";
+import * as x509 from "@peculiar/x509";
+
+x509.cryptoProvider.set(webcrypto);
+
+export const NONCE_OID = "1.2.840.113635.100.8.2";
+
+/// Apple's extension value is SEQUENCE { [1] { OCTET STRING nonce } }.
+///
+/// Every length here is under 128, so single-byte DER lengths are correct and a
+/// long-form encoder would produce something Apple never sends.
+export function nonceExtensionValue(nonce) {
+  const octetString = Buffer.concat([Buffer.from([0x04, nonce.length]), nonce]);
+  const tagged = Buffer.concat([Buffer.from([0xa1, octetString.length]), octetString]);
+  return Buffer.concat([Buffer.from([0x30, tagged.length]), tagged]);
+}
+
+async function generateP256() {
+  return webcrypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+    "sign",
+    "verify"
+  ]);
+}
+
+/// The 65-byte uncompressed point, which is what Apple hashes to make the key id.
+async function uncompressedPoint(publicKey) {
+  const raw = Buffer.from(await webcrypto.subtle.exportKey("raw", publicKey));
+  if (raw.length !== 65 || raw[0] !== 0x04) {
+    throw new Error(`expected a 65-byte uncompressed point, got ${raw.length}`);
+  }
+  return raw;
+}
+
+export async function buildFakeAttestation({
+  appId = "9R8P28G4BJ.com.nitai.aikeyboard",
+  challenge = "test-challenge",
+  aaguid = "appattestdevelop",
+  signCount = 0,
+  rpIdHashOverride = null,
+  credentialIdOverride = null,
+  nonceOverride = null,
+  signLeafWithRoot = true
+} = {}) {
+  const rootKeys = await generateP256();
+  const leafKeys = await generateP256();
+
+  const root = await x509.X509CertificateGenerator.createSelfSigned({
+    serialNumber: "01",
+    name: "CN=Test App Attest Root",
+    notBefore: new Date("2020-01-01"),
+    notAfter: new Date("2040-01-01"),
+    keys: rootKeys,
+    signingAlgorithm: { name: "ECDSA", hash: "SHA-256" },
+    extensions: [new x509.BasicConstraintsExtension(true, 1, true)]
+  });
+
+  const point = await uncompressedPoint(leafKeys.publicKey);
+  const keyId = createHash("sha256").update(point).digest();
+
+  const rpIdHash = rpIdHashOverride ?? createHash("sha256").update(appId).digest();
+  const credentialId = credentialIdOverride ?? keyId;
+
+  const signCountBytes = Buffer.alloc(4);
+  signCountBytes.writeUInt32BE(signCount);
+  const credentialIdLength = Buffer.alloc(2);
+  credentialIdLength.writeUInt16BE(credentialId.length);
+
+  const authData = Buffer.concat([
+    rpIdHash,
+    Buffer.from([0x40]), // AT flag: attested credential data present
+    signCountBytes,
+    Buffer.from(aaguid.padEnd(16, "\0"), "binary"),
+    credentialIdLength,
+    credentialId
+    // A COSE public key follows on a real device. The verifier takes the key
+    // from the leaf certificate and never reads this, so the fixture leaves it
+    // out rather than pretending to encode one it would never be checked
+    // against.
+  ]);
+
+  const clientDataHash = createHash("sha256").update(challenge).digest();
+  const nonce =
+    nonceOverride ??
+    createHash("sha256").update(Buffer.concat([authData, clientDataHash])).digest();
+
+  const leaf = await x509.X509CertificateGenerator.create({
+    serialNumber: "02",
+    subject: "CN=Test Attestation Leaf",
+    issuer: root.subject,
+    notBefore: new Date("2020-01-01"),
+    notAfter: new Date("2040-01-01"),
+    publicKey: leafKeys.publicKey,
+    signingKey: signLeafWithRoot ? rootKeys.privateKey : leafKeys.privateKey,
+    signingAlgorithm: { name: "ECDSA", hash: "SHA-256" },
+    extensions: [new x509.Extension(NONCE_OID, false, nonceExtensionValue(nonce))]
+  });
+
+  const attestation = encode({
+    fmt: "apple-appattest",
+    attStmt: {
+      x5c: [Buffer.from(leaf.rawData), Buffer.from(root.rawData)],
+      receipt: randomBytes(32)
+    },
+    authData
+  });
+
+  return {
+    attestation: Buffer.from(attestation),
+    keyId: keyId.toString("base64"),
+    challenge,
+    rootPem: root.toString("pem"),
+    leafPem: leaf.toString("pem")
+  };
+}
