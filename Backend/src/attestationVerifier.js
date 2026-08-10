@@ -40,12 +40,20 @@ function refuse(reason) {
 /// a message about a malformed extension rather than about the guess that was
 /// wrong.
 ///
-/// Leniency costs nothing because the caller does not *trust* what this
-/// returns — it compares each candidate against a nonce it computed itself from
-/// `authData` and the challenge. Handing back the wrong 32 bytes fails that
-/// comparison. An attacker cannot gain by having their nonce found somewhere
-/// unusual; it still has to equal SHA-256 of their own authData and a challenge
-/// this service issued.
+/// Leniency costs nothing, for two reasons, and the second is the stronger one.
+///
+/// The caller does not *trust* what this returns — it compares each candidate
+/// against a nonce it computed itself from `authData` and the challenge, so
+/// handing back the wrong 32 bytes fails that comparison.
+///
+/// And **this only ever scans bytes that are already authenticated**. The chain
+/// checks above run first, so by the time this is called the leaf's signature
+/// has been verified against a certificate that chains to Apple's root, and an
+/// X.509 signature covers the whole TBSCertificate — extensions included. An
+/// attacker cannot plant a decoy 32-byte value anywhere in this extension
+/// without forging the CA's signature over it, which is the thing the entire
+/// gate already rests on. Scanning further into an authenticated blob widens
+/// nothing.
 function noncesFromExtension(value) {
   const bytes = Buffer.from(value);
   const candidates = [];
