@@ -242,9 +242,17 @@ final class SetupStateTests: XCTestCase {
         XCTAssertFalse(
             withoutCloud.localizedCaseInsensitiveContains("cloud rewrites and key clicks work"),
             "Home tells a phone with no backend that its cloud rewrites work: \(withoutCloud)")
+        // **The remedy moved, so this asserts the new one rather than being
+        // deleted.** It used to require `settingsPath`, because being unconfigured
+        // meant an address with no access token beside it and that screen held the
+        // box. `AppAttestation` fills the bearer now and the box is gone from
+        // Release, so naming a settings screen would send somebody to one that
+        // offers them nothing. What must still be true is that the sentence says
+        // what happens next: a build that answered the state and stopped is the
+        // defect this half of the test has always been for.
         XCTAssertTrue(
-            withoutCloud.contains(BackendTransport.settingsPath),
-            "and it does not say where to fix it: \(withoutCloud)")
+            withoutCloud.localizedCaseInsensitiveContains("connect"),
+            "and it does not say what would fix it: \(withoutCloud)")
 
         let withCloud = state(confirmed(), cloudConfigured: true).fullAccessDetail
         XCTAssertTrue(
@@ -271,7 +279,9 @@ final class SetupStateTests: XCTestCase {
         XCTAssertFalse(
             withoutCloud.localizedCaseInsensitiveContains("cloud rewrites"),
             "onboarding promises cloud rewrites to a phone with no cloud model: \(withoutCloud)")
-        XCTAssertTrue(withoutCloud.contains(BackendTransport.settingsPath))
+        // Same move as `fullAccessDetail`: the remedy is the connection this app
+        // makes for itself, not a settings screen that no longer holds a field.
+        XCTAssertTrue(withoutCloud.localizedCaseInsensitiveContains("connection"))
 
         XCTAssertTrue(
             state(nil, cloudConfigured: true).fullAccessTurnsOn

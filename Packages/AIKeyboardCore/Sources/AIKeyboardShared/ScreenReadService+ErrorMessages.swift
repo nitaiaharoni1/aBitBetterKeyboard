@@ -25,8 +25,16 @@ extension ScreenReadService {
     public static let notConfigured = "Screen reading is not set up in this build."
 
     /// 401 or 403 — the address is right and the credential is not.
+    ///
+    /// **Stopped telling people to check a token when there stopped being one to
+    /// check.** The bearer is written by `AppAttestation` now, not typed, and the
+    /// field it named is compiled out of Release, so "check it in Screen Context"
+    /// sent a user looking for a box that is not there. A 401 here means the same
+    /// two things it means for `AIEngineError.cloudNotConfigured`: attestation has
+    /// never run because the app has had no network since install, or the token it
+    /// wrote has expired. Opening the app is what fixes both.
     public static let tokenRejected =
-        "The screen reading server rejected this app's access token. Check it in AI Keyboard › Screen Context."
+        "The screen reading server turned this app away. Open AI Keyboard once to reconnect."
 
     /// A non-200 the backend did not describe: usually a 404, i.e. a host that
     /// exists and is not running this service.

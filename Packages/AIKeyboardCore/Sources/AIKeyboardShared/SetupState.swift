@@ -136,20 +136,22 @@ public struct SetupState: Equatable, Sendable {
     /// install is the sentence a user sees immediately before every Hebrew rewrite
     /// they try fails for want of the very thing it says is working. Full Access
     /// buys the network; it does not buy somewhere to send.
-    /// **Says "not finished" rather than naming the missing half, and that is
-    /// deliberate.** `cloudConfigured` is one Bool and there are two ways to be
-    /// false: no usable address, or — since a URL started shipping — an address
-    /// with no access token beside it, which is the state of every fresh install.
-    /// Naming a token here would be wrong in the first case and naming a server
-    /// would be wrong in the second, so this sentence carries the state and the
-    /// destination, and `CloudModelView`'s own status line names the missing half
-    /// once the user is standing in front of it.
+    /// **Stopped naming a destination when there stopped being anything to do
+    /// there.** This used to end at `settingsPath`, because the way to be
+    /// unconfigured was an address with no access token beside it and that screen
+    /// held the box to paste one into. `AppAttestation` fills the bearer now and
+    /// the box is gone from Release, so the remaining ways to be false are: the
+    /// app has never had a network since install, so attestation never ran, or the
+    /// session token it wrote has expired. Neither is fixed by walking to a
+    /// settings screen, and sending somebody to one that offers them nothing is
+    /// the failure this type exists to stop. It connects itself, so the sentence
+    /// says so.
     public var fullAccessDetail: String {
         guard fullAccess == .confirmed else { return "Typing and on-device AI work without it" }
         return cloudConfigured
             ? "On — cloud rewrites and key clicks work"
-            : "On — key clicks work. The cloud model is not finished being set up: "
-                + "\(BackendTransport.settingsPath)."
+            : "On — key clicks work. The cloud model has not connected yet; it connects on its own "
+                + "once this app has a network connection."
     }
 
     /// What onboarding's Full Access step lists under "What it turns on".
@@ -162,14 +164,14 @@ public struct SetupState: Equatable, Sendable {
         cloudConfigured
             ? "Cloud rewrites for languages the on-device model cannot handle, and the system key click sound."
             // "have nowhere to run" was true when no backend existed anywhere and
-            // is not any more: there is a server, the calls reach it, and it turns
-            // them down. Sending somebody off to find a model to deploy when they
-            // need to paste in a token is the wrong instruction, and so is naming
-            // the token here — see `fullAccessDetail` for why this stays at "not
-            // finished" and lets the screen itself say which half.
-            : "The system key click sound, and the network a cloud model needs. That model is not finished "
-                + "being set up, so Hebrew Fix, Rewrite and Reply are refused until it is — "
-                + "\(BackendTransport.settingsPath) is where that happens."
+            // is not any more: there is a server and the calls reach it. What it
+            // used to turn them down for was a missing access token, which is why
+            // this named a settings screen; attestation fills that in by itself
+            // now, so the honest instruction is the network, not a destination.
+            // See `fullAccessDetail`.
+            : "The system key click sound, and the network a cloud model needs — including the connection "
+                + "this app makes once to set that model up. Until it does, Hebrew Fix, Rewrite and Reply "
+                + "are refused."
     }
 
     /// What onboarding's Full Access step lists under "Works without it".
