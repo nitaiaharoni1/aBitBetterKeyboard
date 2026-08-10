@@ -138,43 +138,68 @@ Not run automatically by anything — deploy by hand. The script grants the
 Cloud Run default runtime identity `roles/aiplatform.user` (idempotent, safe
 to re-run) and deploys with `--allow-unauthenticated`, because the caller is a
 keyboard extension with no Google identity and IAM cannot gate it. It refuses to
-run without `BACKEND_TOKEN`, which is this service's own gate:
+run without both of this service's own gates:
 
 ```bash
-BACKEND_TOKEN=$(openssl rand -hex 32) PROJECT=handi-project ./deploy.sh
+SESSION_SECRET=$(openssl rand -hex 32) BACKEND_TOKEN=$(openssl rand -hex 32) \
+  PROJECT=handi-project ./deploy.sh
 ```
 
-Put the same value in the app's `cloudBackendToken` setting beside its URL. See
-"Known gaps" for what that gate is and is not.
+`SESSION_SECRET` is the gate a shipping install passes. The app proves itself
+with App Attest at `/v1/attest`, the service signs it a ninety-day token, and
+nothing is ever typed in by anybody.
+
+`BACKEND_TOKEN` is the door behind it, and it is required too: a simulator has no
+Secure Enclave and cannot attest at all, so without it no cloud action can be
+exercised anywhere but on a device. Anyone running this backend themselves uses
+the same door. Put its value in the app's `cloudBackendToken` setting, which
+exists in Debug builds only.
+
+See "Known gaps" for what these are and are not.
 
 ## Known gaps
 
-- **The gate is a shared secret, and a shared secret has a ceiling.** `IAM`
-  cannot be the gate here: the caller is a keyboard extension making a plain
-  `URLSession` request with no Google identity, so the service has to be
-  `--allow-unauthenticated`, which leaves a URL where every request costs
-  money. `src/gate.js` closes the obvious half of that — set `BACKEND_TOKEN`
-  and `BackendTransport` sends it as a bearer from the app's
-  `cloudBackendToken` setting, and a rate limit per caller bounds the damage if it
-  leaks or a client loops on retry. `deploy.sh` refuses to deploy without one.
-  Both run before the request body is read, so a refused caller cannot make this
-  service buffer 8 MB on their behalf, and the connection is closed rather than
-  left open — answering a slow POST without hanging up is a connection-exhaustion
-  route that costs the attacker nothing and never reaches the model.
+- **The gate is App Attest now, and what it does not cover is a session token
+  sitting on the device it was issued to.** `IAM` cannot be the gate here: the
+  caller is a keyboard extension making a plain `URLSession` request with no
+  Google identity, so the service has to be `--allow-unauthenticated`, which
+  leaves a URL where every request costs money. That URL also ships in the app
+  (`BackendTransport.bundledDefaultURL`), so it is public by construction.
 
-  The rate limiter counts **in one process**, and `deploy.sh` sets
+  `src/attestationVerifier.js` closes it properly: the containing app raises an
+  App Attest statement, this service checks it against Apple's vendored root and
+  against `9R8P28G4BJ.com.nitai.aikeyboard`, and signs back a ninety-day session
+  token. Nothing is typed in and there is nothing to leak. The gate and the rate
+  limit still run before the request body is read, so a refused caller cannot make
+  this service buffer 8 MB on their behalf, and the connection is closed rather
+  than left open — answering a slow POST without hanging up is a
+  connection-exhaustion route that costs the attacker nothing and never reaches
+  the model.
+
+  **What survives.** A session token is a bearer in the App Group, so the owner
+  of a device can read their own and use it off-device until it expires. That is
+  bounded by the ninety days and by the per-device rate limit, which is now the
+  real control — `callerKey` counts on the attested device rather than on
+  `x-forwarded-for`, so a leaked token buys one device's quota instead of a whole
+  carrier NAT's. There is no revocation list: this service stores nothing, so the
+  only way to kill a token early is rotating `SESSION_SECRET`, which kills every
+  token at once and makes every app re-attest on its next launch.
+
+  **`BACKEND_TOKEN` is still here and still a shared secret**, because a
+  simulator has no Secure Enclave and cannot attest. It is a Debug-only field in
+  the app now, so no shipping install has one, but on the service it is exactly as
+  strong as whoever holds it keeps it.
+
+  The rate limiter still counts **in one process**, and `deploy.sh` still sets
   `--max-instances=10`, so the real ceiling is up to ten times the per-instance
   limit and a caller spread across instances sees a looser bound than the number
-  suggests. Bounding it properly means shared state (Cloud Armor, or Redis).
+  suggests. Per-device keying makes each bucket the right size without making the
+  count shared. Bounding it properly still means shared state (Cloud Armor, or
+  Redis).
 
-  What this is *not*: protection from a determined user of the app itself.
-  Nothing ships the token in the bundle — for the same reason no provider
-  credential ships there, anything in a bundle is extractable — but a token
-  typed into settings is still only as private as the person holding it. For a
-  shipping consumer build the right control is **App Attest**, which proves the
-  caller is a genuine unmodified copy of this app on real Apple hardware rather
-  than proving it knows a string. That needs a client change and an Apple key,
-  and it has not been done.
+  **Receipt validation is not done.** The attestation carries a receipt that can
+  be exchanged with Apple for fraud metrics and a risk score. It is a separate
+  server-to-server flow with its own key, and nothing here depends on it.
 - **`/healthz` answers locally and 404s in the deployment, and it is not this
   service that refuses it.** `curl localhost:8080/healthz` returns `ok`; the same
   path on Cloud Run comes back as Google's own HTML 404, without the
