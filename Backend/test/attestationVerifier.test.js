@@ -167,3 +167,49 @@ test("a wrong nonce is still refused however deeply it is wrapped", async () => 
   assert.equal(result.ok, false);
   assert.match(result.reason, /nonce/i);
 });
+
+// ── The chain shape a real device actually sends ───────────────────────────
+//
+// Apple's x5c is always [leaf, intermediate], with the root kept out of it. The
+// fixtures above use the flatter two-certificate form, which makes x5c[1]
+// byte-identical to the trusted root — and the verifier short-circuits that
+// case, so none of them ever exercise the intermediate-to-root link that every
+// real attestation depends on. These do.
+
+test("a real-shaped chain, leaf under a distinct intermediate under the root, is accepted", async () => {
+  const fixture = await buildFakeAttestation({ withIntermediate: true });
+  const result = await verifierFor(fixture).verify(fixture);
+  assert.equal(result.ok, true, `expected acceptance, got: ${result.reason}`);
+  assert.equal(result.deviceId, fixture.keyId);
+});
+
+test("a real-shaped chain whose intermediate is not signed by our root is refused", async () => {
+  const fixture = await buildFakeAttestation({ withIntermediate: true });
+  const other = await buildFakeAttestation({ withIntermediate: true });
+  const result = await verifierFor(other).verify(fixture);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /trusted root/i);
+});
+
+// **Signed by the root is not the same as allowed to sign.** This intermediate
+// is genuinely signed by the trusted root and still must be refused, because it
+// is marked CA:false. Nobody can reach this from outside without Apple's private
+// key; it matters the day the hierarchy changes.
+test("an intermediate that is not marked as a CA is refused even though the root signed it", async () => {
+  const fixture = await buildFakeAttestation({ withIntermediate: true, intermediateIsCA: false });
+  const result = await verifierFor(fixture).verify(fixture);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /not a CA/i);
+});
+
+// The expiry branch, which had no coverage at all while it sat below the
+// signature checks and was therefore unreachable: `@peculiar/x509` rejects an
+// expired certificate inside `verify()` unless `signatureOnly` is passed, so an
+// expired leaf used to come back as "not signed as it claims" — a false
+// statement about a perfectly good signature.
+test("an expired leaf is refused, and refused for being expired", async () => {
+  const fixture = await buildFakeAttestation({ leafNotAfter: new Date("2021-01-01") });
+  const result = await verifierFor(fixture).verify(fixture);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /expired/i);
+});

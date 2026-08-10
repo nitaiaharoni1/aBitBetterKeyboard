@@ -88,12 +88,50 @@ export async function buildFakeAttestation({
   // only honest way to test the locator: computing a nonce for one attestation
   // and injecting it into another can never match, because authData differs.
   nonceWrapper = nonceExtensionValue,
+  // **The shape a real device sends.** Apple's `x5c` is always
+  // [leaf, intermediate] with the root kept out of it, so the leaf is signed by
+  // an intermediate and the intermediate by the root. The default here is the
+  // flatter two-certificate chain, which is easier to build and which every
+  // rejection test uses — but it makes `x5c[1]` byte-identical to the trusted
+  // root, and the verifier short-circuits that case, so it never exercises the
+  // one link every real attestation depends on.
+  withIntermediate = false,
+  // Separate from the above so the CA-flag rejection can be built at all: a
+  // signer that is genuinely signed by the root but is not marked as a
+  // certificate authority.
+  intermediateIsCA = true,
+  // So the expiry branch can be reached at all. It used to sit below the
+  // signature checks, where `@peculiar/x509` had already rejected an expired
+  // certificate inside `verify()` and it was unreachable dead code.
+  leafNotAfter = new Date("2040-01-01"),
   signLeafWithRoot = true
 } = {}) {
   const authority = ca ?? (await createTestCA());
   const rootKeys = authority.keys;
   const root = authority.certificate;
   const leafKeys = await generateP256();
+
+  let issuerCertificate = root;
+  let issuerKeys = rootKeys;
+  if (withIntermediate) {
+    const intermediateKeys = await generateP256();
+    issuerCertificate = await x509.X509CertificateGenerator.create({
+      serialNumber: "03",
+      subject: "CN=Test Attestation Intermediate",
+      issuer: root.subject,
+      notBefore: new Date("2020-01-01"),
+      notAfter: new Date("2040-01-01"),
+      publicKey: intermediateKeys.publicKey,
+      signingKey: rootKeys.privateKey,
+      signingAlgorithm: { name: "ECDSA", hash: "SHA-256" },
+      extensions: [
+        intermediateIsCA
+          ? new x509.BasicConstraintsExtension(true, 0, true)
+          : new x509.BasicConstraintsExtension(false, undefined, true)
+      ]
+    });
+    issuerKeys = intermediateKeys;
+  }
 
   const point = await uncompressedPoint(leafKeys.publicKey);
   const keyId = createHash("sha256").update(point).digest();
@@ -127,11 +165,11 @@ export async function buildFakeAttestation({
   const leaf = await x509.X509CertificateGenerator.create({
     serialNumber: "02",
     subject: "CN=Test Attestation Leaf",
-    issuer: root.subject,
+    issuer: issuerCertificate.subject,
     notBefore: new Date("2020-01-01"),
-    notAfter: new Date("2040-01-01"),
+    notAfter: leafNotAfter,
     publicKey: leafKeys.publicKey,
-    signingKey: signLeafWithRoot ? rootKeys.privateKey : leafKeys.privateKey,
+    signingKey: signLeafWithRoot ? issuerKeys.privateKey : leafKeys.privateKey,
     signingAlgorithm: { name: "ECDSA", hash: "SHA-256" },
     extensions: [new x509.Extension(NONCE_OID, false, nonceWrapper(nonce))]
   });
@@ -139,7 +177,7 @@ export async function buildFakeAttestation({
   const attestation = encode({
     fmt: "apple-appattest",
     attStmt: {
-      x5c: [Buffer.from(leaf.rawData), Buffer.from(root.rawData)],
+      x5c: [Buffer.from(leaf.rawData), Buffer.from(issuerCertificate.rawData)],
       receipt: randomBytes(32)
     },
     authData

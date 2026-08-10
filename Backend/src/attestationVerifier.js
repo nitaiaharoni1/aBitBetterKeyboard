@@ -125,7 +125,34 @@ export function createAttestationVerifier({ rootCertificatePem, appId, environme
       const leaf = chain[0];
       const intermediate = chain[1];
 
+      // **Validity first, so an expired certificate says so.** `verify()` in
+      // `@peculiar/x509` already checks the subject certificate's own dates
+      // unless `signatureOnly` is passed, so leaving this below the signature
+      // checks made it unreachable in practice: an expired leaf came back as
+      // "not signed as it claims", which is a false statement about a
+      // perfectly good signature and a full day of debugging for whoever reads
+      // it. Asked here, it is both accurate and the first thing tried.
+      const asOf = new Date();
+      for (const certificate of chain) {
+        if (asOf < certificate.notBefore || asOf > certificate.notAfter) {
+          return refuse("certificate chain contains an expired certificate");
+        }
+      }
+
       if (!Buffer.from(intermediate.rawData).equals(Buffer.from(root.rawData))) {
+        // **Signed by the root is not the same as allowed to sign, and only the
+        // second one is what "verify the chain" means.** Without this, any
+        // certificate the root ever issued — including a leaf, which is not a
+        // certificate authority and carries no `keyCertSign` — could occupy the
+        // intermediate slot and vouch for an attestation. Nobody can exploit it
+        // today, because both links still need Apple's private key and nobody
+        // outside Apple has one. It becomes load-bearing the moment Apple's
+        // hierarchy changes or this verifier is pointed at a second root, which
+        // is exactly when nobody will be looking at it.
+        const constraints = intermediate.getExtension(x509.BasicConstraintsExtension);
+        if (constraints?.ca !== true) {
+          return refuse("certificate chain is signed by a certificate that is not a CA");
+        }
         try {
           if (!(await intermediate.verify({ publicKey: root.publicKey }))) {
             return refuse("certificate chain does not reach the trusted root");
@@ -140,13 +167,6 @@ export function createAttestationVerifier({ rootCertificatePem, appId, environme
         }
       } catch {
         return refuse("certificate chain is not signed as it claims");
-      }
-
-      const asOf = new Date();
-      for (const certificate of chain) {
-        if (asOf < certificate.notBefore || asOf > certificate.notAfter) {
-          return refuse("certificate chain contains an expired certificate");
-        }
       }
 
       // 3, 4. The nonce Apple bound into the leaf when it issued it.
