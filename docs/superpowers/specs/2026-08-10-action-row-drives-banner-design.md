@@ -31,7 +31,14 @@ whatever happened, including "it did not run and here is why". Emoji is the sing
 exception and is already correct: it draws over the letter area only, inside `keyGrid`,
 so the action row stays under the thumb that opened it.
 
-`KeyboardOverlay` therefore collapses to `.none | .emoji`.
+`KeyboardOverlay` therefore loses `.aiMenu`, `.aiResult` and `.dictation`. It keeps
+`.emoji`, and it keeps whatever other emoji-family cases exist when this lands — a
+second session is adding `.emojiSearch` as this is written. The rule is about *which*
+panels may cover the keys, not about how many cases the enum has: an emoji panel is
+exempt because it leaves the action row alone, and an emoji search panel that covers the
+full key area is exempt for the same reason the emoji grid is, as long as the action row
+stays reachable. That enum is owned by the emoji work; this change deletes three cases
+from it and adds none.
 
 ## Scope
 
@@ -167,8 +174,9 @@ itself and it is black in light mode.
 - `AIMenuPanel.swift`
 - `AIResultPanel.swift`, `AIResultPanel+Replies.swift`, `AIResultPanel+Variants.swift`
 - `DictationPanel.swift`
-- `PanelChrome.swift` — `PanelSurface` and `PanelHeader` have no other caller;
-  `EmojiPanel` draws its own chrome.
+- `PanelChrome.swift` — `PanelSurface` and `PanelHeader` have no other caller; today's
+  `EmojiPanel` draws its own chrome. Confirm this against the rewritten emoji panel
+  before deleting it, since that panel is being replaced in parallel.
 - `AIActionResultKind`
 - `BannerState`'s existing `.needsSetup` case and the `screenContextPromptTitle`
   constant beside it, both folded into `.blocked`
@@ -243,6 +251,19 @@ banner state alone passes against the panel build, because `resolve` would repor
 
 Nothing here asks for a test *run*; the suite must compile and the assertions must be
 honest.
+
+## Sequencing
+
+Six of the files this touches are being edited right now by a parallel session building a
+new emoji mode: `Models.swift`, `KeyboardView.swift`, `KeyboardView+Keys.swift`,
+`KeyboardController.swift`, `KeyboardController+Typing.swift`, `KeyView+Label.swift` and
+`SuggestionBar+Edges.swift`. Implementation waits for that session to land. The plan is
+ordered so every step that avoids those files comes first.
+
+`AIKeyboardCore` also does not compile as this is written: `public enum AIAction` is
+declared in both `Models.swift` and `Models+AI.swift`, left over from a file split in
+progress. That has to be resolved by whoever owns the split before any step here can be
+built.
 
 ## Not doing
 
