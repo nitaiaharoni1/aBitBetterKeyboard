@@ -18,6 +18,10 @@ extension KeyboardController {
         // guard and draw nothing at all, which is the dead button the suggestion
         // bar's own comment records this repo shipping once already.
         guard hasTextToWorkWith else {
+            // Fired here rather than in `refuse`, because the tap has not been
+            // acknowledged yet on this path: the `Feedback.actionPress()` below is
+            // the one a running action gets, and it sits after this guard.
+            Feedback.actionPress()
             refuseForEmptyField(action)
             return
         }

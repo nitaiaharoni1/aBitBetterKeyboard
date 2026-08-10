@@ -102,7 +102,11 @@ extension SuggestionBar {
         return Button {
             switch tap {
             case .rewrite: controller.runDefaultTone()
-            case .needsText: controller.refuseForEmptyField(.rewrite)
+            case .needsText:
+                // The bar's own button, which is not a key, so nothing has
+                // acknowledged the tap yet.
+                Feedback.actionPress()
+                controller.refuseForEmptyField(.rewrite)
             case .ignore: break
             }
         } label: {

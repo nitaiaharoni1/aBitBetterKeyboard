@@ -27,8 +27,12 @@ extension KeyboardController {
     /// for want of a session would draw its sentence over the three rewrites the
     /// previous action left behind, with the pager still offering to page through
     /// them.
+    /// **Fires no haptic of its own.** Three of the four callers are reached from
+    /// `press(_:)`, which has already fired `Feedback.actionPress()` for the key —
+    /// so buzzing here made a refused tap buzz twice, where the panels this replaces
+    /// buzzed once. The two callers that are *not* reached through a key press fire
+    /// it themselves.
     public func refuse(_ block: BannerState.Block) {
-        Feedback.modifierPress()
         withAnimation(Theme.Motion.content) {
             clearBannerState()
             self.block = block
