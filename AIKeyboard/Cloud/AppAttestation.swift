@@ -40,7 +40,17 @@ public enum AppAttestation {
     }
 
     static func attest(store: SharedStore) async throws {
-        let base = URL(string: BackendTransport.effectiveURL())!
+        // **Guarded, not force-unwrapped, and the difference is a launch
+        // crash.** `effectiveURL` returns the stored string as it was typed —
+        // only `configured()` ever asks whether it parses — and this runs at
+        // launch on a value written by a different process into a shared plist.
+        // A stored string with a space in it makes `URL(string:)` nil, and a
+        // `!` there takes the app down before it draws. Refused the same two
+        // ways `BackendTransport.configured` refuses, so a URL this accepts is
+        // one a call would actually go to.
+        guard let base = URL(string: BackendTransport.effectiveURL()),
+            base.scheme?.hasPrefix("http") == true
+        else { return }
         let service = DCAppAttestService.shared
 
         let challenge = try await fetchChallenge(base: base)
