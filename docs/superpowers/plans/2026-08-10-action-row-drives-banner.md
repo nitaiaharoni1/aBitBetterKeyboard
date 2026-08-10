@@ -89,10 +89,37 @@ keyboard UI lives in the local package `Packages/AIKeyboardCore`, never in
 - `.../DictationPanel.swift`
 - `.../PanelChrome.swift` (confirm against the rewritten emoji panel first)
 
-**Tests modified**
-- `AIKeyboardCoreTests/BannerStateTests.swift`, `AIButtonTests.swift`,
-  `DefaultToneTests.swift`, `CustomLayoutTests.swift`, `LayoutValidatorTests.swift`,
-  `AIKeyboardUITests/DemoWalkthroughTests.swift`
+**Tests modified** — surveyed rather than guessed; the first draft of this list missed
+half of them.
+- `AIKeyboardCoreTests/BannerStateTests.swift` — `resultPanelIsOpen` cases deleted, the
+  two `resultsShownElsewhere` cases deleted, `block` added to the helper
+- `AIKeyboardCoreTests/AIButtonTests.swift` — `:84` overlay assertion, `:106` `.openMenu`,
+  and five `AIMenuPanel.isAvailable` / `.hasRunnableAction` call sites that move to
+  `AIAction`
+- `AIKeyboardCoreTests/CustomKeyActionTests.swift` — three tests whose *purpose* is that
+  a menu opens (`testAIMenuKeyTogglesTheMenu`,
+  `testTheQuickToneKeyOpensTheMenuWithNothingToRewrite`, and the empty-field routing test)
+- `AIKeyboardCoreTests/DefaultToneTests.swift:208,236` — two `show(.aiMenu)` flows
+- `AIKeyboardCoreTests/DictationKeyboardTests.swift:48` —
+  `testWithNoSessionThePanelExplainsAndNothingIsDictated`, whose assertion is literally
+  "the panel must still open, to explain"
+- `AIKeyboardCoreTests/CustomLayoutTests.swift` — five `.aiMenu` references across the
+  catalogue, cap and slot-action lists
+- `AIKeyboardCoreTests/LayoutEditorTests.swift:223` — `model.add(.aiMenu, to: .barTrailing)`
+- `AIKeyboardUITests/DemoWalkthroughTests.swift:173` — waits on `dictation-explanation`
+- `AIKeyboardUITests/EmptyFieldBarTests.swift:75` — waits on `ai-action-reply`, an
+  accessibility identifier that only exists on `AIMenuPanel`'s cards
+
+**Two things the first draft of this plan got wrong**
+- `AIMenuPanel.isAvailable(_:hasTextToWorkWith:)` and
+  `AIMenuPanel.hasRunnableAction(hasTextToWorkWith:)` are **not** panel code.
+  `SuggestionBar+Edges.swift:41` reads the second to decide the emoji key's tint, and
+  five tests read both. They move to `AIAction` as
+  `isAvailable(hasTextToWorkWith:)` and `static hasRunnableAction(hasTextToWorkWith:)`
+  before the panel is deleted.
+- Adding `BannerState.blocked` breaks the exhaustive switches in `ActionBanner+Content`
+  and `+Trailing` immediately, so Tasks 1 and 3 cannot be separate commits. They landed
+  together.
 
 ---
 
