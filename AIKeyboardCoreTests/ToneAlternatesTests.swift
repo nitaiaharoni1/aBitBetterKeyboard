@@ -32,9 +32,11 @@ private final class ToneCallRecorder: TextIntelligence, @unchecked Sendable {
     func replies(to context: ScreenContext) async throws -> [ReplyOption] { [] }
 }
 
-/// **Picking a register from the one-tap rewrite key**, which is the only route to
-/// a tone on a stock install: `AIAction.tone` reaches only through `AIMenuPanel`,
-/// and that panel is not in the shipped layout.
+/// **Picking a register from the one-tap rewrite key**, which is now the only route
+/// to a register at all. It used to be the only one on a *stock* install, because
+/// `AIAction.tone` reached a panel of six chips that no shipped layout carried; that
+/// panel is deleted and the action runs the stored register outright, so this popup
+/// is the whole of the feature rather than the convenient half of it.
 ///
 /// The gesture itself is `KeyView`'s alternates popup and cannot be driven from
 /// here. What can be, and what the broken versions get wrong, is the *list* and
@@ -103,11 +105,11 @@ final class ToneAlternatesTests: XCTestCase {
     /// that is deliberate rather than an oversight.** `ToneSetting` only resolves
     /// to `.custom` when `prefersCustomTone` is on, so with the switch off there is
     /// no instruction to send and the popup would be offering a name over the
-    /// built-in register standing behind it. It is the same rule
-    /// `AIResultPanel.toneChips` follows — it draws the custom chip only
-    /// `if let custom = controller.customTone` — and the two surfaces disagreeing
-    /// about which registers exist is the class of drift that `SuggestionBar` and
-    /// `AIMenuPanel` already shipped once.
+    /// built-in register standing behind it. `AIResultPanel.toneChips` used to
+    /// follow the same rule and was the other surface this had to agree with; it is
+    /// deleted, so this popup is now the only reader of `customTone` — which removes
+    /// the drift `SuggestionBar` and `AIMenuPanel` already shipped once rather than
+    /// guarding against it.
     func testAWrittenCustomToneIsNotOfferedUnlessItIsSelected() {
         store.defaultTone = .friendly
         store.customTone = "short, blunt, no pleasantries"

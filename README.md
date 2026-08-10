@@ -60,12 +60,13 @@ xcrun swift-format --in-place --recursive \
   symbols planes
 - Hebrew is 8/10/9 keys, has no shift key, and mirrors delete to the leading
   edge — because Hebrew has no case and reads right to left
-- Suggestion bar with three fixed slots, emoji on one edge and the AI sparkle on
-  the other
+- Suggestion bar with three fixed slots edge to edge; the AI actions live in a
+  row under the keys, and both of the bar's ends ship empty
 - Code-switching predictions: Latin words typed inside a Hebrew sentence get
   offered from a loanword list and tagged with the language they came from
 - Emoji panel, nine categories, plain Unicode with no bundled images
-- AI panel: Reply, Fix, Rewrite, Tone, each with a loading state and results you
+- AI actions: Reply, Fix, Rewrite, Tone, each reporting in the status strip above
+  the keys with a loading state and results you
   apply with one tap
 - Dictation panel driven by a real recording: a waveform fed by the microphone's
   actual level, the transcript the cloud returns, and a mixed-language indicator.
@@ -87,9 +88,13 @@ xcrun swift-format --in-place --recursive \
 
 ## Design decisions worth arguing with
 
-**The sparkle and emoji sit in the suggestion bar, not the bottom row.** Both act
-on text you are looking at rather than characters you are inserting, and it
-leaves the bottom row close to the system layout where muscle memory lives.
+**The AI actions sit in a row of their own under the keys, and nothing they do
+covers the keys.** They act on text you are looking at rather than characters you
+are inserting, so they are kept off the bottom row, which stays close to the
+system layout where muscle memory lives. Every outcome — running, answered,
+failed, or refused because there is nothing to work on — is said in the strip
+above the keys. The three panels that used to paint over the key grid are
+deleted.
 
 **Autocorrect defaults to not correcting.** A space commits what you typed unless
 the correction is confident: a missing apostrophe at any length, or four-plus
@@ -99,7 +104,7 @@ letters that are not already a word. The first version of this turned `I` into
 **AI actions are small and reversible, never a chat box.** Fix and Rewrite show
 you the before and after and let you decline. Nothing is applied silently.
 
-**Reply leads the AI menu and explains itself when it cannot run.** Tapping it
+**Reply explains itself when it cannot run.** Tapping it
 without a capture session says what screen context is and, when a broadcast
 started now could actually get somewhere, hosts Apple's own picker so it can be
 started from the keyboard. `RPSystemBroadcastPickerView` is a plain `UIView` that

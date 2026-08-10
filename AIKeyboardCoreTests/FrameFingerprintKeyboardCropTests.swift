@@ -64,10 +64,12 @@ final class FrameFingerprintKeyboardCropTests: XCTestCase {
 
     // MARK: - Our own keyboard
 
-    /// The blocker this crop exists for: `AIResultPanel.loading` animates three
-    /// shimmer lines for the whole read, and our keyboard is 33% of the band, so
-    /// with our own UI left in, condition 4 refused the answer to the very tap
-    /// that paid for it.
+    /// The blocker this crop exists for: our own UI animates a shimmer for the whole
+    /// read, and our keyboard is 33% of the band, so with it left in, condition 4
+    /// refused the answer to the very tap that paid for it. It was
+    /// `AIResultPanel.loading`'s three lines when this was measured; that panel is
+    /// deleted and `ActionBanner`'s two lines shimmer in its place, which is the
+    /// same hazard in a shorter strip — the crop is what makes either harmless.
     func testOurOwnShimmerDoesNotMoveTheIdentity() throws {
         let early = try deployedIdentity(deployedFrame(newest: newestMessage, shimmer: 30))
         let late = try deployedIdentity(deployedFrame(newest: newestMessage, shimmer: 180))

@@ -11,9 +11,12 @@ import XCTest
 
 /// D8: "we should have a quick button to share screen context in the keyboard".
 ///
-/// The affordance is in the Reply panel — `AIResultPanel.screenContextPrompt`,
-/// which hosts Apple's own broadcast picker — and the only route to it is the
-/// sparkle. The sparkle was enabled by `hasTextToWorkWith || canReply`, which is
+/// The affordance is Apple's own broadcast picker. It used to live in the Reply
+/// panel, reachable only through the sparkle; that panel and that key are both
+/// deleted, and the picker is the banner's trailing chip when
+/// `ScreenContextPrompt.offersPicker` is true. What has not changed is the state
+/// the defect is about, which is why this file still exists: an empty field with no
+/// session must leave a route open. The sparkle was enabled by `hasTextToWorkWith || canReply`, which is
 /// false on an empty field with no session: open WhatsApp, tap the compose box,
 /// tap the AI button to answer the message on screen, and nothing happens under a
 /// hint reading "Type something first".
@@ -40,10 +43,10 @@ final class SparkleReachabilityTests: XCTestCase {
 
     /// The button is open exactly when at least one card inside is.
     ///
-    /// **Read this for what it is.** Comparing `sparkleOpensTheMenu` against
+    /// **Read this for what it is.** Comparing `anyActionCouldRun` against
     /// `hasRunnableAction` would be a tautology, because one is a call to the
     /// other; the right-hand side here is rebuilt from `isAvailable`, which is what
-    /// each *card* is disabled by, so it is the same question asked of the surface
+    /// each *action* is refused by, so it is the same question asked of the surface
     /// that answers it rather than of the surface that delegates. That still only
     /// catches a future re-divergence — the shipped bug lived in an expression
     /// neither side now has, and `testAnEmptyFieldWithNoSessionStillOpensTheMenu`

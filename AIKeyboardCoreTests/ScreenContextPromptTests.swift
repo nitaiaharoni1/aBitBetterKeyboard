@@ -4,8 +4,9 @@ import XCTest
 
 /// What the keyboard offers when Reply is tapped with no session behind it.
 ///
-/// `AIResultPanel` renders three strings and one button off this, and the button
-/// is the one worth pinning: it starts a **real screen recording**, with iOS's own
+/// `ActionBanner` renders a title, a sentence and at most one button off this — it
+/// was `AIResultPanel` until that panel was deleted — and the button is the one
+/// worth pinning: it starts a **real screen recording**, with iOS's own
 /// countdown and its own red indicator, and a broadcast started with no cloud
 /// model behind it is refused by `SampleHandler.broadcastStarted` inside a second
 /// — `ScreenContextEndReason.refusalToStart(canRead:)` is the decision. So the
