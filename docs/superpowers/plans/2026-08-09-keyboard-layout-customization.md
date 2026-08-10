@@ -10,6 +10,50 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-09-keyboard-layout-customization-design.md`
 
+## PAUSED 2026-08-10 — resume state
+
+Execution stopped partway through Task 6 because six other Claude sessions were
+editing this repo concurrently, including `Theme.swift`, `KeyboardView.swift`,
+`SuggestionBar.swift` and `Models.swift`, which Tasks 7 and 8 both need. Nothing
+below has been compiled or tested. **Treat every "done" here as written, not
+verified.**
+
+**Written, uncommitted:**
+
+| Item | State |
+|---|---|
+| `CustomLayout.swift` | complete, includes the `SlotAction.keyCap`/`glyph` extension from Task 2 |
+| `LayoutValidator.swift` | complete |
+| `LayoutPresets.swift` | complete |
+| `CustomLayoutCompiler.swift` | complete |
+| `KeyboardLayout.swift` | six new `KeyCap` cases, their labels and ids, plus `KeySpec.addressableID` |
+| `KeyView.swift` | labels for the six new caps; accessibility id now uses `addressableID` |
+| `KeyboardController.swift` | `press` branches for the six; `onDismissKeyboard`; `customization`; `apply(_:)`; `reloadCustomization()`; `apply(store.storedKeyboardLayout)` in `init` |
+| `SharedStore.swift` | `Key.keyboardLayout`, `layoutKey`, `keyboardLayout`, `storedKeyboardLayout`, `decodeLayout(from:)`, `writeLayout(_:)` |
+
+**Half-done, finish these first on resume:**
+
+- `SharedStore.resetToDefaults()` does not yet clear `Key.keyboardLayout` or
+  restore `keyboardLayout = .default`. `load()` does not yet call
+  `Self.decodeLayout(from: defaults)`. Both are Task 6 Step 3 and were not
+  applied.
+- `AIKeyboardExtension/KeyboardViewController.swift` has no
+  `controller.onDismissKeyboard = { [weak self] in self?.dismissKeyboard() }`.
+  That is Task 2 Step 7, and without it the Hide keyboard key silently does
+  nothing.
+- **Not one test from Tasks 1 to 6 has been written.** Write them before Task 7,
+  and run them before believing any of the above.
+- Task 9's `LayoutView` uses `Theme.Surface.card`, which does not exist. The real
+  tokens are `Theme.Surface.raised` and `.elevated`. Substitute `raised`.
+- `KeyboardLayout.stretchUnits` and `LetterLayout.deleteRow` changed under this
+  work in another session. Re-read `KeyboardLayout.swift` before touching it and
+  check whether Hebrew still puts delete on the top row, because
+  `KeyboardCustomization.default` is asserted against the compiled bottom row and
+  nothing else.
+
+**Resume at:** finish the two half-done edits above, write the Task 1 to 6 tests,
+run the suite, then Task 7.
+
 ## Global Constraints
 
 - **Never link `AIKeyboardCore` from `AIKeyboardBroadcast`.** All new code in this plan goes in `AIKeyboardCore`, never `AIKeyboardShared`. The capture process has no keyboard in it.
@@ -865,9 +909,9 @@ public enum LayoutValidator {
         // MARK: The essentials
         //
         // Three, and not four. Delete is deliberately absent: `KeyboardLayout`
-        // puts it at the end of a *letter* row — the top row for Hebrew, the
-        // bottom letter row for the other sixty-three — and those rows are not
-        // editable, so it is always reachable whatever the user does down here.
+        // puts it at the end of the bottom *letter* row in every language, and
+        // those rows are not editable, so it is always reachable whatever the
+        // user does down here.
         // Requiring it in the custom rows would make the shipped default invalid.
 
         if !actions.contains(.space) {
