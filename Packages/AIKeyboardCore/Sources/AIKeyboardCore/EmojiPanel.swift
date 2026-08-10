@@ -14,6 +14,15 @@ import SwiftUI
 /// section with blanks so a category boundary is always a column boundary, which
 /// is what makes the tab row's highlight computable from the scroll offset alone
 /// (see `category(atOffset:)`) instead of needing a geometry read per cell.
+///
+/// **And the boundary is drawn, because sideways scrolling hides it.** The panel
+/// this replaced put one category on screen at a time, so where Food ended was
+/// never a question. In a continuous strip, Smileys running into People is five
+/// rows of glyphs with nothing between them: the seam is only legible from the
+/// tab row's highlight, which the user is not looking at while swiping. A
+/// hairline down the leading edge of every section's first column says it in
+/// place. It is an overlay, not a column of its own, so `category(atOffset:)`
+/// still counts the same columns.
 public struct EmojiPanel: View {
 
     @ObservedObject var controller: KeyboardController
@@ -127,32 +136,53 @@ public struct EmojiPanel: View {
         }
     }
 
-    @ViewBuilder
     private func cell(_ cell: Cell, width: CGFloat, height: CGFloat) -> some View {
-        if let emoji = cell.emoji {
-            Button {
-                controller.insertEmoji(emoji)
-            } label: {
-                Text(emoji)
-                    // Against the shorter side, so the glyph stays inside its cell
-                    // on a Compact layout where the rows are 28pt tall.
-                    .font(.system(size: min(width, height) * 0.78))
-                    .frame(width: width, height: height)
-                    .contentShape(Rectangle())
+        Group {
+            if let emoji = cell.emoji {
+                Button {
+                    controller.insertEmoji(emoji)
+                } label: {
+                    Text(emoji)
+                        // Against the shorter side, so the glyph stays inside its cell
+                        // on a Compact layout where the rows are 28pt tall.
+                        .font(.system(size: min(width, height) * 0.78))
+                        .frame(width: width, height: height)
+                        .contentShape(Rectangle())
+                }
+                .pressable(scale: 0.85)
+                .accessibilityLabel(EmojiCatalog.names(for: emoji).first ?? emoji)
+            } else {
+                // The tail of a section, keeping the next one on a fresh column.
+                Color.clear.frame(width: width, height: height)
             }
-            .pressable(scale: 0.85)
-            .accessibilityLabel(EmojiCatalog.names(for: emoji).first ?? emoji)
-        } else {
-            // The tail of a section, keeping the next one on a fresh column.
-            Color.clear.frame(width: width, height: height)
+        }
+        // Outside the button and with no vertical inset: the rule has to scale
+        // with nothing when a finger presses the emoji next to it, and the five
+        // cells of a column have to join into one unbroken line rather than a
+        // dashed one. An overlay so the seam costs no layout — the column maths
+        // in `category(atOffset:)` is what the tab highlight rides on.
+        .overlay(alignment: .leading) {
+            if cell.leadsSection {
+                Rectangle().fill(Self.ruleTint).frame(width: 1)
+            }
         }
     }
+
+    /// The seam, spelled once: between two sections in the strip, and between the
+    /// last category tab and delete. The two are read together, one directly above
+    /// the other, so a second opinion about the colour would show.
+    static let ruleTint = Theme.Keys.secondaryLabel.opacity(0.18)
 
     // MARK: Sections
 
     struct Cell: Identifiable, Equatable {
         let id: String
         let emoji: String?
+        /// Whether this cell wears the seam on its leading edge. True for a whole
+        /// first column — every cell with an index under `rowCount`, blanks
+        /// included, so a section shorter than one column still rules its full
+        /// height — and false for the first section that has any cells at all.
+        var leadsSection = false
     }
 
     struct Section: Equatable {
@@ -167,9 +197,16 @@ public struct EmojiPanel: View {
     /// directly — a `@State` array is empty until a body has been evaluated, and
     /// a test that read one would be measuring nothing.
     static func sections(recent: [String]) -> [Section] {
-        var result = [section(id: EmojiCatalog.recentID, emoji: recent)]
+        // **The first section holding anything wears no seam.** A rule marks a
+        // boundary between two sections, and the leading edge of the strip has
+        // only the edge of the panel on its other side. Asked of the cells rather
+        // than hardcoded to Recent, because on a fresh install `recent` is empty
+        // and Smileys is what opens the grid.
+        var result = [section(id: EmojiCatalog.recentID, emoji: recent, rule: false)]
+        var anythingBefore = !recent.isEmpty
         for category in EmojiCatalog.categories {
-            result.append(section(id: category.id, emoji: category.emoji))
+            result.append(section(id: category.id, emoji: category.emoji, rule: anythingBefore))
+            anythingBefore = anythingBefore || !category.emoji.isEmpty
         }
         return result
     }
@@ -178,12 +215,23 @@ public struct EmojiPanel: View {
     /// once, here, because it has to agree exactly with the ids `section` mints.
     static func anchorID(forCategory id: String) -> String { "\(id)-0" }
 
-    private static func section(id: String, emoji: [String]) -> Section {
-        var cells = emoji.enumerated().map { Cell(id: "\(id)-\($0.offset)", emoji: $0.element) }
+    private static func section(id: String, emoji: [String], rule: Bool) -> Section {
+        var cells = emoji.enumerated().map {
+            Cell(
+                id: "\(id)-\($0.offset)", emoji: $0.element,
+                leadsSection: rule && $0.offset < rowCount)
+        }
         let remainder = cells.count % rowCount
         if remainder != 0 {
             for blank in 0..<(rowCount - remainder) {
-                cells.append(Cell(id: "\(id)-blank-\(blank)", emoji: nil))
+                // The blank's index in the *section*, not in the padding: Recent
+                // with three emoji in it is one column of three glyphs and two
+                // blanks, and the seam has to run past all five.
+                let index = cells.count
+                cells.append(
+                    Cell(
+                        id: "\(id)-blank-\(blank)", emoji: nil,
+                        leadsSection: rule && index < rowCount))
             }
         }
         return Section(id: id, cells: cells)
@@ -245,6 +293,16 @@ struct EmojiCategoryRow: View {
             ForEach(EmojiCatalog.categories) { category in
                 tab(id: category.id, icon: category.icon)
             }
+
+            // **Delete is not a tab, and the row has to say so.** Every other key
+            // here scrolls the grid; this one edits the user's text, and drawn
+            // flush against the flags tab it is one more icon in a row of icons.
+            // The same hairline the strip above uses for a section boundary, for
+            // the same reason: it separates two things that do different jobs.
+            Rectangle()
+                .fill(EmojiPanel.ruleTint)
+                .frame(width: 1, height: height * 0.5)
+                .padding(.horizontal, Theme.Space.xxs / 2)
 
             // Pinned at the end and never scrolled, exactly as delete is pinned on
             // every letter row. See `.claude/rules/keyboard-layout.md`.

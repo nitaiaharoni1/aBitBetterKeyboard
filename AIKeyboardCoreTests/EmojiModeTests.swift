@@ -167,6 +167,33 @@ final class EmojiModeTests: XCTestCase {
         XCTAssertFalse(cellIDs.contains("Food"))
     }
 
+    /// **The seam between two categories, which the sideways strip otherwise
+    /// hides.** One category running into the next is five rows of glyphs with
+    /// nothing between them, so the boundary is only readable from the tab row's
+    /// highlight — which nobody is looking at while their thumb is moving.
+    ///
+    /// Asserted on the whole first column rather than on "some cell is ruled",
+    /// because the obvious build marks cell zero alone: that draws a fifth of a
+    /// hairline against the top row and reads as a stray tick, not a divider.
+    func testTheSeamRunsDownEverySectionBoundaryButNotTheStripsOwnEdge() {
+        let sections = EmojiPanel.sections(recent: SharedStore.shippedRecentEmoji)
+
+        // Nothing to the left of Recent but the edge of the panel.
+        XCTAssertFalse(sections[0].cells.contains(where: \.leadsSection))
+
+        for section in sections.dropFirst() {
+            let ruled = section.cells.enumerated().filter { $0.element.leadsSection }.map(\.offset)
+            XCTAssertEqual(ruled, Array(0..<EmojiPanel.rowCount), section.id)
+        }
+
+        // And on a fresh install the list of recents is empty, so the section
+        // that opens the grid — and wears no seam — is Smileys, not Recent.
+        let fresh = EmojiPanel.sections(recent: [])
+        XCTAssertTrue(fresh[0].cells.isEmpty)
+        XCTAssertFalse(fresh[1].cells.contains(where: \.leadsSection))
+        XCTAssertTrue(fresh[2].cells.prefix(EmojiPanel.rowCount).allSatisfy(\.leadsSection))
+    }
+
     func testTheSelectedTabFollowsTheScrollOffset() {
         let sections = EmojiPanel.sections(recent: SharedStore.shippedRecentEmoji)
         let width: CGFloat = 40
