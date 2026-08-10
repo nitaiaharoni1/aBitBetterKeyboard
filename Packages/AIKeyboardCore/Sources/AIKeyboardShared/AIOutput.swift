@@ -126,15 +126,16 @@ public enum AIEngineError: Error, Equatable, Sendable {
             // fresh install actually hits.** At runtime there is now exactly one
             // thing that produces this case: `BackendTransport.mapped` turning a
             // 401 or 403 into it, which means the backend *answered* and turned
-            // this app away. Since the build ships an address and not a token,
-            // that is overwhelmingly a token that is missing, mistyped or
-            // revoked — so telling somebody no cloud model exists sends them
-            // looking for a server to deploy instead of at the field they need to
-            // fill. Names `settingsPath` directly rather than `setUpRecovery`,
-            // because this is the one dead end that can say *which* half is
-            // missing, and a sentence that names the token beats the general one.
-            return "The cloud model turned this away, which usually means its access token is "
-                + "missing or wrong. Check it under \(BackendTransport.settingsPath)."
+            // this app away.
+            //
+            // **"Missing, mistyped or revoked" stopped being the likely cause the
+            // moment nobody types a token.** `AppAttestation` is what fills this
+            // build's bearer now, so a 401 here means one of two things: the app
+            // has never had network since install, so attestation never ran, or
+            // it has not been opened in ninety days and the session token it
+            // wrote has expired. Either way there is no field to check — the fix
+            // is opening the app, so that is the one thing this message says.
+            return "The cloud model turned this away. Open AI Keyboard once to reconnect."
         case .network(let detail):
             return detail.isEmpty ? "The cloud model couldn't be reached." : detail
         case .empty:

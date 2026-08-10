@@ -19,7 +19,13 @@ struct CloudModelFieldSection: View {
     /// Mirrored out of the shared store so the fields are editable, and written
     /// back only when the URL parses. See `save()`.
     @State private var url = ""
+    // The token field is a developer door, not a user setting — see the type's
+    // doc comment. `token` only backs a control that exists in Debug, so it only
+    // exists there too; a Release build with nowhere to type one has nothing to
+    // mirror.
+    #if DEBUG
     @State private var token = ""
+    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
@@ -31,15 +37,23 @@ struct CloudModelFieldSection: View {
                     // state was "there is nowhere to send to", and this line said
                     // so; there is a deployed server now
                     // (`BackendTransport.bundledDefaultURL`), the address below is
-                    // filled in from it, and the only thing still missing on a fresh
-                    // install is the token, which is the one value that cannot ship
-                    // in the bundle.
+                    // filled in from it, and — since App Attest started filling the
+                    // bearer — a shipping install has nothing left to paste in.
+                    #if DEBUG
                     Text(
                         "AI Keyboard comes pointing at our server, already filled in below. It needs the access token before it will answer — paste yours in, or replace both with your own server."
                     )
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    #else
+                    Text(
+                        "AI Keyboard comes pointing at our server, already filled in below, and connects to it on its own. Replace the address to point it at a server of your own instead."
+                    )
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    #endif
 
                     TextField("https://example.com", text: $url)
                         .textFieldStyle(.plain)
@@ -71,6 +85,13 @@ struct CloudModelFieldSection: View {
                     // in one change. Until then the field says what it is storing,
                     // in the line under it, rather than implying more safety than
                     // it has by hiding the characters.
+                    //
+                    // Debug only, along with everything below that describes it: a
+                    // shipping install has `AppAttestation` filling this bearer, and
+                    // a field with nothing to type into it is not a setting, it is a
+                    // question nobody can answer. It stays for Debug builds because
+                    // the simulator has no Secure Enclave and cannot attest at all.
+                    #if DEBUG
                     SecureField(tokenPrompt, text: $token)
                         .textFieldStyle(.plain)
                         .font(.system(size: 15).monospaced())
@@ -86,12 +107,14 @@ struct CloudModelFieldSection: View {
                         )
                         .accessibilityIdentifier("cloud-model-token")
                         .accessibilityLabel("Cloud model \(tokenPrompt)")
+                    #endif
 
                     Text(status)
                         .font(.system(size: 12))
                         .foregroundStyle(isUsable ? Theme.Semantic.success : Theme.Text.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
 
+                    #if DEBUG
                     // Said rather than implied. The token is stored in the app's
                     // shared settings file, which is backed up with the phone; it
                     // is not in the Keychain yet. Somebody choosing what to paste
@@ -102,6 +125,7 @@ struct CloudModelFieldSection: View {
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.Text.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
+                    #endif
 
                     PrimaryButton(title: "Save", icon: "checkmark") { save() }
                         .disabled(!isUsable && !typedURL.isEmpty)
@@ -111,7 +135,9 @@ struct CloudModelFieldSection: View {
         }
         .onAppear {
             url = store.cloudBackendURL
+            #if DEBUG
             token = store.cloudBackendToken
+            #endif
         }
     }
 
@@ -136,11 +162,13 @@ struct CloudModelFieldSection: View {
     /// in the field above rather than picking one answer and being wrong half the
     /// time. Reads the typed value, not the stored one, so it changes as soon as
     /// somebody pastes their own server in.
+    #if DEBUG
     private var tokenPrompt: String {
         let typed = typedURL
         let isBundled = typed.isEmpty || typed == BackendTransport.bundledDefaultURL
         return isBundled ? "Access token (required)" : "Access token (optional)"
     }
+    #endif
 
     private var status: String {
         // An emptied box is not "off" — `BackendTransport.configured` falls back to
@@ -159,9 +187,18 @@ struct CloudModelFieldSection: View {
         // immediately, and this line would have said the cloud was working while
         // every AI action came back 401 for want of a token. `hasCloudModel` is
         // `BackendTransport.isReady`, which is the same question the keyboard asks.
+        #if DEBUG
         return store.hasCloudModel
             ? "Saved and in use."
             : "Saved, but there is no access token — AI actions will be refused until you paste one in."
+        #else
+        // Nothing here for a shipping install to paste in: `AppAttestation`
+        // fills the bearer at launch, so the only honest report is whether
+        // that attempt has succeeded, not whether a field is filled in.
+        return store.hasCloudModel
+            ? "Saved and connected."
+            : "Saved. Open AI Keyboard once to connect it."
+        #endif
     }
 
     /// Only a value the transport would accept is ever written, and an emptied
@@ -180,7 +217,9 @@ struct CloudModelFieldSection: View {
         guard let parsed = parsedURL else {
             guard typedURL.isEmpty else { return }
             store.cloudBackendURL = ""
+            #if DEBUG
             store.cloudBackendToken = typedToken
+            #endif
             // Show the address that is now in force rather than the empty box the
             // user just saved. `store.cloudBackendURL` answers the shipped default
             // for an absent value, which is exactly what the transport will use.
@@ -189,9 +228,13 @@ struct CloudModelFieldSection: View {
         }
         url = parsed.absoluteString
         store.cloudBackendURL = parsed.absoluteString
+        #if DEBUG
         store.cloudBackendToken = typedToken
+        #endif
     }
 
     private var typedURL: String { url.trimmingCharacters(in: .whitespacesAndNewlines) }
+    #if DEBUG
     private var typedToken: String { token.trimmingCharacters(in: .whitespacesAndNewlines) }
+    #endif
 }

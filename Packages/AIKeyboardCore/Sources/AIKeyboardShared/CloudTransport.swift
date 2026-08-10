@@ -278,20 +278,24 @@ public struct BackendTransport: CloudTransport {
     /// writer, a field titled "Where the screen is read" on the Screen Context
     /// screen. So a Hebrew Fix, Rewrite, Tone or Reply failed with "no cloud model
     /// is set up" and named nowhere to go, while the one place that could fix it
-    /// said it was about screen reading. Every failure that dead-ends here now
-    /// prints this string, and `CloudModelView` is the row it names.
+    /// said it was about screen reading. `CloudModelView` is the row this names.
+    /// **Survives `setUpRecovery` sending users to the app instead of here**: the
+    /// URL field is still real, and it is what the Debug token row still sits
+    /// beside.
     public static let settingsPath = "Settings › AI › Cloud model"
 
-    /// The whole sentence, for the four failures that have to say it:
-    /// `AIEngineError.unsupportedLanguage`, `.cloudNotConfigured`,
-    /// `.deviceNotSupported` and `ScreenContextEndReason.notConfigured`.
-    /// **"Set one up" became the wrong instruction when a URL started shipping.**
-    /// Every caller of this reaches it in the state `isReady()` is false in, and
-    /// that is now almost always an address that is already filled in with no
-    /// access token beside it. Sending somebody off to stand up a server, when
-    /// what they need is to paste a string into a field that is already on screen,
-    /// is the kind of dead end this whole constant exists to close.
-    public static let setUpRecovery = "Finish setting it up in AI Keyboard, under \(settingsPath)."
+    /// The whole sentence, for the failures that have to say it:
+    /// `AIEngineError.unsupportedLanguage`, `.deviceNotSupported`,
+    /// `ScreenContextEndReason.notConfigured` and the cloud dictation card.
+    ///
+    /// **"Finish setting it up under \(settingsPath)" became the wrong instruction
+    /// the moment the token field it pointed at left the shipping app.**
+    /// `AppAttestation` fills this build's bearer now, and it runs at launch, so
+    /// there is nothing left for a user to type — the one thing they can still do
+    /// is open the app and let it try again. `settingsPath` survives below for the
+    /// Debug token row and for the URL field, which is still real and still
+    /// user-editable; it is just not what this sentence points at any more.
+    public static let setUpRecovery = "Open AI Keyboard once to reconnect."
 
     // send, encoded, mapped, and decode are in BackendTransport+Send.swift.
 }
