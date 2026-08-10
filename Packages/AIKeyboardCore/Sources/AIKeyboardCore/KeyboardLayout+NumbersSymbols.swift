@@ -1,0 +1,161 @@
+import CoreGraphics
+import Foundation
+
+extension KeyboardLayout {
+
+    // MARK: Numbers and symbols
+
+    static func numbers(for language: KeyboardLanguage) -> [KeyRow] {
+        [
+            KeyRow(id: 0, keys: chars(language.digits)),
+            KeyRow(
+                id: 1,
+                keys: chars(connectors(for: language))
+                    + [KeySpec(.character(language.currency))] + chars("&@\"")),
+            KeyRow(
+                id: 2,
+                keys: [KeySpec(.plane(.symbols, label: "#+="), width: .pinned)]
+                    + punctuation(for: language)
+                    + [KeySpec(.backspace, width: .pinned)],
+                sideInsetUnits: 0
+            )
+        ]
+    }
+
+    static func symbols(for language: KeyboardLanguage) -> [KeyRow] {
+        // The language's own currency leads, and the three that are not it follow,
+        // so no row ever carries the same sign twice — two keys with one id is a
+        // `ForEach` with duplicate identity.
+        let others = ["$", "€", "¥", "•"].filter { $0 != language.currency }.prefix(3)
+        return [
+            KeyRow(id: 0, keys: chars("[]{}#%^*+=")),
+            KeyRow(
+                id: 1,
+                keys: chars("_\\|~<>") + [KeySpec(.character(language.currency))]
+                    + others.map { KeySpec(.character($0)) }),
+            KeyRow(
+                id: 2,
+                keys: [KeySpec(.plane(.numbers, label: "123"), width: .pinned)]
+                    + punctuation(for: language)
+                    + [KeySpec(.backspace, width: .pinned)],
+                sideInsetUnits: 0
+            )
+        ]
+    }
+
+    /// The run of connectors that opens the numbers plane's middle row.
+    ///
+    /// The semicolon is the one that moves. Greek writes its question mark as a
+    /// semicolon, so its semicolon is the ano teleia — and leaving `;` in both
+    /// rows put two keys with the same identity on one plane, which is a `ForEach`
+    /// with duplicate identity and undefined behaviour, not a cosmetic clash.
+    private static func connectors(for language: KeyboardLanguage) -> String {
+        switch language.script {
+        case .greek: return "-/:·()"
+        case .arabic: return "-/:؛()"
+        default: return "-/:;()"
+        }
+    }
+
+    /// The five punctuation keys, which are not the same five in every script.
+    ///
+    /// Arabic and Persian write the comma and the question mark as ، and ؟, and
+    /// Greek writes the question mark as a semicolon — U+037E, the "Greek question
+    /// mark", is canonically equivalent to it and Unicode says to use U+003B. The
+    /// Latin forms stay reachable as long presses, so nothing is lost.
+    ///
+    /// Spanish keeps the Latin five and gains the two marks that open a sentence:
+    /// Apple's own Spanish layout puts ¡ and ¿ on one key, and a phone has no room
+    /// for it, so they are the long presses of the marks that close the sentence.
+    private static func punctuation(for language: KeyboardLanguage) -> [KeySpec] {
+        let extras: [String: [String]]
+        switch language.script {
+        case .arabic: extras = alternates(["،": ",", "؟": "?"])
+        case .greek: extras = alternates([";": "?"])
+        default: extras = openingMarks[language] ?? [:]
+        }
+        return chars(punctuationMarks(for: language), alternates: extras)
+    }
+
+    /// The five marks themselves, in the order the numbers plane prints them.
+    ///
+    /// The bottom row's punctuation key offers the same five, so the two cannot
+    /// drift: a script that writes its question mark as ؟ has to get ؟ in both
+    /// places or the letters plane types a mark the language does not use.
+    public static func punctuationMarks(for language: KeyboardLanguage) -> String {
+        switch language.script {
+        case .arabic: return ".،؟!'"
+        case .greek: return ".,;!'"
+        default: return ".,?!'"
+        }
+    }
+
+    /// The inverted marks Spanish opens a question or an exclamation with. A
+    /// dictionary rather than a `case` because it is data about one language, not
+    /// a property of its script — nothing else in Latin script uses them.
+    private static let openingMarks: [KeyboardLanguage: [String: [String]]] = [
+        .spanish: alternates(["?": "¿", "!": "¡"])
+    ]
+
+    // MARK: Bottom row
+
+    /// Sparkle and emoji live in the suggestion bar, so this row stays close to
+    /// the system layout: plane switch, globe, space, dictation, punctuation,
+    /// return.
+    public static func bottomRow(
+        for language: KeyboardLanguage, plane: KeyboardPlane, showsGlobe: Bool
+    ) -> KeyRow {
+        let planeKey: KeySpec =
+            plane == .letters
+            ? KeySpec(.plane(.numbers, label: "123"), width: .unit(1.3))
+            : KeySpec(
+                .plane(.letters, label: language.lettersPlaneLabel), width: .unit(1.3))
+
+        var keys: [KeySpec] = [planeKey]
+        if showsGlobe { keys.append(KeySpec(.globe, width: .unit(1.0))) }
+        keys.append(KeySpec(.space, width: .flexible))
+        keys.append(KeySpec(.dictation, width: .unit(1.0)))
+        // On every plane: the numbers plane already draws these five marks one
+        // row up, and that is not a reason to move the one key a thumb finds
+        // without looking. The ids do not collide — this one is `punctuation`.
+        keys.append(punctuationKey(for: language))
+        keys.append(KeySpec(.ret, width: .unit(2.2)))
+        return KeyRow(id: 3, keys: keys)
+    }
+
+    /// The bottom row's punctuation key: a full stop on the cap, the other four
+    /// marks of the script behind a long press.
+    ///
+    /// **Drawn on every plane, and its identity is its own.** The numbers plane
+    /// already carries the same five marks on the row above as `char-.` and
+    /// friends; this key answers to `punctuationKeyID` so the two never share a
+    /// `ForEach` identity. That is what lets it stay under the thumb on 123 and
+    /// #+= rather than vanishing when the plane switches.
+    /// Internal rather than private so `CustomLayoutCompiler` can build the same
+    /// key for a custom row. A second spelling of it there would be a copy that
+    /// loses the alternates the first time somebody changes one of them.
+    static func punctuationKey(for language: KeyboardLanguage) -> KeySpec {
+        let marks = punctuationMarks(for: language).map(String.init)
+        return KeySpec(
+            .character(marks[0]),
+            width: .unit(1.0),
+            id: punctuationKeyID,
+            alternates: Array(marks.dropFirst()))
+    }
+
+    /// Read by `KeyView`, which draws this one key's long presses in miniature
+    /// above the mark it types.
+    public static let punctuationKeyID = "punctuation"
+
+    // MARK: Helpers
+
+    static func chars(_ string: String, alternates: [String: [String]] = [:]) -> [KeySpec] {
+        chars(string.map(String.init), alternates: alternates)
+    }
+
+    static func chars(_ keys: [String], alternates: [String: [String]] = [:]) -> [KeySpec] {
+        keys.map { key in
+            KeySpec(.character(key), alternates: alternates[key] ?? [])
+        }
+    }
+}

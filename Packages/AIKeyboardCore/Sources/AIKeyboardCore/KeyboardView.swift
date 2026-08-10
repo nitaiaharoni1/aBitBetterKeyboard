@@ -21,7 +21,9 @@ public struct KeyboardView: View {
     /// bounds, so an `.overlay` on a `KeyboardView` shares it exactly.
     public static let frameSpace = "aikeyboard-frames"
 
-    @ObservedObject private var controller: KeyboardController
+    // Internal so `KeyboardView+Keys` (and any later split) can read it. Private
+    // would compile only while the keys lived in this same file.
+    @ObservedObject var controller: KeyboardController
 
     public init(controller: KeyboardController) {
         self.controller = controller
@@ -38,16 +40,15 @@ public struct KeyboardView: View {
 
             SuggestionBar(controller: controller)
 
-            ZStack {
-                keyGrid
-                    .opacity(controller.overlay == .none ? 1 : 0)
-                    // Keys keep their layout while hidden so the grid does not
-                    // reflow every time a panel opens.
-                    .allowsHitTesting(controller.overlay == .none)
-
-                panel
-            }
-            .frame(height: Theme.Metrics.keyAreaHeight(for: controller.customization))
+            // **Nothing covers the whole key area any more.** This was a `ZStack`
+            // with a `fullKeyAreaPanel` over it, and the three panels that used it —
+            // the AI menu, the AI result and dictation — are deleted: every one of
+            // them existed to say something the strip above now says, and they said
+            // it with the keyboard hidden. What is left of overlays lives inside
+            // `keyGrid`: the emoji grid replaces the letters and leaves the action
+            // row, and emoji search hands the letters back and takes only that row.
+            keyGrid
+                .frame(height: Theme.Metrics.keyAreaHeight(for: controller.customization))
         }
         .background(Theme.Keys.background)
         .environment(\.layoutDirection, controller.language.layoutDirection)
@@ -55,52 +56,34 @@ public struct KeyboardView: View {
         .onAppear { Feedback.prepare() }
     }
 
-    // MARK: Keys
+    /// How the emoji grid arrives. Still needed by `KeyboardView+Keys`, which is the
+    /// one place left that puts anything over the keys.
+    var panelTransition: AnyTransition {
+        .asymmetric(
+            insertion: .move(edge: .bottom).combined(with: .opacity),
+            removal: .opacity
+        )
+    }
+}
 
-    private var keyGrid: some View {
-        GeometryReader { geo in
-            let layout = controller.customization
-            let columns = KeyboardLayout.columns(for: controller.language, plane: controller.plane)
-            // One-handed narrows the grid and pins it to a side. The keys inside
-            // are solved against the narrowed width, so nothing has to know: the
-            // whole keyboard is simply drawn in a smaller box.
-            let gridWidth = geo.size.width * layout.geometry.reach.widthFraction
-            let unit = KeyboardLayout.unitWidth(
-                totalWidth: gridWidth,
-                spacing: Theme.Metrics.keySpacing,
-                sideInset: Theme.Metrics.sideInset,
-                columns: columns
-            )
-            let available = gridWidth - Theme.Metrics.sideInset * 2
-            let rows = KeyboardLayout.rows(
-                for: controller.language,
-                plane: controller.plane,
-                showsGlobe: controller.showsGlobeKey,
-                customization: layout
-            )
-
-            VStack(spacing: layout.geometry.rowSpacing) {
-                ForEach(rows) { row in
-                    rowView(
-                        row, availableWidth: available, unit: unit,
-                        height: layout.geometry.keyHeight)
-                }
-            }
-            // **Every row is drawn in the order its keys are listed, in every
-            // language, and the letters plane is not an exception.** It was, and
-            // that shipped all six right-to-left keyboards mirrored: the rows come
-            // out of Apple's own layout data in physical key order, which is
-            // already the order Apple draws them on screen — ק at the left of the
-            // Hebrew top row, ض at the left of the Arabic one — and an RTL `HStack`
-            // draws its first element last, so it reversed rows that were right.
-            // `Bar/layouts/stock-rendered-rows.json` is the measurement and
-            // `RenderedRowOrderTests` is what holds this to it.
-            .padding(.horizontal, Theme.Metrics.sideInset)
-            .padding(.top, Theme.Metrics.topInset)
-            .padding(.bottom, Theme.Metrics.bottomInset)
-            .frame(width: gridWidth)
+extension View {
+    /// Side inset, optional one-handed width, and the left-to-right pin every key
+    /// row needs. Shared by the letter block and the action row; the emoji panel
+    /// above the action row uses the same width and reach, without the key inset.
+    func keyboardGridChrome(width: CGFloat, reach: Reach) -> some View {
+        // **Every row is drawn in the order its keys are listed, in every
+        // language, and the letters plane is not an exception.** It was, and
+        // that shipped all six right-to-left keyboards mirrored: the rows come
+        // out of Apple's own layout data in physical key order, which is
+        // already the order Apple draws them on screen — ק at the left of the
+        // Hebrew top row, ض at the left of the Arabic one — and an RTL `HStack`
+        // draws its first element last, so it reversed rows that were right.
+        // `Bar/layouts/stock-rendered-rows.json` is the measurement and
+        // `RenderedRowOrderTests` is what holds this to it.
+        padding(.horizontal, Theme.Metrics.sideInset)
+            .frame(width: width)
             // Which edge a narrowed grid hugs.
-            .frame(maxWidth: .infinity, alignment: reachAlignment(layout.geometry.reach))
+            .frame(maxWidth: .infinity, alignment: reachAlignment(reach))
             // **Applied last, so it covers the frame above as well as the rows.**
             // `.leading` and `.trailing` resolve against the layout direction in
             // force *where the modifier sits*, so with this pinned only around the
@@ -109,110 +92,58 @@ public struct KeyboardView: View {
             // about which thumb is holding the phone, and that does not swap with
             // the script.
             .environment(\.layoutDirection, .leftToRight)
-        }
     }
 
     /// Where the grid sits when it has been narrowed for one hand. Physical
     /// sides, guaranteed by the `.leftToRight` pin this is resolved inside.
-    private func reachAlignment(_ reach: Reach) -> Alignment {
+    func reachAlignment(_ reach: Reach) -> Alignment {
         switch reach {
         case .full: return .center
         case .left: return .leading
         case .right: return .trailing
         }
     }
+}
 
-    private func rowView(
-        _ row: KeyRow, availableWidth: CGFloat, unit: CGFloat, height: CGFloat
-    ) -> some View {
-        let widths = KeyboardLayout.widths(
-            for: row,
-            totalWidth: availableWidth,
-            unitWidth: unit,
-            spacing: Theme.Metrics.keySpacing
-        )
+// MARK: - Previews
 
-        return HStack(spacing: Theme.Metrics.keySpacing) {
-            ForEach(Array(row.keys.enumerated()), id: \.element.id) { index, key in
-                KeyView(
-                    spec: key,
-                    width: widths.indices.contains(index) ? widths[index] : unit,
-                    height: height,
-                    language: controller.language,
-                    shift: controller.shift,
-                    // Only the space bar carries the language name, and only it
-                    // reports a touch instead of a press. Both because a slide
-                    // along it switches language — see `SpaceSwipe`. The list is
-                    // what it prints codes from and what decides whether it wears
-                    // the chevrons that say so.
-                    indication: key.cap == .space ? controller.languageSwitchIndication : nil,
-                    enabledLanguages: controller.enabledLanguages,
-                    // Only the one-tap rewrite key, and only because the list comes
-                    // from a setting the app writes: a `KeySpec` is a value and
-                    // cannot read the store. Same shape as `enabledLanguages`.
-                    toneAlternates: key.cap == .quickTone ? controller.toneAlternates : [],
-                    onPress: { controller.press($0) },
-                    onRepeat: key.cap == .backspace ? { controller.deleteBackward() } : nil,
-                    onAlternate: alternateHandler(for: key),
-                    onSpaceTouch: key.cap == .space ? { controller.spaceBarTouch($0) } : nil
-                )
-                .background {
-                    GeometryReader { proxy in
-                        Color.clear.preference(
-                            key: KeyFramesKey.self,
-                            value: [key.id: proxy.frame(in: .named(Self.frameSpace))])
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
+#if DEBUG
+
+/// Holds the controller in a `@StateObject` for the same reason the in-app
+/// playground does: `KeyboardView` takes its controller as an
+/// `@ObservedObject`, so something outside the view has to own it or a canvas
+/// re-render rebuilds the keyboard's entire state mid-edit.
+///
+/// What a preview cannot show is the extension talking to a *host* app, which is
+/// the half that broke on the first real install — see
+/// `KeyboardController.preview(language:text:)`.
+private struct KeyboardPreviewHost: View {
+
+    @StateObject private var controller: KeyboardController
+
+    init(language: KeyboardLanguage, text: String) {
+        _controller = StateObject(
+            wrappedValue: .preview(language: language, text: text))
     }
 
-    /// What lifting a finger on the second or later item of a key's popup does.
-    ///
-    /// Two kinds of key have one and they mean opposite things. A letter has
-    /// *already inserted* its character on finger-down, so picking an accent is a
-    /// replacement — delete, then type the alternate. The one-tap rewrite key has
-    /// deliberately run nothing yet (see `KeyView.runsOnLift`), so picking a
-    /// register is the whole action and there is nothing to undo first.
-    private func alternateHandler(for key: KeySpec) -> ((String) -> Void)? {
-        if key.cap == .quickTone {
-            return controller.toneAlternates.count > 1
-                ? { controller.selectTone(named: $0) } : nil
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            KeyboardView(controller: controller)
         }
-        guard !key.alternates.isEmpty else { return nil }
-        return { alternate in
-            controller.deleteBackward()
-            controller.press(.character(alternate))
-        }
-    }
-
-    // MARK: Panels
-
-    @ViewBuilder
-    private var panel: some View {
-        switch controller.overlay {
-        case .none:
-            EmptyView()
-        case .emoji:
-            EmojiPanel(controller: controller)
-                .transition(panelTransition)
-        case .aiMenu:
-            AIMenuPanel(controller: controller)
-                .transition(panelTransition)
-        case .aiResult(let kind):
-            AIResultPanel(controller: controller, kind: kind)
-                .transition(panelTransition)
-        case .dictation:
-            DictationPanel(controller: controller)
-                .transition(panelTransition)
-        }
-    }
-
-    private var panelTransition: AnyTransition {
-        .asymmetric(
-            insertion: .move(edge: .bottom).combined(with: .opacity),
-            removal: .opacity
-        )
+        .task { controller.refreshSuggestions() }
     }
 }
+
+#Preview("English") {
+    KeyboardPreviewHost(language: .english, text: "the quick brown fo")
+}
+
+/// Hebrew is here because right-to-left rows are **not** mirrored, and a
+/// preview is the cheapest place to see that they are not. See
+/// `.claude/rules/keyboard-layout.md`.
+#Preview("Hebrew") {
+    KeyboardPreviewHost(language: .hebrew, text: "שלו")
+}
+
+#endif

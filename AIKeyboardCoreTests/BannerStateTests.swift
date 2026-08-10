@@ -25,8 +25,6 @@ final class BannerStateTests: XCTestCase {
         runningAction: AIAction? = nil,
         error: AIEngineError? = nil,
         block: BannerState.Block? = nil,
-        resultsShownElsewhere: Bool = false,
-        needsScreenContextSetup: Bool = false,
         options: [BannerOption] = [],
         index: Int = 0,
         screenContext: ScreenContext? = nil,
@@ -41,8 +39,6 @@ final class BannerStateTests: XCTestCase {
             runningAction: runningAction,
             error: error,
             block: block,
-            resultsShownElsewhere: resultsShownElsewhere,
-            needsScreenContextSetup: needsScreenContextSetup,
             options: options,
             index: index,
             screenContext: screenContext,
@@ -155,29 +151,14 @@ final class BannerStateTests: XCTestCase {
         XCTAssertFalse(title.isEmpty)
     }
 
-    /// And it must not fire while a panel owns the answer. `AIMenuPanel`'s Tone row
-    /// runs a rewrite into `AIResultPanel` without touching the banner's list, so
-    /// without this the strip reports "nothing came back" for the whole of a call
-    /// the user is watching succeed in a panel.
-    func testAPanelOwningTheAnswerSilencesTheStrip() {
-        XCTAssertEqual(
-            resolve(runningAction: .rewrite, resultsShownElsewhere: true),
-            .hint(BannerState.defaultHint))
-        XCTAssertEqual(
-            resolve(isWorking: true, runningAction: .rewrite, resultsShownElsewhere: true),
-            .hint(BannerState.defaultHint))
-    }
-
-    func testTheResultPanelIsRecognisedExceptForTheSetupCase() {
-        XCTAssertTrue(ActionBanner.resultPanelIsOpen(.aiResult(.fix)))
-        XCTAssertTrue(ActionBanner.resultPanelIsOpen(.aiResult(.replies)))
-        XCTAssertTrue(ActionBanner.resultPanelIsOpen(.aiResult(.variants(nil))))
-        XCTAssertFalse(
-            ActionBanner.resultPanelIsOpen(.aiResult(.needsScreenContext)),
-            "that panel explains a missing session; the banner labels it rather than standing down")
-        XCTAssertFalse(ActionBanner.resultPanelIsOpen(.none))
-        XCTAssertFalse(ActionBanner.resultPanelIsOpen(.emoji))
-    }
+    /// **And nothing silences it any more.** Two tests lived here about a panel
+    /// owning the answer: `resolve` took a `resultsShownElsewhere` flag and stood
+    /// down when `AIMenuPanel`'s Tone row ran a rewrite into `AIResultPanel`, and
+    /// `ActionBanner.resultPanelIsOpen` decided when that was true. Both panels are
+    /// deleted and the strip is the only place an answer can go, so the flag, the
+    /// function and the two tests all went with them. The branch they guarded is
+    /// what `testAnActionThatProducedNothingIsReportedRatherThanIgnored` above now
+    /// reaches unconditionally.
 
     // MARK: Idle
 

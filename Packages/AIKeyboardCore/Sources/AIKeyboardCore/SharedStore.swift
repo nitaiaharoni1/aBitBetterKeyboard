@@ -27,7 +27,7 @@ public final class SharedStore: ObservableObject {
     /// keyboard will quietly fail.
     public let storage: Storage
 
-    private let defaults: UserDefaults
+    let defaults: UserDefaults
 
     /// The store the two processes actually share, for callers that need
     /// `UserDefaults` itself rather than one of the typed accessors below.
@@ -38,7 +38,7 @@ public final class SharedStore: ObservableObject {
     /// two processes. `BackendTransport.configured` shipped that bug.
     public var userDefaults: UserDefaults { defaults }
 
-    private static let log = Logger(subsystem: "com.nitai.aikeyboard", category: "SharedStore")
+    static let log = Logger(subsystem: "com.nitai.aikeyboard", category: "SharedStore")
 
     private init() {
         // `UserDefaults(suiteName:)` hands back a usable object whether or not
@@ -90,6 +90,7 @@ public final class SharedStore: ObservableObject {
         static let screenContextAllowed = "screenContextAllowed"
         static let dictationSessionMinutes = "dictationSessionMinutes"
         static let keyboardLayout = "keyboardLayout"
+        static let recentEmoji = "recentEmoji"
     }
 
     /// Keys this store used to write and no longer reads.
@@ -147,6 +148,23 @@ public final class SharedStore: ObservableObject {
         didSet { defaults.set(enabledLanguages.map(\.rawValue), forKey: Key.enabledLanguages) }
     }
 
+    /// Appends or removes `language` from `enabledLanguages`.
+    ///
+    /// Returns `false` without mutating if the toggle would leave the list empty
+    /// (a keyboard with no language has nothing to draw). Feedback and animation
+    /// are the caller's responsibility: `Feedback` imports UIKit and
+    /// `withAnimation` imports SwiftUI, neither of which belongs in this store.
+    @discardableResult
+    public func toggleEnabledLanguage(_ language: KeyboardLanguage) -> Bool {
+        if enabledLanguages.contains(language) {
+            guard enabledLanguages.count > 1 else { return false }
+            enabledLanguages.removeAll { $0 == language }
+        } else {
+            enabledLanguages.append(language)
+        }
+        return true
+    }
+
     // MARK: Typing
 
     @Published public var autocorrect = true { didSet { defaults.set(autocorrect, forKey: Key.autocorrect) } }
@@ -188,55 +206,6 @@ public final class SharedStore: ObservableObject {
     }
 
     public static let dictationSessionChoices = [5, 15, 60]
-
-    // MARK: The cloud model
-
-    /// The backend every cloud call goes to, exactly as typed.
-    ///
-    /// **One key, and it is the one the whole product turns on.** Three readers
-    /// live off it — `KeyboardController`'s text actions, `ScreenReadService` in the
-    /// capture process, and `ScreenContextSession` — and all three reach it through
-    /// `BackendTransport.configured`. This is the writer, and until `CloudModelView`
-    /// there was effectively only one, hidden on the Screen Context screen under a
-    /// heading about screen reading, so a Hebrew rewrite failed forever with no way
-    /// to find out why.
-    ///
-    /// Computed through `userDefaults` rather than `@Published`, exactly like
-    /// `customTone`: the value is read by another process at the moment of a tap,
-    /// and a published copy filled at launch would be the stale one. Empty removes
-    /// the key rather than storing "", because `URL(string: "")` is a URL and a
-    /// stored empty string would read back as a configured backend with no scheme.
-    /// **Falls back to `BackendTransport.bundledDefaultURL` exactly as
-    /// `BackendTransport.configured` does, and that agreement is the point.** This
-    /// getter is what `CloudModelView` fills its field from, so a getter answering
-    /// "" while the transport quietly used the built-in address would put an empty
-    /// box and the words "Nothing set" in front of a user whose Hebrew rewrites
-    /// were working. The screen has to describe the send that will actually happen.
-    public var cloudBackendURL: String {
-        get { BackendTransport.effectiveURL(defaults: defaults) }
-        set { write(newValue, forKey: Key.cloudBackendURL) }
-    }
-
-    /// The optional bearer token sent beside it. See `BackendTransport.send` for
-    /// what it is and is not, and `CloudModelView` for where it is stored.
-    public var cloudBackendToken: String {
-        get { defaults.string(forKey: Key.cloudBackendToken) ?? "" }
-        set { write(newValue, forKey: Key.cloudBackendToken) }
-    }
-
-    /// Whether an AI action would find a cloud engine right now. The same question
-    /// `BackendTransport.configured` answers, asked of this store so a screen can
-    /// render it.
-    public var hasCloudModel: Bool { BackendTransport.isReady(defaults: defaults) }
-
-    private func write(_ value: String, forKey key: String) {
-        objectWillChange.send()
-        if value.isEmpty {
-            defaults.removeObject(forKey: key)
-        } else {
-            defaults.set(value, forKey: key)
-        }
-    }
 
     // MARK: Personal dictionary
 
@@ -280,60 +249,41 @@ public final class SharedStore: ObservableObject {
         defaults.array(forKey: Key.personalDictionary) as? [String] ?? personalDictionary
     }
 
-    // MARK: Keyboard layout
+    // MARK: Recent emoji
 
-    /// The key, exposed so `LayoutStoreTests` can write it into a scratch suite
-    /// without reaching into a private enum.
-    public static let layoutKey = Key.keyboardLayout
+    /// What the Recent tab shows before the user has picked anything.
+    public static let shippedRecentEmoji = ["😂", "🙏", "❤️", "👍", "🔥", "😅"]
+
+    /// The emoji last inserted, most recent first.
+    ///
+    /// **Persisted, and it was not.** This lived in `KeyboardController` as a
+    /// plain `@Published` array with nowhere to go, and iOS tears a keyboard
+    /// extension down whenever it feels like it — every time the host app changed
+    /// field, went to the background, or was simply not used for a while. So the
+    /// Recent tab reset to the six shipped emoji constantly, which for a tab whose
+    /// entire job is remembering is the feature not working at all.
+    ///
+    /// Written by the keyboard rather than by the app, the opposite direction to
+    /// every other setting here. Without Full Access the container is
+    /// process-local (see `SharedStore.storage`) and recents live only as long as
+    /// the extension does — the same honest degradation the rest of the store has.
+    @Published public var recentEmoji: [String] = SharedStore.shippedRecentEmoji {
+        didSet { defaults.set(recentEmoji, forKey: Key.recentEmoji) }
+    }
+
+    /// The same list, read at the moment it is needed, for the reason
+    /// `storedPersonalDictionary` exists: the process that wrote it may not be the
+    /// process reading it. An empty stored list is honoured — a user who cleared
+    /// their recents meant it.
+    public var storedRecentEmoji: [String] {
+        defaults.array(forKey: Key.recentEmoji) as? [String] ?? recentEmoji
+    }
+
+    // MARK: Keyboard layout
 
     /// The shape of the keyboard, as the editor in the app last left it.
     @Published public var keyboardLayout: KeyboardCustomization = .default {
         didSet { writeLayout(keyboardLayout) }
-    }
-
-    /// The same value, read out of the store at the moment it is needed.
-    ///
-    /// **The keyboard has to use this one, for the reason `storedDefaultTone` and
-    /// `storedPersonalDictionary` exist.** The editor is in the app and the
-    /// renderer is in the keyboard extension; those are two processes, and
-    /// `load()` fills the `@Published` copy above once, when whichever process
-    /// asked was launched. A keyboard already on screen when the user taps Done
-    /// would otherwise keep drawing the shape they just changed, which looks
-    /// exactly like the editor not working.
-    public var storedKeyboardLayout: KeyboardCustomization {
-        Self.decodeLayout(from: defaults)
-    }
-
-    /// **Falls back rather than throws, twice.** Unreadable JSON is a build that
-    /// changed the model; a layout that fails the validator is a build that added
-    /// a required key. Either one would otherwise be a keyboard that cannot draw
-    /// itself, and that is not a state the user can get out of from inside the
-    /// keyboard — they are in somebody else's app with no keys.
-    ///
-    /// `showsGlobe: false` here on purpose. Whether the globe is required is a
-    /// property of the *device*, and the store does not know it. A layout missing
-    /// the globe is repaired where that answer is known, in
-    /// `KeyboardController.apply(_:)`.
-    public static func decodeLayout(from defaults: UserDefaults) -> KeyboardCustomization {
-        guard let data = defaults.data(forKey: Key.keyboardLayout) else { return .default }
-        guard let decoded = try? JSONDecoder().decode(KeyboardCustomization.self, from: data)
-        else {
-            log.error("stored keyboard layout could not be decoded, falling back to the default")
-            return .default
-        }
-        guard LayoutValidator.isUsable(decoded, showsGlobe: false) else {
-            log.error("stored keyboard layout is not usable, falling back to the default")
-            return .default
-        }
-        return decoded
-    }
-
-    private func writeLayout(_ layout: KeyboardCustomization) {
-        guard let data = try? JSONEncoder().encode(layout) else {
-            Self.log.error("keyboard layout could not be encoded, the change was not saved")
-            return
-        }
-        defaults.set(data, forKey: Key.keyboardLayout)
     }
 
     // MARK: Screen context
@@ -357,99 +307,4 @@ public final class SharedStore: ObservableObject {
         didSet { defaults.set(isSubscribed, forKey: Key.isSubscribed) }
     }
 
-    /// Puts every setting back to its shipped default. Used by the UI tests so a
-    /// run never depends on what the previous run left behind.
-    public func resetToDefaults() {
-        for key in [
-            Key.hasCompletedOnboarding, Key.enabledLanguages, Key.autocorrect,
-            Key.autocapitalise, Key.predictions, Key.haptics, Key.keySounds,
-            Key.defaultTone, Key.customToneInstruction, Key.dictationSessionMinutes,
-            Key.prefersCustomTone, Key.personalDictionary,
-            Key.isSubscribed, Key.screenContextAllowed, Key.keyboardLayout
-            // Deliberately not `cloudBackendURL` or `cloudBackendToken`. A UI test
-            // run would otherwise wipe the backend whoever is developing this
-            // typed in, and it is the one setting here that cannot be recovered by
-            // tapping a switch back on.
-        ] {
-            defaults.removeObject(forKey: key)
-        }
-        hasCompletedOnboarding = false
-        enabledLanguages = Self.shippedDefaultLanguages
-        autocorrect = true
-        autocapitalise = true
-        predictions = true
-        haptics = true
-        keySounds = true
-        defaultTone = .clearer
-        dictationSessionMinutes = 15
-        personalDictionary = Self.shippedPersonalDictionary
-        isSubscribed = false
-        screenContextAllowed = false
-        // Assigned as well as removed, for the reason `personalDictionary` is:
-        // clearing the key and leaving the in-memory value alone is a reset that
-        // does not reset, and the keyboard would keep drawing the old shape.
-        keyboardLayout = .default
-    }
-
-    /// Loads persisted values without firing the `didSet` writes above.
-    public func load() {
-        Self.removeRetiredKeys(from: defaults)
-
-        if defaults.object(forKey: Key.hasCompletedOnboarding) != nil {
-            hasCompletedOnboarding = defaults.bool(forKey: Key.hasCompletedOnboarding)
-        }
-        if let raw = defaults.array(forKey: Key.enabledLanguages) as? [String] {
-            let parsed = raw.compactMap(KeyboardLanguage.init(rawValue:))
-            if !parsed.isEmpty { enabledLanguages = parsed }
-        }
-        if defaults.object(forKey: Key.autocorrect) != nil {
-            autocorrect = defaults.bool(forKey: Key.autocorrect)
-        }
-        if defaults.object(forKey: Key.autocapitalise) != nil {
-            autocapitalise = defaults.bool(forKey: Key.autocapitalise)
-        }
-        if defaults.object(forKey: Key.predictions) != nil {
-            predictions = defaults.bool(forKey: Key.predictions)
-        }
-        if defaults.object(forKey: Key.haptics) != nil { haptics = defaults.bool(forKey: Key.haptics) }
-        if defaults.object(forKey: Key.keySounds) != nil { keySounds = defaults.bool(forKey: Key.keySounds) }
-        let minutes = defaults.integer(forKey: Key.dictationSessionMinutes)
-        if Self.dictationSessionChoices.contains(minutes) { dictationSessionMinutes = minutes }
-        if let tone = defaults.string(forKey: Key.defaultTone).flatMap(ToneStyle.init(rawValue:)) {
-            defaultTone = tone
-        }
-        // No `!words.isEmpty` guard: an empty stored list is a list the user
-        // emptied, and treating it as absent made this reader and
-        // `storedPersonalDictionary` disagree about what is in force. Absent is
-        // still the shipped default, because that is what the key not existing
-        // means.
-        if let words = defaults.array(forKey: Key.personalDictionary) as? [String] {
-            personalDictionary = words
-        }
-        if defaults.object(forKey: Key.isSubscribed) != nil {
-            isSubscribed = defaults.bool(forKey: Key.isSubscribed)
-        }
-        if defaults.object(forKey: Key.screenContextAllowed) != nil {
-            screenContextAllowed = defaults.bool(forKey: Key.screenContextAllowed)
-        }
-        // Unguarded, because `decodeLayout` already answers `.default` for an
-        // absent key and for anything it cannot use. A guard here would be a
-        // second opinion about what "no stored layout" means, and the two would
-        // eventually disagree.
-        keyboardLayout = Self.decodeLayout(from: defaults)
-
-        // The app and the keyboard are separate processes, and a process always
-        // sees its own writes — so the only way to observe that the App Group is
-        // genuinely shared is to watch both processes report what they read. The
-        // unified log stamps each line with the process that emitted it, which
-        // makes `AppGroupProof.sh` able to fail. Keep this in sync with the keys
-        // that script greps for.
-        Self.log.notice(
-            """
-            load storage=\(self.storage.rawValue, privacy: .public) \
-            languages=\(self.enabledLanguages.map(\.rawValue).joined(separator: ","), privacy: .public) \
-            onboarded=\(self.hasCompletedOnboarding, privacy: .public)
-            """
-        )
-    }
 }

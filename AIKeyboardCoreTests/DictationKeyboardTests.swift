@@ -42,10 +42,24 @@ final class DictationKeyboardTests: XCTestCase {
     // MARK: No session
 
     /// The state a stock install is in every time until the user opens the app.
-    func testWithNoSessionThePanelExplainsAndNothingIsDictated() async throws {
+    ///
+    /// **The explanation moved from a panel to the banner, and it still has to be an
+    /// explanation.** Nothing in a keyboard extension can start a recording session
+    /// or launch its own app, so this is a dead end the user has to be walked out of
+    /// by hand — it must name the app and the screen, never spin. Asserting the block
+    /// alone would pass against the build that set one *and* opened `DictationPanel`
+    /// over every key, so the overlay is asserted with it.
+    func testWithNoSessionTheBannerExplainsAndNothingIsDictated() async throws {
         controller.startDictation()
 
-        XCTAssertEqual(controller.overlay, .dictation, "the panel must still open, to explain")
+        XCTAssertEqual(controller.overlay, .none, "the keys must stay visible")
+        XCTAssertNil(controller.block?.action, "dictation is not an AIAction")
+        XCTAssertTrue(
+            controller.block?.detail.contains("Start dictation") ?? false,
+            "the way out is not named: \(controller.block?.detail ?? "nothing was said")")
+        XCTAssertEqual(
+            controller.block?.remedy, .none,
+            "nothing here can start a session, so it must not offer a button")
         XCTAssertFalse(controller.isDictating)
         guard case .noSession = controller.dictationAvailability else {
             return XCTFail("expected noSession, got \(controller.dictationAvailability)")
@@ -170,9 +184,7 @@ final class DictationKeyboardTests: XCTestCase {
                 isWorking: controller.isWorking,
                 runningAction: controller.runningAction,
                 error: controller.aiError,
-                block: nil,
-                resultsShownElsewhere: false,
-                needsScreenContextSetup: false,
+                block: controller.block,
                 options: controller.bannerOptions,
                 index: controller.bannerIndex,
                 screenContext: nil,

@@ -35,9 +35,16 @@ struct DictationView: View {
             ScrollView {
                 VStack(spacing: Theme.Space.md) {
                     sessionCard
-                    if service.isRunning { liveCard } else { howCard }
-                    lengthCard
-                    if !setup.cloudConfigured { cloudCard }
+                    if service.isRunning {
+                        liveCard
+                    } else {
+                        DictationHowItWorksSection(sessionMinutes: store.dictationSessionMinutes)
+                    }
+                    DictationLengthSection(
+                        sessionMinutes: $store.dictationSessionMinutes,
+                        isRunning: service.isRunning
+                    )
+                    if !setup.cloudConfigured { DictationCloudSection() }
                 }
                 .padding(.horizontal, Theme.Space.md)
                 .padding(.bottom, Theme.Space.xl)
@@ -166,109 +173,4 @@ struct DictationView: View {
         }
     }
 
-    // MARK: How it works
-
-    private var howCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                SectionHeader(title: "How dictation works")
-
-                step(
-                    1, "Start the session here",
-                    "iOS won't let a keyboard open the microphone, and won't let an app start recording from the background. So it starts here, with AI Keyboard in front of you."
-                )
-                step(
-                    2, "Switch to the app you're writing in",
-                    "The session keeps running while AI Keyboard is in the background. iOS shows the orange microphone dot the whole time it does."
-                )
-                step(
-                    3, "Tap the microphone on the keyboard",
-                    "Speak, then tap Insert. The recording is transcribed and the words go straight into the field."
-                )
-                step(
-                    4, "It closes itself",
-                    "After \(store.dictationSessionMinutes) minutes, or when you stop it here, or if a call takes the microphone."
-                )
-
-                Divider().overlay(Theme.Surface.separator)
-
-                Text(
-                    "Nothing is recorded between taps, and no recording is ever written to disk. What is kept is the text, until the session ends."
-                )
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.Text.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private func step(_ number: Int, _ title: String, _ detail: String) -> some View {
-        HStack(alignment: .top, spacing: Theme.Space.sm) {
-            Text("\(number)")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Theme.Text.onBrand)
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(Theme.Brand.gradient))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.Text.primary)
-                Text(detail)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.Text.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    // MARK: Length
-
-    private var lengthCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                SectionHeader(title: "Session length")
-
-                Picker("Session length", selection: $store.dictationSessionMinutes) {
-                    ForEach(SharedStore.dictationSessionChoices, id: \.self) { minutes in
-                        Text("\(minutes) min").tag(minutes)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .disabled(service.isRunning)
-
-                Text(
-                    service.isRunning
-                        ? "Stop the session to change this."
-                        : "How long the microphone stays available before it closes itself. There is deliberately no \"never\"."
-                )
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.Text.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    // MARK: The cloud
-
-    /// **Dictation without a backend is a microphone that records into nothing**,
-    /// and the failure would otherwise land after the user has already spoken.
-    /// Said here, before they start, in the same words every other cloud
-    /// dead-end in this app uses.
-    private var cloudCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                SectionHeader(title: "Needs a cloud model")
-                Text(
-                    "Speech is transcribed in the cloud. Apple's on-device speech has no Hebrew at all, so there is no on-device path for the languages this keyboard is for. \(BackendTransport.setUpRecovery)"
-                )
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.Text.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-                NavigationLink("Set up the cloud model") { CloudModelView() }
-                    .font(.system(size: 14, weight: .semibold))
-            }
-        }
-    }
 }

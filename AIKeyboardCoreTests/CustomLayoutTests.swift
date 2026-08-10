@@ -22,7 +22,7 @@ final class CustomLayoutTests: XCTestCase {
     func testEveryActionRoundTrips() throws {
         let actions: [SlotAction] = [
             .shift, .backspace, .numbersPlane, .symbolsPlane, .globe, .space, .ret,
-            .dictation, .emoji, .aiMenu, .quickTone, .cursorLeft, .cursorRight,
+            .dictation, .emoji, .quickTone, .cursorLeft, .cursorRight,
             .hideKeyboard, .text(".com")
         ]
         let data = try JSONEncoder().encode(actions)
@@ -77,16 +77,28 @@ final class CustomLayoutTests: XCTestCase {
         XCTAssertEqual(key?.alternates, KeyboardLayout.punctuationKey(for: .arabic).alternates)
     }
 
-    /// All five marks are already on the row above, and a second `char-.` on one
-    /// plane is a `ForEach` with duplicate identity.
-    func testThePunctuationKeyIsDroppedOffTheLettersPlane() {
-        for plane in [KeyboardPlane.numbers, .symbols] {
+    /// **The full stop is on the bottom row of every plane**, and it used to be
+    /// dropped on two of them because the row above already carries all five
+    /// marks. It is the one key a thumb finds without looking, so switching to
+    /// numbers put the return key where the full stop had been.
+    ///
+    /// Asserted with the *whole* compiled keyboard rather than the bottom row
+    /// alone, because the thing that made this look unsafe is a collision: the
+    /// numbers plane draws a `char-.` on its punctuation row and this key on the
+    /// row below, and two keys with one id is a `ForEach` with duplicate identity.
+    /// They do not collide — this one answers to `punctuation` — and the second
+    /// half of this test is what proves it rather than the comment.
+    func testThePunctuationKeyIsOnEveryPlane() {
+        for plane in [KeyboardPlane.letters, .numbers, .symbols] {
             let rows = KeyboardLayout.rows(
                 for: .english, plane: plane, showsGlobe: true, customization: .default)
-            XCTAssertFalse(
-                rows.flatMap(\.keys)
-                    .contains { $0.addressableID == KeyboardLayout.punctuationKeyID },
-                "\(plane)")
+            let keys = rows.flatMap(\.keys)
+            XCTAssertTrue(
+                keys.contains { $0.addressableID == KeyboardLayout.punctuationKeyID },
+                "\(plane) has no full stop on its bottom row")
+            XCTAssertEqual(
+                Set(keys.map(\.id)).count, keys.count,
+                "\(plane) draws two keys with one id")
         }
     }
 
@@ -134,7 +146,7 @@ final class CustomLayoutTests: XCTestCase {
     /// Each new cap needs a distinct accessibility label: that string is the only
     /// thing a VoiceOver user has to tell two icon keys apart.
     func testNewCapsHaveDistinctAccessibilityLabels() {
-        let caps: [KeyCap] = [.emoji, .aiMenu, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard]
+        let caps: [KeyCap] = [.emoji, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard]
         let labels = caps.map(\.accessibilityLabel)
         XCTAssertEqual(Set(labels).count, caps.count, "two caps share a label: \(labels)")
         XCTAssertFalse(labels.contains(where: \.isEmpty))
@@ -143,214 +155,17 @@ final class CustomLayoutTests: XCTestCase {
     /// Distinct ids for the same reason: `KeySpec.identifier(for:)` derives from
     /// the cap, and a collision is a `ForEach` with duplicate identity.
     func testNewCapsHaveDistinctSpecIDs() {
-        let caps: [KeyCap] = [.emoji, .aiMenu, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard]
+        let caps: [KeyCap] = [.emoji, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard]
         XCTAssertEqual(Set(caps.map { KeySpec($0).id }).count, caps.count)
     }
 
     func testTheNewCapsAreFunctionKeys() {
-        for cap in [KeyCap.emoji, .aiMenu, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard] {
+        for cap in [KeyCap.emoji, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard] {
             XCTAssertTrue(cap.isFunctionKey, "\(cap) should not be treated as a character key")
         }
     }
 
-    // MARK: Compiling
-
-    /// **The letter rows are untouched by customization, in every language and on
-    /// every plane.** This is the load-bearing test of the whole feature.
-    ///
-    /// It used to compare the *whole* compiled keyboard against the pre-feature
-    /// one, which was the right check for as long as the default was a no-op. The
-    /// default deliberately changed — dictation moved to the action row and the
-    /// bar was emptied — so that comparison now pins a product decision rather
-    /// than an invariant. What must never change is this: whatever the user does,
-    /// the three rows that come out of `letterLayouts` come out unaltered.
-    func testCustomizationNeverTouchesTheLetterRows() {
-        var wild = KeyboardCustomization.default
-        wild.showsNumberRow = true
-        wild.bottomRow = [
-            SlotSpec(action: .numbersPlane), SlotSpec(action: .globe),
-            SlotSpec(action: .space, width: .fill), SlotSpec(action: .ret)
-        ]
-        wild.cursorRow = [SlotSpec(action: .text("x"), width: .fill)]
-
-        for language in KeyboardLanguage.allCases {
-            for plane in [KeyboardPlane.letters, .numbers, .symbols] {
-                let stock = KeyboardLayout.rows(for: language, plane: plane)
-                for layout in [KeyboardCustomization.default, wild] {
-                    let compiled = KeyboardLayout.rows(
-                        for: language, plane: plane, showsGlobe: true, customization: layout)
-                    // The stock rows appear in order, unaltered, somewhere in the
-                    // compiled set: after the number row when there is one.
-                    let offset = (layout.showsNumberRow && plane == .letters) ? 1 : 0
-                    for (index, row) in stock.enumerated() {
-                        let mine = compiled[index + offset]
-                        XCTAssertEqual(
-                            row.keys.map(\.cap), mine.keys.map(\.cap), "\(language) \(plane)")
-                        XCTAssertEqual(
-                            row.keys.map(\.width), mine.keys.map(\.width), "\(language) \(plane)")
-                        XCTAssertEqual(
-                            row.sideInsetUnits, mine.sideInsetUnits, "\(language) \(plane)")
-                    }
-                }
-            }
-        }
-    }
-
-    /// The compiled bottom row is exactly what the model describes, in order.
-    func testTheBottomRowCompilesToWhatTheModelSays() {
-        let layout = KeyboardCustomization.default
-        let row = KeyboardLayout.rows(
-            for: .english, plane: .letters, showsGlobe: true,
-            customization: layout)[KeyboardLayout.RowID.bottom]
-        XCTAssertEqual(row.keys.count, layout.bottomRow.count)
-        XCTAssertEqual(
-            row.keys.map(\.width),
-            layout.bottomRow.map { spec in
-                switch spec.width {
-                case .fill: return KeyWidth.flexible
-                case .units(let value): return KeyWidth.unit(value)
-                }
-            })
-    }
-
-
-    func testEveryRowHasAUniqueID() {
-        var layout = KeyboardCustomization.default
-        layout.showsNumberRow = true
-        layout.cursorRow = [SlotSpec(action: .cursorLeft), SlotSpec(action: .cursorRight)]
-        let rows = KeyboardLayout.rows(
-            for: .english, plane: .letters, showsGlobe: true, customization: layout)
-        XCTAssertEqual(rows.count, 6)
-        XCTAssertEqual(Set(rows.map(\.id)).count, rows.count)
-    }
-
-    func testTheNumberRowSitsAboveTheLetters() {
-        var layout = KeyboardCustomization.default
-        layout.showsNumberRow = true
-        let rows = KeyboardLayout.rows(
-            for: .english, plane: .letters, showsGlobe: true, customization: layout)
-        XCTAssertEqual(
-            rows.first?.keys.compactMap(\.characterValue),
-            ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"])
-    }
-
-    /// Arabic and Persian do not write their digits with the same glyphs, and
-    /// `KeyboardLanguage.digits` already knows.
-    func testTheNumberRowUsesTheLanguagesOwnDigits() {
-        var layout = KeyboardCustomization.default
-        layout.showsNumberRow = true
-        let rows = KeyboardLayout.rows(
-            for: .arabic, plane: .letters, showsGlobe: true, customization: layout)
-        XCTAssertEqual(
-            rows.first?.keys.compactMap(\.characterValue).joined(), KeyboardLanguage.arabic.digits)
-    }
-
-    /// The digits are already the top row of the numbers plane; drawing them twice
-    /// is not a feature.
-    func testTheNumberRowIsNotDrawnOnTheNumbersPlane() {
-        var layout = KeyboardCustomization.default
-        layout.showsNumberRow = false
-        let without = KeyboardLayout.rows(
-            for: .english, plane: .numbers, showsGlobe: true, customization: layout).count
-        layout.showsNumberRow = true
-        let with = KeyboardLayout.rows(
-            for: .english, plane: .numbers, showsGlobe: true, customization: layout).count
-        // The digits are already the top row here; drawing them twice is not a
-        // feature. Compared rather than counted, because the default also ships an
-        // action row and an absolute count pins two decisions at once.
-        XCTAssertEqual(with, without)
-    }
-
-    func testTheCursorRowSitsBelowTheBottomRow() {
-        var layout = KeyboardCustomization.default
-        layout.cursorRow = [SlotSpec(action: .cursorLeft), SlotSpec(action: .cursorRight)]
-        let rows = KeyboardLayout.rows(
-            for: .english, plane: .letters, showsGlobe: true, customization: layout)
-        XCTAssertEqual(rows.last?.keys.map(\.cap), [.cursorLeft, .cursorRight])
-    }
-
-    /// The layout stores the globe; iOS decides whether it is drawn.
-    func testTheGlobeKeyDropsOutWhenTheSystemDoesNotWantIt() {
-        let rows = KeyboardLayout.rows(
-            for: .english, plane: .letters, showsGlobe: false, customization: .default)
-        XCTAssertFalse(rows.flatMap(\.keys).contains { $0.cap == .globe })
-    }
-
-    /// The plane key is resolved at draw time, so it says where it goes *back* to.
-    func testTheBottomRowSwitchesBackFromTheNumbersPlane() {
-        let rows = KeyboardLayout.rows(
-            for: .hebrew, plane: .numbers, showsGlobe: true, customization: .default)
-        // Addressed by id, not by `last`: the default ships an action row below
-        // the bottom one, so `rows.last` stopped being the bottom row.
-        XCTAssertTrue(
-            rows[KeyboardLayout.RowID.bottom].keys.map(\.cap)
-                .contains(.plane(.letters, label: KeyboardLanguage.hebrew.lettersPlaneLabel)))
-    }
-
-    /// **A plane key must go somewhere it is not, on every plane it is drawn on.**
-    /// `.symbolsPlane` used to resolve to the letters plane from letters and to
-    /// the symbols plane from symbols, so a symbols key the user placed themselves
-    /// drew, pressed and switched to the plane already showing on two planes out
-    /// of three.
-    func testAPlaneKeyNeverTargetsThePlaneItIsStandingOn() {
-        for action in [SlotAction.numbersPlane, .symbolsPlane] {
-            for plane in [KeyboardPlane.letters, .numbers, .symbols] {
-                var layout = KeyboardCustomization.default
-                layout.bottomRow = [
-                    SlotSpec(action: action), SlotSpec(action: .numbersPlane),
-                    SlotSpec(action: .globe), SlotSpec(action: .space, width: .fill),
-                    SlotSpec(action: .ret)
-                ]
-                let rows = KeyboardLayout.rows(
-                    for: .english, plane: plane, showsGlobe: true, customization: layout)
-                guard case .plane(let destination, _) = rows[3].keys[0].cap else {
-                    return XCTFail("\(action) on \(plane) is not a plane key")
-                }
-                XCTAssertNotEqual(
-                    destination, plane,
-                    "\(action) on the \(plane) plane switches to the plane it is already on")
-            }
-        }
-    }
-
-    func testTheSymbolsKeyReachesTheSymbolsPlaneFromLetters() {
-        var layout = KeyboardCustomization.default
-        layout.bottomRow[0] = SlotSpec(action: .symbolsPlane, width: .units(1.3))
-        let rows = KeyboardLayout.rows(
-            for: .english, plane: .letters, showsGlobe: true, customization: layout)
-        XCTAssertTrue(
-            rows[KeyboardLayout.RowID.bottom].keys.map(\.cap)
-                .contains(.plane(.symbols, label: "#+=")))
-    }
-
-    /// A key has to stay addressable by a test and a screen reader *and* be unique
-    /// on its row. Both halves, in one assertion.
-    func testCompiledKeysKeepAnAddressableIDAndAUniqueOne() {
-        var layout = KeyboardCustomization.default
-        layout.bottomRow.append(SlotSpec(action: .text(",")))
-        layout.bottomRow.append(SlotSpec(action: .text(",")))
-        let row = KeyboardLayout.rows(
-            for: .english, plane: .letters, showsGlobe: true, customization: layout)[3]
-
-        let commas = row.keys.filter { $0.cap == .character(",") }
-        XCTAssertEqual(commas.count, 2)
-        XCTAssertNotEqual(commas[0].id, commas[1].id, "two keys with one ForEach identity")
-        XCTAssertTrue(commas.allSatisfy { $0.addressableID == "char-," })
-    }
-
-    func testTheDefaultBottomRowKeepsItsShippedIdentifiers() {
-        let row = KeyboardLayout.rows(
-            for: .english, plane: .letters, showsGlobe: true, customization: .default)[3]
-        XCTAssertEqual(
-            row.keys.map(\.addressableID),
-            ["plane-123", "globe", "space", KeyboardLayout.punctuationKeyID, "return"])
-    }
-
-    /// A key that was never compiled from a slot has no suffix to strip.
-    func testAnOrdinaryKeysAddressableIDIsItsID() {
-        XCTAssertEqual(KeySpec(.space).addressableID, "space")
-        XCTAssertEqual(KeySpec(.character("a")).addressableID, "char-a")
-    }
+    // Compiled-layout tests live in CustomLayoutCompilerTests.swift.
 
     // MARK: Presets
 
@@ -408,13 +223,7 @@ final class CustomLayoutTests: XCTestCase {
                         customization: preset.customization)
                     let columns = CGFloat(KeyboardLayout.columns(for: language, plane: plane))
                     for row in rows {
-                        let units = row.keys.reduce(CGFloat(0)) { total, key in
-                            switch key.width {
-                            case .unit(let value): return total + value
-                            // A stretcher still needs somewhere to stand.
-                            case .flexible, .remainderShare: return total + 1
-                            }
-                        }
+                        let units = totalUnits(of: row)
                         XCTAssertLessThanOrEqual(
                             units + row.sideInsetUnits * 2, columns + 0.001,
                             "\(preset.id)/\(language.rawValue)/\(plane) row \(row.id) is \(units) wide against \(columns)"
@@ -443,7 +252,7 @@ final class CustomLayoutTests: XCTestCase {
         XCTAssertFalse(SuggestionBar.barCatalogue.contains(.space))
         XCTAssertFalse(SuggestionBar.barCatalogue.contains(.shift))
         XCTAssertFalse(SuggestionBar.barCatalogue.contains(.backspace))
-        for action in [SlotAction.emoji, .aiMenu, .quickTone] {
+        for action in [SlotAction.emoji, .quickTone] {
             XCTAssertTrue(SuggestionBar.barCatalogue.contains(action), "\(action) is missing")
         }
     }
@@ -513,9 +322,4 @@ final class CustomLayoutTests: XCTestCase {
     }
 }
 
-extension KeySpec {
-    fileprivate var characterValue: String? {
-        if case .character(let value) = cap { return value }
-        return nil
-    }
-}
+// KeySpec.characterValue extension lives in CustomLayoutCompilerTests.swift.

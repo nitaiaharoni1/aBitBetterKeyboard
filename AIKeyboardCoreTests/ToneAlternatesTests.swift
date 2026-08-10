@@ -65,13 +65,6 @@ final class ToneAlternatesTests: XCTestCase {
             engine: RoutedIntelligence(onDevice: engine, cloud: nil))
     }
 
-    private func settle(_ controller: KeyboardController, timeout: TimeInterval = 8) async {
-        let deadline = Date().addingTimeInterval(timeout)
-        while controller.isWorking, Date() < deadline {
-            try? await Task.sleep(for: .milliseconds(5))
-        }
-    }
-
     // MARK: The list
 
     /// **The default leads, and this is the assertion that rejects the obvious
@@ -158,7 +151,7 @@ final class ToneAlternatesTests: XCTestCase {
         let controller = makeController(engine: engine)
 
         controller.selectTone(named: ToneStyle.professional.title)
-        await settle(controller)
+        await settleToneController(controller)
 
         XCTAssertEqual(engine.calls.count, 1)
         XCTAssertEqual(engine.calls.first?.tone, .professional)
@@ -178,7 +171,7 @@ final class ToneAlternatesTests: XCTestCase {
         let controller = makeController(engine: engine)
 
         controller.selectTone(named: ToneSetting.customTitle)
-        await settle(controller)
+        await settleToneController(controller)
 
         XCTAssertEqual(engine.calls.first?.instruction, "short, blunt, no pleasantries")
         XCTAssertEqual(engine.calls.first?.tone, .friendly, "the register it falls back to")
@@ -194,7 +187,7 @@ final class ToneAlternatesTests: XCTestCase {
         let controller = makeController(engine: engine)
 
         controller.selectTone(named: "Sardonic")
-        await settle(controller)
+        await settleToneController(controller)
 
         XCTAssertTrue(engine.calls.isEmpty)
     }
@@ -211,7 +204,7 @@ final class ToneAlternatesTests: XCTestCase {
             engine: RoutedIntelligence(onDevice: engine, cloud: nil))
 
         controller.selectTone(named: ToneStyle.professional.title)
-        await settle(controller)
+        await settleToneController(controller)
 
         XCTAssertTrue(engine.calls.isEmpty)
     }

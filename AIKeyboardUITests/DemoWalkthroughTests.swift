@@ -121,11 +121,17 @@ final class DemoWalkthroughTests: XCTestCase {
         // default, so a walkthrough that addresses them is walking a keyboard
         // nobody has.
 
-        // Emoji
+        // Emoji replaces the letter keys only. The action row stays put, so the
+        // same Emoji key that opened the grid can close it — a panel that covered
+        // the row would leave `key-emoji` unhittable while the grid was up.
         tap(element("key-emoji"), "emoji key")
         settle()
+        let emojiKey = element("key-emoji")
+        XCTAssertTrue(
+            emojiKey.waitForExistence(timeout: 2) && emojiKey.isHittable,
+            "emoji panel covered the action row; Emoji / Reply / Fix must stay reachable")
         capture("keyboard-emoji")
-        tap(element("key-emoji"), "emoji key (close)")
+        tap(emojiKey, "emoji key (close)")
         settle(0.5)
 
         // Fix, straight from the row. No menu to open and no panel to close: the

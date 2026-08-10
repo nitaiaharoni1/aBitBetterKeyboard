@@ -12,8 +12,8 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.Space.lg) {
-                        typingSection
-                        aiSection
+                        SettingsTypingSection()
+                        SettingsAISection()
                         feedbackSection
                         moreSection
                         footer
@@ -26,145 +26,12 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: Typing
-
-    private var typingSection: some View {
-        section("Typing") {
-            ToggleRow(
-                title: "Autocorrect",
-                subtitle: "Commits the highlighted suggestion when you press space",
-                icon: "text.badge.checkmark",
-                isOn: $store.autocorrect
-            )
-            divider
-            ToggleRow(
-                title: "Auto-capitalise",
-                icon: "textformat",
-                isOn: $store.autocapitalise
-            )
-            divider
-            ToggleRow(
-                title: "Predictions",
-                subtitle: "Show the suggestion bar above the keys",
-                icon: "lightbulb",
-                isOn: $store.predictions
-            )
-            divider
-            NavigationRow(
-                title: "Keyboard layout",
-                subtitle: "Presets, key size, and what each key does",
-                icon: "square.grid.3x2",
-                badge: layoutSummary
-            ) {
-                // Deliberately parameterless. Passing `store.keyboardLayout` here
-                // makes the pushed editor a function of the store, so tapping its
-                // Done button rebuilds it while it dismisses itself. See
-                // `LayoutView.init`.
-                LayoutView()
-            }
-        }
-    }
-
-    /// The preset's name, or that it has been edited away from one. Named rather
-    /// than inline so the row cannot drift from what `LayoutView` shows.
-    private var layoutSummary: String {
-        guard let id = store.keyboardLayout.preset, let preset = LayoutPreset.named(id) else {
-            return "Custom"
-        }
-        return preset.name
-    }
-
-    // MARK: AI
-
-    /// **The cloud row leads, because without it most of this section does
-    /// nothing.** Apple's on-device model has no Hebrew, so on a stock install
-    /// every Fix, Rewrite, Tone and Reply in the keyboard's primary language fails
-    /// with "no cloud model is set up" — and this screen used to answer that with a
-    /// tone picker and a "Prefer on-device" switch nothing read. See
-    /// `CloudModelView` for why the setting lives here rather than on Screen
-    /// Context.
-    private var aiSection: some View {
-        section("AI") {
-            CloudModelRow()
-            divider
-            HStack(spacing: Theme.Space.sm) {
-                IconBadge(systemName: "slider.horizontal.3")
-                Text("Default tone")
-                    .font(.system(size: 16))
-                    .foregroundStyle(Theme.Text.primary)
-                Spacer()
-                Picker("Default tone", selection: toneChoice) {
-                    ForEach(ToneStyle.allCases) { tone in
-                        Text(tone.title).tag(Optional(tone))
-                    }
-                    Text(ToneSetting.customTitle).tag(ToneStyle?.none)
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-            }
-
-            if store.prefersCustomTone {
-                customToneField
-            }
-        }
-    }
-
-    /// The picker's seventh option. `nil` is the user's own tone rather than a
-    /// seventh `ToneStyle`, because `ToneStyle`'s raw values are the persisted
-    /// setting and its cases are the chips in the keyboard's tone panel — see
-    /// `ToneSetting`.
-    private var toneChoice: Binding<ToneStyle?> {
-        Binding(
-            get: { store.prefersCustomTone ? nil : store.defaultTone },
-            set: { choice in
-                guard let choice else {
-                    store.prefersCustomTone = true
-                    return
-                }
-                store.prefersCustomTone = false
-                store.defaultTone = choice
-            }
-        )
-    }
-
-    /// One line, in the user's words, describing how they want to sound.
-    ///
-    /// Deliberately a single-line field with a hard cap: this text is handed to a
-    /// model as its register, and a paragraph stops being a register.
-    private var customToneField: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            TextField(
-                "Short and blunt, no pleasantries",
-                text: Binding(get: { store.customTone }, set: { store.customTone = $0 })
-            )
-            .font(.system(size: 15))
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .padding(.horizontal, Theme.Space.sm)
-            .frame(height: 44)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Theme.Surface.raised)
-            )
-            .accessibilityIdentifier("row-custom-tone")
-            .accessibilityLabel("Your own tone")
-
-            // The sentence lives on `ToneSetting`, not here: it names a control,
-            // it named the wrong one (a ✦ button nothing draws), and the app
-            // target has no test host to catch that. See `ToneSetting.settingsNote`.
-            Text(store.toneSetting.settingsNote)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.Text.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
     // MARK: Feedback
 
     private var feedbackSection: some View {
         section("Feel") {
             ToggleRow(title: "Haptics", icon: "hand.tap", isOn: $store.haptics)
-            divider
+            Divider.themed
             ToggleRow(
                 title: "Key sounds",
                 subtitle: "Needs Full Access",
@@ -196,7 +63,7 @@ struct SettingsView: View {
             ) {
                 ScreenContextView()
             }
-            divider
+            Divider.themed
             NavigationRow(
                 title: "Personal dictionary",
                 subtitle: "Names and words we should never correct",
@@ -205,23 +72,15 @@ struct SettingsView: View {
             ) {
                 DictionaryView()
             }
-            divider
+            Divider.themed
             NavigationRow(
                 title: store.isSubscribed ? "Subscription" : "Upgrade to Pro",
-                // Not "cloud dictation". Dictation is real now and it is cloud,
-                // because Apple's on-device speech has no Hebrew — but that makes
-                // cloud the only tier, not the paid one.
-                //
-                // And not "Unlimited rewrites and every tone" either, which is the
-                // same claim `SubscriptionView` just stopped making: nothing counts
-                // a rewrite and nothing gates a tone, so "unlimited" describes a
-                // cap that does not exist.
                 subtitle: store.isSubscribed ? "Active" : "Mock paywall, nothing is gated yet",
                 icon: "sparkles"
             ) {
                 SubscriptionView()
             }
-            divider
+            Divider.themed
             Button {
                 store.hasCompletedOnboarding = false
             } label: {
@@ -269,142 +128,6 @@ struct SettingsView: View {
                     content()
                 }
             }
-        }
-    }
-
-    private var divider: some View {
-        Divider().overlay(Theme.Surface.separator)
-    }
-}
-
-// MARK: - Personal dictionary
-
-struct DictionaryView: View {
-    @EnvironmentObject private var store: SharedStore
-    @State private var newWord = ""
-    @FocusState private var isAdding: Bool
-
-    var body: some View {
-        ZStack {
-            Theme.Surface.background.ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: Theme.Space.md) {
-                    addField
-
-                    if store.personalDictionary.isEmpty {
-                        emptyState
-                    } else {
-                        wordList
-                    }
-                }
-                .padding(.horizontal, Theme.Space.md)
-                .padding(.bottom, Theme.Space.xl)
-            }
-        }
-        .navigationTitle("Personal dictionary")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var addField: some View {
-        HStack(spacing: Theme.Space.xs) {
-            TextField("Add a word or name", text: $newWord)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .focused($isAdding)
-                .onSubmit(add)
-                .padding(.horizontal, Theme.Space.sm)
-                .frame(height: 46)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Theme.Surface.raised)
-                )
-
-            Button(action: add) {
-                Image(systemName: "plus")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Theme.Text.onBrand)
-                    .frame(width: 46, height: 46)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Theme.Brand.gradient)
-                    )
-            }
-            .pressable()
-            .disabled(trimmedWord.isEmpty)
-            .opacity(trimmedWord.isEmpty ? 0.45 : 1)
-            .accessibilityLabel("Add word")
-        }
-    }
-
-    private var wordList: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            SectionHeader(title: "\(store.personalDictionary.count) words")
-
-            Card(padding: Theme.Space.xs) {
-                VStack(spacing: 0) {
-                    ForEach(Array(store.personalDictionary.enumerated()), id: \.offset) { index, word in
-                        if index > 0 {
-                            Divider().overlay(Theme.Surface.separator).padding(.leading, Theme.Space.xs)
-                        }
-                        HStack {
-                            Text(word)
-                                .font(.system(size: 16))
-                                .foregroundStyle(Theme.Text.primary)
-                            Spacer()
-                            Button {
-                                remove(at: index)
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 17))
-                                    .foregroundStyle(Theme.Text.tertiary)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Remove \(word)")
-                        }
-                        .padding(.vertical, Theme.Space.sm)
-                        .padding(.horizontal, Theme.Space.xs)
-                    }
-                }
-            }
-        }
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: Theme.Space.xs) {
-            Image(systemName: "character.book.closed")
-                .font(.system(size: 34))
-                .foregroundStyle(Theme.Text.tertiary)
-            Text("Nothing here yet")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(Theme.Text.primary)
-            Text("Add names, companies and terms autocorrect keeps getting wrong.")
-                .font(.system(size: 14))
-                .foregroundStyle(Theme.Text.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, Theme.Space.xxl)
-    }
-
-    private var trimmedWord: String {
-        newWord.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func add() {
-        let word = trimmedWord
-        guard !word.isEmpty, !store.personalDictionary.contains(word) else { return }
-        Feedback.success()
-        withAnimation(Theme.Motion.quick) {
-            store.personalDictionary.insert(word, at: 0)
-        }
-        newWord = ""
-    }
-
-    private func remove(at index: Int) {
-        Feedback.modifierPress()
-        withAnimation(Theme.Motion.quick) {
-            _ = store.personalDictionary.remove(at: index)
         }
     }
 }

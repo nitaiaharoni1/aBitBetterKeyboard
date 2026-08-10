@@ -15,8 +15,6 @@ extension ActionBanner {
             tag(action.icon, action.title, tint: Theme.Brand.solid)
         case .failed(let action, _, _):
             tag("exclamationmark.triangle", action.title, tint: Theme.Semantic.warning)
-        case .needsSetup:
-            tag("exclamationmark.triangle", AIAction.reply.title, tint: Theme.Semantic.warning)
         case .blocked(let block):
             tag(
                 "exclamationmark.triangle",
@@ -107,10 +105,6 @@ extension ActionBanner {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(title). \(detail)")
-
-        case .needsSetup:
-            caption(
-                "Reply answers the message in front of you. Tap Set up to start screen context.")
 
         case .blocked(let block):
             // The same two-line shape `.failed` and `.dictationFailed` already use.

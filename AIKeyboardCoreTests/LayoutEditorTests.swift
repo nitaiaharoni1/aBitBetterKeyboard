@@ -214,13 +214,16 @@ final class LayoutEditorTests: XCTestCase {
         let model = editor()
         model.setExtraRow(enabled: true)
         // **The bar ends are empty in the shipped default now** — the emoji key,
-        // the one-tap rewrite and the sparkle all moved into the action row — so
-        // this has to put something in them rather than index into them. It used
-        // to index straight in and crashed the whole runner when the default
-        // changed, which took 367 later tests with it and reported as
-        // `** TEST FAILED **` with no failing assertion anywhere.
+        // the one-tap rewrite and the AI menu (since deleted; its actions each
+        // got their own key) all moved into the action row — so this has to put
+        // something in them rather than index into them. It used to index
+        // straight in and crashed the whole runner when the default changed,
+        // which took 367 later tests with it and reported as
+        // `** TEST FAILED **` with no failing assertion anywhere. `.reply`
+        // stands in for the old sparkle: any real action proves the point, and
+        // Reply is one the catalogue still has.
         model.add(.emoji, to: .barLeading)
-        model.add(.aiMenu, to: .barTrailing)
+        model.add(.reply, to: .barTrailing)
         XCTAssertEqual(model.rowKind(of: model.draft.bottomRow[0]), .bottom)
         XCTAssertEqual(model.rowKind(of: model.draft.cursorRow[0]), .cursor)
         XCTAssertEqual(model.rowKind(of: model.draft.barLeading[0]), .barLeading)
@@ -252,200 +255,5 @@ final class LayoutEditorTests: XCTestCase {
         XCTAssertEqual(model.draft.geometry.rowSpacing, LayoutGeometry.rowSpacingRange.lowerBound)
         model.setReach(.right)
         XCTAssertEqual(model.draft.geometry.reach, .right)
-    }
-}
-
-// MARK: - Persistence
-
-/// Drives the decode path against a scratch suite. The singleton's own defaults
-/// are the App Group plist and are nobody's fixture.
-final class LayoutStoreTests: XCTestCase {
-
-    private var defaults: UserDefaults!
-    private let suite = "LayoutStoreTests"
-
-    override func setUp() {
-        super.setUp()
-        UserDefaults().removePersistentDomain(forName: suite)
-        defaults = UserDefaults(suiteName: suite)
-    }
-
-    override func tearDown() {
-        UserDefaults().removePersistentDomain(forName: suite)
-        super.tearDown()
-    }
-
-    func testAnAbsentKeyIsTheShippedDefault() {
-        XCTAssertEqual(SharedStore.decodeLayout(from: defaults), .default)
-    }
-
-    func testGarbageDecodesToTheDefaultRatherThanCrashing() {
-        defaults.set(Data("not json".utf8), forKey: SharedStore.layoutKey)
-        XCTAssertEqual(SharedStore.decodeLayout(from: defaults), .default)
-    }
-
-    /// A build that adds a new required key must not brick a keyboard saved by the
-    /// build before it. The user cannot fix a keyboard that will not draw from
-    /// inside the keyboard.
-    func testAnInvalidStoredLayoutFallsBackToTheDefault() throws {
-        var broken = KeyboardCustomization.default
-        broken.bottomRow.removeAll { $0.action == .space }
-        defaults.set(try JSONEncoder().encode(broken), forKey: SharedStore.layoutKey)
-        XCTAssertEqual(SharedStore.decodeLayout(from: defaults), .default)
-    }
-
-    func testAValidStoredLayoutComesBack() throws {
-        let roomy = LayoutPreset.named("roomy")!.customization
-        defaults.set(try JSONEncoder().encode(roomy), forKey: SharedStore.layoutKey)
-        XCTAssertEqual(SharedStore.decodeLayout(from: defaults), roomy)
-    }
-
-    /// **A layout missing the globe decodes fine, and that is deliberate.**
-    /// Whether the key is required belongs to the device, not to the store, so the
-    /// store validates with `showsGlobe: false` and
-    /// `KeyboardController.apply(_:)` puts it back where the answer is known.
-    func testAGlobelessLayoutSurvivesTheStore() throws {
-        var without = KeyboardCustomization.default
-        without.bottomRow.removeAll { $0.action == .globe }
-        defaults.set(try JSONEncoder().encode(without), forKey: SharedStore.layoutKey)
-        XCTAssertEqual(SharedStore.decodeLayout(from: defaults), without)
-    }
-
-    /// **The keyboard is a second process.** `load()` fills the published copy
-    /// once per launch, so a keyboard already on screen when the user taps Done
-    /// has to read through `UserDefaults` again. The broken version returns the
-    /// launch-time copy, so this writes *after* the read that would have cached
-    /// it.
-    func testTheStoredAccessorSeesAWriteMadeAfterItWasFirstRead() throws {
-        XCTAssertEqual(SharedStore.decodeLayout(from: defaults), .default)
-        let power = LayoutPreset.named("power")!.customization
-        defaults.set(try JSONEncoder().encode(power), forKey: SharedStore.layoutKey)
-        XCTAssertEqual(SharedStore.decodeLayout(from: defaults), power)
-    }
-}
-
-// MARK: - What the new keys actually do
-
-/// A target that records the calls made against it.
-///
-/// `MockTextTarget.adjustTextPosition` is a deliberate no-op — it has no cursor
-/// to move — so it cannot answer whether a cursor key moved anything.
-@MainActor
-final class RecordingTextTarget: TextTarget {
-    var offsets: [Int] = []
-    var inserted: [String] = []
-    var deletions = 0
-
-    var documentContextBeforeInput: String? { "" }
-    var documentContextAfterInput: String? { "" }
-    var selectedText: String? { nil }
-    var isSecureTextEntry: Bool? { false }
-    var textContentType: UITextContentType?? { .some(.none) }
-
-    func insertText(_ text: String) { inserted.append(text) }
-    func deleteBackward() { deletions += 1 }
-    func adjustTextPosition(byCharacterOffset offset: Int) { offsets.append(offset) }
-}
-
-@MainActor
-final class CustomKeyActionTests: XCTestCase {
-
-    private func controller() -> (KeyboardController, RecordingTextTarget) {
-        let target = RecordingTextTarget()
-        let controller = KeyboardController(target: target, language: .english)
-        controller.showsGlobeKey = true
-        controller.apply(.default)
-        return (controller, target)
-    }
-
-    func testCursorKeysMoveTheInsertionPointAndTypeNothing() {
-        let (controller, target) = controller()
-        controller.press(.cursorLeft)
-        controller.press(.cursorRight)
-        XCTAssertEqual(target.offsets, [-1, 1])
-        XCTAssertEqual(target.inserted, [], "a cursor key must not type anything")
-        XCTAssertEqual(target.deletions, 0)
-    }
-
-    func testEmojiKeyTogglesTheEmojiPanel() {
-        let (controller, _) = controller()
-        controller.press(.emoji)
-        XCTAssertEqual(controller.overlay, .emoji)
-        controller.press(.emoji)
-        XCTAssertEqual(controller.overlay, .none)
-    }
-
-    func testAIMenuKeyTogglesTheMenu() {
-        let (controller, _) = controller()
-        controller.press(.aiMenu)
-        XCTAssertEqual(controller.overlay, .aiMenu)
-        controller.press(.aiMenu)
-        XCTAssertEqual(controller.overlay, .none)
-    }
-
-    /// On an empty field the one-tap key opens the menu instead of running a
-    /// rewrite, which is the same three-way answer the bar's button gives. The two
-    /// must not diverge; that drift has already shipped once between the bar and
-    /// the panel behind it.
-    func testTheQuickToneKeyOpensTheMenuWithNothingToRewrite() {
-        let (controller, _) = controller()
-        XCTAssertFalse(controller.hasTextToWorkWith)
-        controller.press(.quickTone)
-        XCTAssertEqual(controller.overlay, .aiMenu)
-    }
-
-    /// Nothing in the package can dismiss a keyboard, so the cap has to reach the
-    /// host through a callback the way the globe key already does.
-    func testHideKeyboardCallsTheHost() {
-        let (controller, _) = controller()
-        var dismissed = 0
-        controller.onDismissKeyboard = { dismissed += 1 }
-        controller.press(.hideKeyboard)
-        XCTAssertEqual(dismissed, 1)
-    }
-
-    func testHideKeyboardWithNoHostDoesNothing() {
-        let (controller, target) = controller()
-        controller.press(.hideKeyboard)
-        XCTAssertEqual(target.inserted, [])
-    }
-
-    // MARK: Applying a layout
-
-    /// The device decides whether the globe is drawn, and the stored layout does
-    /// not know. A layout saved on a phone with one keyboard installed must not
-    /// strand the user the day they install a second.
-    func testTheControllerPutsTheGlobeBackWhenTheSystemNeedsIt() {
-        let (controller, _) = controller()
-        var without = KeyboardCustomization.default
-        without.bottomRow.removeAll { $0.action == .globe }
-        controller.apply(without)
-        XCTAssertTrue(controller.customization.bottomRow.contains { $0.action == .globe })
-    }
-
-    func testTheControllerLeavesTheGlobeOutWhenTheSystemDoesNotNeedIt() {
-        let (controller, _) = controller()
-        controller.showsGlobeKey = false
-        var without = KeyboardCustomization.default
-        without.bottomRow.removeAll { $0.action == .globe }
-        controller.apply(without)
-        XCTAssertFalse(controller.customization.bottomRow.contains { $0.action == .globe })
-    }
-
-    func testAUsableLayoutIsAppliedUnchanged() {
-        let (controller, _) = controller()
-        let roomy = LayoutPreset.named("roomy")!.customization
-        controller.apply(roomy)
-        XCTAssertEqual(controller.customization, roomy)
-    }
-
-    /// A layout the repair cannot save falls all the way back, because a keyboard
-    /// that will not draw is not a state the user can escape from inside it.
-    func testAnUnusableLayoutFallsBackToTheDefault() {
-        let (controller, _) = controller()
-        var broken = KeyboardCustomization.default
-        broken.bottomRow.removeAll { $0.action == .ret }
-        controller.apply(broken)
-        XCTAssertEqual(controller.customization, .default)
     }
 }

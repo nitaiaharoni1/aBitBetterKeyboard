@@ -20,16 +20,22 @@ import XCTest
 ///
 /// The decision is asserted rather than the pixels because there is no way to read
 /// `.disabled()` back off a SwiftUI view. What makes these more than a tautology is
-/// that the bar no longer holds an opinion at all: it asks the panel it opens, so
-/// the two surfaces cannot disagree again.
+/// that the bar no longer holds an opinion at all: it asks `AIAction`, so the two
+/// surfaces cannot disagree again.
+///
+/// **The sparkle itself is deleted, and the question outlived it.** The button
+/// opened `AIMenuPanel`; every action that panel listed has its own key now, so the
+/// panel and the button went together. What survives is the state the defect was
+/// about — an empty field with no session — which must still leave at least one
+/// action runnable, because that is the state Reply exists for.
 final class SparkleReachabilityTests: XCTestCase {
 
     /// The state the defect is about, and the one the old expression answered
     /// `false` for.
-    func testAnEmptyFieldWithNoSessionStillOpensTheMenu() {
+    func testAnEmptyFieldWithNoSessionStillLeavesAnActionRunnable() {
         XCTAssertTrue(
-            SuggestionBar.sparkleOpensTheMenu(hasTextToWorkWith: false),
-            "the only route to the screen-context affordance is shut in the state it is for")
+            SuggestionBar.anyActionCouldRun(hasTextToWorkWith: false),
+            "every route to the screen-context affordance is shut in the state it is for")
     }
 
     /// The button is open exactly when at least one card inside is.
@@ -44,11 +50,11 @@ final class SparkleReachabilityTests: XCTestCase {
     /// is the one that rejects it.
     func testTheBarIsOpenExactlyWhenACardInsideIs() {
         for hasText in [false, true] {
-            let anyCardIsTappable = AIAction.allCases.contains {
-                AIMenuPanel.isAvailable($0, hasTextToWorkWith: hasText)
+            let anyActionIsRunnable = AIAction.allCases.contains {
+                $0.isAvailable(hasTextToWorkWith: hasText)
             }
             XCTAssertEqual(
-                SuggestionBar.sparkleOpensTheMenu(hasTextToWorkWith: hasText), anyCardIsTappable,
+                SuggestionBar.anyActionCouldRun(hasTextToWorkWith: hasText), anyActionIsRunnable,
                 "the sparkle and the cards behind it disagree with hasTextToWorkWith = \(hasText)")
         }
     }
@@ -56,12 +62,12 @@ final class SparkleReachabilityTests: XCTestCase {
     /// Which action carries it: Reply, with no text and no session. The three text
     /// actions stay greyed, because they genuinely have nothing to do.
     func testReplyIsTheActionThatKeepsTheMenuWorthOpening() {
-        XCTAssertTrue(AIMenuPanel.isAvailable(.reply, hasTextToWorkWith: false))
+        XCTAssertTrue(AIAction.reply.isAvailable(hasTextToWorkWith: false))
         for action in AIAction.allCases where !action.needsScreenContext {
             XCTAssertFalse(
-                AIMenuPanel.isAvailable(action, hasTextToWorkWith: false),
+                action.isAvailable(hasTextToWorkWith: false),
                 "\(action.title) has nothing to work on and must not look tappable")
-            XCTAssertTrue(AIMenuPanel.isAvailable(action, hasTextToWorkWith: true))
+            XCTAssertTrue(action.isAvailable(hasTextToWorkWith: true))
         }
     }
 
@@ -81,7 +87,14 @@ final class SparkleReachabilityTests: XCTestCase {
         XCTAssertFalse(controller.hasTextToWorkWith, "the state under test is an empty field")
         controller.run(.reply)
 
-        XCTAssertEqual(controller.overlay, .aiResult(.needsScreenContext))
+        // **Both halves, and the first is the point of the change.** Asserting the
+        // block alone passes against the build that set one and opened
+        // `AIResultPanel(.needsScreenContext)` over every key on top of it.
+        XCTAssertEqual(controller.overlay, .none, "the keys must stay visible")
+        XCTAssertEqual(controller.block?.action, .reply)
+        XCTAssertFalse(
+            controller.block?.title.isEmpty ?? true,
+            "the refusal has to say which of the four refusals it is")
     }
 }
 
@@ -103,7 +116,7 @@ final class ToneButtonTapTests: XCTestCase {
 
     func testAnEmptyFieldStillAnswersTheTap() {
         XCTAssertEqual(
-            SuggestionBar.toneTap(hasTextToWorkWith: false, isWorking: false), .openMenu,
+            SuggestionBar.toneTap(hasTextToWorkWith: false, isWorking: false), .needsText,
             "a tap on an empty field is swallowed, which is what shipped")
     }
 
@@ -138,10 +151,13 @@ final class ToneButtonTapTests: XCTestCase {
         XCTAssertEqual(controller.overlay, .none)
         XCTAssertFalse(controller.isWorking)
 
-        // Where the tap goes instead, and that there is something behind it.
-        controller.show(.aiMenu)
-        XCTAssertEqual(controller.overlay, .aiMenu)
-        XCTAssertTrue(AIMenuPanel.hasRunnableAction(hasTextToWorkWith: false))
+        // Where the tap goes instead, and that there is something behind it. It
+        // used to be `show(.aiMenu)` and a panel; the answer is now a sentence in
+        // the strip, with the keys still under it.
+        controller.refuseForEmptyField(.rewrite)
+        XCTAssertEqual(controller.overlay, .none)
+        XCTAssertEqual(controller.block?.action, .rewrite)
+        XCTAssertTrue(AIAction.hasRunnableAction(hasTextToWorkWith: false))
     }
 }
 

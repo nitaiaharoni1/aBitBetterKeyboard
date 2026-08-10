@@ -95,12 +95,12 @@ extension KeyboardLayout {
 
             // **Built whole, not from a cap.** Its long-press marks live on the
             // `KeySpec`, and `KeyView` finds them by recognising
-            // `punctuationKeyID`. Dropped on the numbers and symbols planes for
-            // the reason `bottomRow` drops it: all five marks are already on the
-            // row above, and a second `char-.` on one plane is a `ForEach` with
-            // duplicate identity.
+            // `punctuationKeyID`. Drawn on all three planes (same rule as
+            // `KeyboardLayout.bottomRow`): the five marks on the numbers plane
+            // are not a replacement for the one key a thumb finds without
+            // looking. The ids do not collide — this one is `punctuation`, that
+            // one is `char-.`.
             if slot.action == .punctuation {
-                guard plane == .letters else { return nil }
                 let key = punctuationKey(for: language)
                 return KeySpec(
                     key.cap, width: keyWidth(slot.width),

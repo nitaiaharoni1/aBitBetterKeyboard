@@ -93,11 +93,11 @@ public enum LayoutValidator {
         // MARK: The essentials
         //
         // Three, and not four. **Delete is deliberately not required here.**
-        // `KeyboardLayout` puts it at the end of a *letter* row — the top row for
-        // Hebrew, the bottom letter row for the other sixty-three — and the letter
-        // rows are not editable, so it is reachable whatever the user does down
-        // here. Requiring it in the custom rows would make the shipped default
-        // invalid on its first launch.
+        // `KeyboardLayout` closes the third letter row with it in all sixty-four
+        // languages and on all three planes, at a `.pinned` width so the rect does
+        // not move, and those rows are not editable — so it is reachable whatever
+        // the user does down here. Requiring it in the custom rows would make the
+        // shipped default invalid on its first launch.
 
         if !actions.contains(.space) {
             found.append(

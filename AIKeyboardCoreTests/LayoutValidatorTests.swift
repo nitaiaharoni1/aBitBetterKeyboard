@@ -154,12 +154,7 @@ final class LayoutValidatorTests: XCTestCase {
         // than the English grid it would be drawn in.
         let row = KeyboardLayout.rows(
             for: .english, plane: .letters, showsGlobe: true, customization: layout)[3]
-        let units = row.keys.reduce(CGFloat(0)) { total, key in
-            switch key.width {
-            case .unit(let value): return total + value
-            case .flexible, .remainderShare: return total + 1
-            }
-        }
+        let units = totalUnits(of: row)
         XCTAssertGreaterThan(
             units, CGFloat(KeyboardLayout.columns(for: .english, plane: .letters)))
     }

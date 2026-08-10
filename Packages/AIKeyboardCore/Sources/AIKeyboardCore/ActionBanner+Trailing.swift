@@ -23,12 +23,6 @@ extension ActionBanner {
             button("Dismiss", tint: nil, filled: false) { controller.clearBanner() }
                 .accessibilityIdentifier("banner-dismiss")
 
-        case .needsSetup:
-            button("Set up", tint: Theme.Brand.gradient, filled: true) {
-                controller.show(.aiResult(.needsScreenContext))
-            }
-            .accessibilityIdentifier("banner-setup")
-
         case .blocked(let block):
             switch block.remedy {
             case .none:

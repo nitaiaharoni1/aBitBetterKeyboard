@@ -57,16 +57,13 @@ public struct ActionBanner: View {
     var state: BannerState {
         BannerState.resolve(
             isDictating: controller.isDictating,
-            dictationIsLive: controller.dictationAvailability.isLive
-                && controller.overlay != .dictation,
+            dictationIsLive: controller.dictationAvailability.isLive,
             dictationTranscript: controller.dictationTranscript,
             dictationFailure: controller.dictationFailure,
             isWorking: controller.isWorking,
             runningAction: controller.runningAction,
             error: controller.aiError,
-            block: nil,
-            resultsShownElsewhere: Self.resultPanelIsOpen(controller.overlay),
-            needsScreenContextSetup: controller.overlay == .aiResult(.needsScreenContext),
+            block: controller.block,
             options: controller.bannerOptions,
             index: controller.bannerIndex,
             screenContext: controller.screenContext.context,
@@ -74,17 +71,6 @@ public struct ActionBanner: View {
             // of `ScreenContextStrip` — and the ordinary instruction when it does
             // not. See `KeyboardController.screenContextHint`.
             idleHint: controller.screenContextHint ?? BannerState.defaultHint)
-    }
-
-    /// Whether a panel is showing the answer, which is the one case the strip
-    /// stays out of. Only `.needsScreenContext` is excluded: that panel explains a
-    /// missing session rather than showing a result, and the banner labels it.
-    ///
-    /// The same question `KeyboardController.bannerOptions` asks, spelled once
-    /// here so the list and the state cannot disagree about who owns the answer.
-    static func resultPanelIsOpen(_ overlay: KeyboardOverlay) -> Bool {
-        guard case .aiResult(let kind) = overlay else { return false }
-        return kind != .needsScreenContext
     }
 
     var surface: Color {

@@ -44,14 +44,18 @@ public struct LayoutPreset: Identifiable, Sendable {
             customization: {
                 var layout = base("power", geometry: .default)
                 layout.showsNumberRow = true
-                // **Puts the AI menu back in the bar, because this preset spends
-                // the extra row on something else.** The shipped default carries
-                // Reply, Fix and Rewrite in that row and nothing in the bar; swap
-                // the row for arrows and, without this line, a user picking
-                // "Power" loses every route to the AI actions at once and has no
-                // way to tell that is what happened. `ai-first` keeps its own way
-                // in for the same reason.
-                layout.barTrailing = [SlotSpec(action: .aiMenu)]
+                // **Two real keys instead of one key that opened a list.** The
+                // shipped default carries Reply, Fix and Rewrite in the action row
+                // and nothing in the bar; this preset spends that row on arrows, so
+                // without these a user picking "Power" loses every route to the AI
+                // actions at once and has no way to tell that is what happened. It
+                // used to be a single sparkle opening `AIMenuPanel`; that panel is
+                // deleted, because a list drawn over the keys is the thing this
+                // keyboard stopped doing. `ai-first` keeps its own way in.
+                layout.barTrailing = [
+                    SlotSpec(action: .reply),
+                    SlotSpec(action: .quickTone)
+                ]
                 // No full stop here: the bottom row already carries the script's
                 // own punctuation key, with the other four marks behind a long
                 // press. A second one would be a duplicate that is also worse.
@@ -68,20 +72,21 @@ public struct LayoutPreset: Identifiable, Sendable {
         LayoutPreset(
             id: "ai-first",
             name: "AI first",
-            summary: "The AI key in the grid, rewrite in the bar",
+            summary: "Reply in the grid, rewrite in the bar",
             customization: {
                 var layout = base("ai-first", geometry: .default)
-                // The sparkle moves into the grid, where a thumb already is, and
-                // the bar keeps the one-tap rewrite. That also separates the two
-                // AI controls, which `SuggestionBar`'s own comment records as
-                // having been unreadable side by side: two brand-tinted buttons
-                // with no rule between them, one wearing `sparkle` and the other
-                // `sparkles`.
+                // Reply moves into the grid, where a thumb already is, and the
+                // bar keeps the one-tap rewrite. That also separates the two AI
+                // controls, which `SuggestionBar`'s own comment records as having
+                // been unreadable side by side: two brand-tinted buttons with no
+                // rule between them, one wearing `sparkle` and the other
+                // `sparkles`. This slot was that sparkle until the menu behind it
+                // was deleted.
                 layout.barTrailing = [SlotSpec(action: .quickTone)]
                 layout.bottomRow = [
                     SlotSpec(action: .numbersPlane, width: .units(1.3)),
                     SlotSpec(action: .globe, width: .units(1.0)),
-                    SlotSpec(action: .aiMenu, width: .units(1.2)),
+                    SlotSpec(action: .reply, width: .units(1.2)),
                     SlotSpec(action: .space, width: .fill),
                     SlotSpec(action: .dictation, width: .units(1.0)),
                     SlotSpec(action: .punctuation, width: .units(1.0)),

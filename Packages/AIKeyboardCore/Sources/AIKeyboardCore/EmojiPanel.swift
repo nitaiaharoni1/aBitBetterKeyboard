@@ -1,221 +1,370 @@
 import SwiftUI
 
-/// Emoji as plain Unicode. Nothing is bundled as an image, so the system renders
-/// whatever the user's iOS version draws and the app stays small.
-public enum EmojiCatalog {
-
-    public struct Category: Identifiable, Sendable {
-        public let id: String
-        public let icon: String
-        public let emoji: [String]
-    }
-
-    public static let categories: [Category] = [
-        Category(
-            id: "Smileys", icon: "face.smiling",
-            emoji: [
-                "😀", "😃", "😄", "😁", "😆", "😅", "🤣", "😂", "🙂", "🙃",
-                "😉", "😊", "😇", "🥰", "😍", "🤩", "😘", "😗", "😚", "😙",
-                "😋", "😛", "😜", "🤪", "😝", "🤗", "🤭", "🤫", "🤔", "🤐",
-                "😐", "😑", "😶", "😏", "😒", "🙄", "😬", "😌", "😔", "😪",
-                "🤤", "😴", "😷", "🤒", "🤕", "🥳", "🥺", "😢", "😭", "😤",
-                "😠", "😡", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥"
-            ]),
-        Category(
-            id: "People", icon: "hand.raised",
-            emoji: [
-                "👍", "👎", "👌", "🤌", "✌️", "🤞", "🤟", "🤙", "👈", "👉",
-                "👆", "👇", "☝️", "✋", "🤚", "🖐️", "🖖", "👋", "🤝", "🙏",
-                "💪", "🦾", "👏", "🙌", "👐", "🤲", "✍️", "💅", "👀", "🧠",
-                "👶", "🧒", "👦", "👧", "🧑", "👨", "👩", "🧓", "👴", "👵",
-                "🙋", "🤦", "🤷", "💁", "🙆", "🙅", "🧑‍💻", "👨‍💼", "👩‍💼", "🕺"
-            ]),
-        Category(
-            id: "Nature", icon: "leaf",
-            emoji: [
-                "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯",
-                "🦁", "🐮", "🐷", "🐸", "🐵", "🐔", "🐧", "🐦", "🦆", "🦅",
-                "🦉", "🐴", "🦄", "🐝", "🦋", "🐌", "🐞", "🐢", "🐍", "🐙",
-                "🌵", "🎄", "🌲", "🌳", "🌴", "🌱", "🌿", "☘️", "🍀", "🌷",
-                "🌹", "🌺", "🌸", "🌼", "🌻", "🌞", "🌝", "🌚", "⭐️", "🌟"
-            ]),
-        Category(
-            id: "Food", icon: "fork.knife",
-            emoji: [
-                "🍏", "🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐",
-                "🍈", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🥑", "🥦",
-                "🥕", "🌽", "🌶️", "🥒", "🥬", "🧄", "🧅", "🍄", "🥜", "🌰",
-                "🍞", "🥐", "🥖", "🫓", "🥨", "🧀", "🥚", "🍳", "🥞", "🧇",
-                "🍕", "🍔", "🌭", "🥪", "🌮", "🌯", "🥙", "🧆", "🍝", "🍣",
-                "🍰", "🎂", "🧁", "🍫", "🍬", "☕️", "🍵", "🧃", "🍺", "🍷"
-            ]),
-        Category(
-            id: "Activity", icon: "figure.run",
-            emoji: [
-                "⚽️", "🏀", "🏈", "⚾️", "🎾", "🏐", "🏉", "🎱", "🏓", "🏸",
-                "🥅", "⛳️", "🏹", "🎣", "🥊", "🥋", "🎽", "🛹", "🛼", "🏂",
-                "🏋️", "🤸", "🤺", "⛹️", "🤾", "🏌️", "🏇", "🧘", "🏄", "🏊",
-                "🚴", "🚵", "🎯", "🎮", "🕹️", "🎲", "🧩", "🎨", "🎭", "🎤",
-                "🎧", "🎸", "🥁", "🎹", "🎺", "🎻", "🏆", "🥇", "🥈", "🥉"
-            ]),
-        Category(
-            id: "Travel", icon: "car",
-            emoji: [
-                "🚗", "🚕", "🚙", "🚌", "🚎", "🏎️", "🚓", "🚑", "🚒", "🚐",
-                "🛻", "🚚", "🚛", "🚜", "🛵", "🏍️", "🛺", "🚲", "🛴", "✈️",
-                "🚀", "🛸", "🚁", "⛵️", "🚤", "🛥️", "🚢", "🚂", "🚆", "🚊",
-                "🗺️", "🗿", "🗽", "🗼", "🏰", "🏯", "🏟️", "🎡", "🎢", "🎠",
-                "🏖️", "🏝️", "🏜️", "🌋", "⛰️", "🏔️", "🗻", "🏕️", "🌅", "🌄"
-            ]),
-        Category(
-            id: "Objects", icon: "lightbulb",
-            emoji: [
-                "⌚️", "📱", "💻", "⌨️", "🖥️", "🖨️", "🖱️", "💽", "💾", "📀",
-                "📷", "📹", "🎥", "📞", "☎️", "📟", "📺", "📻", "🧭", "⏱️",
-                "⏰", "🔋", "🔌", "💡", "🔦", "🕯️", "🧯", "🛢️", "💸", "💵",
-                "💳", "🧾", "✉️", "📩", "📨", "📦", "📪", "📝", "📅", "📊",
-                "📈", "📉", "📌", "📎", "🔑", "🔒", "🔓", "🔨", "🧰", "🧪"
-            ]),
-        Category(
-            id: "Symbols", icon: "heart",
-            emoji: [
-                "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔",
-                "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "✨", "⚡️",
-                "🔥", "💥", "💫", "⭐️", "🌟", "☀️", "🌈", "☁️", "❄️", "💧",
-                "✅", "❌", "⭕️", "❗️", "❓", "💯", "🔔", "🔕", "♻️", "⚠️",
-                "🕎", "✡️", "☪️", "✝️", "☯️", "🔆", "🔅", "➕", "➖", "🟰"
-            ]),
-        Category(
-            id: "Flags", icon: "flag",
-            emoji: [
-                "🇮🇱", "🇺🇸", "🇬🇧", "🇨🇦", "🇦🇺", "🇩🇪", "🇫🇷", "🇪🇸", "🇮🇹", "🇳🇱",
-                "🇵🇹", "🇬🇷", "🇹🇷", "🇷🇺", "🇺🇦", "🇵🇱", "🇸🇪", "🇳🇴", "🇩🇰", "🇫🇮",
-                "🇨🇭", "🇦🇹", "🇧🇪", "🇮🇪", "🇮🇳", "🇨🇳", "🇯🇵", "🇰🇷", "🇧🇷", "🇦🇷",
-                "🇲🇽", "🇿🇦", "🇪🇬", "🇦🇪", "🇸🇦", "🏳️‍🌈", "🏴", "🏁", "🚩", "🎌"
-            ])
-    ]
-}
-
+/// The emoji grid: one long strip that scrolls sideways, with a row of category
+/// keys under it.
+///
+/// **Sideways, not down, and every category is in the same strip.** The panel it
+/// replaced showed one category at a time and scrolled vertically, so reaching
+/// Food meant a tap on a tab rather than a swipe — and the tab bar was the only
+/// way between categories at all. Laying the whole catalogue out left to right
+/// makes the swipe continuous and leaves the tabs as shortcuts rather than as
+/// steering.
+///
+/// **Each category starts on a fresh column.** `padded` fills the tail of a
+/// section with blanks so a category boundary is always a column boundary, which
+/// is what makes the tab row's highlight computable from the scroll offset alone
+/// (see `category(atOffset:)`) instead of needing a geometry read per cell.
 public struct EmojiPanel: View {
 
     @ObservedObject var controller: KeyboardController
-    @State private var selectedCategory: String = EmojiCatalog.categories[0].id
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 8)
+    /// The keyboard's own key height, so the category row is the same size as the
+    /// bottom row it is modelled on. Passed in because it is a user setting —
+    /// `LayoutGeometry.keyHeight` moves between 36 and 56.
+    let keyHeight: CGFloat
 
-    public init(controller: KeyboardController) {
+    /// Five, and it is a floor rather than a taste. Four is what the old vertical
+    /// grid showed, and the strip has to beat it to be worth the change.
+    static let rowCount = 5
+
+    /// What a column wants to be. The real width is this rounded to a whole
+    /// number of columns across the panel, so the strip never rests showing a
+    /// half-column at the edge of a section.
+    static let targetCellWidth: CGFloat = 38
+
+    @State private var scrollOffset: CGFloat = 0
+
+    /// The strip's cells, rebuilt only when the recents change. See the `.task`
+    /// in `body` for why this is not a computed property.
+    @State private var sections: [Section] = []
+
+    private let scrollSpace = "emoji-strip"
+
+    public init(controller: KeyboardController, keyHeight: CGFloat = Theme.Metrics.keyHeight) {
         self.controller = controller
+        self.keyHeight = keyHeight
     }
 
     public var body: some View {
-        PanelSurface {
+        GeometryReader { geo in
+            let columns = max(1, (geo.size.width / Self.targetCellWidth).rounded())
+            let cellWidth = geo.size.width / columns
+            let gridHeight = max(0, geo.size.height - keyHeight)
+            let cellHeight = gridHeight / CGFloat(Self.rowCount)
+
             VStack(spacing: 0) {
-                grid
-                categoryBar
+                grid(cellWidth: cellWidth, cellHeight: cellHeight)
+                    .frame(height: gridHeight)
+
+                EmojiCategoryRow(
+                    selected: Self.category(
+                        atOffset: scrollOffset, cellWidth: cellWidth, in: sections),
+                    height: keyHeight,
+                    // The section's *first cell*, not the section. `ForEach(sections)`
+                    // gives the loop its identity but puts no view on screen with
+                    // the category's own id, so `scrollTo("Food")` addressed
+                    // nothing and every tab was silently dead.
+                    onSelect: { scrollTarget = Self.anchorID(forCategory: $0) },
+                    onDelete: { controller.deleteBackward() }
+                )
             }
         }
-        // Emoji read left to right regardless of the keyboard language.
+        // **Built once per change of the recents, not once per scroll frame.**
+        // `sections` is 1,870 cells with an interpolated id each; as a computed
+        // property read from `body` it was rebuilt on every `onPreferenceChange`
+        // the scroll fired, which is sixty times a second while a finger is moving.
+        .task { sections = Self.sections(recent: controller.recentEmoji) }
+        .onChange(of: controller.recentEmoji) { _, recent in
+            sections = Self.sections(recent: recent)
+        }
+        // Emoji read left to right regardless of the keyboard language, and so
+        // does the strip they sit in: a horizontal `ScrollView` in a right-to-left
+        // environment starts at the far end, which would open Hebrew's grid on the
+        // flags.
         .environment(\.layoutDirection, .leftToRight)
     }
 
+    /// Set by a tab tap, consumed by the grid's `ScrollViewReader`. A piece of
+    /// state rather than a direct call because the reader's proxy only exists
+    /// inside the grid's own body.
+    @State private var scrollTarget: String?
+
     // MARK: Grid
 
-    private var grid: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 2) {
-                if selectedCategory == "Recent" {
-                    ForEach(controller.recentEmoji, id: \.self) { cell($0) }
-                } else if let category = EmojiCatalog.categories.first(where: { $0.id == selectedCategory }) {
-                    ForEach(category.emoji, id: \.self) { cell($0) }
-                }
-            }
-            .padding(.horizontal, Theme.Space.xs)
-            .padding(.top, Theme.Space.xs)
-            .padding(.bottom, Theme.Space.xxs)
-        }
-        .frame(maxHeight: .infinity)
-    }
-
-    private func cell(_ emoji: String) -> some View {
-        Button {
-            controller.insertEmoji(emoji)
-        } label: {
-            Text(emoji)
-                .font(.system(size: 29))
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .contentShape(Rectangle())
-        }
-        .pressable(scale: 0.85)
-        .accessibilityLabel(emoji)
-    }
-
-    // MARK: Category bar
-
-    private var categoryBar: some View {
-        HStack(spacing: 0) {
-            Button {
-                controller.show(.none)
-            } label: {
-                // Off the catalogue, not off a two-way test: this key said "ABC"
-                // under twelve of the fourteen keyboards, including the Greek and
-                // Cyrillic ones whose letters plane has no A, B or C in it.
-                Text(controller.language.lettersPlaneLabel)
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(Theme.Keys.label)
-                    .frame(width: 44, height: 38)
-                    .contentShape(Rectangle())
-            }
-            .pressable()
-            .accessibilityLabel("Back to letters")
-
+    private func grid(cellWidth: CGFloat, cellHeight: CGFloat) -> some View {
+        ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
-                    categoryTab(id: "Recent", icon: "clock")
-                    ForEach(EmojiCatalog.categories) { category in
-                        categoryTab(id: category.id, icon: category.icon)
+                LazyHGrid(
+                    rows: Array(
+                        repeating: GridItem(.fixed(cellHeight), spacing: 0), count: Self.rowCount),
+                    spacing: 0
+                ) {
+                    ForEach(sections, id: \.id) { section in
+                        ForEach(section.cells) { cell in
+                            self.cell(cell, width: cellWidth, height: cellHeight)
+                                .id(cell.id)
+                        }
+                    }
+                }
+                .background {
+                    // The whole of the scroll tracking. One reader for the strip,
+                    // not one per cell: with sections padded to whole columns the
+                    // offset alone says which category is at the leading edge.
+                    GeometryReader { inner in
+                        Color.clear.preference(
+                            key: EmojiScrollOffsetKey.self,
+                            value: -inner.frame(in: .named(scrollSpace)).minX)
                     }
                 }
             }
-
-            Button {
-                controller.deleteBackward()
-            } label: {
-                Image(systemName: "delete.left")
-                    .font(Theme.Glyph.font(17))
-                    .foregroundStyle(Theme.Keys.label)
-                    .frame(width: 44, height: 38)
-                    .contentShape(Rectangle())
+            .coordinateSpace(name: scrollSpace)
+            .onPreferenceChange(EmojiScrollOffsetKey.self) { scrollOffset = $0 }
+            .onChange(of: scrollTarget) { _, target in
+                guard let target else { return }
+                withAnimation(Theme.Motion.quick) { proxy.scrollTo(target, anchor: .leading) }
+                scrollTarget = nil
             }
-            .pressable()
-            .accessibilityLabel("Delete")
-        }
-        .background(Theme.Keys.panel)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(Theme.Keys.secondaryLabel.opacity(0.15))
-                .frame(height: 0.5)
         }
     }
 
-    private func categoryTab(id: String, icon: String) -> some View {
-        let isSelected = selectedCategory == id
-        return Button {
-            Feedback.modifierPress()
-            selectedCategory = id
-        } label: {
-            Image(systemName: icon)
-                .font(Theme.Glyph.font(15))
-                .foregroundStyle(isSelected ? Theme.Brand.solid : Theme.Keys.secondaryLabel)
-                .frame(width: 40, height: 38)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(isSelected ? Theme.Brand.solid.opacity(0.14) : .clear)
-                        .padding(3)
-                )
-                .contentShape(Rectangle())
+    @ViewBuilder
+    private func cell(_ cell: Cell, width: CGFloat, height: CGFloat) -> some View {
+        if let emoji = cell.emoji {
+            Button {
+                controller.insertEmoji(emoji)
+            } label: {
+                Text(emoji)
+                    // Against the shorter side, so the glyph stays inside its cell
+                    // on a Compact layout where the rows are 28pt tall.
+                    .font(.system(size: min(width, height) * 0.78))
+                    .frame(width: width, height: height)
+                    .contentShape(Rectangle())
+            }
+            .pressable(scale: 0.85)
+            .accessibilityLabel(EmojiCatalog.names(for: emoji).first ?? emoji)
+        } else {
+            // The tail of a section, keeping the next one on a fresh column.
+            Color.clear.frame(width: width, height: height)
         }
-        .pressable()
+    }
+
+    // MARK: Sections
+
+    struct Cell: Identifiable, Equatable {
+        let id: String
+        let emoji: String?
+    }
+
+    struct Section: Equatable {
+        let id: String
+        let cells: [Cell]
+    }
+
+    /// Recent first, then the catalogue, each padded out to a whole number of
+    /// columns.
+    ///
+    /// Static so the view can cache it in `@State` while tests still ask for it
+    /// directly — a `@State` array is empty until a body has been evaluated, and
+    /// a test that read one would be measuring nothing.
+    static func sections(recent: [String]) -> [Section] {
+        var result = [section(id: EmojiCatalog.recentID, emoji: recent)]
+        for category in EmojiCatalog.categories {
+            result.append(section(id: category.id, emoji: category.emoji))
+        }
+        return result
+    }
+
+    /// The cell a category tab scrolls to: the first one in that section. Spelled
+    /// once, here, because it has to agree exactly with the ids `section` mints.
+    static func anchorID(forCategory id: String) -> String { "\(id)-0" }
+
+    private static func section(id: String, emoji: [String]) -> Section {
+        var cells = emoji.enumerated().map { Cell(id: "\(id)-\($0.offset)", emoji: $0.element) }
+        let remainder = cells.count % rowCount
+        if remainder != 0 {
+            for blank in 0..<(rowCount - remainder) {
+                cells.append(Cell(id: "\(id)-blank-\(blank)", emoji: nil))
+            }
+        }
+        return Section(id: id, cells: cells)
+    }
+
+    /// Which category sits at the leading edge, from the scroll offset alone.
+    ///
+    /// Exact because every section is a whole number of columns wide: the column
+    /// under the left edge is `offset / cellWidth`, and the sections' column counts
+    /// say which one owns it. A geometry read per cell would answer the same
+    /// question and would go quiet the moment a category is wider than the screen,
+    /// which most of them are.
+    static func category(
+        atOffset offset: CGFloat, cellWidth: CGFloat, in sections: [Section]
+    )
+        -> String
+    {
+        guard cellWidth > 0, !sections.isEmpty else { return EmojiCatalog.recentID }
+        let column = Int(max(0, offset) / cellWidth)
+        var consumed = 0
+        for section in sections {
+            consumed += section.cells.count / rowCount
+            if column < consumed { return section.id }
+        }
+        return sections.last?.id ?? EmojiCatalog.recentID
+    }
+}
+
+/// How far the strip has been swiped, in points.
+struct EmojiScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat { 0 }
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+// MARK: - Category row
+
+/// The row under the grid: a category per tab, delete pinned at the end.
+///
+/// **Drawn as keys, because it is a key row.** It takes the keyboard's own key
+/// height, `Theme.Radius.key` corners and the same press treatment every control
+/// on the bottom row has — no cap at rest, `Theme.Keys.functionPressed` under a
+/// finger. The selected tab is the one exception and wears a resting cap, which
+/// is the only thing on this keyboard that means *a target*.
+///
+/// **There is no `אבג` key here.** The way back to the letters is the Emoji key
+/// in the action row, which says `אבג` while the grid is open — see
+/// `KeyView.label`. Two keys doing one job, a thumb's width apart, is what this
+/// row had before.
+struct EmojiCategoryRow: View {
+
+    let selected: String
+    let height: CGFloat
+    let onSelect: (String) -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            tab(id: EmojiCatalog.recentID, icon: EmojiCatalog.recentIcon)
+            ForEach(EmojiCatalog.categories) { category in
+                tab(id: category.id, icon: category.icon)
+            }
+
+            // Pinned at the end and never scrolled, exactly as delete is pinned on
+            // every letter row. See `.claude/rules/keyboard-layout.md`.
+            //
+            // **It repeats, and that is not a nicety.** `SuggestionBar.barCatalogue`
+            // excludes delete from the bar's edges for exactly this reason: the
+            // accelerating repeat is wired into `KeyView`, so a delete drawn
+            // anywhere else "would delete once per tap and look broken beside the
+            // real one". This row replaces the letters while it is up, so it *is*
+            // the only delete on screen — a one-character-per-tap version of it
+            // would be the whole of deleting for as long as the grid is open.
+            KeyStyleButton(
+                width: 42, height: height, repeats: true,
+                // No `Feedback` call of its own: `deleteBackward` already fires
+                // one per character, and the button's own press haptic on top of
+                // it made a single tap buzz twice.
+                feedback: nil, action: onDelete
+            ) {
+                Image(systemName: "delete.left")
+                    .font(Theme.Glyph.font(19))
+                    .foregroundStyle(Theme.Keys.label)
+            }
+            .accessibilityLabel("Delete")
+        }
+        .frame(height: height)
+    }
+
+    private func tab(id: String, icon: String) -> some View {
+        let isSelected = selected == id
+        return KeyStyleButton(
+            width: nil, height: height, isSelected: isSelected,
+            action: { onSelect(id) }
+        ) {
+            Image(systemName: icon)
+                .font(Theme.Glyph.font(19))
+                .foregroundStyle(isSelected ? Theme.Keys.label : Theme.Keys.secondaryLabel)
+        }
         .accessibilityLabel(id)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
+/// A button that looks and presses like a function key.
+///
+/// The keyboard's own controls — `123`, delete, shift — are drawn by `KeyView`,
+/// which is built around a `KeySpec` and a `KeyCap`. A category tab is neither,
+/// so this carries the same three rules rather than inventing a fourth look: no
+/// cap at rest, the light cap under a finger, and `Theme.Radius.key` corners.
+struct KeyStyleButton<Label: View>: View {
+
+    /// Nil spreads the button across the space left over, which is how the tabs
+    /// divide the row.
+    let width: CGFloat?
+    let height: CGFloat
+    var isSelected = false
+    /// Whether holding it keeps firing. Only delete does.
+    var repeats = false
+    /// The press haptic, or nil for a control whose action already fires one.
+    var feedback: (() -> Void)? = Feedback.modifierPress
+    let action: () -> Void
+    @ViewBuilder let label: () -> Label
+
+    @State private var isPressed = false
+    @State private var repeater = KeyRepeater()
+
+    /// True for as long as a touch is on this key, and **the only signal that
+    /// survives a cancelled gesture** — SwiftUI does not call `onEnded` when a
+    /// touch is cancelled by a banner or a Control Centre pull, so `onEnded` alone
+    /// would leave the repeat loop deleting into whatever is focused next. The
+    /// same reasoning, and the same fix, as `KeyView.isTouching`.
+    @GestureState private var isTouching = false
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
+                .fill(fill)
+                .shadow(
+                    color: Theme.Keys.shadow.opacity(isPressed || isSelected ? 0.45 : 0),
+                    radius: 0, x: 0, y: 1)
+            label()
+        }
+        .frame(width: width, height: height)
+        .frame(maxWidth: width == nil ? .infinity : nil)
+        .contentShape(Rectangle())
+        .gesture(press)
+        .onChange(of: isTouching) { _, touching in
+            if !touching { endPress() }
+        }
+        // A raw gesture is invisible to VoiceOver, so the tap is restated as an
+        // action. Same rule the layout editor is built on: every gesture has a
+        // non-gesture route.
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction {
+            feedback?()
+            action()
+        }
+    }
+
+    /// Fires on finger-down rather than on lift, which is what makes a key feel
+    /// immediate — `KeyView.pressGesture` for the same reason.
+    private var press: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .updating($isTouching) { _, state, _ in state = true }
+            .onChanged { _ in
+                guard !isPressed else { return }
+                isPressed = true
+                feedback?()
+                action()
+                if repeats { repeater.start(action) }
+            }
+            .onEnded { _ in endPress() }
+    }
+
+    private func endPress() {
+        isPressed = false
+        repeater.stop()
+    }
+
+    private var fill: Color {
+        if isPressed { return Theme.Keys.functionPressed }
+        return isSelected ? Theme.Keys.letter : .clear
     }
 }

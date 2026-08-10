@@ -64,11 +64,6 @@ public enum BannerState: Equatable {
     /// message is what the accessibility label carries.
     case failed(action: AIAction, title: String, detail: String)
 
-    /// Reply was tapped with nothing behind it. Distinct from `.failed` because
-    /// the tap has somewhere to go: the setup panel, which holds the broadcast
-    /// picker and cannot be a banner.
-    case needsSetup(String)
-
     /// A recording is open in the containing app. The keyboard cannot start one —
     /// see `DictationSession` — so this state is only ever reached from one that
     /// could.
@@ -154,13 +149,6 @@ public enum BannerState: Equatable {
         /// `isWorking` — which makes the ordering below decided rather than
         /// incidental, and is why there is a test for it.
         block: Block?,
-        /// A result panel is open and owns this answer. The Tone row of
-        /// `AIMenuPanel` still runs a rewrite into `AIResultPanel`, and the strip
-        /// must not narrate a call the user is already watching in a panel — nor
-        /// report "nothing came back" about one, which is what the empty-result
-        /// branch below would otherwise do for the whole of it.
-        resultsShownElsewhere: Bool,
-        needsScreenContextSetup: Bool,
         options: [BannerOption],
         index: Int,
         screenContext: ScreenContext?,
@@ -179,7 +167,6 @@ public enum BannerState: Equatable {
         // sentence about the tap the user just made. Below dictation for the reason
         // dictation is first: that is a recording running in another process.
         if let block { return .blocked(block) }
-        if resultsShownElsewhere { return idle(screenContext, idleHint) }
 
         // A running action is what names every branch below, so an action-shaped
         // state without one is not renderable. It cannot happen — `beginWork` sets
@@ -188,7 +175,6 @@ public enum BannerState: Equatable {
         guard let runningAction else { return idle(screenContext, idleHint) }
 
         if isWorking { return .working(runningAction) }
-        if needsScreenContextSetup { return .needsSetup(screenContextPromptTitle) }
         if let error {
             return .failed(action: runningAction, title: error.title, detail: error.message)
         }
@@ -225,7 +211,3 @@ public enum BannerState: Equatable {
     /// must not claim a particular one is in a particular place.
     public static let defaultHint = "Type, or pick an action below"
 }
-
-/// The one-line version of `ScreenContextPrompt.title`, which is three sentences
-/// long because it lives in a panel with room for them.
-let screenContextPromptTitle = "Screen context is off"

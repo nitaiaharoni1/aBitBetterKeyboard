@@ -47,9 +47,9 @@ import SwiftUI
 /// explicitly it never inherits, so a tint set on the picker view is ignored.
 /// That behaviour is worth keeping: it is the system telling the truth about
 /// recording. What it costs is that the background underneath has to be light in
-/// *both* appearances or the glyph vanishes in dark mode, which is why each call
-/// site fills white first and puts the brand tint over it.
-public struct BroadcastPickerButton: UIViewRepresentable {
+/// *both* appearances or the glyph vanishes in dark mode, which is why this view
+/// fills white first and puts the brand tint over it.
+public struct BroadcastPickerButton: View {
 
     /// The broadcast upload extension's bundle identifier, which is
     /// `PRODUCT_BUNDLE_IDENTIFIER` of the `AIKeyboardBroadcast` target. With it
@@ -61,17 +61,36 @@ public struct BroadcastPickerButton: UIViewRepresentable {
     /// insets its `UIButton` by 5 points on every edge, so the pressable area is
     /// this size minus 10 in each dimension; everything outside it is an inert
     /// `UIView`. A 26-point square would leave a 16-point target. Callers pass the
-    /// largest rectangle their layout allows.
-    private let size: CGSize
+    /// largest square their layout allows.
+    private let size: CGFloat
 
-    public init(width: CGFloat = 60, height: CGFloat = 60) {
-        self.size = CGSize(width: width, height: height)
+    public init(size: CGFloat = 60) {
+        self.size = size
     }
 
-    public func makeUIView(context: Context) -> RPSystemBroadcastPickerView {
+    public var body: some View {
+        BroadcastPickerUIView(size: size)
+            .frame(width: size, height: size)
+            // White first, brand tint over it: the system draws the glyph black.
+            // Without the white underlay the glyph vanishes in dark mode over a
+            // near-black surface.
+            .background(
+                Circle()
+                    .fill(Theme.Text.onBrand)
+                    .overlay(Circle().fill(Theme.Brand.softGradient))
+            )
+    }
+}
+
+// MARK: - UIKit wrapper
+
+private struct BroadcastPickerUIView: UIViewRepresentable {
+    let size: CGFloat
+
+    func makeUIView(context: Context) -> RPSystemBroadcastPickerView {
         let picker = RPSystemBroadcastPickerView(
-            frame: CGRect(origin: .zero, size: size))
-        picker.preferredExtension = Self.extensionBundleID
+            frame: CGRect(origin: .zero, size: CGSize(width: size, height: size)))
+        picker.preferredExtension = BroadcastPickerButton.extensionBundleID
         // The capture path reads pixels and never audio: `SampleHandler` drops
         // `.audioApp` and `.audioMic` without looking at them.
         picker.showsMicrophoneButton = false
@@ -82,12 +101,12 @@ public struct BroadcastPickerButton: UIViewRepresentable {
         return picker
     }
 
-    public func updateUIView(_ picker: RPSystemBroadcastPickerView, context: Context) {}
+    func updateUIView(_ picker: RPSystemBroadcastPickerView, context: Context) {}
 
     @MainActor
-    public func sizeThatFits(
+    func sizeThatFits(
         _ proposal: ProposedViewSize, uiView: RPSystemBroadcastPickerView, context: Context
     ) -> CGSize? {
-        size
+        CGSize(width: size, height: size)
     }
 }
