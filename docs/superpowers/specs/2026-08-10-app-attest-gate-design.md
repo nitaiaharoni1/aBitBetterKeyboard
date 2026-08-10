@@ -141,15 +141,21 @@ configured limit. Fixing that properly still means shared state.
 The app stays dependency-free — that is in `AGENTS.md`'s first line and nothing here
 changes it. `DeviceCheck` is an Apple framework.
 
-The backend takes two, both popular and both replacing code that is easy to get subtly
+The backend takes three, all popular and all replacing code that is easy to get subtly
 wrong:
 
 - a CBOR decoder, for the attestation object
 - a JWT library, for signing and verifying the challenge and session tokens
+- an X.509 library, for one specific reason: **Apple puts the attestation nonce in a
+  certificate extension under OID `1.2.840.113635.100.8.2`, and Node cannot read it.**
+  `crypto.X509Certificate` exposes `subject`, `issuer`, `keyUsage`, `infoAccess` and
+  nothing that reaches an arbitrary OID — checked against the prototype on Node 25, not
+  assumed from the documentation. The alternative is hand-rolled DER parsing in the
+  auth path, which is worse than a dependency. The same library builds the test
+  certificates, which have to carry that extension too.
 
-Everything else is Node 22 built-ins: `crypto.X509Certificate` for the chain,
-`crypto.verify` for ECDSA, `crypto.createHash` for the four SHA-256s. Exact package
-names and versions are chosen at implementation time, not pinned by this document.
+`crypto.createHash` still does the four SHA-256s. Exact package names and versions are
+chosen at implementation time, not pinned by this document.
 
 ### The typed-in token becomes a developer door
 
