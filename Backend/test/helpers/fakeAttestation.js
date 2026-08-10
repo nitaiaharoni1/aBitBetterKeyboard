@@ -83,6 +83,11 @@ export async function buildFakeAttestation({
   rpIdHashOverride = null,
   credentialIdOverride = null,
   nonceOverride = null,
+  // How the (correct) nonce gets wrapped into the certificate extension.
+  // Varying the *wrapping* while the nonce stays right by construction is the
+  // only honest way to test the locator: computing a nonce for one attestation
+  // and injecting it into another can never match, because authData differs.
+  nonceWrapper = nonceExtensionValue,
   signLeafWithRoot = true
 } = {}) {
   const authority = ca ?? (await createTestCA());
@@ -128,7 +133,7 @@ export async function buildFakeAttestation({
     publicKey: leafKeys.publicKey,
     signingKey: signLeafWithRoot ? rootKeys.privateKey : leafKeys.privateKey,
     signingAlgorithm: { name: "ECDSA", hash: "SHA-256" },
-    extensions: [new x509.Extension(NONCE_OID, false, nonceExtensionValue(nonce))]
+    extensions: [new x509.Extension(NONCE_OID, false, nonceWrapper(nonce))]
   });
 
   const attestation = encode({

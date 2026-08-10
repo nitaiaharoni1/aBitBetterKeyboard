@@ -91,14 +91,32 @@ public final class DictationSession: ObservableObject {
 
     // MARK: Watching
 
-    public func startWatching() {
-        guard timer == nil else { return }
+    /// Reads the channel once, without starting the poll.
+    ///
+    /// **Anything that decides something on `availability` has to call this
+    /// first, and for the whole of this feature's life the microphone key did
+    /// not.** `availability` is a cache with one writer — `poll()` — and it only
+    /// tracks the page while the timer below is running. `startWatching()` used
+    /// to be reached *after* `startDictation`'s availability check, so the check
+    /// read the `.noSession(.notEnded)` this class is initialised with, refused,
+    /// and returned before starting the poll that would have corrected it. Every
+    /// tap refused, on a phone where a session was live, forever. Creating the
+    /// reader is part of the job and not an optimisation to skip: it is failable,
+    /// nil means the App Group is out of reach, and that is the whole of
+    /// `.needsFullAccess` — so polling without it reports a Full Access problem
+    /// the user does not have.
+    public func refresh() {
         if reader == nil { reader = DictationChannelReader() }
         // The same obligation the capture channel has: a transcript whose
         // session is gone is a sentence somebody dictated, sitting in a
         // container that is backed up.
         reader?.discardTranscriptOfADeadSession()
         poll()
+    }
+
+    public func startWatching() {
+        guard timer == nil else { return }
+        refresh()
 
         let timer = Timer(timeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
@@ -107,10 +125,25 @@ public final class DictationSession: ObservableObject {
         self.timer = timer
     }
 
+    /// **Forgets what the last poll saw, and that is the other half of the same
+    /// bug.** The banner reads `availability` whether or not anything is
+    /// refreshing it, so the `.ready` left behind here — by the transcript sink,
+    /// which stops the watch the moment the words are inserted — went on reading
+    /// as a live session. `BannerState.resolve` kept the dictation strip up over
+    /// a sentence already in the document, and the next tap on the microphone
+    /// passed a guard describing a session that could have been gone for an hour:
+    /// `beginUtterance` answers a number whether or not a recorder exists, so the
+    /// keyboard showed Listening and waited for a transcript nothing would ever
+    /// publish. Not watching means knowing of no session. That is the safe
+    /// direction — the cost of being wrong is a refusal the next `refresh()`
+    /// overturns in the same tap.
     public func stopWatching() {
         timer?.invalidate()
         timer = nil
         lastLogged = ""
+        availability = .noSession(.notEnded)
+        level = 0
+        remainingSeconds = nil
     }
 
     // MARK: Utterances

@@ -132,3 +132,38 @@ test("an unknown environment is refused at construction, not at verify time", ()
     /environment/
   );
 });
+
+// ── The nonce locator ──────────────────────────────────────────────────────
+//
+// Nothing here has yet seen a blob from a real Secure Enclave, so the exact DER
+// nesting Apple sends is the one assumption in this file that has not been
+// measured. The locator is therefore tolerant about *where* it finds the nonce,
+// and the verifier stays strict about *what* it equals. These two pin both
+// halves: an unusual nesting still verifies, and a wrong nonce still fails
+// however deeply it is wrapped.
+//
+// Only the wrapping varies. The nonce itself stays correct by construction,
+// because a nonce computed for one attestation can never match another's.
+
+/// One more SEQUENCE than Apple is believed to send.
+function wrappedOneLayerDeeper(nonce) {
+  const octetString = Buffer.concat([Buffer.from([0x04, nonce.length]), nonce]);
+  const inner = Buffer.concat([Buffer.from([0x30, octetString.length]), octetString]);
+  return Buffer.concat([Buffer.from([0x30, inner.length]), inner]);
+}
+
+test("a nonce nested one layer deeper than expected is still found", async () => {
+  const fixture = await buildFakeAttestation({ nonceWrapper: wrappedOneLayerDeeper });
+  const result = await verifierFor(fixture).verify(fixture);
+  assert.equal(result.ok, true, `expected acceptance, got: ${result.reason}`);
+});
+
+test("a wrong nonce is still refused however deeply it is wrapped", async () => {
+  const fixture = await buildFakeAttestation({
+    nonceOverride: Buffer.alloc(32, 7),
+    nonceWrapper: wrappedOneLayerDeeper
+  });
+  const result = await verifierFor(fixture).verify(fixture);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /nonce/i);
+});

@@ -28,16 +28,48 @@ function refuse(reason) {
   return { ok: false, reason };
 }
 
-/// Apple's extension value is SEQUENCE { [1] { OCTET STRING nonce } }.
+/// Every 32-byte octet string in Apple's nonce extension, most likely first.
 ///
-/// Parsed by shape rather than by "take the last 32 bytes", so a malformed
-/// extension is refused instead of quietly yielding whatever happened to sit at
-/// the end of it.
-function nonceFromExtension(value) {
+/// **Deliberately tolerant about *locating* the nonce, and that is not a
+/// weakness.** Apple documents this extension as a DER sequence containing "the
+/// single octet string", and the shape everything in the wild sends is
+/// `SEQUENCE { [1] { OCTET STRING } }` — 38 bytes, which is what the exact
+/// branch below matches. But nothing here has yet seen a blob from a real Secure
+/// Enclave, so a parser that insisted on those exact offsets would reject every
+/// real device if Apple nests it one layer differently, and it would do it with
+/// a message about a malformed extension rather than about the guess that was
+/// wrong.
+///
+/// Leniency costs nothing because the caller does not *trust* what this
+/// returns — it compares each candidate against a nonce it computed itself from
+/// `authData` and the challenge. Handing back the wrong 32 bytes fails that
+/// comparison. An attacker cannot gain by having their nonce found somewhere
+/// unusual; it still has to equal SHA-256 of their own authData and a challenge
+/// this service issued.
+function noncesFromExtension(value) {
   const bytes = Buffer.from(value);
-  if (bytes.length !== 38) return null;
-  if (bytes[0] !== 0x30 || bytes[2] !== 0xa1 || bytes[4] !== 0x04 || bytes[5] !== 32) return null;
-  return bytes.subarray(6, 38);
+  const candidates = [];
+
+  // The documented shape, first, so the ordinary case is an exact match rather
+  // than a scan.
+  if (
+    bytes.length === 38 &&
+    bytes[0] === 0x30 &&
+    bytes[2] === 0xa1 &&
+    bytes[4] === 0x04 &&
+    bytes[5] === 32
+  ) {
+    candidates.push(bytes.subarray(6, 38));
+  }
+
+  // Then any other 32-byte octet string in the value, for the shapes this has
+  // not been shown a real example of.
+  for (let i = 0; i + 34 <= bytes.length; i += 1) {
+    if (bytes[i] === 0x04 && bytes[i + 1] === 32) {
+      candidates.push(bytes.subarray(i + 2, i + 34));
+    }
+  }
+  return candidates;
 }
 
 /// The 65-byte uncompressed point at the end of an EC SPKI.
@@ -126,9 +158,9 @@ export function createAttestationVerifier({ rootCertificatePem, appId, environme
       // 5.
       const extension = leaf.getExtension(NONCE_OID);
       if (!extension) return refuse("attestation carries no nonce extension");
-      const nonce = nonceFromExtension(extension.value);
-      if (!nonce) return refuse("attestation nonce extension is malformed");
-      if (!nonce.equals(expectedNonce)) {
+      const candidates = noncesFromExtension(extension.value);
+      if (candidates.length === 0) return refuse("attestation nonce extension is malformed");
+      if (!candidates.some((candidate) => candidate.equals(expectedNonce))) {
         return refuse("attestation nonce does not match the challenge");
       }
 

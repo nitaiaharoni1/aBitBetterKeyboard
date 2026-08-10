@@ -325,4 +325,103 @@ final class DictationKeyboardTests: XCTestCase {
         XCTAssertEqual(controller.dictationAvailability, .noSession(.interrupted))
         XCTAssertEqual(target.text, "")
     }
+
+    // MARK: The tap has to read the page
+
+    /// **The one live-session test here with no `session.poll()` before the tap,
+    /// and that absence is the whole test.** Every case above polls by hand
+    /// first — the one thing the shipping keyboard never does, and so the reason
+    /// a defect that refused *every* tap on a real phone passed all of them.
+    /// `availability` is only written by a poll; the poll was started two lines
+    /// below the check that reads it, and the refusal returned before reaching
+    /// it. So the check read the `.noSession(.notEnded)` a fresh `DictationSession`
+    /// carries, the microphone key answered "No dictation session" over a session
+    /// running in the app, and it went on answering it for as long as the keyboard
+    /// was up.
+    func testTheFirstTapFindsASessionNobodyHasPolledFor() {
+        beginLiveSession()
+
+        controller.startDictation()
+
+        XCTAssertTrue(
+            controller.isDictating,
+            "the first tap refused a live session: \(controller.block?.detail ?? "no reason given")")
+        XCTAssertNil(controller.block, "a live session must not produce a refusal")
+        XCTAssertEqual(controller.dictationAvailability, .listening)
+        XCTAssertEqual(recorder.request()?.utterance, 1)
+        XCTAssertTrue(recorder.request()?.wantsRecording() ?? false)
+    }
+
+    /// The other end of the same cache, and it fails the old build for the
+    /// opposite reason — so the `session.poll()` below is deliberate, to warm
+    /// availability the way the tests above do and leave this test about the
+    /// *second* tap.
+    ///
+    /// `stopWatching()` used to leave whatever the last poll saw in place, and the
+    /// transcript sink calls it the moment the words land. `.ready` outlived the
+    /// session it described, the next tap walked through a guard about a session
+    /// that could have been gone for an hour, and `beginUtterance` answers a
+    /// number whether or not a recorder exists — so the keyboard showed Listening,
+    /// the speech went nowhere, and no transcript could arrive to say so.
+    func testATapAfterTheSessionDiedRefusesInsteadOfRecordingIntoNothing() throws {
+        beginLiveSession()
+        session.poll()
+        controller.startDictation()
+        controller.stopDictation(insert: false)
+
+        recorder.end(.expired)
+        controller.startDictation()
+
+        XCTAssertFalse(
+            controller.isDictating, "an utterance was opened in a session that had ended")
+        XCTAssertFalse(
+            try XCTUnwrap(recorder.request()).wantsRecording(),
+            "the recorder was asked to record for a session no process is holding")
+        XCTAssertEqual(
+            controller.block?.detail,
+            "The dictation session timed out. Open AI Keyboard, tap Start dictation, then come back.",
+            "the refusal has to name the ending, which it can only do from a fresh read")
+    }
+
+    /// **The same stale `.ready`, where the user actually saw it.**
+    /// `BannerState.resolve` reads `dictationIsLive`, so after the words were
+    /// inserted the strip went on showing the sentence already in the document —
+    /// over a microphone tag, hiding the screen-context line and the idle hint,
+    /// until the next tap on the microphone. Asserting the availability alone
+    /// would not reject that build for the right reason; the banner is the thing
+    /// that was wrong.
+    func testTheBannerLetsGoOfDictationOnceTheWordsAreIn() throws {
+        let id = beginLiveSession()
+        controller.startDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+        controller.stopDictation(insert: true)
+
+        recorder.setPhase(.idle)
+        try recorder.publish(
+            DictationTranscriptRecord(
+                sessionID: id, utterance: utterance, text: "on my way",
+                recordedAt: 1, completedAt: 2, seconds: 3))
+        session.poll()
+
+        XCTAssertEqual(target.text, "on my way")
+        XCTAssertFalse(
+            controller.dictationAvailability.isLive,
+            "the keyboard still claims a session it stopped watching")
+        XCTAssertEqual(
+            BannerState.resolve(
+                isDictating: controller.isDictating,
+                dictationIsLive: controller.dictationAvailability.isLive,
+                dictationTranscript: controller.dictationTranscript,
+                dictationFailure: controller.dictationFailure,
+                isWorking: controller.isWorking,
+                runningAction: controller.runningAction,
+                error: controller.aiError,
+                block: controller.block,
+                options: controller.bannerOptions,
+                index: controller.bannerIndex,
+                screenContext: nil,
+                idleHint: BannerState.defaultHint),
+            .hint(BannerState.defaultHint),
+            "the strip stayed on a sentence that is already in the document")
+    }
 }

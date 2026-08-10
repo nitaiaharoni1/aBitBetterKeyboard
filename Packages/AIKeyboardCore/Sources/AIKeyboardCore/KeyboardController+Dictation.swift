@@ -26,6 +26,23 @@ extension KeyboardController {
         dictationFailure = ""
         pendingDictationInsert = false
 
+        // **This is what the guard below is asking, and without it the answer
+        // was a value nothing had ever read.** `DictationSession.availability`
+        // only tracks the shared page while its poll is running, and the poll
+        // used to be started *below* the check that reads it — after the refusal
+        // had already returned. So the check read the `.noSession(.notEnded)` the
+        // session is initialised with, the banner said "No dictation session" over
+        // a session that was live in the app, and the poll that would have
+        // corrected it was never reached: every tap refused, on every device, for
+        // as long as the keyboard was up. `refresh()` rather than
+        // `startWatching()` because the refusal must not leave a timer running —
+        // `DictationRequest.keyboardAliveAt` is a dead-man's switch and a timer
+        // outliving the keyboard is the one thing that defeats it — and because
+        // `stopWatching()` clears the availability this refusal is about to
+        // print. The live path starts the watch below, where `refresh()` runs
+        // again for nothing.
+        dictation.refresh()
+
         guard dictation.availability.isLive else {
             refuse(
                 .init(
