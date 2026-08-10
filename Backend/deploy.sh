@@ -5,10 +5,18 @@ set -euo pipefail
 # (Packages/AIKeyboardCore/Sources/AIKeyboardShared/CloudTransport.swift)
 # posts to. Nothing in the repo runs this automatically — whoever is
 # deploying runs it by hand, from this directory or anywhere:
-#   PROJECT=handi-project REGION=us-central1 ./deploy.sh
+#   SESSION_SECRET=... BACKEND_TOKEN=... ./deploy.sh
 
 PROJECT="${PROJECT:-handi-project}"
-REGION="${REGION:-us-central1}"
+# **This has to match the region in `BackendTransport.bundledDefaultURL`, and
+# it did not.** The default used to be us-central1 while the only service that
+# has ever existed runs in europe-west1, which is the region baked into the
+# address every install posts to. Deploying with the default therefore did not
+# update the service the app talks to: it stood up a second, identical service
+# in another region that nothing pointed at, left the real one serving whatever
+# it was already serving, and reported success. Changing the address in the app
+# is a release; changing it here is a flag. Keep them equal.
+REGION="${REGION:-europe-west1}"
 SERVICE="${SERVICE:-aikeyboard-backend}"
 MODEL="${MODEL:-gemini-2.5-flash}"
 
