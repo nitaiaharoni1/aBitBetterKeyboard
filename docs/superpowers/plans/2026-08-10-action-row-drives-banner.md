@@ -26,10 +26,12 @@ keyboard UI lives in the local package `Packages/AIKeyboardCore`, never in
   `KeyboardController.swift`, `KeyboardController+Typing.swift`, `KeyView+Label.swift`
   and `SuggestionBar+Edges.swift`. Tasks 1 and 3 avoid all seven and may be done first;
   every later task touches at least one.
-- **`AIKeyboardCore` does not compile as this plan is written.** `public enum AIAction` is
-  declared in both `Models.swift` and `Models+AI.swift`, left over from a file split in
-  progress. Whoever owns that split has to resolve it before any step here can be built.
-  Do not resolve it as part of this work.
+- **The baseline builds clean.** An earlier draft claimed a duplicate `AIAction`
+  declaration blocked everything; that was a prefix match on `AIActionResultKind` and is
+  not real. `xcodebuild build` succeeds on the tree this plan starts from.
+- **`KeyboardOverlay` already carries `.emojiSearch`** and an `isEmoji` helper, landed by
+  the parallel session. Task 7 deletes `.aiMenu`, `.aiResult` and `.dictation` and leaves
+  both of those exactly as they are.
 - **Never run the test suite.** The user's standing instruction. Verify every task with
   `xcodebuild build-for-testing`, which compiles the app *and* the test targets and runs
   nothing:

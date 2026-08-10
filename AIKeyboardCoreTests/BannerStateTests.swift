@@ -24,6 +24,7 @@ final class BannerStateTests: XCTestCase {
         isWorking: Bool = false,
         runningAction: AIAction? = nil,
         error: AIEngineError? = nil,
+        block: BannerState.Block? = nil,
         resultsShownElsewhere: Bool = false,
         needsScreenContextSetup: Bool = false,
         options: [BannerOption] = [],
@@ -39,6 +40,7 @@ final class BannerStateTests: XCTestCase {
             isWorking: isWorking,
             runningAction: runningAction,
             error: error,
+            block: block,
             resultsShownElsewhere: resultsShownElsewhere,
             needsScreenContextSetup: needsScreenContextSetup,
             options: options,
@@ -94,6 +96,51 @@ final class BannerStateTests: XCTestCase {
                 runningAction: .reply, error: .refused, options: [reply])
         else { return XCTFail("a failure was not reported") }
         XCTAssertEqual(action, .reply)
+    }
+
+    // MARK: A refusal
+
+    private let noSession = BannerState.Block(
+        action: .reply,
+        title: "Screen context is off",
+        detail: "Tap to pick AI Keyboard, then Start Broadcast.",
+        remedy: .broadcastPicker)
+
+    /// **A recording outranks a refusal**, for the reason it outranks everything else
+    /// here: it is running in another process and stopping it is the time-critical
+    /// thing on screen. A refusal is a sentence about a tap that did nothing, and it
+    /// can wait.
+    func testARecordingOutranksARefusal() {
+        let state = resolve(isDictating: true, block: noSession)
+        XCTAssertEqual(state, .dictating(transcript: "", isListening: true))
+    }
+
+    /// **A refusal outranks the idle hint**, which is the ordering the whole case
+    /// exists for. Resolved the other way, the user taps Reply with no session and the
+    /// strip goes on reading "Type, or pick an action below" — which is exactly what
+    /// the build before this one did, under a panel that covered the keys.
+    func testARefusalOutranksTheIdleHint() {
+        XCTAssertEqual(resolve(block: noSession), .blocked(noSession))
+    }
+
+    /// **A refusal outranks a live screen-context reading.** The idle branch prefers
+    /// the reading over the hint, so without this a refusal about Reply would be drawn
+    /// as the very message it just refused to answer — the one wrong answer here that
+    /// looks like a right one.
+    func testARefusalOutranksAScreenContextReading() {
+        let context = ScreenContext(
+            appName: "WhatsApp", appIcon: "message", sender: "Dana", message: "מה קורה",
+            language: .hebrew)
+        XCTAssertEqual(resolve(block: noSession, screenContext: context), .blocked(noSession))
+    }
+
+    /// **A refusal does not survive the next call.** `beginWork` clears it, so a state
+    /// carrying both is unreachable — but `resolve` is the one place that decides, and
+    /// a version testing `block` after `isWorking` would leave a stale refusal under a
+    /// running shimmer the day that clearing regressed.
+    func testWorkOutranksARefusal() {
+        XCTAssertEqual(
+            resolve(isWorking: true, runningAction: .fix, block: noSession), .working(.fix))
     }
 
     // MARK: The empty answer

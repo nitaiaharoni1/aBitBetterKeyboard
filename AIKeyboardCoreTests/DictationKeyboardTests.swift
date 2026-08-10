@@ -170,6 +170,7 @@ final class DictationKeyboardTests: XCTestCase {
                 isWorking: controller.isWorking,
                 runningAction: controller.runningAction,
                 error: controller.aiError,
+                block: nil,
                 resultsShownElsewhere: false,
                 needsScreenContextSetup: false,
                 options: controller.bannerOptions,

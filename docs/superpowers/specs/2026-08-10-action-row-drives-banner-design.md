@@ -260,10 +260,9 @@ new emoji mode: `Models.swift`, `KeyboardView.swift`, `KeyboardView+Keys.swift`,
 `SuggestionBar+Edges.swift`. Implementation waits for that session to land. The plan is
 ordered so every step that avoids those files comes first.
 
-`AIKeyboardCore` also does not compile as this is written: `public enum AIAction` is
-declared in both `Models.swift` and `Models+AI.swift`, left over from a file split in
-progress. That has to be resolved by whoever owns the split before any step here can be
-built.
+An earlier draft of this section claimed `AIKeyboardCore` did not compile, on the basis
+of `AIAction` appearing to be declared twice. That was a bad grep — the second match was
+`AIActionResultKind` — and a full build succeeds. There is no such blocker.
 
 ## Not doing
 
