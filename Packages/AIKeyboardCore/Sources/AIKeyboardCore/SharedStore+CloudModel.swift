@@ -37,6 +37,15 @@ extension SharedStore {
         set { write(newValue, forKey: Key.cloudBackendToken) }
     }
 
+    /// The bearer `AppAttestation` writes once the hardware has proved this app.
+    /// Never typed, never shown, and the only one a shipping install has. See
+    /// `BackendTransport.storedToken` for why it is a second key rather than
+    /// reusing `cloudBackendToken`.
+    public var cloudSessionToken: String {
+        get { defaults.string(forKey: Key.cloudSessionToken) ?? "" }
+        set { write(newValue, forKey: Key.cloudSessionToken) }
+    }
+
     /// Whether an AI action would find a cloud engine right now. The same question
     /// `BackendTransport.configured` answers, asked of this store so a screen can
     /// render it.

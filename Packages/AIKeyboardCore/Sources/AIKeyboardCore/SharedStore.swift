@@ -83,6 +83,7 @@ public final class SharedStore: ObservableObject {
         /// is what fails if the two spellings ever part.
         static let cloudBackendURL = "cloudBackendURL"
         static let cloudBackendToken = "cloudBackendToken"
+        static let cloudSessionToken = "cloudSessionToken"
         static let customToneInstruction = "customToneInstruction"
         static let prefersCustomTone = "prefersCustomTone"
         static let personalDictionary = "personalDictionary"

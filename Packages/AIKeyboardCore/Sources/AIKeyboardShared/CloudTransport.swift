@@ -196,9 +196,21 @@ public struct BackendTransport: CloudTransport {
         nonBlank(defaults.string(forKey: "cloudBackendURL"))
     }
 
-    /// Nil rather than "" or "   ", so a blank never becomes `Bearer    `.
+    /// The bearer to send, or nil when there is nothing to send.
+    ///
+    /// **Two sources, and the order is the design.** `cloudSessionToken` is what
+    /// `AppAttestation` writes after the hardware proved this is a genuine build
+    /// of this app, and it is the only one a shipping install ever has.
+    /// `cloudBackendToken` is typed by hand, exists in Debug builds only, and
+    /// wins — a simulator has no Secure Enclave, so without it there is no way
+    /// to exercise a cloud action anywhere but on a device.
+    ///
+    /// Separate keys rather than one, so the two lifecycles cannot collide: a
+    /// refresh writing the session slot must never overwrite what a developer
+    /// typed. Nil rather than "" or "   ", so a blank never becomes `Bearer    `.
     private static func storedToken(_ defaults: UserDefaults) -> String? {
         nonBlank(defaults.string(forKey: "cloudBackendToken"))
+            ?? nonBlank(defaults.string(forKey: "cloudSessionToken"))
     }
 
     private static func nonBlank(_ value: String?) -> String? {
@@ -231,10 +243,22 @@ public struct BackendTransport: CloudTransport {
     /// wrong service, and only a call finds that out — which is why the failure
     /// path maps 401 to `cloudNotConfigured` and names `settingsPath`. This closes
     /// the one case that is knowable without spending a request.
+    ///
+    /// **Expiry is asked about here, and only of an attested token.** A session
+    /// token has a ninety-day life and only the containing app can renew it, so
+    /// an install whose owner has not opened the app in three months has a token
+    /// the service will refuse. Saying "set up" about it would put a green tick
+    /// in front of a keyboard that 401s on every action, which is exactly the
+    /// class of claim `isReady` exists to prevent. A typed token carries no
+    /// expiry to read and is taken at face value.
     public static func isReady(defaults: UserDefaults = SharedContainer.userDefaults) -> Bool {
         guard configured(defaults: defaults) != nil else { return false }
         guard usesBundledBackend(defaults: defaults) else { return true }
-        return storedToken(defaults) != nil
+        if nonBlank(defaults.string(forKey: "cloudBackendToken")) != nil { return true }
+        guard let session = nonBlank(defaults.string(forKey: "cloudSessionToken")),
+            let expiry = SessionToken.expiry(of: session)
+        else { return false }
+        return expiry > Date()
     }
 
     /// Whether the address in force is the one that ships rather than one the user
