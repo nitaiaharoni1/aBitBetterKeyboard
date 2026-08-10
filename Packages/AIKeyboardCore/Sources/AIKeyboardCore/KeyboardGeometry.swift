@@ -6,10 +6,12 @@ import SwiftUI
 /// capture process cannot work out for itself.
 ///
 /// It needs it because our own UI must not be part of the frame fingerprint.
-/// `AIResultPanel.loading` repaints three shimmer lines at 60 Hz for the whole
-/// five seconds of a read, and the keyboard is a third of the fingerprint band on
-/// an iPhone 17 Pro, so with it left in the freshness gate retired the answer to
-/// the very tap that paid for it. `CaptureIntent.ownUIHeightPermille` carries
+/// `ActionBanner` repaints its shimmer at 60 Hz for the whole five seconds of a
+/// read, and the keyboard is a third of the fingerprint band on an iPhone 17 Pro,
+/// so with it left in the freshness gate retired the answer to the very tap that
+/// paid for it. It was `AIResultPanel.loading`'s three lines when this was
+/// measured; that panel is deleted and the strip shimmers two in its place, which
+/// is the same hazard in a shorter band. `CaptureIntent.ownUIHeightPermille` carries
 /// this across; `FrameReduction.bottomCrop(ownUI:)` is what acts on it.
 public enum KeyboardGeometry {
 

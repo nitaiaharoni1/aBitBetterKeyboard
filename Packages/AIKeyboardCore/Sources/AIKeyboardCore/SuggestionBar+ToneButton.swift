@@ -90,7 +90,7 @@ extension SuggestionBar {
     /// unavailable and swallows the tap teaches the user nothing. A call in flight
     /// replaces the icon with a spinner and is the only state that disables it. A
     /// call that *failed* needs nothing here: `beginWork` puts the reason in
-    /// `aiError` and `AIResultPanel` is already on screen showing it.
+    /// `aiError` and `ActionBanner` is already showing it, one row up.
     var toneButton: some View {
         let tone = controller.defaultTone
         let isBusy = controller.isWorking

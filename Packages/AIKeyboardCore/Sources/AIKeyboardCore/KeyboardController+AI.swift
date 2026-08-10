@@ -29,24 +29,27 @@ extension KeyboardController {
             break
         case .fix:
             let source = aiSourceText
-            // **No overlay.** Fix, Rewrite and Reply now report in the banner, so
-            // the keys stay visible and usable while the call runs — the user can
-            // see the sentence being corrected, which is the one thing the panel
-            // that used to cover them hid. `AIResultPanel` survives for the single
-            // case that cannot be a strip: the screen-context setup screen, which
-            // holds `BroadcastPickerButton`, a real `UIView`.
+            // **No overlay, and there is no longer one to ask for.** Fix,
+            // Rewrite and Reply report in the banner, so the keys stay visible and
+            // usable while the call runs — the user can see the sentence being
+            // corrected, which is the one thing the panel that used to cover them
+            // hid. The screen-context setup screen was the last case argued to need
+            // a panel, because it holds `BroadcastPickerButton`, a real `UIView`;
+            // that view is 42pt in the banner's trailing slot instead, at the cost
+            // of 10pt of tap target.
             beginWork(.fix, showing: .none) { [engine] in
                 try await engine.fix(source)
             } apply: { controller, text in
                 controller.aiResultText = text
             }
         // **Both of these clear `selectedToneIsCustom`, and forgetting it left the
-        // flag lit across a Back.** It is set by `runTone` and only ever cleared by
-        // `dismissOverlay`, but the panel's Back button goes to the AI menu without
-        // dismissing anything — so running the user's own tone, tapping Back and
-        // then Rewrite titled a plain three-decision Rewrite "My tone" and lit the
-        // custom chip under it. `selectedTone = nil` alone does not cover it:
-        // `AIResultPanel.title` reads the flag first.
+        // flag lit across a Back.** It is set by `runTone`, and it used to be
+        // cleared only by `dismissOverlay` — which the result panel's Back button
+        // did not call, because it went to the AI menu. So running the user's own
+        // tone, tapping Back and then Rewrite titled a plain three-decision Rewrite
+        // "My tone" and lit the custom chip under it. Both panels are deleted and
+        // there is no Back to tap, but the flag is still set by one action and read
+        // by the next, so these two lines are still what stops it carrying over.
         case .rewrite:
             selectedTone = nil
             selectedToneIsCustom = false
