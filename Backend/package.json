@@ -10,5 +10,10 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test"
+  },
+  "dependencies": {
+    "@peculiar/x509": "^2.0.0",
+    "cbor-x": "^1.6.5",
+    "jose": "^6.2.8"
   }
 }
