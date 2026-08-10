@@ -6,17 +6,26 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { authorize, bearerToken, callerKey, createRateLimiter } from "../src/gate.js";
 
-test("a service with no token configured accepts everyone", () => {
+test("a service with no token configured accepts everyone", async () => {
   // The local `npm start` case. Opening this up is a decision `deploy.sh`
   // refuses to make for you.
-  assert.deepEqual(authorize({ expectedToken: null, headers: {} }), { ok: true });
+  assert.deepEqual(await authorize({ expectedToken: null, headers: {} }), {
+    ok: true,
+    deviceId: null
+  });
 });
 
-test("a configured token accepts the matching bearer and nothing else", () => {
+test("a configured token accepts the matching bearer and nothing else", async () => {
   const expectedToken = "s3cret-value";
 
-  assert.equal(authorize({ expectedToken, headers: { authorization: "Bearer s3cret-value" } }).ok, true);
-  assert.equal(authorize({ expectedToken, headers: { authorization: "bearer s3cret-value" } }).ok, true);
+  assert.equal(
+    (await authorize({ expectedToken, headers: { authorization: "Bearer s3cret-value" } })).ok,
+    true
+  );
+  assert.equal(
+    (await authorize({ expectedToken, headers: { authorization: "bearer s3cret-value" } })).ok,
+    true
+  );
 
   for (const headers of [
     {},
@@ -28,12 +37,78 @@ test("a configured token accepts the matching bearer and nothing else", () => {
     { authorization: "s3cret-value" }, // right value, no scheme
     { authorization: "Basic s3cret-value" }
   ]) {
-    const result = authorize({ expectedToken, headers });
+    const result = await authorize({ expectedToken, headers });
     assert.equal(result.ok, false, `accepted ${JSON.stringify(headers)}`);
     // 401, because the client maps it to "cloud not configured" — from the
     // app's side a backend it cannot authenticate to is one it does not have.
     assert.equal(result.status, 401);
   }
+});
+
+// ── The attested path ──────────────────────────────────────────────────────
+
+/// Stands in for `sessionToken.verifySession`. The real one is pinned by its own
+/// suite; what is being tested here is which of the two doors `authorize` tries
+/// and what it reports back, not JWT verification a second time.
+const acceptsOnly = (good) => async (token) =>
+  token === good ? { ok: true, deviceId: "device-1" } : { ok: false };
+
+test("a valid session token is accepted and names its device", async () => {
+  const result = await authorize({
+    expectedToken: "shared",
+    headers: { authorization: "Bearer good" },
+    verifySession: acceptsOnly("good")
+  });
+  assert.deepEqual(result, { ok: true, deviceId: "device-1" });
+});
+
+test("the shared token still works beside session tokens", async () => {
+  const result = await authorize({
+    expectedToken: "shared",
+    headers: { authorization: "Bearer shared" },
+    verifySession: acceptsOnly("good")
+  });
+  // No device: this token is shared by definition, so its callers stay counted
+  // by address.
+  assert.deepEqual(result, { ok: true, deviceId: null });
+});
+
+test("a bearer that is neither is refused", async () => {
+  const result = await authorize({
+    expectedToken: "shared",
+    headers: { authorization: "Bearer neither" },
+    verifySession: acceptsOnly("good")
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 401);
+});
+
+test("a session token is not accepted when no verifier was wired in", async () => {
+  // Guards the wiring: a `createServer` that forgot to pass `verifySession`
+  // would otherwise fail open on whatever the shared token happens to be.
+  const result = await authorize({
+    expectedToken: "shared",
+    headers: { authorization: "Bearer good" }
+  });
+  assert.equal(result.ok, false);
+});
+
+test("the caller key is the device when there is one", () => {
+  const req = { headers: { "x-forwarded-for": "1.2.3.4" }, socket: {} };
+  assert.equal(callerKey(req, "device-1"), "device:device-1");
+});
+
+test("the caller key falls back to the address when there is not", () => {
+  const req = { headers: { "x-forwarded-for": "1.2.3.4" }, socket: {} };
+  assert.equal(callerKey(req, null), "1.2.3.4");
+});
+
+// **The reason for the `device:` prefix.** `x-forwarded-for` is a header the
+// caller writes, so without a namespace anyone could set it to a device id and
+// share, or drain, that device's allowance.
+test("a device and an address can never collide in the limiter", () => {
+  const req = { headers: { "x-forwarded-for": "device-1" }, socket: {} };
+  assert.notEqual(callerKey(req, "device-1"), callerKey(req, null));
 });
 
 test("bearerToken tolerates the whitespace a real header carries", () => {

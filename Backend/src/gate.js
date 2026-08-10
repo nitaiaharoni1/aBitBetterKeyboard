@@ -51,15 +51,35 @@ export function bearerToken(headers) {
   return match ? match[1] : null;
 }
 
-/// 401 when a token is configured and the caller did not present it.
+/// 401 unless the caller proved something. Two things count.
 ///
-/// Configured-and-absent is the only rejection. A service with no
-/// `BACKEND_TOKEN` set accepts everyone, which is what a local `npm start`
-/// wants; `deploy.sh` refuses to deploy without one, so the open case cannot
-/// reach Cloud Run by accident.
-export function authorize({ expectedToken, headers }) {
-  if (!expectedToken) return { ok: true };
-  if (tokensMatch(expectedToken, bearerToken(headers))) return { ok: true };
+/// **A session token, first, because it is the shipping path.** It is what
+/// `/v1/attest` hands back once App Attest proved the caller is a genuine,
+/// unmodified build of this app on real Apple hardware, and it is the only
+/// bearer an installed copy ever has. It carries the device it was issued to,
+/// which is what `callerKey` rate-limits on.
+///
+/// **`BACKEND_TOKEN` behind it**, unchanged, as the developer and self-hosting
+/// door. A simulator has no Secure Enclave, so without this there is no way to
+/// exercise a cloud action anywhere but on a device; and a backend somebody runs
+/// themselves is their business. It carries no device, because it is shared by
+/// definition, so its callers fall back to being counted by address exactly as
+/// they were before.
+///
+/// Configured-and-absent is still the only rejection. A service with no
+/// `BACKEND_TOKEN` and no session token accepts everyone, which is what a local
+/// `npm start` wants; `deploy.sh` refuses to deploy without one, so the open
+/// case cannot reach Cloud Run by accident.
+export async function authorize({ expectedToken, headers, verifySession }) {
+  const presented = bearerToken(headers);
+
+  if (presented && verifySession) {
+    const session = await verifySession(presented);
+    if (session.ok) return { ok: true, deviceId: session.deviceId };
+  }
+
+  if (!expectedToken) return { ok: true, deviceId: null };
+  if (tokensMatch(expectedToken, presented)) return { ok: true, deviceId: null };
   // 401 rather than 403: the client maps both to `cloudNotConfigured`, which is
   // the honest reading — from the app's side a backend it cannot authenticate
   // to is a backend it does not have.
@@ -112,13 +132,27 @@ export function createRateLimiter({
 
 /// The caller's identity for rate-limiting purposes.
 ///
+/// **The attested device, whenever the gate proved one.** The address was the
+/// only key available before attestation, and behind carrier NAT that is
+/// thousands of unrelated people sharing one bucket: one abusive caller starved
+/// all of them, and a leaked token cost as much as its holder's whole IP
+/// allowance rather than one device's. Counting per device is what actually
+/// bounds the bill now, and it is why the ninety-day token life is not the
+/// control it looks like.
+///
+/// **Namespaced with a prefix, and that is not cosmetic.** `x-forwarded-for` is
+/// a header the caller writes. Without the prefix, setting it to somebody's
+/// device id would share, and could drain, that device's allowance.
+///
 /// Cloud Run terminates TLS and proxies, so `socket.remoteAddress` is the load
 /// balancer on every request and would rate-limit the whole world as one caller.
 /// The real client is the first entry of `x-forwarded-for`. Trusting a header
 /// the caller controls is normally wrong; here the alternative is a limiter that
-/// does nothing at all, and the header is rewritten by Google's front end in the
-/// deployment this ships to.
-export function callerKey(req) {
+/// does nothing at all, the header is rewritten by Google's front end in the
+/// deployment this ships to, and it now only decides the two unauthenticated
+/// routes and the shared-token callers.
+export function callerKey(req, deviceId = null) {
+  if (deviceId) return `device:${deviceId}`;
   const forwarded = req.headers?.["x-forwarded-for"];
   if (typeof forwarded === "string" && forwarded.length > 0) {
     return forwarded.split(",")[0].trim();
