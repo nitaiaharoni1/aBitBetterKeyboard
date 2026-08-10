@@ -74,6 +74,27 @@ final class DictationKeyboardTests: XCTestCase {
             "something is producing a transcript without a recording")
     }
 
+    /// **A refusal from a session that closed itself must not resurface on the
+    /// next one.** `dictation.$failure` only ever sets `dictationFailure`, and the
+    /// Dismiss button that clears it is drawn only while a session is live — so a
+    /// failure the user never dismissed sat in the property, and the next live
+    /// session brought it straight back on screen attached to a recording that had
+    /// not failed. `startDictation` resets it before the availability guard, which
+    /// is where it always was until the guard moved above it.
+    ///
+    /// Asserting `dictationFailure == ""` alone would not reject that build: it is
+    /// empty on a fresh controller too. The failure has to be *put there* first,
+    /// which is what the first line does.
+    func testAStaleFailureDoesNotSurviveTheNextTapOnTheMicrophone() {
+        controller.dictationFailure = "I didn't catch that"
+
+        controller.startDictation()
+
+        XCTAssertEqual(
+            controller.dictationFailure, "",
+            "a refusal from an earlier session is still on the controller")
+    }
+
     /// The half that reaches the user's document, asserted separately: a panel
     /// that shows invented words is bad, and a panel that *types* them is the
     /// actual harm.

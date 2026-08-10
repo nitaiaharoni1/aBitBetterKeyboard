@@ -120,6 +120,13 @@ extension KeyboardController {
             replies = []
             replyContext = nil
             isWorking = false
+            // **The one `aiError` set outside `beginWork`, so the one that has to
+            // clear `block` by hand.** `beginWork` does it for every other call;
+            // this path never reaches it. `BannerState.resolve` tests `block` above
+            // `error`, so without this a refusal left by an earlier tap — "Nothing
+            // to fix yet" — stays on screen and the password-field refusal the user
+            // has just earned is never shown at all.
+            block = nil
             aiError = .screenNotRead(
                 "Screen context does not read password fields, and this field either is one or would not say."
             )

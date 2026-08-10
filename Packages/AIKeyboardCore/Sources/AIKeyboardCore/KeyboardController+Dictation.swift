@@ -11,6 +11,21 @@ extension KeyboardController {
         // `openURL` workaround is disallowed — so this names the app, the screen and
         // the button, and offers no button of its own because there is none to
         // offer. See `.claude/rules/dictation.md`.
+        //
+        // **These three resets are above the guard, not below it, and that is not
+        // tidiness.** They used to run unconditionally, before the availability
+        // check opened the panel; putting the check first left the no-session tap
+        // without them. `dictation.$failure` only ever *sets* `dictationFailure`,
+        // and the only other place that clears it is `stopDictation`'s teardown —
+        // which the user reaches through a Dismiss button that is gone the moment
+        // the session ends, because `.dictationFailed` needs a live session to
+        // render. So a refusal left behind by a session that closed itself sat in
+        // the property until the next live session brought it back on screen,
+        // attached to a recording that had not failed.
+        dictationTranscript = ""
+        dictationFailure = ""
+        pendingDictationInsert = false
+
         guard dictation.availability.isLive else {
             refuse(
                 .init(
@@ -20,9 +35,6 @@ extension KeyboardController {
                     remedy: .none))
             return
         }
-        dictationTranscript = ""
-        dictationFailure = ""
-        pendingDictationInsert = false
 
         dictation.startWatching()
         observeDictation()

@@ -99,6 +99,59 @@ final class SparkleReachabilityTests: XCTestCase {
             controller.block?.title.isEmpty ?? true,
             "the refusal has to say which of the four refusals it is")
     }
+
+
+    /// **A refusal must not hide the next one.**
+    ///
+    /// `runReply`'s secure-field guard is the only place in the module that sets
+    /// `aiError` without going through `beginWork`, and `beginWork` is what clears
+    /// `block` everywhere else. `BannerState.resolve` tests `block` above `error`,
+    /// so a stale "Nothing to fix yet" from an earlier tap stayed on screen while
+    /// the password-field refusal the user had just earned was never drawn at all.
+    ///
+    /// Driven through `run(.reply)` rather than by setting the fields, because the
+    /// bug is that one code path forgets a line: a test that assigns `block = nil`
+    /// itself passes against the build that forgets it. The state has to be set up
+    /// with a real refusal standing, or both versions look identical.
+    @MainActor
+    func testAPasswordFieldRefusalIsNotHiddenByAnEarlierOne() {
+        let allowed = SharedStore.shared.screenContextAllowed
+        SharedStore.shared.screenContextAllowed = true
+        defer { SharedStore.shared.screenContextAllowed = allowed }
+
+        let controller = KeyboardController(target: SecureTextTarget())
+        // A reading exists, so `runReply` gets past its first guard and reaches the
+        // secure-field one, which is the guard under test.
+        controller.screenContext = .ready(
+            ScreenContext(
+                appName: "Bank", appIcon: "lock", sender: "Dana", message: "sent it",
+                language: .english))
+
+        controller.refuseForEmptyField(.fix)
+        XCTAssertEqual(controller.block?.action, .fix, "the state under test was not set up")
+
+        controller.run(.reply)
+
+        XCTAssertNotNil(controller.aiError, "the secure-field guard did not fire")
+        XCTAssertNil(
+            controller.block,
+            "the stale refusal is still standing, and resolve draws it over the new one")
+    }
+}
+
+/// A field that says it is secure, which is what `runReply`'s §3.3.1 guard refuses
+/// on. Local to this file: every other mock here answers `false`.
+@MainActor
+private final class SecureTextTarget: TextTarget {
+    var documentContextBeforeInput: String? { "" }
+    var documentContextAfterInput: String? { "" }
+    var selectedText: String? { nil }
+    var isSecureTextEntry: Bool? { true }
+    var textContentType: UITextContentType?? { .some(.password) }
+
+    func insertText(_ text: String) {}
+    func deleteBackward() {}
+    func adjustTextPosition(byCharacterOffset offset: Int) {}
 }
 
 // MARK: - The one-tap rewrite button on an empty field
