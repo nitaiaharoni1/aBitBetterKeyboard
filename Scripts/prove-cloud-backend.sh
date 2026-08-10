@@ -4,17 +4,23 @@
 #
 #   BACKEND_TOKEN=... Scripts/prove-cloud-backend.sh [url]
 #
-# Three checks, each able to fail on its own:
+# Four checks, each able to fail on its own:
 #
 #   1. The address the app ships pointing at is reachable and refuses an
 #      unauthenticated caller. A backend that answers everyone is a bill.
-#   2. `BackendTransport.configured` falls back to that address when nothing is
+#   2. The attestation routes exist, hand out a challenge, and refuse a bogus
+#      attestation in words that do not say which of the ten checks fired.
+#   3. `BackendTransport.configured` falls back to that address when nothing is
 #      stored — which is the state of every fresh install, and the state that
 #      used to mean "no cloud engine at all".
-#   3. The real `CloudIntelligence` + `BackendTransport`, compiled from the
+#   4. The real `CloudIntelligence` + `BackendTransport`, compiled from the
 #      shipping sources, corrects a Hebrew message through the live service.
 #
-# Check 3 is the one that matters, and it is the only check in this repo that
+# Check 2 fails against a deployment that predates App Attest, and that is the
+# point: it is how you find out the service is behind the app. Redeploy with
+# `SESSION_SECRET` set and it passes.
+#
+# Check 4 is the one that matters, and it is the only check in this repo that
 # runs the product's own cloud path end to end. Everything else about the cloud
 # is tested against a fake transport, which is exactly how a service could be
 # down, unreachable, mis-deployed or answering the wrong shape for a week
@@ -80,14 +86,46 @@ else
         "endpoint in front of a paid model bills whoever finds it."
 fi
 
-# --- 2. A fresh install resolves a transport ---------------------------------
+# --- 2. The attestation routes -----------------------------------------------
+#
+# Nothing here can raise a real attestation: that needs a Secure Enclave, which
+# this Mac process does not have and no simulator has either. What it can prove
+# is that the two routes exist, that a challenge is issued, and that a refusal
+# says nothing about *why* — which is the property a caller would otherwise use
+# to work out which of the ten checks to fix next.
+
+echo
+echo "2. The attestation routes"
+
+CHALLENGE_BODY="$(curl -s -m 60 "$URL/v1/challenge" -X POST -H 'content-type: application/json')"
+if printf '%s' "$CHALLENGE_BODY" | grep -q '"challenge"'; then
+    echo "   /v1/challenge issues a challenge"
+else
+    note_failure "/v1/challenge did not return a challenge. Deploy with SESSION_SECRET set, or the app cannot attest at all. Got: $CHALLENGE_BODY"
+fi
+
+# A well-formed request carrying nonsense. It must be refused, and refused in the
+# same words as every other rejection.
+ATTEST_BODY="$(curl -s -m 60 "$URL/v1/attest" -X POST -H 'content-type: application/json' \
+    -d '{"keyId":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","attestation":"bm9uc2Vuc2U=","challenge":"never-issued"}')"
+ATTEST_STATUS="$(curl -s -o /dev/null -w '%{http_code}' -m 60 "$URL/v1/attest" \
+    -X POST -H 'content-type: application/json' \
+    -d '{"keyId":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=","attestation":"bm9uc2Vuc2U=","challenge":"never-issued"}')"
+
+if [ "$ATTEST_STATUS" = "401" ] && [ "$ATTEST_BODY" = '{"error":"attestation refused"}' ]; then
+    echo "   /v1/attest refuses a bogus attestation, and says only that"
+else
+    note_failure "/v1/attest answered $ATTEST_STATUS with $ATTEST_BODY, wanted 401 and exactly {\"error\":\"attestation refused\"}. A refusal that names the failing check tells an attacker what to fix."
+fi
+
+# --- 3. A fresh install resolves a transport ---------------------------------
 #
 # Asserted here as well as in `CloudIntelligenceTests` because the unit test
 # proves the *fallback* works and this proves the constant it falls back to is
 # the address that is actually live. Those are two different failures.
 
 echo
-echo "2. The fallback"
+echo "3. The fallback"
 
 if [ "$(printf '%s' "$URL" | cut -c1-8)" = "https://" ]; then
     echo "   bundledDefaultURL is an https address"
@@ -95,10 +133,10 @@ else
     note_failure "bundledDefaultURL is not https, so the keyboard would post the user's text in clear"
 fi
 
-# --- 3. The shipping client, against the live service ------------------------
+# --- 4. The shipping client, against the live service ------------------------
 
 echo
-echo "3. The real client, in Hebrew"
+echo "4. The real client, in Hebrew"
 
 BUILD="$(mktemp -d)"
 trap 'rm -rf "$BUILD"' EXIT
@@ -185,7 +223,7 @@ fi
 
 echo
 if [ "$FAILED" -eq 0 ]; then
-    echo "PASS: the backend the app ships pointing at is live, gated, and answers Hebrew."
+    echo "PASS: the backend the app ships pointing at is live, gated by attestation, and answers Hebrew."
 else
     echo "FAILED"
 fi

@@ -339,5 +339,15 @@ the `Scripts/prove-*.sh` scripts rather than judged by their own assertions; see
 - Landscape, iPad layouts, Dynamic Type above the default size
 - Real StoreKit or accounts. The **backend is real and deployed** (`Backend/`,
   Cloud Run, `Scripts/prove-cloud-backend.sh` exercises the shipping client
-  against it); what is untested there is App Attest, a shared-state rate limit,
-  and the token living in the Keychain rather than the App Group plist
+  against it); what is untested there is a shared-state rate limit and the token
+  living in the Keychain rather than the App Group plist
+- **App Attest is measured on the server and only compiled on the device.** The
+  backend half is real and tested against real cryptography: `Backend/test/`
+  mints a certificate authority, builds a valid attestation against it, and runs
+  all ten of Apple's checks — two tests prove acceptance and twelve prove
+  refusal, one per way in. The client half (`AIKeyboard/Cloud/AppAttestation.swift`)
+  has never run: `DCAppAttestService` needs a Secure Enclave, so no simulator and
+  no CI machine can raise an attestation, and nothing here has yet been through a
+  device. What that leaves unproven is the round trip, not the verifier: whether a
+  real `attestKey` blob passes the checks a synthetic one passes. Prove it by
+  running the app on a phone and watching `/v1/attest` return 200
