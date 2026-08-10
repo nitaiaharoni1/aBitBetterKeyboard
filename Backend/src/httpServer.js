@@ -106,8 +106,8 @@ export function createServer({
     // both use a body cap two orders of magnitude smaller than the model
     // routes' — an unauthenticated endpoint that will buffer 8 MB is a denial
     // of service with a polite name.
-    const attestRoute = req.method === "POST" ? req.url : null;
-    if (tokens && attestationVerifier && (attestRoute === "/v1/challenge" || attestRoute === "/v1/attest")) {
+    const route = req.method === "POST" ? req.url : null;
+    if (tokens && attestationVerifier && (route === "/v1/challenge" || route === "/v1/attest")) {
       const allowance = rateLimiter.check(callerKey(req, null));
       if (!allowance.ok) {
         sendJSONAndClose(
@@ -117,8 +117,15 @@ export function createServer({
         return;
       }
 
-      if (attestRoute === "/v1/challenge") {
-        sendJSON(res, 200, { challenge: await tokens.signChallenge() });
+      if (route === "/v1/challenge") {
+        // **Closed, not merely answered, because this branch never reads a
+        // body.** It is a POST, so a caller can announce `Content-Length:
+        // 100000000` and trickle it; answering without hanging up leaves that
+        // socket open and counted for as long as they care to hold it. That is
+        // the exhaustion route `sendJSONAndClose` exists for, and it applies
+        // here more than anywhere: this is the one route that answers 200 to a
+        // caller who has proved nothing at all.
+        sendJSONAndClose(req, res, 200, { challenge: await tokens.signChallenge() });
         return;
       }
 
@@ -168,7 +175,6 @@ export function createServer({
       return;
     }
 
-    const route = req.method === "POST" ? req.url : null;
     if (route !== "/v1/text" && route !== "/v1/screen" && route !== "/v1/audio") {
       sendJSONAndClose(req, res, 404, { error: "not found" });
       return;

@@ -495,3 +495,20 @@ test("with no attestation configured the routes do not exist", async () => {
     assert.equal(response.status, 404);
   });
 });
+
+// **Regression: /v1/challenge answers a caller who has proved nothing, so it is
+// the last route that should leave a socket open.** It never reads a body, and a
+// POST can carry one, so it has to hang up the way every other pre-body branch
+// does. Asserted through the header rather than the socket because that is what
+// a client acts on.
+test("/v1/challenge closes the connection it answers", async () => {
+  const ca = await createTestCA();
+  await withAttestServer(
+    async (base) => {
+      const response = await fetch(`${base}/v1/challenge`, { method: "POST" });
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("connection"), "close");
+    },
+    { rootPem: ca.pem }
+  );
+});
