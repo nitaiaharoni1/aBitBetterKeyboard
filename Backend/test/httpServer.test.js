@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer } from "../src/httpServer.js";
+import { createTokens } from "../src/sessionToken.js";
+import { createAttestationVerifier } from "../src/attestationVerifier.js";
+import { buildFakeAttestation, createTestCA } from "./helpers/fakeAttestation.js";
 
 // These start a real `http.Server` on a loopback port and use the platform
 // `fetch` against it — not a network call to any external service, and no
@@ -315,4 +318,180 @@ test("POST /v1/audio round-trips a transcription to a 200", async () => {
       assert.equal((await response.json()).fields.text, "היי");
     }
   );
+});
+
+// ── The attestation routes ─────────────────────────────────────────────────
+//
+// These start the same real loopback server as the tests above, with a token
+// signer and a verifier whose trust anchor is the test CA out of
+// `helpers/fakeAttestation.js`. Nothing here reaches Apple, and nothing needs a
+// Secure Enclave.
+
+async function withAttestServer(run, { secret = "s".repeat(64), rootPem } = {}) {
+  const tokens = createTokens({ secret });
+  const attestationVerifier = createAttestationVerifier({
+    rootCertificatePem: rootPem,
+    appId: "9R8P28G4BJ.com.nitai.aikeyboard",
+    environment: "development"
+  });
+  await withServer(
+    fakeVertexClient(async () => ({ kind: "ok", fields: { corrections: "none", text: "hi" } })),
+    (base) => run(base, tokens),
+    { tokens, attestationVerifier, expectedToken: "shared-secret" }
+  );
+}
+
+const TEXT_BODY = JSON.stringify({
+  instructions: "fix typos",
+  prompt: "hii",
+  fields: [{ name: "text", description: "corrected text" }]
+});
+
+test("POST /v1/challenge hands out a challenge without a bearer", async () => {
+  const ca = await createTestCA();
+  await withAttestServer(
+    async (base) => {
+      const response = await fetch(`${base}/v1/challenge`, { method: "POST" });
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.ok(typeof body.challenge === "string" && body.challenge.length > 0);
+    },
+    { rootPem: ca.pem }
+  );
+});
+
+test("a valid attestation is exchanged for a session token that opens /v1/text", async () => {
+  // Built against a challenge this server actually issued, which is the whole
+  // point of the round trip.
+  const ca = await createTestCA();
+  await withAttestServer(
+    async (base) => {
+      const challenge = (await (await fetch(`${base}/v1/challenge`, { method: "POST" })).json())
+        .challenge;
+      const fixture = await buildFakeAttestation({ challenge, ca });
+
+      const attested = await fetch(`${base}/v1/attest`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          keyId: fixture.keyId,
+          attestation: fixture.attestation.toString("base64"),
+          challenge
+        })
+      });
+      // Read once. `await attested.text()` as an assert message consumes the
+      // body eagerly, and the `.json()` below then throws instead of reporting.
+      const attestedBody = await attested.text();
+      assert.equal(attested.status, 200, attestedBody);
+      const { token, expiresAt } = JSON.parse(attestedBody);
+      assert.ok(typeof token === "string" && token.length > 0);
+      assert.ok(typeof expiresAt === "string");
+
+      // The half that proves the token is worth anything.
+      const used = await fetch(`${base}/v1/text`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: TEXT_BODY
+      });
+      assert.equal(used.status, 200);
+
+      // And the half that proves the gate is still a gate.
+      const without = await fetch(`${base}/v1/text`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: TEXT_BODY
+      });
+      assert.equal(without.status, 401);
+    },
+    { rootPem: ca.pem }
+  );
+});
+
+test("a challenge the service never issued is refused", async () => {
+  const ca = await createTestCA();
+  const fixture = await buildFakeAttestation({ challenge: "made up", ca });
+  await withAttestServer(
+    async (base) => {
+      const response = await fetch(`${base}/v1/attest`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          keyId: fixture.keyId,
+          attestation: fixture.attestation.toString("base64"),
+          challenge: "made up"
+        })
+      });
+      assert.equal(response.status, 401);
+      assert.deepEqual(await response.json(), { error: "attestation refused" });
+    },
+    { rootPem: ca.pem }
+  );
+});
+
+// **One message for every rejection.** A caller who can tell "wrong app" from
+// "expired challenge" from "bad chain" is a caller being coached.
+test("an attestation for another app is refused in exactly the same words", async () => {
+  const ca = await createTestCA();
+  await withAttestServer(
+    async (base) => {
+      const challenge = (await (await fetch(`${base}/v1/challenge`, { method: "POST" })).json())
+        .challenge;
+      const wrongApp = await buildFakeAttestation({
+        challenge,
+        ca,
+        appId: "9R8P28G4BJ.com.someone.else"
+      });
+      const response = await fetch(`${base}/v1/attest`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          keyId: wrongApp.keyId,
+          attestation: wrongApp.attestation.toString("base64"),
+          challenge
+        })
+      });
+      assert.equal(response.status, 401);
+      assert.deepEqual(await response.json(), { error: "attestation refused" });
+    },
+    { rootPem: ca.pem }
+  );
+});
+
+test("an attest body missing its fields is 400, not a crash", async () => {
+  const ca = await createTestCA();
+  await withAttestServer(
+    async (base) => {
+      const response = await fetch(`${base}/v1/attest`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ keyId: "only-this" })
+      });
+      assert.equal(response.status, 400);
+    },
+    { rootPem: ca.pem }
+  );
+});
+
+test("an attest body over its own smaller cap is refused", async () => {
+  const ca = await createTestCA();
+  await withAttestServer(
+    async (base) => {
+      const response = await fetch(`${base}/v1/attest`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        // Well under the 8 MB the model routes allow, and well over this
+        // route's own 64 KB.
+        body: JSON.stringify({ keyId: "x", attestation: "A".repeat(200 * 1024), challenge: "y" })
+      });
+      assert.equal(response.status, 413);
+    },
+    { rootPem: ca.pem }
+  );
+});
+
+test("with no attestation configured the routes do not exist", async () => {
+  await withServer(fakeVertexClient(async () => ({ kind: "ok", fields: {} })), async (base) => {
+    const response = await fetch(`${base}/v1/challenge`, { method: "POST" });
+    assert.equal(response.status, 404);
+  });
 });

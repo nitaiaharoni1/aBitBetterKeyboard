@@ -17,6 +17,12 @@ import { handleRequest } from "./requestHandler.js";
 // 8 MB still rejects abuse without rejecting anything real.
 const DEFAULT_MAX_BODY_BYTES = 8 * 1024 * 1024;
 
+// An attestation is about 5 KB. The 8 MB cap above exists for dictation audio
+// and screen JPEGs, and applying it to `/v1/attest` would let anybody make this
+// service buffer 8 MB before it has proved anything at all — which is exactly
+// the exhaustion route `sendJSONAndClose` was written to close.
+const ATTEST_MAX_BODY_BYTES = 64 * 1024;
+
 function sendJSON(res, status, body) {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
@@ -78,7 +84,12 @@ export function createServer({
   vertexClient,
   maxBodyBytes = DEFAULT_MAX_BODY_BYTES,
   expectedToken = null,
-  rateLimiter = createRateLimiter()
+  rateLimiter = createRateLimiter(),
+  // Both absent means no attestation route exists at all, which is what the
+  // suites that only exercise the model path get. `server.js` always supplies
+  // them, and refuses to start if it cannot.
+  tokens = null,
+  attestationVerifier = null
 } = {}) {
   return createHttpServer(async (req, res) => {
     // Deliberately before the gate: Cloud Run's own health checks carry no
@@ -86,6 +97,74 @@ export function createServer({
     if (req.method === "GET" && req.url === "/healthz") {
       res.writeHead(200, { "content-type": "text/plain" });
       res.end("ok");
+      return;
+    }
+
+    // **How a device gets a bearer, so necessarily reached without one.**
+    //
+    // Neither route costs a model call, both stay inside the rate limiter, and
+    // both use a body cap two orders of magnitude smaller than the model
+    // routes' — an unauthenticated endpoint that will buffer 8 MB is a denial
+    // of service with a polite name.
+    const attestRoute = req.method === "POST" ? req.url : null;
+    if (tokens && attestationVerifier && (attestRoute === "/v1/challenge" || attestRoute === "/v1/attest")) {
+      const allowance = rateLimiter.check(callerKey(req, null));
+      if (!allowance.ok) {
+        sendJSONAndClose(
+          req, res, allowance.status, { error: allowance.error },
+          { "retry-after": String(allowance.retryAfterSeconds) }
+        );
+        return;
+      }
+
+      if (attestRoute === "/v1/challenge") {
+        sendJSON(res, 200, { challenge: await tokens.signChallenge() });
+        return;
+      }
+
+      let attestBody;
+      try {
+        const raw = await readBody(req, ATTEST_MAX_BODY_BYTES);
+        attestBody = raw.length > 0 ? JSON.parse(raw.toString("utf8")) : {};
+      } catch (error) {
+        if (error.tooLarge) sendJSONAndClose(req, res, 413, { error: "request body too large" });
+        else sendJSONAndClose(req, res, 400, { error: "could not read request body" });
+        return;
+      }
+
+      const { keyId, attestation, challenge } = attestBody ?? {};
+      if (
+        typeof keyId !== "string" ||
+        typeof attestation !== "string" ||
+        typeof challenge !== "string"
+      ) {
+        sendJSON(res, 400, { error: "keyId, attestation and challenge are required" });
+        return;
+      }
+
+      // Checked first and separately: an attestation raised against a nonce this
+      // service never issued is a replay, and there is no reason to spend
+      // certificate parsing on one.
+      if (!(await tokens.verifyChallenge(challenge))) {
+        sendJSONAndClose(req, res, 401, { error: "attestation refused" });
+        return;
+      }
+
+      const verdict = await attestationVerifier.verify({
+        attestation: Buffer.from(attestation, "base64"),
+        keyId,
+        challenge
+      });
+      if (!verdict.ok) {
+        // One message for all ten checks. `verdict.reason` is for whoever reads
+        // the logs and stops at this line: a 401 that says which check fired is
+        // a tutorial for the person trying to get past it.
+        console.warn(`attestation refused: ${verdict.reason}`);
+        sendJSONAndClose(req, res, 401, { error: "attestation refused" });
+        return;
+      }
+
+      sendJSON(res, 200, await tokens.signSession(verdict.deviceId));
       return;
     }
 
@@ -98,13 +177,17 @@ export function createServer({
     // Both gates run before the body is read, so an unauthorised or
     // rate-limited caller cannot make this service buffer 8 MB on their behalf,
     // let alone pay for a model call.
-    const auth = authorize({ expectedToken, headers: req.headers });
+    const auth = await authorize({
+      expectedToken,
+      headers: req.headers,
+      verifySession: tokens?.verifySession
+    });
     if (!auth.ok) {
       sendJSONAndClose(req, res, auth.status, { error: auth.error });
       return;
     }
 
-    const allowance = rateLimiter.check(callerKey(req));
+    const allowance = rateLimiter.check(callerKey(req, auth.deviceId));
     if (!allowance.ok) {
       sendJSONAndClose(
         req, res, allowance.status, { error: allowance.error },

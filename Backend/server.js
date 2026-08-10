@@ -5,8 +5,11 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { APPLE_APP_ATTEST_ROOT_PEM } from "./src/appleRoot.js";
+import { createAttestationVerifier } from "./src/attestationVerifier.js";
 import { createRateLimiter } from "./src/gate.js";
 import { createServer } from "./src/httpServer.js";
+import { createTokens } from "./src/sessionToken.js";
 import { createTokenProvider } from "./src/token.js";
 import { createVertexClient } from "./src/vertexClient.js";
 
@@ -33,9 +36,42 @@ if (!expectedToken) {
   );
 }
 
+// App Attest, the gate a shipping install actually passes.
+//
+// **Absent `SESSION_SECRET` switches the two attestation routes off rather than
+// refusing to start**, and that is the same bargain `BACKEND_TOKEN` already
+// strikes: a bare `npm start` on a laptop keeps working with no environment at
+// all, and `deploy.sh` is what refuses to put either gap on a public URL.
+// `createTokens` throws on a secret too short to be one, so the failure mode
+// this leaves open is "no attestation locally", never "tokens signed with
+// undefined".
+//
+// `createTokens` is the session signer and has nothing to do with
+// `createTokenProvider` above it, which fetches Google access tokens for Vertex.
+// Two different tokens, two different jobs, named apart here because they were
+// briefly not.
+const sessionSecret = process.env.SESSION_SECRET || null;
+let sessionTokens = null;
+let attestationVerifier = null;
+if (sessionSecret) {
+  sessionTokens = createTokens({ secret: sessionSecret });
+  attestationVerifier = createAttestationVerifier({
+    rootCertificatePem: APPLE_APP_ATTEST_ROOT_PEM,
+    appId: process.env.APP_ID || "9R8P28G4BJ.com.nitai.aikeyboard",
+    environment: process.env.ATTEST_ENV || "production"
+  });
+} else {
+  console.warn(
+    "SESSION_SECRET is not set: /v1/challenge and /v1/attest are switched off, so "
+      + "no device can attest and the shared BACKEND_TOKEN is the only way in."
+  );
+}
+
 const server = createServer({
   vertexClient,
   expectedToken,
+  tokens: sessionTokens,
+  attestationVerifier,
   rateLimiter: createRateLimiter({
     maxPerWindow: Number(process.env.RATE_LIMIT_PER_MINUTE) || 60
   })

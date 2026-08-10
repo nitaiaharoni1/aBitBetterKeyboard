@@ -52,28 +52,43 @@ async function uncompressedPoint(publicKey) {
   return raw;
 }
 
+/// A certificate authority the tests own.
+///
+/// **Separable from `buildFakeAttestation` because a round-trip test needs two
+/// attestations under one root.** The server is constructed trusting a PEM, and
+/// only then can it issue the challenge that the real attestation has to be
+/// built against — so the CA has to outlive the fixture. Every call to
+/// `buildFakeAttestation` without one mints a fresh CA, which is what the
+/// "chain does not reach our root" rejection relies on.
+export async function createTestCA() {
+  const keys = await generateP256();
+  const certificate = await x509.X509CertificateGenerator.createSelfSigned({
+    serialNumber: "01",
+    name: "CN=Test App Attest Root",
+    notBefore: new Date("2020-01-01"),
+    notAfter: new Date("2040-01-01"),
+    keys,
+    signingAlgorithm: { name: "ECDSA", hash: "SHA-256" },
+    extensions: [new x509.BasicConstraintsExtension(true, 1, true)]
+  });
+  return { keys, certificate, pem: certificate.toString("pem") };
+}
+
 export async function buildFakeAttestation({
   appId = "9R8P28G4BJ.com.nitai.aikeyboard",
   challenge = "test-challenge",
   aaguid = "appattestdevelop",
   signCount = 0,
+  ca = null,
   rpIdHashOverride = null,
   credentialIdOverride = null,
   nonceOverride = null,
   signLeafWithRoot = true
 } = {}) {
-  const rootKeys = await generateP256();
+  const authority = ca ?? (await createTestCA());
+  const rootKeys = authority.keys;
+  const root = authority.certificate;
   const leafKeys = await generateP256();
-
-  const root = await x509.X509CertificateGenerator.createSelfSigned({
-    serialNumber: "01",
-    name: "CN=Test App Attest Root",
-    notBefore: new Date("2020-01-01"),
-    notAfter: new Date("2040-01-01"),
-    keys: rootKeys,
-    signingAlgorithm: { name: "ECDSA", hash: "SHA-256" },
-    extensions: [new x509.BasicConstraintsExtension(true, 1, true)]
-  });
 
   const point = await uncompressedPoint(leafKeys.publicKey);
   const keyId = createHash("sha256").update(point).digest();
