@@ -163,19 +163,25 @@ final class DemoWalkthroughTests: XCTestCase {
 
         // Dictation. In the playground there is no recording session — the
         // microphone lives in the app and is opened deliberately, never by
-        // walking a demo — so what this captures is the panel's explanation,
-        // which is the state a stock install is genuinely in. It used to capture
-        // a scripted transcript mid-stream, which is the screenshot that made
-        // this feature look finished for the whole of development.
+        // walking a demo — so what this captures is the explanation, which is the
+        // state a stock install is genuinely in. It used to capture a scripted
+        // transcript mid-stream, which is the screenshot that made this feature
+        // look finished for the whole of development.
+        //
+        // **The explanation is a banner now, not a panel.** `DictationPanel` is
+        // deleted, so `dictation-explanation` and the ✕ in its header are gone with
+        // it; the strip says the same two sentences with every key still visible,
+        // which is the whole point of the screenshot this takes.
         tap(element("key-dictation"), "mic key")
         settle(0.6)
         XCTAssertTrue(
-            element("dictation-explanation").waitForExistence(timeout: 3),
-            "the dictation panel showed neither a session nor an explanation")
+            element("banner-blocked").waitForExistence(timeout: 3),
+            "the banner showed neither a session nor an explanation")
+        XCTAssertTrue(
+            element("key-a").exists || element("key-q").exists,
+            "the keys were covered, which is the thing this change removed")
         capture("dictation")
-        // The ✕ in the header, not the Cancel button: the explanation state
-        // draws no controls, because there is nothing to cancel.
-        tap(app.buttons["Cancel dictation"], "close dictation")
+        tap(element("banner-blocked-dismiss"), "dismiss the explanation")
         settle(0.6)
 
         // Hebrew

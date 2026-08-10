@@ -11,8 +11,21 @@ extension ActionBanner {
             EmptyView()
         case .context:
             tag(AIAction.reply.icon, "On screen", tint: Theme.Keys.secondaryLabel)
-        case .working(let action), .options(let action, _, _):
+        case .working(let action):
             tag(action.icon, action.title, tint: Theme.Brand.solid)
+        case .options(let action, _, _):
+            // **Amber when the answer is a best effort**, which means the on-device
+            // model answered in a language Apple does not list as supported because
+            // no cloud engine was reachable. `AIResultPanel` said so in a sentence
+            // and had room for one; a 48pt strip does not, so the tag carries it and
+            // the accessibility label below carries the words. The result is still
+            // worth offering — the user can see their own sentence in the field
+            // underneath — but it must not be presented with the same confidence.
+            let bestEffort = controller.aiProvenance?.isBestEffort == true
+            tag(
+                bestEffort ? "info.circle" : action.icon,
+                action.title,
+                tint: bestEffort ? Theme.Semantic.warning : Theme.Brand.solid)
         case .failed(let action, _, _):
             tag("exclamationmark.triangle", action.title, tint: Theme.Semantic.warning)
         case .blocked(let block):
@@ -21,7 +34,7 @@ extension ActionBanner {
                 block.action?.title ?? "Dictation",
                 tint: Theme.Semantic.warning)
         case .dictating(_, let isListening):
-            tag("mic", isListening ? "Recording" : "Transcribing", tint: Theme.Semantic.record)
+            tag("mic", dictationTagTitle(isListening: isListening), tint: Theme.Semantic.record)
         case .dictationFailed:
             tag("mic.slash", "Dictation", tint: Theme.Semantic.warning)
         }
@@ -33,6 +46,24 @@ extension ActionBanner {
     /// made twice: `sparkle` and `sparkles` are one drawing at two counts, and
     /// `figure.wave` in a keyboard reads as a contacts button. Whatever the banner
     /// is doing, it says so.
+    /// **The countdown replaces the word, and only in the last minute.**
+    ///
+    /// A session closes itself, and `DictationPanel` used to print the remaining
+    /// seconds in its header. The panel is deleted and the strip has one line, so
+    /// this is the one thing that header said which was worth the room: a clock
+    /// running for the whole session is one the user is invited to watch, and a
+    /// clock that appears is news.
+    ///
+    /// What did not survive is the `עב ⟷ EN` badge naming the languages heard. The
+    /// transcript beside it is already written in its own script, so the badge was
+    /// the cheaper of the two to lose.
+    func dictationTagTitle(isListening: Bool) -> String {
+        if let remaining = controller.dictationRemainingSeconds, remaining < 60 {
+            return "\(Int(remaining))s left"
+        }
+        return isListening ? "Recording" : "Transcribing"
+    }
+
     func tag(_ icon: String, _ title: String, tint: Color) -> some View {
         VStack(spacing: 1) {
             Image(systemName: icon)
@@ -91,9 +122,15 @@ extension ActionBanner {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(
-                options.count > 1
+                (options.count > 1
                     ? "\(option.label). \(option.text). Option \(index + 1) of \(options.count)"
                     : "\(option.label). \(option.text)")
+                    // The sentence the deleted panel printed under the answer. It has
+                    // no line of its own on a one-line strip, and the amber tag alone
+                    // says nothing to somebody who cannot see it.
+                    + (controller.aiProvenance?.isBestEffort == true
+                        ? ". Best effort, this language isn't fully supported on device"
+                        : ""))
 
         case .failed(_, let title, let detail):
             VStack(alignment: .leading, spacing: 0) {

@@ -68,12 +68,15 @@ final class EmptyFieldBarTests: XCTestCase {
         tone.tap()
 
         // Something to rewrite is the one thing an empty field does not have, so
-        // the tap goes to the panel that holds what it does have. Reply is the
-        // card that is live there; the three text actions are greyed, by the same
-        // rule, in the same panel.
+        // the tap has to say so. It used to open `AIMenuPanel` and this waited on
+        // that panel's Reply card; the panel is deleted, and the answer is a
+        // sentence in the strip with the keys still under it.
         XCTAssertTrue(
-            element("ai-action-reply").waitForExistence(timeout: 4),
+            element("banner-blocked").waitForExistence(timeout: 4),
             "tapping the one-tap rewrite button on an empty field did nothing at all")
+        XCTAssertTrue(
+            tone.exists,
+            "the action row was covered, which is the thing this change removed")
         capture("empty-field-tone-tapped")
     }
 

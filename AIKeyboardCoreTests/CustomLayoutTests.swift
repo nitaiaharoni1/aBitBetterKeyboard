@@ -257,6 +257,34 @@ final class CustomLayoutTests: XCTestCase {
         }
     }
 
+    /// **Every preset keeps a route to every AI action.**
+    ///
+    /// That is what the sparkle key used to buy for the two presets that spend the
+    /// action row on something else: "Power" fills it with arrows and punctuation,
+    /// and "AI first" moves things into the bottom row, so a single `.aiMenu` slot
+    /// was their only way in. `AIMenuPanel` is deleted and the slot went with it, so
+    /// both carry real Reply keys now.
+    ///
+    /// **Asserting that the sparkle is gone would pass against the broken build**
+    /// this is written for — the one where it was deleted and "Power" was left with
+    /// no way to reach Reply at all, silently, because nothing in the type system
+    /// notices a preset losing a feature. So this asserts reachability rather than
+    /// absence, per preset, by name.
+    func testEveryPresetReachesEveryAIAction() {
+        for preset in LayoutPreset.all {
+            let layout = preset.customization
+            let actions = Set(
+                (layout.barLeading + layout.barTrailing + layout.bottomRow + layout.cursorRow)
+                    .map(\.action))
+            XCTAssertTrue(
+                actions.contains(.reply),
+                "\(preset.id) has no way to reach Reply, which is the action with no substitute")
+            XCTAssertTrue(
+                actions.contains(.fix) || actions.contains(.quickTone),
+                "\(preset.id) has no way to reach a text action")
+        }
+    }
+
     // MARK: Height
 
     func testAFourRowGridReproducesTheShippedHeight() {
