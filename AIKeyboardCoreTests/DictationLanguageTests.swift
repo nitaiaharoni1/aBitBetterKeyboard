@@ -1,16 +1,22 @@
 import Speech
 import XCTest
 
-/// Pins the two measurements behind `MockDictation`'s doc comment: legacy
+/// Pins the two measurements behind `CloudDictation`'s doc comment: legacy
 /// `SFSpeechRecognizer` — distinct from iOS 26's `SpeechTranscriber`, which
 /// `SpeechLanguageTests` in `ScreenReaderTests.swift` already pins as having no
 /// Hebrew locale at all — does list Hebrew, but only for network recognition.
 ///
+/// **Together they are why every transcription in this product is a network
+/// call.** Hebrew is listed, so the language is not the problem; it is listed
+/// without on-device support, so there is no local engine to fall back to, and
+/// `SpeechTranscriber` does not list it at all. `CloudDictation` is the
+/// consequence.
+///
 /// This does not touch the other half of that finding: that a keyboard
 /// extension has no path to the microphone regardless of what any recognizer
 /// supports. That is Apple's own documentation, not something a test on this
-/// Simulator can measure, and it is cited by URL and quote where `MockDictation`
-/// lives rather than pinned here.
+/// Simulator can measure, and it is cited by URL and quote in
+/// `DictationChannel` rather than pinned here.
 final class LegacySpeechRecognizerLanguageTests: XCTestCase {
 
     func testHebrewIsAmongTheSupportedLocales() {
@@ -20,7 +26,7 @@ final class LegacySpeechRecognizerLanguageTests: XCTestCase {
             identifiers.contains("he-IL"),
             """
             SFSpeechRecognizer no longer lists he-IL. If this ever fails, re-read \
-            supportsOnDeviceRecognition for it before touching MockDictation — \
+            supportsOnDeviceRecognition for it before touching CloudDictation — \
             losing the locale entirely is a bigger change than gaining on-device \
             support for it. Locales seen: \(identifiers.sorted())
             """)

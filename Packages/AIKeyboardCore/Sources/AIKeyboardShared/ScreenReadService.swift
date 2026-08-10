@@ -153,7 +153,16 @@ public final class ScreenReadService: @unchecked Sendable {
     public static func standard(channel: CaptureChannelWriter) -> ScreenReadService {
         ScreenReadService(
             channel: channel,
-            reader: BackendTransport.configured().map { CloudScreenReader(transport: $0) })
+            // Gated on `isReady`, not on `configured()`. `canRead` is what
+            // `SampleHandler.broadcastStarted` consults before it lets a broadcast
+            // live, and a build that ships an address makes `configured()` true
+            // from the first launch — so without this the user grants screen
+            // recording, iOS shows the red pill, a frame is captured and uploaded,
+            // and the first read comes back 401 because no token has been pasted
+            // in. Refusing at `broadcastStarted` costs a tap; the alternative
+            // records somebody's screen for nothing.
+            reader: (BackendTransport.isReady() ? BackendTransport.configured() : nil)
+                .map { CloudScreenReader(transport: $0) })
     }
 
     /// True when a backend is configured and a read could actually be performed.

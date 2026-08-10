@@ -49,7 +49,29 @@ struct SettingsView: View {
                 icon: "lightbulb",
                 isOn: $store.predictions
             )
+            divider
+            NavigationRow(
+                title: "Keyboard layout",
+                subtitle: "Presets, key size, and what each key does",
+                icon: "square.grid.3x2",
+                badge: layoutSummary
+            ) {
+                // Deliberately parameterless. Passing `store.keyboardLayout` here
+                // makes the pushed editor a function of the store, so tapping its
+                // Done button rebuilds it while it dismisses itself. See
+                // `LayoutView.init`.
+                LayoutView()
+            }
         }
+    }
+
+    /// The preset's name, or that it has been edited away from one. Named rather
+    /// than inline so the row cannot drift from what `LayoutView` shows.
+    private var layoutSummary: String {
+        guard let id = store.keyboardLayout.preset, let preset = LayoutPreset.named(id) else {
+            return "Custom"
+        }
+        return preset.name
     }
 
     // MARK: AI
@@ -186,9 +208,9 @@ struct SettingsView: View {
             divider
             NavigationRow(
                 title: store.isSubscribed ? "Subscription" : "Upgrade to Pro",
-                // Not "cloud dictation". There is no dictation of any kind in this
-                // build — the mic key streams a scripted transcript — so a paid
-                // tier could not have a better one. See `MockDictation`.
+                // Not "cloud dictation". Dictation is real now and it is cloud,
+                // because Apple's on-device speech has no Hebrew — but that makes
+                // cloud the only tier, not the paid one.
                 //
                 // And not "Unlimited rewrites and every tone" either, which is the
                 // same claim `SubscriptionView` just stopped making: nothing counts

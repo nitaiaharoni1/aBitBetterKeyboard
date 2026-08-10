@@ -161,13 +161,16 @@ private struct WelcomeStep: View {
                     detail: "Turn on screen context and the keyboard answers the message you're looking at."
                 )
                 // This was a dictation promise — "Dictation that keeps up when you
-                // switch language mid-sentence" — on the first screen a new user
-                // ever sees, for a feature that streams a fixed script and records
-                // nothing (see `MockDictation`). Replaced rather than softened,
-                // with something the build actually does.
+                // switch language mid-sentence" — made when the mic key streamed a
+                // fixed script. Dictation is real now and could go back, but the
+                // claim would still be the unmeasured half: `Bar/dictation/` scores
+                // 17.7% word error rate on code-switched speech against 8-10% on
+                // either language alone, so mid-sentence switching is the thing it
+                // is *worst* at. The line stays out until that number says
+                // otherwise.
                 ValuePoint(
                     icon: "globe",
-                    title: "Fourteen keyboards, one swipe apart",
+                    title: "Sixty-four keyboards, one swipe apart",
                     detail: "Slide along the space bar to change language, and it names the one you land on."
                 )
             }
@@ -490,19 +493,19 @@ private struct MicrophoneStep: View {
 
     @State private var pulse = false
 
-    /// **Nothing on this step turns anything on, so it no longer says it does.**
-    /// It was titled "Turn on dictation" and described recording happening in the
-    /// app — an architecture that is achievable and is not built: no code in either
-    /// process opens a microphone, and the mic key streams a fixed script. There is
-    /// no button here because there is nothing to grant, and the words now say
-    /// that instead of implying a missing one. `MockDictation` carries the evidence
-    /// for what is and is not possible; the blocker is a supported hand-off from
-    /// the keyboard to the app, not the microphone.
+    /// **The architecture this step used to say was unbuilt is now the one that
+    /// ships**, and the step describes it rather than apologising for it. Recording
+    /// happens in this app, the transcript crosses the App Group, the keyboard
+    /// inserts it — see `DictationChannel` for why that shape is forced. The one
+    /// thing that has not changed is that there is no button here: the microphone
+    /// is asked for when a session starts, not during onboarding, because a
+    /// permission prompt for something the user has not tried yet is the one they
+    /// say no to.
     var body: some View {
         StepLayout(
             title: "About dictation",
             subtitle:
-                "The mic key plays a scripted demo today, and nothing here switches that. iOS does not let a keyboard open the microphone, so recording would have to happen in this app and be handed over — that half is not built."
+                "iOS does not let a keyboard open the microphone, so AI Keyboard holds it for you. Start a session on the Dictation screen, switch to whatever you are writing in, and the mic key on the keyboard works until the session closes."
         ) {
             Card {
                 StatusRow(

@@ -1,7 +1,8 @@
 # Dictation bar
 
-36 audio clips with exact transcripts, for measuring the word error rate (WER) of a real
-speech engine in place of the scripted fake in `MockDictation`.
+36 audio clips with exact transcripts, plus a 29-language probe in `multilingual/`,
+for measuring the word error rate (WER) of the transcriber the keyboard actually uses
+(`CloudDictation`).
 
 ---
 
@@ -27,33 +28,120 @@ corpus as evidence that dictation works.
 
 ---
 
-## Blocking finding: SpeechTranscriber has no Hebrew
+## Scores
 
-Measured on this machine (macOS 26.5.1, build 25F80, Swift 6.2.3) by calling the APIs
-directly:
+Measured 2026-08-09 through `harness/transcribe.py` (Vertex `gemini-2.5-flash`,
+`thinkingBudget: 512`, `temperature: 0`), scored by `harness/score.py`. The
+request is the one `CloudDictation` builds — same system instruction, same
+prompt, same schema with the same field descriptions and `propertyOrdering` —
+because an earlier version of this harness sent a bare schema and therefore
+measured a request the product does not send.
+
+| | Hebrew | English | code-switched | all |
+| --- | ---: | ---: | ---: | ---: |
+| word error rate | 10.7% | 8.5% | 23.5% | **14.2%** |
+| exact | 5/12 | 6/12 | 2/12 | 13/36 |
+
+Named entities 38/60. English words kept in Latin letters inside Hebrew
+sentences: **25/36** — the number to watch, because an engine that writes `סינק`
+for `sync` scores a respectable WER against a transliterating reference and is
+useless in this product.
+
+**Word error rate flatters nobody here and punishes one thing unfairly.** The
+prompt asks for digits, the references spell numbers out, so `בעשר וחצי` coming
+back as `ב-10 וחצי` scores two errors while being exactly what a keyboard should
+type. Six of the nineteen non-exact clips differ only, or mostly, in number
+style.
+
+### This bar is deterministic and the others are not
+
+Two full runs of the identical configuration, minutes apart, came back **byte for
+byte identical** — same transcripts, same trap failure. `Bar/ai-text` and
+`Bar/screen-context` swing 1-5 points between runs and need two runs a side
+before a delta means anything. This one does not, because `temperature: 0` over a
+fixed audio file leaves almost nothing to sample. **Do not carry that property
+across to the other two bars**, and re-check it if the model, the temperature or
+the thinking budget moves.
+
+### What the prompt is worth, one variant at a time
+
+All four run in one sitting, committed under `ablation/`.
+
+| variant | WER | entities | Latin kept | silence trap |
+| --- | ---: | ---: | ---: | --- |
+| baseline | 15.6% | 31/60 | 18/36 | invented "Hello" |
+| + language hint | 16.3% | 32/60 | 20/36 | invented a sentence |
+| + loanword rule | 14.3% | 36/60 | 24/36 | clean |
+| **both (ships)** | **14.2%** | **38/60** | **25/36** | clean |
+
+- **The loanword rule is the real win** and it is the examples that work, not the
+  rule: `favor` heard through Israeli phonology comes back as `פייבור`, which is
+  a faithful phonetic transcription and useless to somebody who meant to type
+  `favor`. Worth 6 English words and 5 entities on its own.
+- **The language hint is worth nothing here and ships anyway.** On this corpus it
+  is neutral at best. It earns its place in `multilingual/`, below.
+
+## Blocking finding, now routed around: no Apple API can transcribe Hebrew
+
+Measured on macOS 26.5.1, build 25F80, Swift 6.2.3, by calling the APIs directly,
+and pinned from the simulator by `LegacySpeechRecognizerLanguageTests` and
+`SpeechLanguageTests`:
 
 | API | Locales | Hebrew? | On-device Hebrew? |
 | --- | --- | --- | --- |
-| `SpeechTranscriber` (iOS/macOS 26, the one `plan.md` §6 wants) | 30 | **No** | n/a |
-| `SFSpeechRecognizer` (legacy) | 63 | Yes (`he-IL`) | **No** (`supportsOnDeviceRecognition == false`) |
+| `SpeechTranscriber` (iOS/macOS 26) | 30 | **No** | n/a |
+| `SFSpeechRecognizer` (legacy) | 63 | Yes (`he-IL`) | **No** |
 
-`SpeechTranscriber.supportedLocales` is `de-*, en-*, es-*, fr-*, it-*, ja-JP, ko-KR, pt-*,
-yue-CN, zh-*`. No `he`. Requesting `he-IL` logs `No Assistant asset for language he-IL`.
+`SpeechTranscriber.supportedLocales` is `de-*, en-*, es-*, fr-*, it-*, ja-JP,
+ko-KR, pt-*, yue-CN, zh-*`. No `he`. Requesting `he-IL` logs `No Assistant asset
+for language he-IL`.
 
-What this means for the product:
+So the choice is not "on-device or cloud", it is "cloud or nothing", and
+`CloudDictation` is the consequence. That is a product fact worth saying out
+loud rather than a fallback: **every dictated sentence in this product leaves the
+device**, exactly as every Hebrew screen reading does.
 
-1. The engine `plan.md` prefers **cannot transcribe Hebrew at all**, which is 24 of the 36
-   clips here and the majority of the actual use case.
-2. The only Apple path with Hebrew is the legacy `SFSpeechRecognizer`, and for Hebrew it is
-   **cloud-only**. That removes the on-device privacy story and adds network latency.
-3. This strengthens the case for Deepgram Nova-3 (Hebrew production model, Feb 2026) that
-   `plan.md` §6 raises as the alternative.
+**Caveat unchanged:** the table above was measured on macOS, not on an iOS 26
+device. Apple's speech asset catalogs are usually shared across platforms, but a
+device should confirm it before any architecture decision rests on it.
 
-**Caveat on that finding:** it was measured on macOS, not on an iOS 26 device. Apple's
-speech asset catalogs are usually shared across platforms, but this must be re-confirmed on
-a real iOS 26 device before any architecture decision rests on it.
+## The traps, and why the gate is not in the prompt
 
----
+Three recordings with no words in them — digital silence, deterministic noise, a
+440 Hz tone — generated by the harness rather than committed. They answer the one
+question the 36 real clips cannot: **does the model invent a sentence when it
+hears nothing?**
+
+It does. Four seconds of digital silence came back as `speech: yes` and
+
+> *"I'm not sure if I'm going to be able to make it to the meeting."*
+
+reproducibly, in every variant of the first harness shape, and in two of the four
+shipping-shape variants — including, at the best-scoring one, the same sentence
+out of stationary noise. **The `speech` field does not save you**, and neither
+does any wording tried so far. A keyboard that types a plausible message nobody
+said, in the user's own voice, into somebody else's chat is the worst thing this
+product can do.
+
+So the question is answered on the device instead, by arithmetic, before anything
+is uploaded. `SpeechGate` compares a quiet frame against the loudest one: speech
+has gaps between words, a fan or a road or a held note does not.
+
+| | peak | 10th-percentile frame | quietest/peak |
+| --- | ---: | ---: | ---: |
+| 36 real clips | 0.208 – 0.332 | 0.002 – 0.062 | **0.012 – 0.21** |
+| trap-noise | 0.019 | 0.017 | 0.91 |
+| trap-tone | 0.174 | 0.171 | 0.98 |
+| trap-silence | 0.000 | 0.000 | — |
+
+A factor of four either side of the 0.5 threshold. `SpeechGateTests` re-measures
+that table from these same WAVs, so a threshold moved without re-measuring fails.
+
+**Its honest limitation is this corpus.** Every clip is `say` output with true
+digital silence between words; a phone in a car has room tone in those gaps,
+which lifts the quiet frames toward the refusing side. The threshold leaves room
+for that, and the remaining error is deliberately biased: a refusal costs one
+more tap, a false accept can put an invented sentence in somebody's name.
 
 ## What is in here
 
@@ -94,10 +182,31 @@ not a recognition error. Score `named_entities` separately: for this product, ge
 
 ---
 
+## The other 62 languages
+
+`multilingual/` is one sentence in each of the 29 catalogue languages macOS has a
+voice for — the same template, each carrying an embedded English word. It exists
+because this corpus speaks two of the 64 languages this keyboard ships, so it
+cannot answer "does dictation work" as a claim about 64 alphabets.
+
+It answers something narrower and still worth having: **29/29 came back in the
+right writing system**, Arabic, Greek, Devanagari, Tamil and Cyrillic included.
+
+It is also where the language hint earns its place. Without it, the Polish clip
+came back transcribed as **Portuguese** and the Slovak one drifted to Croatian;
+with the speaker's own keyboards named in the prompt, both are correct. That is
+the failure that makes dictation useless rather than imprecise, and this corpus
+is the only place in the repo that can see it. `multilingual/generate.py` carries
+its own warnings — the sentences were written by a language model and no native
+speaker has read them.
+
 ## Regenerate
 
 ```sh
-python3 Bar/dictation/generate.py
+python3 Bar/dictation/generate.py               # the 36 Hebrew/English clips
+python3 Bar/dictation/multilingual/generate.py  # the 29-language probe
+python3 Bar/dictation/harness/transcribe.py     # score either through the model
+python3 Bar/dictation/harness/score.py
 ```
 
 macOS only. Deterministic, destructive to `audio/`, safe to re-run. It refuses to run if no

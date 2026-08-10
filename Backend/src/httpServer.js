@@ -11,6 +11,10 @@ import { handleRequest } from "./requestHandler.js";
 // median of 66 KB and a max of 250 KB unscaled
 // (`Packages/AIKeyboardCore/Sources/AIKeyboardShared/CloudScreenReader.swift`),
 // base64 included. 8 MB rejects abuse without rejecting anything real.
+// Dictation is what sets this now, not screen reading. `SpeechGate.maximumSeconds`
+// caps an utterance at 60s, and 16 kHz mono LEI16 is 32 KB a second, so the
+// worst honest body is ~1.9 MB of PCM and ~2.6 MB once base64 puts it in JSON.
+// 8 MB still rejects abuse without rejecting anything real.
 const DEFAULT_MAX_BODY_BYTES = 8 * 1024 * 1024;
 
 function sendJSON(res, status, body) {
@@ -86,7 +90,7 @@ export function createServer({
     }
 
     const route = req.method === "POST" ? req.url : null;
-    if (route !== "/v1/text" && route !== "/v1/screen") {
+    if (route !== "/v1/text" && route !== "/v1/screen" && route !== "/v1/audio") {
       sendJSONAndClose(req, res, 404, { error: "not found" });
       return;
     }

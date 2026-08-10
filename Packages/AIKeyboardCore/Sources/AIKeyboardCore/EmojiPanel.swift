@@ -160,7 +160,7 @@ public struct EmojiPanel: View {
                 // under twelve of the fourteen keyboards, including the Greek and
                 // Cyrillic ones whose letters plane has no A, B or C in it.
                 Text(controller.language.lettersPlaneLabel)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(Theme.Keys.label)
                     .frame(width: 44, height: 38)
                     .contentShape(Rectangle())
@@ -181,7 +181,7 @@ public struct EmojiPanel: View {
                 controller.deleteBackward()
             } label: {
                 Image(systemName: "delete.left")
-                    .font(.system(size: 17, weight: .medium))
+                    .font(Theme.Glyph.font(17))
                     .foregroundStyle(Theme.Keys.label)
                     .frame(width: 44, height: 38)
                     .contentShape(Rectangle())
@@ -204,7 +204,7 @@ public struct EmojiPanel: View {
             selectedCategory = id
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .regular))
+                .font(Theme.Glyph.font(15))
                 .foregroundStyle(isSelected ? Theme.Brand.solid : Theme.Keys.secondaryLabel)
                 .frame(width: 40, height: 38)
                 .background(

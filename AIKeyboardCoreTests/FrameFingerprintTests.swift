@@ -199,12 +199,17 @@ final class FrameFingerprintTests: XCTestCase {
 
     // MARK: - Our own keyboard
 
-    /// The bottom fraction of the screen our own keyboard covers at its tallest:
-    /// context strip, suggestion bar and key area over an iPhone 17 Pro's 874 pt.
+    /// The bottom fraction of the screen our own keyboard covers: the action
+    /// banner, the suggestion bar and the key area over an iPhone 17 Pro's 874 pt.
+    ///
+    /// **There is no "at its tallest" any more, and that is the improvement.** This
+    /// used to pass `withContextStrip: true` to get the largest the keyboard could
+    /// be, because the context strip came and went with a capture session — and a
+    /// crop band that moves mid-read retires the reading the user's own tap paid
+    /// for. `ActionBanner` replaced that strip and is always drawn, so the total is
+    /// one number for a given layout and this is simply what the keyboard covers.
     private var ownUIFraction: Double {
-        Double(
-            Theme.Metrics.totalHeight(withContextStrip: true)
-                / KeyboardGeometry.referenceScreenHeight)
+        Double(Theme.Metrics.totalHeight() / KeyboardGeometry.referenceScreenHeight)
     }
 
     private var ownUIRows: Range<Int> {

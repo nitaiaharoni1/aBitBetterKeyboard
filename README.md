@@ -3,9 +3,9 @@
 A running SwiftUI mock of the keyboard described in `plan.md`: a Hebrew/English
 iOS keyboard with AI text actions, dictation, and screen-context replies.
 
-**The AI is real; the input to it is still partly faked.** Text actions and
-screen reading call real models and are scored against frozen corpora in `Bar/`.
-Typing suggestions and dictation are still mocks. Screen capture is now built up
+**The AI is real; the input to it is still partly faked.** Text actions, screen
+reading and dictation call real models and are scored against frozen corpora in
+`Bar/`. Screen capture is now built up
 to the read: the app hosts Apple's broadcast picker, a broadcast upload extension
 fingerprints frames into a shared page, the keyboard asks it for a reading when
 you tap Reply, and the capture process answers by encoding one frame and reading
@@ -67,8 +67,10 @@ xcrun swift-format --in-place --recursive \
 - Emoji panel, nine categories, plain Unicode with no bundled images
 - AI panel: Reply, Fix, Rewrite, Tone, each with a loading state and results you
   apply with one tap
-- Dictation panel with a live waveform, a word-by-word streaming transcript, and
-  a mixed-language indicator
+- Dictation panel driven by a real recording: a waveform fed by the microphone's
+  actual level, the transcript the cloud returns, and a mixed-language indicator.
+  The microphone is held by the companion app, because a keyboard cannot open
+  one — see below
 - Screen-context strip: the capture indicator, the message that was read, and
   one-tap Reply; it also carries "paused" and "stopped unexpectedly, restart it
   in AI Keyboard"
@@ -120,13 +122,23 @@ bottom of the screen.
 
 These shape the UI, so they are modelled rather than glossed over.
 
-**A keyboard extension cannot open the microphone.** In a real build the audio
-session would live in the main app and hand the transcript back. Nothing here
-does that yet, so the dictation panel says what it is — "A scripted demo — iOS
-gives a keyboard no microphone" — rather than describing the architecture it
-would need. (It used to say "Recording runs in the AI Keyboard app", which
-describes a build that does not exist.) This is the part most likely to break on
-an iOS update, and it is worth prototyping before anything else.
+**A keyboard extension cannot open the microphone.** That is an OS boundary, not
+a permission: Apple's guidance lists "No access to microphone and speaker" under
+the keyboard sandbox, open access adds Location, Contacts, a shared container,
+network and iCloud but never the microphone, and a keyboard that tries anyway
+gets `AVAudioSession` error 561145187, `cannotStartRecording`. So the audio
+session lives in the companion app and the transcript crosses the App Group —
+the same shape screen context already uses, and the same shape Wispr Flow ships.
+
+The same error code shapes the interaction, and it is the part users notice. An
+app in the *background* cannot begin recording either; an app whose session is
+already active keeps it across an app switch under the `audio` background mode.
+So dictation is a **session**: start it in AI Keyboard, switch to WhatsApp, and
+the keyboard's microphone key works until the session closes itself. Nothing in
+an extension can launch its containing app — `UIApplication` is unavailable
+there and the responder-chain `openURL` workaround is explicitly disallowed — so
+when no session is running the keyboard says so and says where to go, rather
+than spinning. This is still the part most likely to break on an iOS update.
 
 **Screen context is a session, not a permission.** Apple's persistent-capture
 entitlement is meant for remote-desktop apps, so "allow once, works forever" is
@@ -230,11 +242,19 @@ onboarding and in the Languages tab, withheld once Full Access is confirmed. And
 for the audience this keyboard is built for, "optional" is the wrong word.
 
 **Full Access is not sufficient either, and the app has to say so.** It buys the
-network; it does not buy somewhere to send. The cloud engine only exists when
-`cloudBackendURL` is in the shared store, which is set in one place —
-`Settings › AI › Cloud model`, `BackendTransport.settingsPath` — and nothing
-deploys a server for you, so a fresh install is honestly "not set up" rather than
-broken. Every surface that depends on it reads the same measurement: Home's Full
+network; it does not buy something that will answer. A backend is deployed and
+the app ships pointing at it — `BackendTransport.bundledDefaultURL`, which
+`configured()` falls back to whenever `cloudBackendURL` is absent or empty — so
+"nothing deploys a server for you" stopped being true on 2026-08-10, and with it
+the state this paragraph used to describe, where every Hebrew AI action failed on
+every install for want of anywhere to send. What still does not ship is the
+**access token**: it gates that server, a bundle cannot hold a secret, and it is
+typed in at `Settings › AI › Cloud model` (`BackendTransport.settingsPath`)
+beside the address. So a fresh install is "not finished" rather than "not set up",
+and the question every surface asks is `BackendTransport.isReady()` — *would a
+call be accepted* — not `configured() != nil`, which is true from the first launch
+and would credit a keyboard that 401s on every action. Every surface that depends
+on it reads that same measurement: Home's Full
 Access row and onboarding's "What it turns on" both go through
 `SetupState.cloudConfigured` instead of claiming cloud rewrites work, the four
 failures that dead-end on it (`unsupportedLanguage`, `cloudNotConfigured`,
@@ -248,7 +268,7 @@ starting a screen recording iOS ends inside a second.
 |---|---|
 | ~~`MockSuggestionEngine`~~ — now `SuggestionEngine` | **Done, with one part honestly left out.** Completions, spelling guesses and autocorrect all come from `UITextChecker`, the on-device engine the system keyboard's own autocorrect draws on, plus the personal dictionary the app writes and the user's own names and text replacements via `UILexicon`. A word on either list is offered above the system dictionary and, more importantly, is never overridden by it: that check runs before every autocorrect rule, including the Hebrew final-form one, because the app's own shipped entry `בלי־פרופ` was being committed as `בלי־פרוף`. The word is compared with the marks that end a sentence taken off it, because the word under the cursor runs back to the last whitespace and so `Hi Nitai,` is one prefix — protecting `Nitai` and not `Nitai,` left the commonest shape a name is typed in exactly as broken as before. The mark itself now survives the replacement too, which is a separate repair with no dictionary in it: `recieve,` used to commit as `receive`, comma and all gone. **Hebrew works here**, unlike Foundation Models, `SpeechTranscriber` and Vision's text recogniser: `UITextChecker.availableLanguages` lists `he_IL` among 42, and `אנ` completes to `אני`. (It is not the only Apple text API here with Hebrew — `LanguageDetector` uses `NLLanguageRecognizer`, which returns `he` too.) Its Hebrew is also weaker than that sounds, and the gap is handled rather than described: `שלומ` — "hello" typed with a plain mem instead of a final mem — has twelve real completions, so Apple's spelling-guess path never runs and the bar used to offer `שלומדים`, committing "who are studying". `SuggestionEngine` corrects the five final-form letters itself, by orthography rather than by dictionary lookup, and `SuggestionEngineTests` pins that case. What is *not* real is predicting the next word from nothing typed: that is QuickType, and Apple ships no public API for it, so it remains a small fixed table and says so where it lives rather than being dressed up. |
 | ~~`MockAI`~~ — now `RoutedIntelligence` | **Done.** Apple Foundation Models on device for the languages it lists, a cloud LLM behind it for the rest. Hebrew is not one of Apple's supported languages, so it needs the cloud path. The cloud provider sits behind a protocol; a shipped app cannot hold cloud credentials, so it must point at your own backend. The direct-to-Vertex client used to score `Bar/ai-text/` lives in the harness and is deliberately not in the app target. |
-| `MockDictation` | **Still a mock, and the blocker is narrower than "keyboards cannot dictate".** The keyboard itself genuinely cannot record: Apple's guidance for custom keyboards lists, verbatim, under the standard sandbox *"No access to microphone and speaker,"* and open access does not lift it — that page says an open-access keyboard *"has all the capabilities in the preceding list"* and then adds Location, Contacts, a shared container, server-side processing, iCloud, Game Center and MDM, naming the microphone nowhere. **But Gboard ships voice typing on iOS anyway**, by handing off to the Gboard *app* and sending the text back ([TechCrunch, 2017](https://techcrunch.com/2017/02/23/googles-ios-keyboard-gets-the-one-feature-it-really-lacked-voice-typing/) — reporting, not a teardown, so read it as strong evidence the feature exists rather than proof of the mechanism), so the feature is achievable and the architecture it needs is the one screen context already uses here: sensor in the containing app, result across the App Group, keyboard as a pure reader. What is unsettled is the *trigger* — `UIApplication` is unavailable to extensions, and the usual responder-chain `openURL` workaround is explicitly disallowed and a likely rejection. Hebrew adds a second cost: `SpeechTranscriber` lists no Hebrew at all, and legacy `SFSpeechRecognizer` has `he-IL` but no on-device support here, so Hebrew means network STT. See the comment above `MockDictation`. |
+| ~~`MockDictation`~~ — now `DictationService` + `CloudDictation` | **Done, and the shape was forced rather than chosen.** The keyboard genuinely cannot record: Apple's guidance lists, verbatim, *"No access to microphone and speaker"* under the standard sandbox, open access adds Location, Contacts, a shared container, server-side processing and iCloud while naming the microphone nowhere, and a keyboard that tries anyway gets `AVAudioSession` error 561145187, `cannotStartRecording`. So the microphone lives in the companion app and the transcript crosses the App Group — the architecture screen context already uses, and the one [Wispr Flow ships on iOS](https://docs.wisprflow.ai/articles/7453988911-set-up-the-flow-keyboard-on-iphone) as a "Flow Session". The same error code forces the session model: an app cannot *begin* recording from the background, but an active session survives an app switch under the `audio` background mode. Nothing in an extension can launch its own app, so with no session running the keyboard explains rather than spins. **Transcription is cloud-only and that is measured, not conceded**: `SpeechTranscriber` lists 30 locales and no Hebrew, and legacy `SFSpeechRecognizer` lists `he-IL` with `supportsOnDeviceRecognition == false`, so there is no on-device path for the language this product is for. Scored on `Bar/dictation/`'s 36 clips: word error rate 10.7% Hebrew, 8.5% English, 23.5% code-switched, 14.2% overall, 38/60 named entities, 25/36 of the English words inside Hebrew sentences kept in Latin letters. Across 29 more languages in `Bar/dictation/multilingual/`: 29/29 came back in the right writing system. **The model cannot be trusted to say it heard nothing** — four seconds of silence come back as a fluent invented sentence — so `SpeechGate` decides that on the device, by arithmetic, before anything is uploaded. `Scripts/prove-dictation.sh` proves the cross-process half; nothing has yet proved a microphone opens on a real phone. |
 | `MockScreenContext` | **Reading a frame is done and measured** — `RoutedScreenReader`, scored against `Bar/screen-context/`. **Getting** one is not. ScreenCaptureKit is `iOS 27.0+` and absent from the iOS 26.2 SDK this project compiles against. The ReplayKit route is built except for the read: the app hosts `RPSystemBroadcastPickerView` so a user can start a broadcast, `AIKeyboardBroadcast` fingerprints every sampled frame and publishes a `CaptureStatus` page, and `ScreenContextSession` consumes that page — the strip and the app screen render no session, starting, watching, a reading, paused and stopped-unexpectedly from it, and Reply raises `intent.readNow` and waits for a reading the freshness gate accepts. The read is there too: a tap makes `AIKeyboardBroadcast` encode one frame and call `CloudScreenReader` on its own serial queue, then publish the text with the identity of the frame it read. **And none of it has ever run**: the iOS Simulator ships no `replayd`, so no broadcast session starts here and `SampleHandler` has never been called. The scripted sample stays behind a button on the Screen Context screen, labelled as a sample, and yields to a real session the moment one appears. `ScreenContextSession.submit(_:appName:appIcon:)` is the in-app seam. |
 | ~~`SharedStore`~~ | **Done.** Both targets carry the App Group entitlement and share one suite. |
 | `MockTextTarget` | `UITextDocumentProxy`, already wired via `ProxyTextTarget` |
@@ -312,4 +332,7 @@ the `Scripts/prove-*.sh` scripts rather than judged by their own assertions; see
   drives it — but only far enough to prove it reads shared settings; the panels
   are still exercised through the in-app playground
 - Landscape, iPad layouts, Dynamic Type above the default size
-- Real StoreKit, accounts, or any backend
+- Real StoreKit or accounts. The **backend is real and deployed** (`Backend/`,
+  Cloud Run, `Scripts/prove-cloud-backend.sh` exercises the shipping client
+  against it); what is untested there is App Attest, a shared-state rate limit,
+  and the token living in the Keychain rather than the App Group plist

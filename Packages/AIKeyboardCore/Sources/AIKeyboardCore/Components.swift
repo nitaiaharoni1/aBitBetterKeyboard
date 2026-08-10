@@ -18,7 +18,7 @@ public struct SparkleMark: View {
 
     public var body: some View {
         Image(systemName: Self.symbolName)
-            .font(.system(size: size, weight: .medium))
+            .font(Theme.Glyph.medium(size))
             .foregroundStyle(Theme.Brand.gradient)
             .accessibilityHidden(true)
     }

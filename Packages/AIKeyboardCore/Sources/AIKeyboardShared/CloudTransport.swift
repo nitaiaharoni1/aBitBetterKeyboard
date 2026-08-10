@@ -52,22 +52,45 @@ public struct CloudImage: Sendable {
     }
 }
 
+/// A recording travelling with a request. Dictation is the only caller.
+///
+/// **Not folded into `CloudImage` as a general "media" type**, though the wire
+/// shape is identical and the temptation is real. They are separated because
+/// they go to different endpoints, and they go to different endpoints because a
+/// picture of somebody's screen and a recording of their voice deserve different
+/// retention rules on the backend. Collapsing them here is what would quietly
+/// make that one rule.
+public struct CloudAudio: Sendable {
+    public let data: Data
+    public let mimeType: String
+
+    /// 16 kHz mono LEI16 WAV by default, which is what `Bar/dictation/` is
+    /// recorded at and therefore what every published number was measured on.
+    public init(data: Data, mimeType: String = "audio/wav") {
+        self.data = data
+        self.mimeType = mimeType
+    }
+}
+
 public struct CloudRequest: Sendable {
     public let instructions: String
     public let prompt: String
     public let fields: [CloudField]
     public let image: CloudImage?
+    public let audio: CloudAudio?
 
     public init(
         instructions: String,
         prompt: String,
         fields: [CloudField],
-        image: CloudImage? = nil
+        image: CloudImage? = nil,
+        audio: CloudAudio? = nil
     ) {
         self.instructions = instructions
         self.prompt = prompt
         self.fields = fields
         self.image = image
+        self.audio = audio
     }
 }
 
@@ -98,8 +121,35 @@ public struct BackendTransport: CloudTransport {
         self.session = session
     }
 
-    /// Nil when the build has no backend configured, which is the state the app
-    /// ships in today. The router then reports that rather than guessing.
+    /// The backend this build ships pointing at, used whenever the user has not
+    /// named one of their own.
+    ///
+    /// **A URL is not a credential, and that is the whole reason this can be here
+    /// while `cloudBackendToken` cannot.** Everything in a bundle is extractable,
+    /// so the rule this file is built around is that no *secret* ships. An address
+    /// is not one: the service behind it refuses every request that arrives without
+    /// the bearer token (`Backend/src/gate.js`), so a copy of this string buys an
+    /// attacker a 401 and nothing else. The token stays typed in, in
+    /// `CloudModelView`, exactly as before.
+    ///
+    /// Deployed 2026-08-10 to Cloud Run in `handi-project`, `europe-west1`, from
+    /// `Backend/deploy.sh`. Before that date this constant did not exist and
+    /// `configured()` returned nil on every stock install, so Hebrew Fix, Rewrite,
+    /// Tone and Reply had nowhere to run and failed for the life of the install —
+    /// see `KeyboardController.init`.
+    public static let bundledDefaultURL = "https://aikeyboard-backend-cq6zxsdx5a-ew.a.run.app"
+
+    /// The transport this process should use, or nil when there is nowhere to send.
+    ///
+    /// **Nil is now much rarer than it was, and reaching it takes a deliberate
+    /// act.** A stored value wins; absent *or* empty falls back to
+    /// `bundledDefaultURL`. So clearing the field in `CloudModelView` means "put
+    /// the built-in server back", not "switch the cloud off" — there is no off
+    /// switch here and deliberately no dead state either, because the alternative
+    /// is a user who empties the box and can only recover by retyping a 52-character
+    /// URL they were never shown. What still returns nil is a stored value that is
+    /// not an http(s) URL, which is the case the screen refuses to save in the first
+    /// place.
     ///
     /// Reads the **shared** store, not `.standard`. The app writes this setting
     /// and two extensions read it, and `.standard` in an extension is that
@@ -116,12 +166,82 @@ public struct BackendTransport: CloudTransport {
     public static func configured(
         defaults: UserDefaults = SharedContainer.userDefaults
     ) -> BackendTransport? {
-        guard let raw = defaults.string(forKey: "cloudBackendURL"),
-            let url = URL(string: raw), url.scheme?.hasPrefix("http") == true
+        guard let url = URL(string: effectiveURL(defaults: defaults)),
+            url.scheme?.hasPrefix("http") == true
         else { return nil }
-        let token = defaults.string(forKey: "cloudBackendToken")?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return BackendTransport(baseURL: url, token: (token?.isEmpty == false) ? token : nil)
+        return BackendTransport(baseURL: url, token: storedToken(defaults))
+    }
+
+    /// The address a call would actually go to: the one the user named, or the one
+    /// that ships when they have not named one.
+    ///
+    /// **One spelling of the fallback, because it briefly had three.** This rule
+    /// also decides what `CloudModelView` puts in its field and what its status
+    /// line claims, and a getter that answered "" while `configured()` quietly used
+    /// the built-in address would put an empty box and the words "Nothing set" in
+    /// front of somebody whose Hebrew rewrites were working. `SharedStore`
+    /// therefore reads this rather than repeating the test.
+    public static func effectiveURL(
+        defaults: UserDefaults = SharedContainer.userDefaults
+    ) -> String {
+        storedURL(defaults) ?? bundledDefaultURL
+    }
+
+    /// The address the user named, or nil when the field is absent, empty or
+    /// nothing but whitespace — the three states that all mean "I have not named
+    /// one", and which `CloudModelView` trims to the same thing before saving.
+    private static func storedURL(_ defaults: UserDefaults) -> String? {
+        nonBlank(defaults.string(forKey: "cloudBackendURL"))
+    }
+
+    /// Nil rather than "" or "   ", so a blank never becomes `Bearer    `.
+    private static func storedToken(_ defaults: UserDefaults) -> String? {
+        nonBlank(defaults.string(forKey: "cloudBackendToken"))
+    }
+
+    private static func nonBlank(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+            !trimmed.isEmpty
+        else { return nil }
+        return trimmed
+    }
+
+    /// Whether a cloud call would be **accepted**, not merely addressed.
+    ///
+    /// **`configured() != nil` stopped being the right question the moment a URL
+    /// started shipping, and every screen that asks it had to move here.** It
+    /// answers "is there somewhere to send", which on a fresh install is now
+    /// always yes — so Settings would read "Set up", the Screen Context prompt
+    /// would offer to start a broadcast, and the dictation screen would drop its
+    /// "set up the cloud" card, all for a keyboard that 401s on every single
+    /// action because the token has not been pasted in yet. That is precisely the
+    /// class of claim this project keeps having to unpick: an assertion that the
+    /// cloud works, made by something that never measured it.
+    ///
+    /// The rule is not "a token is required", because a backend somebody runs
+    /// themselves with no `BACKEND_TOKEN` accepts everyone and is a perfectly good
+    /// backend — `BackendTransportSuiteTests` pins that. It is: **the backend
+    /// this build ships gates on a bearer, so choosing it and not supplying one is
+    /// an incomplete setup.** A backend the user typed in is their business, and
+    /// this says yes to it either way.
+    ///
+    /// Still not a guarantee. A token can be wrong, revoked or pointed at the
+    /// wrong service, and only a call finds that out — which is why the failure
+    /// path maps 401 to `cloudNotConfigured` and names `settingsPath`. This closes
+    /// the one case that is knowable without spending a request.
+    public static func isReady(defaults: UserDefaults = SharedContainer.userDefaults) -> Bool {
+        guard configured(defaults: defaults) != nil else { return false }
+        guard usesBundledBackend(defaults: defaults) else { return true }
+        return storedToken(defaults) != nil
+    }
+
+    /// Whether the address in force is the one that ships rather than one the user
+    /// named. The same absent-or-empty test `configured` falls back on, so the two
+    /// cannot disagree about which backend is being talked about.
+    public static func usesBundledBackend(
+        defaults: UserDefaults = SharedContainer.userDefaults
+    ) -> Bool {
+        effectiveURL(defaults: defaults) == bundledDefaultURL
     }
 
     /// Where the containing app lets somebody set this up, spelled once.
@@ -139,7 +259,13 @@ public struct BackendTransport: CloudTransport {
     /// The whole sentence, for the four failures that have to say it:
     /// `AIEngineError.unsupportedLanguage`, `.cloudNotConfigured`,
     /// `.deviceNotSupported` and `ScreenContextEndReason.notConfigured`.
-    public static let setUpRecovery = "Set one up in AI Keyboard, under \(settingsPath)."
+    /// **"Set one up" became the wrong instruction when a URL started shipping.**
+    /// Every caller of this reaches it in the state `isReady()` is false in, and
+    /// that is now almost always an address that is already filled in with no
+    /// access token beside it. Sending somebody off to stand up a server, when
+    /// what they need is to paste a string into a field that is already on screen,
+    /// is the kind of dead end this whole constant exists to close.
+    public static let setUpRecovery = "Finish setting it up in AI Keyboard, under \(settingsPath)."
 
     public func send(_ request: CloudRequest) async throws -> [String: String] {
         var body: [String: Any] = [
@@ -159,7 +285,24 @@ public struct BackendTransport: CloudTransport {
             ]
         }
 
-        let path = request.image == nil ? "v1/text" : "v1/screen"
+        // A recording goes to its own endpoint for the reason a frame does: the
+        // backend can hold somebody's voice to a different retention rule than
+        // their text, and it can only do that if the two arrive separately.
+        if let audio = request.audio {
+            body["audio"] = [
+                "mimeType": audio.mimeType,
+                "data": audio.data.base64EncodedString()
+            ]
+        }
+
+        let path: String
+        if request.image != nil {
+            path = "v1/screen"
+        } else if request.audio != nil {
+            path = "v1/audio"
+        } else {
+            path = "v1/text"
+        }
         var urlRequest = URLRequest(url: baseURL.appendingPathComponent(path))
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")

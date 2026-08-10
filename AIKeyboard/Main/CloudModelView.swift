@@ -73,12 +73,15 @@ struct CloudModelView: View {
 
             Card {
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                    // Says the true state of a fresh install rather than implying
-                    // something is broken: there is no server to point at yet
-                    // because nobody has deployed one, and that is a different
-                    // sentence from "this failed".
+                    // Says the true state of a fresh install. Until 2026-08-10 that
+                    // state was "there is nowhere to send to", and this line said
+                    // so; there is a deployed server now
+                    // (`BackendTransport.bundledDefaultURL`), the address below is
+                    // filled in from it, and the only thing still missing on a fresh
+                    // install is the token, which is the one value that cannot ship
+                    // in the bundle.
                     Text(
-                        "We do not run a server for you yet, so this is empty until you point it at your own. Nothing here is broken — there is just nowhere to send to."
+                        "AI Keyboard comes pointing at our server, already filled in below. It needs the access token before it will answer — paste yours in, or replace both with your own server."
                     )
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.Text.secondary)
@@ -114,7 +117,7 @@ struct CloudModelView: View {
                     // in one change. Until then the field says what it is storing,
                     // in the line under it, rather than implying more safety than
                     // it has by hiding the characters.
-                    SecureField("Access token (optional)", text: $token)
+                    SecureField(tokenPrompt, text: $token)
                         .textFieldStyle(.plain)
                         .font(.system(size: 15).monospaced())
                         .textInputAutocapitalization(.never)
@@ -128,7 +131,7 @@ struct CloudModelView: View {
                                 .fill(Theme.Surface.background)
                         )
                         .accessibilityIdentifier("cloud-model-token")
-                        .accessibilityLabel("Cloud model access token, optional")
+                        .accessibilityLabel("Cloud model \(tokenPrompt)")
 
                     Text(status)
                         .font(.system(size: 12))
@@ -210,26 +213,63 @@ struct CloudModelView: View {
 
     private var isUsable: Bool { parsedURL != nil }
 
+    /// **"(optional)" was true of every backend until one shipped, and false of the
+    /// one almost everybody will use.** The server this build points at gates on a
+    /// bearer, so leaving this empty is not a choice, it is an unfinished setup that
+    /// 401s every AI action. A backend somebody runs themselves may well have no
+    /// gate, and for that one the word is still right — so this follows the address
+    /// in the field above rather than picking one answer and being wrong half the
+    /// time. Reads the typed value, not the stored one, so it changes as soon as
+    /// somebody pastes their own server in.
+    private var tokenPrompt: String {
+        let typed = typedURL
+        let isBundled = typed.isEmpty || typed == BackendTransport.bundledDefaultURL
+        return isBundled ? "Access token (required)" : "Access token (optional)"
+    }
+
     private var status: String {
+        // An emptied box is not "off" — `BackendTransport.configured` falls back to
+        // the built-in address, and saying "nothing set" here would describe a
+        // keyboard that is in fact still sending. Saving an empty field is how you
+        // get the built-in server back after typing over it.
         if typedURL.isEmpty {
-            return
-                "Nothing set. Hebrew AI actions and screen context both stop here until there is. It takes a web address beginning http:// or https://."
+            return "Empty — tap Save to go back to the server AI Keyboard ships with."
         }
         guard isUsable else {
             return "That is not a web address. It has to begin with http:// or https://."
         }
-        return store.cloudBackendURL == typedURL ? "Saved and in use." : "Not saved yet — tap Save."
+        guard store.cloudBackendURL == typedURL else { return "Not saved yet — tap Save." }
+        // **"Saved and in use" was a lie for the one state a fresh install is
+        // actually in.** The address ships filled in, so it saves and matches
+        // immediately, and this line would have said the cloud was working while
+        // every AI action came back 401 for want of a token. `hasCloudModel` is
+        // `BackendTransport.isReady`, which is the same question the keyboard asks.
+        return store.hasCloudModel
+            ? "Saved and in use."
+            : "Saved, but there is no access token — AI actions will be refused until you paste one in."
     }
 
     /// Only a value the transport would accept is ever written, and an emptied
     /// field removes the key rather than storing "" — which `URL(string:)` would
     /// happily turn into a URL with no scheme.
+    ///
+    /// **Clearing the address no longer clears the token, and that changed with
+    /// the shipped default.** It used to wipe both, which was right when an empty
+    /// address meant there was no backend at all: a token for a server you had
+    /// just disowned was debris. Now an empty address means "use the one AI
+    /// Keyboard ships with", and that server needs a token — so wiping it would
+    /// turn a reset into a keyboard that 401s on every AI action, with a filled-in
+    /// address on screen saying it is in use. Clearing the token is what the token
+    /// field is for.
     private func save() {
         guard let parsed = parsedURL else {
             guard typedURL.isEmpty else { return }
             store.cloudBackendURL = ""
-            store.cloudBackendToken = ""
-            token = ""
+            store.cloudBackendToken = typedToken
+            // Show the address that is now in force rather than the empty box the
+            // user just saved. `store.cloudBackendURL` answers the shipped default
+            // for an absent value, which is exactly what the transport will use.
+            url = store.cloudBackendURL
             return
         }
         url = parsed.absoluteString

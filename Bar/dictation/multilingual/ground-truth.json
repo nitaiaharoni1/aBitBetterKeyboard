@@ -1,0 +1,531 @@
+{
+  "corpus": "AIKeyboard dictation — multilingual probe",
+  "provenance": "SYNTHETIC. macOS `say` text-to-speech, sentences written by a language model and NOT checked by native speakers.",
+  "warning": "One sentence per language. This cannot produce a word error rate worth the name. It answers two narrower questions: does the transcript come back in the right script, and does the embedded English word stay in Latin letters.",
+  "template": "I will send you the document tomorrow morning, after the standup.",
+  "clip_count": 29,
+  "clips": [
+    {
+      "id": "ar",
+      "language": "arabic",
+      "tag": "ar",
+      "file": "audio/ar.wav",
+      "transcript": "سأرسل لك الـ document غدًا صباحًا بعد الـ standup",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 5.04,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Majed",
+        "locale": "ar_001",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "bg",
+      "language": "bulgarian",
+      "tag": "bg",
+      "file": "audio/bg.wav",
+      "transcript": "Ще ти изпратя document утре сутринта, след standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.473,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Daria",
+        "locale": "bg_BG",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "ca",
+      "language": "catalan",
+      "tag": "ca",
+      "file": "audio/ca.wav",
+      "transcript": "T'enviaré el document demà al matí, després del standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.452,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Montse",
+        "locale": "ca_ES",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "hr",
+      "language": "croatian",
+      "tag": "hr",
+      "file": "audio/hr.wav",
+      "transcript": "Poslat ću ti document sutra ujutro, nakon standupa.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.707,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Lana",
+        "locale": "hr_HR",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "cs",
+      "language": "czech",
+      "tag": "cs",
+      "file": "audio/cs.wav",
+      "transcript": "Pošlu ti ten document zítra ráno, po standupu.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.239,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Zuzana",
+        "locale": "cs_CZ",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "da",
+      "language": "danish",
+      "tag": "da",
+      "file": "audio/da.wav",
+      "transcript": "Jeg sender dig det document i morgen tidlig, efter standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.471,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Sara",
+        "locale": "da_DK",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "nl",
+      "language": "dutch",
+      "tag": "nl",
+      "file": "audio/nl.wav",
+      "transcript": "Ik stuur je het document morgenochtend, na de standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 2.939,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Xander",
+        "locale": "nl_NL",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "fi",
+      "language": "finnish",
+      "tag": "fi",
+      "file": "audio/fi.wav",
+      "transcript": "Lähetän sinulle document huomenna aamulla, standupin jälkeen.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 4.222,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Eddy (Finnish (Finland))",
+        "locale": "fi_FI",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "fr",
+      "language": "french",
+      "tag": "fr",
+      "file": "audio/fr.wav",
+      "transcript": "Je t'enverrai le document demain matin, après le standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.551,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Eddy (French (France))",
+        "locale": "fr_FR",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "de",
+      "language": "german",
+      "tag": "de",
+      "file": "audio/de.wav",
+      "transcript": "Ich schicke dir das document morgen früh, nach dem standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.425,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Anna",
+        "locale": "de_DE",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "el",
+      "language": "greek",
+      "tag": "el",
+      "file": "audio/el.wav",
+      "transcript": "Θα σου στείλω το document αύριο το πρωί, μετά το standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.751,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Melina",
+        "locale": "el_GR",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "hi",
+      "language": "hindi",
+      "tag": "hi",
+      "file": "audio/hi.wav",
+      "transcript": "मैं तुम्हें कल सुबह document भेज दूंगा, standup के बाद।",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.986,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Lekha",
+        "locale": "hi_IN",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "hu",
+      "language": "hungarian",
+      "tag": "hu",
+      "file": "audio/hu.wav",
+      "transcript": "Holnap reggel elküldöm neked a document-et, a standup után.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 4.035,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Tünde",
+        "locale": "hu_HU",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "id",
+      "language": "indonesian",
+      "tag": "id",
+      "file": "audio/id.wav",
+      "transcript": "Saya akan mengirimkan document besok pagi, setelah standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 4.593,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Damayanti",
+        "locale": "id_ID",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "it",
+      "language": "italian",
+      "tag": "it",
+      "file": "audio/it.wav",
+      "transcript": "Ti manderò il document domani mattina, dopo lo standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.452,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Alice",
+        "locale": "it_IT",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "lt",
+      "language": "lithuanian",
+      "tag": "lt",
+      "file": "audio/lt.wav",
+      "transcript": "Atsiųsiu tau document rytoj ryte, po standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.453,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Ona",
+        "locale": "lt_LT",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "ms",
+      "language": "malay",
+      "tag": "ms",
+      "file": "audio/ms.wav",
+      "transcript": "Saya akan hantar document esok pagi, selepas standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.856,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Amira",
+        "locale": "ms_MY",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "nb",
+      "language": "norwegian",
+      "tag": "nb",
+      "file": "audio/nb.wav",
+      "transcript": "Jeg sender deg document i morgen tidlig, etter standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.352,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Nora",
+        "locale": "nb_NO",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "pl",
+      "language": "polish",
+      "tag": "pl",
+      "file": "audio/pl.wav",
+      "transcript": "Wyślę ci document jutro rano, po standupie.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 2.806,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Zosia",
+        "locale": "pl_PL",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "pt",
+      "language": "portuguese",
+      "tag": "pt",
+      "file": "audio/pt.wav",
+      "transcript": "Vou enviar-te o document amanhã de manhã, depois do standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 4.085,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Joana",
+        "locale": "pt_PT",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "ro",
+      "language": "romanian",
+      "tag": "ro",
+      "file": "audio/ro.wav",
+      "transcript": "Îți trimit document mâine dimineață, după standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.527,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Ioana",
+        "locale": "ro_RO",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "ru",
+      "language": "russian",
+      "tag": "ru",
+      "file": "audio/ru.wav",
+      "transcript": "Я отправлю тебе document завтра утром, после standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.689,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Milena",
+        "locale": "ru_RU",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "sk",
+      "language": "slovak",
+      "tag": "sk",
+      "file": "audio/sk.wav",
+      "transcript": "Pošlem ti document zajtra ráno, po standupe.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.192,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Laura",
+        "locale": "sk_SK",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "sl",
+      "language": "slovenian",
+      "tag": "sl",
+      "file": "audio/sl.wav",
+      "transcript": "Poslal ti bom document jutri zjutraj, po standupu.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.032,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Tina",
+        "locale": "sl_SI",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "es",
+      "language": "spanish",
+      "tag": "es",
+      "file": "audio/es.wav",
+      "transcript": "Te enviaré el document mañana por la mañana, después del standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.913,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Eddy (Spanish (Spain))",
+        "locale": "es_ES",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "sv",
+      "language": "swedish",
+      "tag": "sv",
+      "file": "audio/sv.wav",
+      "transcript": "Jag skickar dig document imorgon bitti, efter standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 3.68,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Alva",
+        "locale": "sv_SE",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "ta",
+      "language": "tamil",
+      "tag": "ta",
+      "file": "audio/ta.wav",
+      "transcript": "நான் நாளை காலை document அனுப்புகிறேன், standup க்கு பிறகு.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 4.072,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Vani",
+        "locale": "ta_IN",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "tr",
+      "language": "turkish",
+      "tag": "tr",
+      "file": "audio/tr.wav",
+      "transcript": "Sana document'i yarın sabah, standup'tan sonra göndereceğim.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 4.813,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Yelda",
+        "locale": "tr_TR",
+        "rate_wpm": 175
+      }
+    },
+    {
+      "id": "uk",
+      "language": "ukrainian",
+      "tag": "uk",
+      "file": "audio/uk.wav",
+      "transcript": "Я надішлю тобі document завтра вранці, після standup.",
+      "embedded_english": [
+        "document",
+        "standup"
+      ],
+      "duration_seconds": 4.154,
+      "production": {
+        "method": "macos-say-tts",
+        "voice": "Lesya",
+        "locale": "uk_UA",
+        "rate_wpm": 175
+      }
+    }
+  ]
+}

@@ -296,3 +296,23 @@ test("an unknown route is hung up on too", { timeout: 10_000 }, async () => {
     }
   );
 });
+
+test("POST /v1/audio round-trips a transcription to a 200", async () => {
+  await withServer(
+    fakeVertexClient(async () => ({ kind: "ok", fields: { speech: "yes", languages: "he,en", text: "היי" } })),
+    async (base) => {
+      const response = await fetch(`${base}/v1/audio`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          instructions: "transcribe",
+          prompt: "what was said",
+          fields: [{ name: "text", description: "the transcript" }],
+          audio: { mimeType: "audio/wav", data: "UklGRg==" }
+        })
+      });
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).fields.text, "היי");
+    }
+  );
+});

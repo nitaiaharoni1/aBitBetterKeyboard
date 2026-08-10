@@ -1,18 +1,27 @@
 import XCTest
 
-/// **What the two brand-tinted bar buttons do with nothing typed**, which is the
+/// **What the one-tap rewrite control does with nothing typed**, which is the
 /// state a keyboard comes up in and spends most of its life in.
 ///
-/// The one-tap rewrite button shipped `.disabled(!canRun)` with a brand gradient
-/// behind an icon drawn at full brand colour: only the background faded, so beside
-/// the fully-lit sparkle it read as live. The owner of the first phone this went
-/// on tapped it on an empty field, nothing happened, and nothing said why.
+/// It shipped `.disabled(!canRun)` with a brand gradient behind an icon drawn at
+/// full brand colour: only the background faded, so beside the fully-lit sparkle
+/// it read as live. The owner of the first phone this went on tapped it on an
+/// empty field, nothing happened, and nothing said why.
 ///
 /// A unit test can hold the *decision* — `ToneButtonTapTests` does — and cannot
-/// see a `.disabled()` modifier or a fill colour. This drives the real bar and
+/// see a `.disabled()` modifier or a fill colour. This drives the real control and
 /// asserts on what a tap actually reaches, which is the thing that was missing:
 /// against the shipped build the tap lands on a disabled button and the AI menu
 /// never opens.
+///
+/// **The control moved out of the suggestion bar and the defect did not.** It is
+/// now a key in the action row under the keyboard, so this addresses
+/// `key-quick-tone` rather than `bar-tone` — and it goes through
+/// `KeyboardController.press(.quickTone)`, which asks `SuggestionBar.toneTap` the
+/// same three-way question the bar button asked. That shared question is the whole
+/// reason the key and the button could never disagree about an empty field; the
+/// bar's own ends now ship empty, so this is the only place left that a user meets
+/// it.
 final class EmptyFieldBarTests: XCTestCase {
 
     private var app: XCUIApplication!
@@ -54,8 +63,8 @@ final class EmptyFieldBarTests: XCTestCase {
             "the field is not empty, so this is not the state the defect is about")
         capture("empty-field-bar")
 
-        let tone = element("bar-tone")
-        XCTAssertTrue(tone.exists, "the one-tap rewrite button is not in the bar")
+        let tone = element("key-quick-tone")
+        XCTAssertTrue(tone.exists, "the one-tap rewrite key is not in the action row")
         tone.tap()
 
         // Something to rewrite is the one thing an empty field does not have, so

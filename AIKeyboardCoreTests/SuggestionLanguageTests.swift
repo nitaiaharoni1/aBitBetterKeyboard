@@ -246,17 +246,18 @@ final class SuggestionLayoutRoutingTests: XCTestCase {
 /// **The badge named the runner-up as `dominant.next()` — the next row of the
 /// catalogue.** That was right for exactly as long as the catalogue was English
 /// and Hebrew, and became wrong the day it grew to fourteen: Hebrew's neighbour is
-/// Arabic. `MockDictation.script(at: 0)` is the first thing anybody sees when they
-/// tap the mic key, it is Hebrew carrying English loanwords, and it was badged
-/// `עב ⟷ ع`.
+/// Arabic. The sentence below was the scripted transcript the mic key used to
+/// play — it is gone now that dictation records for real, but it is still exactly
+/// the shape this product exists for, Hebrew carrying English loanwords, and it
+/// was badged `עב ⟷ ع`.
 @MainActor
 final class MixedLanguageDetectionTests: XCTestCase {
 
-    /// The shipped script, through the same call the badge makes. The broken
-    /// version answers `[hebrew, arabic]` here — catalogue index 1 then 2 — so the
-    /// assertion has to be on the pair and not merely on it being non-empty.
-    func testTheShippedDictationScriptIsBadgedHebrewAndEnglish() {
-        let transcript = MockDictation.script(at: 0).words.joined(separator: " ")
+    /// Through the same call the badge makes. The broken version answers
+    /// `[hebrew, arabic]` here — catalogue index 1 then 2 — so the assertion has
+    /// to be on the pair and not merely on it being non-empty.
+    func testACodeSwitchedTranscriptIsBadgedHebrewAndEnglish() {
+        let transcript = "אני אשלח לך את ה-document מחר בבוקר, אחרי ה-standup"
         let detected = SuggestionEngine.languages(in: transcript)
 
         XCTAssertEqual(

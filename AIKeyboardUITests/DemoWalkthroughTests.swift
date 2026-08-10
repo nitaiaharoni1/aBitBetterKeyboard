@@ -111,42 +111,65 @@ final class DemoWalkthroughTests: XCTestCase {
         settle(1.2)
         capture("keyboard-letters")
 
+        // **The walkthrough follows the action row now, because that is where
+        // these controls are.** Emoji, the sparkle and the one-tap rewrite used to
+        // sit at the ends of the suggestion bar and the three text actions were
+        // rows inside a panel that covered the keys; they are keys in the action
+        // row under the keyboard, and their answers arrive in the banner above it.
+        // `bar-emoji` and `bar-sparkle` still exist as identifiers — a user can put
+        // either back through the layout editor — but neither is in the shipped
+        // default, so a walkthrough that addresses them is walking a keyboard
+        // nobody has.
+
         // Emoji
-        tap(element("bar-emoji"), "emoji button")
+        tap(element("key-emoji"), "emoji key")
         settle()
         capture("keyboard-emoji")
-        tap(element("bar-emoji"), "emoji button (close)")
+        tap(element("key-emoji"), "emoji key (close)")
         settle(0.5)
 
-        // AI menu, then each result panel
-        tap(element("bar-sparkle"), "sparkle button")
-        settle()
-        capture("ai-menu")
-
-        tap(element("ai-action-fix"), "Fix")
+        // Fix, straight from the row. No menu to open and no panel to close: the
+        // keys stay visible for the whole call, which is the point of the redesign
+        // — the user can see the sentence being corrected.
+        tap(element("key-ai-fix"), "Fix key")
         settle(0.3)
-        capture("ai-fix-loading")
-        settle(1.2)
+        capture("ai-fix-working")
+        settle(1.6)
         capture("ai-fix-result")
+        // Either an answer to accept or a reason it failed. Both are terminal and
+        // both are the banner; asserting on the *answer* would make this test a
+        // test of whether a model is reachable from a simulator, which it is not —
+        // no backend token ships and the on-device model has no assets here.
+        XCTAssertTrue(
+            element("banner-use").exists || element("banner-dismiss").exists,
+            "Fix left the banner with neither an answer nor a reason")
 
-        tap(app.buttons["Back"], "back to AI menu")
-        settle(0.6)
-        tap(element("ai-action-rewrite"), "Rewrite")
-        settle(1.4)
+        // Rewrite in the default tone, which is the same three-way tap the bar
+        // button used to make. Three versions come back, so the banner pages.
+        tap(element("key-quick-tone"), "one-tap rewrite key")
+        settle(1.8)
         capture("ai-rewrite")
 
-        tap(app.buttons["Professional"], "Professional tone chip", timeout: 3)
-        settle(1.4)
-        capture("ai-tone-professional")
+        if element("banner-dismiss").exists {
+            tap(element("banner-dismiss"), "dismiss the banner")
+            settle(0.5)
+        }
 
-        tap(app.buttons["Close and go back to the keyboard"], "close panel")
-        settle(0.6)
-
-        // Dictation
+        // Dictation. In the playground there is no recording session — the
+        // microphone lives in the app and is opened deliberately, never by
+        // walking a demo — so what this captures is the panel's explanation,
+        // which is the state a stock install is genuinely in. It used to capture
+        // a scripted transcript mid-stream, which is the screenshot that made
+        // this feature look finished for the whole of development.
         tap(element("key-dictation"), "mic key")
-        settle(2.2)
+        settle(0.6)
+        XCTAssertTrue(
+            element("dictation-explanation").waitForExistence(timeout: 3),
+            "the dictation panel showed neither a session nor an explanation")
         capture("dictation")
-        tap(app.buttons["Cancel"], "cancel dictation")
+        // The ✕ in the header, not the Cancel button: the explanation state
+        // draws no controls, because there is nothing to cancel.
+        tap(app.buttons["Cancel dictation"], "close dictation")
         settle(0.6)
 
         // Hebrew
@@ -189,12 +212,20 @@ final class DemoWalkthroughTests: XCTestCase {
 
         tap(element("home-playground"), "playground card")
         settle(1.4)
-        capture("keyboard-context-strip")
+        // The banner, not a separate strip. `ScreenContextStrip` was a 30pt row
+        // that appeared and disappeared with the session; `ActionBanner` is always
+        // drawn and carries the live reading as its idle state, so this is the same
+        // screenshot of the same information without the keyboard changing height
+        // to show it.
+        capture("keyboard-context-banner")
 
-        tap(element("context-reply"), "Reply in strip")
+        // And Reply is a key in the action row rather than a button inside the
+        // strip, which is what makes it reachable when there is no session at all —
+        // the state the strip could not render, because it was not drawn.
+        tap(element("key-ai-reply"), "Reply key")
         settle(0.3)
-        capture("reply-loading")
-        settle(1.4)
+        capture("reply-working")
+        settle(1.6)
         capture("reply-results")
     }
 

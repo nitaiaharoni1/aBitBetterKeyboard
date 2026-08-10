@@ -44,16 +44,33 @@ function validateFields(fields, path = "fields") {
   return null;
 }
 
+// `image` and `audio` are the same shape on the wire and are validated by the
+// same function. They stay separate *fields* — and separate endpoints — because
+// a picture of somebody's screen and a recording of their voice should be able
+// to have different retention rules, and one shared field is how they quietly
+// end up with one rule.
+function validateMedia(value, name) {
+  if (value === undefined) return null;
+  if (typeof value !== "object" || value === null) return `${name} must be an object`;
+  if (typeof value.mimeType !== "string") return `${name}.mimeType must be a string`;
+  if (typeof value.data !== "string") return `${name}.data must be a base64 string`;
+  return null;
+}
+
 function validateBody(body) {
   if (typeof body !== "object" || body === null) return "request body must be a JSON object";
   if (typeof body.instructions !== "string") return "instructions must be a string";
   if (typeof body.prompt !== "string") return "prompt must be a string";
   const fieldsError = validateFields(body.fields);
   if (fieldsError) return fieldsError;
-  if (body.image !== undefined) {
-    if (typeof body.image !== "object" || body.image === null) return "image must be an object";
-    if (typeof body.image.mimeType !== "string") return "image.mimeType must be a string";
-    if (typeof body.image.data !== "string") return "image.data must be a base64 string";
+  const imageError = validateMedia(body.image, "image");
+  if (imageError) return imageError;
+  const audioError = validateMedia(body.audio, "audio");
+  if (audioError) return audioError;
+  // One at a time. A body carrying both would be a caller mixing up two
+  // endpoints, and guessing which one it meant is worse than saying so.
+  if (body.image !== undefined && body.audio !== undefined) {
+    return "a request carries either image or audio, not both";
   }
   return null;
 }
@@ -66,7 +83,8 @@ export async function handleRequest(body, { vertexClient }) {
     instructions: body.instructions,
     prompt: body.prompt,
     fields: body.fields,
-    image: body.image ?? null
+    image: body.image ?? null,
+    audio: body.audio ?? null
   });
 
   const status = STATUS_BY_KIND[result.kind];

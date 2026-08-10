@@ -17,6 +17,7 @@ struct AIKeyboardApp: App {
         if arguments.contains("-uiTestReset") {
             SharedStore.shared.resetToDefaults()
             CaptureChannel.clear()
+            DictationChannel.clear()
         } else {
             SharedStore.shared.load()
         }
@@ -40,6 +41,14 @@ struct AIKeyboardApp: App {
         // this; see `CaptureChannelProbe` for what it does and does not show.
         if arguments.contains("-uiTestCaptureChannel") {
             CaptureChannelProbe.shared.start()
+        }
+
+        // Stands in for the microphone and the transcriber, and for nothing
+        // else: the channel underneath it is the shipping one. See
+        // `DictationChannelProbe`, and `Scripts/prove-dictation.sh` for what it
+        // does and does not prove.
+        if arguments.contains("-uiTestDictationChannel") {
+            DictationChannelProbe.shared.start()
         }
     }
 

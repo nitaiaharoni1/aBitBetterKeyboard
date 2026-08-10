@@ -147,11 +147,46 @@ public enum FrameReduction {
         /// bottom 45% of the frame removes the newest message from the
         /// fingerprint and misses **23 of 29** conversation switches, which is
         /// the failure the whole band measurement exists to prevent. Our
-        /// keyboard at its tallest is 33.4% of an iPhone 17 Pro screen; 0.40
-        /// leaves room for a taller device and stays clear of the cliff.
-        /// Measured with our own panel on screen at `bottom 40%`: still 0 misses
-        /// and 0 false invalidations.
-        public static let maximumOwnUI = 0.40
+        /// **This is a ceiling on how tall the keyboard may be, and the action row
+        /// is what made it bind.** It was 0.40, chosen against a 292 pt keyboard
+        /// (33.4%) where nothing real ever reached it. `ActionBanner` and the
+        /// action row took the keyboard to 372 pt of an iPhone 17 Pro's 874 —
+        /// 0.4256 — and the clamp started binding, which left about 22 pt of our
+        /// own banner inside the band. The banner shimmers for the whole of a read,
+        /// so that is the 30-of-30 failure again: every frame takes a fresh
+        /// identity from our own loading state and the freshness gate retires the
+        /// answer the user's tap just paid a cloud call for.
+        ///
+        /// **The obvious fix — raise the ceiling to fit the taller keyboard — was
+        /// measured and is wrong.** `run-fingerprint.sh` takes `OWN_UI_POINTS`, so
+        /// the cliff was swept over the same 30 scenes rather than reasoned about.
+        /// The arithmetic said 22 pt was far under a message bubble and safe. It is
+        /// not:
+        ///
+        /// | our UI | crop | misses | false invalidations |
+        /// |---|---|---|---|
+        /// | 292 pt (before the action row) | 0.3340 | 0/29 | 0/30 |
+        /// | 356 pt | 0.4073 | 0/29 | 0/30 |
+        /// | **364 pt (shipping)** | **0.4165** | **0/29** | **0/30** |
+        /// | 368 pt | 0.4210 | 0/29 | 0/30 |
+        /// | 370 pt | 0.4233 | **1/29** | 0/30 |
+        /// | 372 pt | 0.4256 | **1/29** | 0/30 |
+        /// | 385 pt | 0.4405 | 1/29 | 0/30 |
+        ///
+        /// The cliff is between 368 and 370 pt, and it is sharp: `ml-04`'s two
+        /// conversations collide the moment the crop passes it, because that much
+        /// of the bottom takes the newest message with it. It is the same cliff
+        /// `frame-hash.mjs` found at bottom-45%, where 23 of 29 switches are missed
+        /// — this is its near edge rather than a second one.
+        ///
+        /// So 0.42 is the ceiling (367 pt), the keyboard ships at 364 pt with 6 pt
+        /// of margin below the first failing measurement, and **the height of this
+        /// keyboard is now a constraint rather than a preference**: adding a row,
+        /// or growing the banner past `Theme.Metrics.bannerHeight`, costs a
+        /// conversation switch. `CustomLayoutTests` holds the shipped total under
+        /// this; the layout editor can still exceed it, which is the user's choice
+        /// to make and degrades only screen context.
+        public static let maximumOwnUI = 0.42
     }
 
     /// How much of the bottom to remove, given how much of the screen our own

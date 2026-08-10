@@ -18,10 +18,13 @@ struct SubscriptionView: View {
     }
 
     /// A "Cloud dictation" row used to sit second, promising something "better in
-    /// noisy places". Nothing in this build records audio anywhere — the mic key
-    /// streams a fixed script — so there is no dictation for a paid tier to
-    /// improve. Removed rather than reworded, because every rewording of it would
-    /// still be selling a feature that does not exist. See `MockDictation`.
+    /// noisy places". It was removed when nothing recorded audio anywhere. Dictation
+    /// is real now, and the row still does not come back: every transcription in
+    /// this product goes to the cloud, because Apple's on-device speech has no
+    /// Hebrew, so "cloud dictation" describes the free tier as exactly as it
+    /// describes a paid one. And "better in noisy places" is unmeasured — every
+    /// clip in `Bar/dictation/` is studio-clean synthetic speech, which the corpus
+    /// says in as many words.
     ///
     /// **The two free-tier limits are gone for the same reason, and they were a
     /// worse case.** These rows said "Free stops at 20 a day" and "Free includes

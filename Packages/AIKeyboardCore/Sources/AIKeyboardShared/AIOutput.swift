@@ -110,10 +110,10 @@ public enum AIEngineError: Error, Equatable, Sendable {
         // action fails, and none of them says where to go.
         case .deviceNotSupported:
             return
-                "This device can't run the on-device model, and no cloud model is set up. \(BackendTransport.setUpRecovery)"
+                "This device can't run the on-device model, and the cloud model is not finished being set up. \(BackendTransport.setUpRecovery)"
         case .unsupportedLanguage(let script):
             return
-                "\(script.displayName) isn't one of the languages the on-device model supports, and no cloud model is set up. \(BackendTransport.setUpRecovery)"
+                "\(script.displayName) isn't one of the languages the on-device model supports, and the cloud model is not finished being set up. \(BackendTransport.setUpRecovery)"
         case .refused:
             return "The model declined this text. Editing it slightly usually gets past it."
         case .inputTooLong:
@@ -122,10 +122,19 @@ public enum AIEngineError: Error, Equatable, Sendable {
             return
                 "This language needs the cloud model, which needs Full Access. Turn it on in Settings › Keyboards."
         case .cloudNotConfigured:
-            // Not "none is set up in this build" any more: there is a screen for
-            // it, so this is something the phone's owner can act on rather than
-            // something the build withheld from them.
-            return "This language needs a cloud model, and none is set up. \(BackendTransport.setUpRecovery)"
+            // **"None is set up" stopped being true, and this is the one error a
+            // fresh install actually hits.** At runtime there is now exactly one
+            // thing that produces this case: `BackendTransport.mapped` turning a
+            // 401 or 403 into it, which means the backend *answered* and turned
+            // this app away. Since the build ships an address and not a token,
+            // that is overwhelmingly a token that is missing, mistyped or
+            // revoked — so telling somebody no cloud model exists sends them
+            // looking for a server to deploy instead of at the field they need to
+            // fill. Names `settingsPath` directly rather than `setUpRecovery`,
+            // because this is the one dead end that can say *which* half is
+            // missing, and a sentence that names the token beats the general one.
+            return "The cloud model turned this away, which usually means its access token is "
+                + "missing or wrong. Check it under \(BackendTransport.settingsPath)."
         case .network(let detail):
             return detail.isEmpty ? "The cloud model couldn't be reached." : detail
         case .empty:

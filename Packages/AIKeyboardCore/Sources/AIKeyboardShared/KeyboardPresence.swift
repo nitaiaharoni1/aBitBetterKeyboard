@@ -409,11 +409,20 @@ public struct SetupState: Equatable, Sendable {
     /// install is the sentence a user sees immediately before every Hebrew rewrite
     /// they try fails for want of the very thing it says is working. Full Access
     /// buys the network; it does not buy somewhere to send.
+    /// **Says "not finished" rather than naming the missing half, and that is
+    /// deliberate.** `cloudConfigured` is one Bool and there are two ways to be
+    /// false: no usable address, or — since a URL started shipping — an address
+    /// with no access token beside it, which is the state of every fresh install.
+    /// Naming a token here would be wrong in the first case and naming a server
+    /// would be wrong in the second, so this sentence carries the state and the
+    /// destination, and `CloudModelView`'s own status line names the missing half
+    /// once the user is standing in front of it.
     public var fullAccessDetail: String {
         guard fullAccess == .confirmed else { return "Typing and on-device AI work without it" }
         return cloudConfigured
             ? "On — cloud rewrites and key clicks work"
-            : "On — key clicks work. Cloud rewrites need a cloud model: \(BackendTransport.settingsPath)."
+            : "On — key clicks work. The cloud model is not finished being set up: "
+                + "\(BackendTransport.settingsPath)."
     }
 
     /// What onboarding's Full Access step lists under "What it turns on".
@@ -425,8 +434,15 @@ public struct SetupState: Equatable, Sendable {
     public var fullAccessTurnsOn: String {
         cloudConfigured
             ? "Cloud rewrites for languages the on-device model cannot handle, and the system key click sound."
-            : "The system key click sound, and the network a cloud model needs. None is set up yet, so Hebrew "
-                + "Fix, Rewrite and Reply have nowhere to run — \(BackendTransport.settingsPath) is where one goes."
+            // "have nowhere to run" was true when no backend existed anywhere and
+            // is not any more: there is a server, the calls reach it, and it turns
+            // them down. Sending somebody off to find a model to deploy when they
+            // need to paste in a token is the wrong instruction, and so is naming
+            // the token here — see `fullAccessDetail` for why this stays at "not
+            // finished" and lets the screen itself say which half.
+            : "The system key click sound, and the network a cloud model needs. That model is not finished "
+                + "being set up, so Hebrew Fix, Rewrite and Reply are refused until it is — "
+                + "\(BackendTransport.settingsPath) is where that happens."
     }
 
     /// What onboarding's Full Access step lists under "Works without it".
@@ -462,15 +478,17 @@ public struct SetupState: Equatable, Sendable {
         switch microphoneAccess {
         case .confirmed: return "Allowed for this app"
         case .blocked: return "Blocked in Settings"
-        case .unknown: return "Not asked yet — dictation is still a demo"
+        case .unknown: return "Asked when you start a dictation session"
         }
     }
 
     /// The two things the keyboard actually needs. The microphone is deliberately
-    /// not one of them: a keyboard extension cannot open the microphone at all,
-    /// with or without Full Access, so counting it would leave every user one step
-    /// short of a checklist they cannot finish — which is the same nag this card is
-    /// being fixed for.
+    /// not one of them, and still is not now that dictation records for real: a
+    /// keyboard extension cannot open the microphone with or without Full Access,
+    /// so the permission belongs to the *app*, is asked for when a session starts,
+    /// and is not a step between somebody and a working keyboard. Counting it would
+    /// leave every user who does not dictate one short of a checklist they have
+    /// finished.
     public var requirementCount: Int { 2 }
 
     public var confirmedRequirements: Int {

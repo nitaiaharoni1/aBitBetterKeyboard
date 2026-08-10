@@ -10,9 +10,10 @@ actions run for real through `RoutedIntelligence`, which picks between
 `FoundationModelsEngine` on device and `CloudIntelligence` over the network, and
 screen context runs for real through `RoutedScreenReader` over frames a broadcast
 extension captures. What is still mocked is narrower and named in `README.md`'s
-mock-to-real table: dictation
-(`MockDictation`) and the scripted screen-context demo (`MockScreenContext`) the
-app plays when no broadcast is running.
+mock-to-real table: the scripted screen-context demo (`MockScreenContext`) the
+app plays when no broadcast is running. Dictation is no longer among them —
+`DictationService` records in the app, `SpeechGate` decides on the device whether
+anybody spoke, and `CloudDictation` transcribes; `MockDictation` is deleted.
 
 ## Directory Map
 
@@ -69,9 +70,8 @@ app plays when no broadcast is running.
 - **One controller owns all mutation.** `KeyboardController` is the only type that
   edits text or drives overlays; every view is a projection of its published
   state.
-- **Mocks are isolated behind named types** (
-  `MockDictation`, `MockScreenContext`) so each has a single obvious replacement
-  point. See the mock-to-real table in `README.md`.
+- **Mocks are isolated behind named types** (`MockScreenContext`) so each has a
+  single obvious replacement point. See the mock-to-real table in `README.md`.
 - **Design tokens are centralised in `Theme.swift`.** Colors resolve per
   appearance through `Color.adaptive(light:dark:)`; keyboard metrics live in
   `Theme.Metrics` because the extension and the in-app preview must agree on

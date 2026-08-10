@@ -21,36 +21,41 @@ public struct SuggestionBar: View {
 
     public var body: some View {
         HStack(spacing: 0) {
-            edgeButton(
-                systemImage: "face.smiling",
-                label: "Emoji",
-                isActive: controller.overlay == .emoji
-            ) {
-                controller.show(controller.overlay == .emoji ? .none : .emoji)
+            // Both ends are configured in the layout editor. The three controls
+            // that shipped are still the default, and each keeps its own view
+            // below: what moved is which ones are drawn and where, never how they
+            // behave. Controls in the same group sit together with no rule between
+            // them, because one of them runs the default tone outright and the
+            // other opens the menu holding everything that still needs a choice.
+            ForEach(controller.customization.barLeading) { slot in
+                slotButton(slot.action)
             }
 
-            separator
+            if !controller.customization.barLeading.isEmpty { separator }
 
             suggestions
 
-            separator
+            if !controller.customization.barTrailing.isEmpty { separator }
 
-            // The two AI controls sit together with no rule between them: one runs
-            // the default tone outright, the other opens the menu holding
-            // everything that still needs a choice.
-            toneButton
-
-            sparkleButton
+            ForEach(controller.customization.barTrailing) { slot in
+                slotButton(slot.action)
+            }
         }
-        // **The buttons do not swap sides when the language does; the candidates
-        // do.** This bar sits inside `KeyboardView`, which runs in the language's
-        // own direction, so on Hebrew the emoji key jumped to the right and the
-        // two AI buttons to the left — and a swipe along the space bar moves
-        // between languages, so they jumped mid-use. Every other control row here
-        // is already pinned: the bottom row in `KeyboardView`, the alternates
-        // popup in `KeyView`, the dots in `LanguageCallout`, and the swipe
-        // direction itself in `SpaceSwipe.language`. Controls stay put; text
-        // follows the language, which is why `suggestions` sets its own direction.
+        // **Nothing in this bar swaps sides when the language does — not the
+        // buttons and not the words.** It sits inside `KeyboardView`, which runs
+        // in the language's own direction, so on Hebrew the emoji key jumped to
+        // the right and the two AI buttons to the left; a swipe along the space
+        // bar moves between languages, so they jumped mid-use. The candidates
+        // then kept their own right-to-left arrangement for a while longer, on
+        // the argument that words should read the way the language does — but the
+        // three slots are targets a thumb learns, and the same slide that moves
+        // the language would have moved the word under it. Every other row is
+        // pinned for that reason already: the key rows and bottom row in
+        // `KeyboardView`, the alternates popup and the space bar's own strip in
+        // `KeyView`, the dots in `LanguageCallout`, and the swipe direction itself
+        // in `SpaceSwipe.language`. A Hebrew word still renders right to left
+        // inside its own slot; that is the text engine's business and is
+        // untouched by this.
         .environment(\.layoutDirection, .leftToRight)
         .frame(height: Theme.Metrics.suggestionBarHeight)
         .padding(.horizontal, Theme.Space.xxs)
@@ -58,8 +63,9 @@ public struct SuggestionBar: View {
 
     // MARK: Candidates
 
-    /// Always three slots of equal width. A single candidate stretched across the
-    /// whole bar reads as a banner rather than as a word you can tap.
+    /// Always three slots of equal width, in the same three places in every
+    /// language. A single candidate stretched across the whole bar reads as a
+    /// banner rather than as a word you can tap.
     private var suggestions: some View {
         HStack(spacing: 0) {
             ForEach(0..<3, id: \.self) { slot in
@@ -73,10 +79,6 @@ public struct SuggestionBar: View {
             }
         }
         .frame(maxWidth: .infinity)
-        // The candidates are words, so they read in the language's direction:
-        // candidate 0 is the literal echo of what was typed and belongs at the
-        // edge the reader starts from. The default stays in the middle either way.
-        .environment(\.layoutDirection, controller.language.layoutDirection)
         .animation(Theme.Motion.quick, value: controller.suggestions)
     }
 
@@ -84,26 +86,23 @@ public struct SuggestionBar: View {
         Button {
             controller.apply(suggestion)
         } label: {
-            HStack(spacing: 3) {
-                Text(suggestion.text)
-                    .font(.system(size: 17))
-                    .foregroundStyle(Theme.Keys.label)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-
-                // Only tag a candidate when it comes from the other language, so
-                // the marker means something instead of decorating every word.
-                if suggestion.language != controller.language {
-                    LanguageTag(suggestion.language)
-                }
-            }
-            .padding(.horizontal, Theme.Space.xxs)
-            .frame(maxWidth: .infinity, minHeight: 36)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
-                    .fill(suggestion.isDefault ? Theme.Keys.letter.opacity(0.9) : .clear)
-            )
-            .contentShape(Rectangle())
+            // The word alone. A candidate coming from the other language used to
+            // carry a small `LanguageTag` beside it, which is a badge on the one
+            // control in the bar that has to be read at a glance mid-word: the
+            // word is already written in its own script, so the tag repeats what
+            // the letters say and costs the room they are read in.
+            Text(suggestion.text)
+                .font(.system(size: 17, weight: .light))
+                .foregroundStyle(Theme.Keys.label)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.horizontal, Theme.Space.xxs)
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+                        .fill(suggestion.isDefault ? Theme.Keys.letter.opacity(0.9) : .clear)
+                )
+                .contentShape(Rectangle())
         }
         .pressable(scale: 0.94)
         .accessibilityLabel(suggestion.text)
@@ -111,6 +110,56 @@ public struct SuggestionBar: View {
     }
 
     // MARK: Edges
+
+    /// What the bar's two ends may hold.
+    ///
+    /// A subset of `SlotAction.catalogue`, and the exclusions are the point. A
+    /// space bar or a shift key 46 points tall above the letters is not a layout
+    /// anybody meant to build. Delete is out for a subtler reason: it is the one
+    /// key with an accelerating repeat, and the repeat is wired in `KeyView`,
+    /// which does not draw this bar — an edge button would delete once per tap and
+    /// look broken beside the real one.
+    public static let barCatalogue: [SlotAction] = [
+        .emoji, .aiMenu, .quickTone, .dictation, .cursorLeft, .cursorRight,
+        .hideKeyboard, .globe
+    ]
+
+    /// One configured control.
+    ///
+    /// The three that shipped keep their own views, unchanged: each carries a
+    /// measured decision — the tone button's three-way tap, the sparkle agreeing
+    /// with `AIMenuPanel.hasRunnableAction`, the emoji key's active tint.
+    /// Everything else is the same tap the grid key makes, so a control cannot
+    /// behave differently depending on which of the two places the user put it.
+    @ViewBuilder
+    func slotButton(_ action: SlotAction) -> some View {
+        switch action {
+        case .emoji:
+            edgeButton(
+                systemImage: "face.smiling", label: "Emoji",
+                isActive: controller.overlay == .emoji
+            ) {
+                controller.show(controller.overlay == .emoji ? .none : .emoji)
+            }
+        case .aiMenu:
+            sparkleButton
+        case .quickTone:
+            toneButton
+        default:
+            // Guarded rather than defaulted. `keyCap` answers non-nil for every
+            // case today, and a `?? .space` here would mean a future gap types a
+            // space into the user's message rather than drawing nothing.
+            if let cap = action.keyCap(language: controller.language) {
+                edgeButton(
+                    systemImage: action.glyph ?? "questionmark",
+                    label: action.title,
+                    isActive: false
+                ) {
+                    controller.press(cap)
+                }
+            }
+        }
+    }
 
     private func edgeButton(
         systemImage: String,
@@ -120,7 +169,7 @@ public struct SuggestionBar: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 19, weight: .regular))
+                .font(Theme.Glyph.font(19))
                 .foregroundStyle(isActive ? Theme.Brand.solid : Theme.Keys.secondaryLabel)
                 .frame(width: 44, height: 40)
                 .background(
@@ -134,15 +183,21 @@ public struct SuggestionBar: View {
         .accessibilityLabel(label)
     }
 
-    /// What to call the sparkle in prose, named once and next to the button it
-    /// names.
+    /// Where to send a reader looking for the AI actions, named once.
     ///
-    /// For the reason `ToneSetting.settingsNote` gives: a glyph is not a name.
-    /// The playground and onboarding both said "tap ✨" while two brand-tinted
-    /// buttons sat side by side in this bar — and the default tone's own icon was
-    /// SF `sparkle` next to this one's `sparkles`, so the instruction pointed at
+    /// For the reason `ToneSetting.settingsNote` gives: a glyph is not a name. The
+    /// playground and onboarding both said "tap ✨" while two brand-tinted buttons
+    /// sat side by side in this bar — and the default tone's own icon was SF
+    /// `sparkle` next to this one's `sparkles`, so the instruction pointed at
     /// whichever of the two the reader looked at first.
-    public static let aiButtonName = "the AI button above the keys"
+    ///
+    /// **It now names a row rather than a button, because the buttons moved and
+    /// there is more than one of them.** Reply, Fix, Rewrite and dictation are keys
+    /// in the action row under the keyboard, and the bar's own ends ship empty. It
+    /// deliberately does not say "the sparkle": on a stock install there is no
+    /// sparkle, and a user who has put one back in the bar through the layout
+    /// editor is not who this copy is written for.
+    public static let aiButtonName = "the action row under the keys"
 
     /// Whether the sparkle opens the AI menu.
     ///
@@ -181,12 +236,56 @@ public struct SuggestionBar: View {
         return hasTextToWorkWith ? .rewrite : .openMenu
     }
 
+    /// The glyph the one-tap button always wears, whatever the tone is.
+    ///
+    /// **It is `AIAction.rewrite`'s own icon on purpose.** The button is a
+    /// shortcut through the Rewrite row in `AIMenuPanel`, so drawing what that row
+    /// draws is the only thing in the bar that says which panel it is short for.
+    /// It must not be a sparkle in any count: `SparkleMark` sits against it with no
+    /// rule between them, and that pairing has already shipped once — see
+    /// `ToneIconTests`.
+    static let toneButtonSymbol = AIAction.rewrite.icon
+
+    /// The one-tap button's width, the same for every tone.
+    ///
+    /// **Fixed rather than grown to fit, because the label under the glyph is a
+    /// setting and a button that resizes when a setting changes moves its
+    /// neighbours with it.** Letting it size to its text put `Professional` at 67pt
+    /// against `Casual`'s 44, so changing the default tone in Settings silently
+    /// re-laid-out the suggestion bar — three candidates the user reads mid-word,
+    /// shifted sideways by a choice made on another screen.
+    ///
+    /// 68 is the widest label plus the padding, so nothing ever scales down:
+    /// `Professional` measures 56.6pt at this font and the inset is 5 a side.
+    /// `ToneIconTests` holds every tone name to fitting, which is the assertion
+    /// that fails if a seventh register arrives with a longer name.
+    static let toneButtonWidth: CGFloat = 68
+
+    /// The inset either side of the label inside `toneButtonWidth`.
+    static let toneButtonInset: CGFloat = 5
+
+    /// The label's type, as a `UIFont` so the width rule can be measured against
+    /// the font the button actually draws rather than against a second spelling of
+    /// it. The view wraps it back into a `Font`.
+    ///
+    /// Semibold at 9pt, against the `Theme.Glyph` light house weight the icons use:
+    /// a hairline holds up at 15pt and disappears at 9.
+    static let toneLabelFont = UIFont.systemFont(ofSize: 9, weight: .semibold)
+
     /// Rewrite in the default tone, without opening anything.
     ///
-    /// It wears the tone's own icon rather than a generic wand, because the one
-    /// thing a user cannot otherwise learn without opening a panel is *which* tone
-    /// a tap will run. `KeyboardController.runDefaultTone` carries why this is
-    /// Rewrite and not Fix.
+    /// **The icon is fixed and the tone is written out under it, because the icon
+    /// alone answered the wrong question.** It used to be the tone's own symbol and
+    /// nothing else, so a user with Casual selected got a small waving stick figure
+    /// (`figure.wave`) in a keyboard, which says nothing about rewriting, nothing
+    /// about AI, and reads as a profile or contacts button. The fact it *was*
+    /// carrying — which of six tones a tap runs, otherwise unknowable without
+    /// opening a panel — is real and is kept, just moved into the label under the
+    /// glyph where it can be read rather than guessed. `ToneStyle.icon` is still the
+    /// per-tone symbol and still used, in the tone picker and on a result variant,
+    /// where the surrounding panel already says what the screen is about.
+    ///
+    /// `KeyboardController.runDefaultTone` carries why this is Rewrite and not Fix.
     ///
     /// Three states, and they look like three things. With something to rewrite it
     /// is brand-tinted and lit. With nothing to rewrite the gradient goes and the
@@ -203,6 +302,8 @@ public struct SuggestionBar: View {
         let tap = Self.toneTap(
             hasTextToWorkWith: controller.hasTextToWorkWith, isWorking: isBusy)
 
+        let tint = tap == .rewrite ? Theme.Brand.solid : Theme.Keys.secondaryLabel
+
         return Button {
             switch tap {
             case .rewrite: controller.runDefaultTone()
@@ -210,19 +311,30 @@ public struct SuggestionBar: View {
             case .ignore: break
             }
         } label: {
-            Group {
-                if isBusy {
-                    ProgressView()
-                        .controlSize(.mini)
-                        .tint(Theme.Brand.solid)
-                } else {
-                    Image(systemName: tone.icon)
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(
-                            tap == .rewrite ? Theme.Brand.solid : Theme.Keys.secondaryLabel)
+            // The spinner replaces the glyph and not the label: a bare spinner in
+            // a 68pt slot is an unlabelled box, and the button is being waited on
+            // precisely when the user most wants to know what they tapped.
+            VStack(spacing: 1) {
+                Group {
+                    if isBusy {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .tint(Theme.Brand.solid)
+                    } else {
+                        Image(systemName: Self.toneButtonSymbol)
+                            .font(Theme.Glyph.medium(15))
+                            .foregroundStyle(tint)
+                    }
                 }
+                .frame(height: 18)
+
+                Text(tone.title)
+                    .font(Font(Self.toneLabelFont))
+                    .foregroundStyle(tint)
+                    .lineLimit(1)
             }
-            .frame(width: 44, height: 40)
+            .padding(.horizontal, Self.toneButtonInset)
+            .frame(width: Self.toneButtonWidth, height: 40)
             .background(
                 RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                     .fill(Theme.Brand.softGradient)

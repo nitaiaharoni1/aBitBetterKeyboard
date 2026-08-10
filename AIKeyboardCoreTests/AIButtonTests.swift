@@ -162,10 +162,17 @@ final class ToneIconTests: XCTestCase {
         for tone in ToneStyle.allCases {
             XCTAssertFalse(
                 tone.icon.contains("sparkle"),
-                "\(tone.title) wears \(tone.icon) next to \(SparkleMark.symbolName) in the same bar")
+                "\(tone.title) wears \(tone.icon) next to \(SparkleMark.symbolName) in the same panel")
         }
         XCTAssertEqual(ToneSetting.customTitle, "My tone")
-        XCTAssertFalse(ToneSetting.custom(instruction: "x", nearest: .clearer).icon.contains("sparkle"))
+    }
+
+    /// The custom register is named in the same place as the six built-ins,
+    /// because the button prints a name rather than drawing one.
+    func testTheCustomRegisterIsNamedTheSameWayTheBuiltInsAre() {
+        XCTAssertEqual(ToneSetting.builtIn(.professional).title, ToneStyle.professional.title)
+        XCTAssertEqual(
+            ToneSetting.custom(instruction: "x", nearest: .clearer).title, ToneSetting.customTitle)
     }
 
     /// Every icon has to be a symbol that exists, because a name with no symbol
@@ -182,5 +189,62 @@ final class ToneIconTests: XCTestCase {
     /// held to being six.
     func testTheSixTonesAreSixDifferentIcons() {
         XCTAssertEqual(Set(ToneStyle.allCases.map(\.icon)).count, ToneStyle.allCases.count)
+    }
+
+    /// **The bar button's glyph does not change with the tone, and that is the
+    /// whole fix.** Drawing `tone.icon` there made the control mean six things:
+    /// with Casual selected it was `figure.wave`, a waving stick figure sitting in
+    /// a keyboard, which reads as a profile button and says nothing about rewriting
+    /// anything. So the assertion is written to reject the old behaviour outright —
+    /// the symbol has to be one *no* tone wears — rather than merely to pass.
+    func testTheOneTapButtonWearsOneFixedSymbolAndNotTheTonesOwn() {
+        XCTAssertEqual(SuggestionBar.toneButtonSymbol, AIAction.rewrite.icon)
+        XCTAssertNotNil(UIImage(systemName: SuggestionBar.toneButtonSymbol))
+        XCTAssertFalse(SuggestionBar.toneButtonSymbol.contains("sparkle"))
+
+        for tone in ToneStyle.allCases {
+            XCTAssertNotEqual(
+                SuggestionBar.toneButtonSymbol, tone.icon,
+                "the button is back to drawing \(tone.title)'s own symbol")
+        }
+    }
+
+    /// **The tone is printed now, and the button that prints it is a fixed width**,
+    /// so a name that does not fit does not widen the bar — it truncates, and the
+    /// user reads `Professiona…` under a glyph. The button cannot grow instead
+    /// because its width is a setting: sizing to the text moved the three
+    /// candidates sideways whenever the default tone changed on another screen.
+    ///
+    /// So every name is measured against the real font at the real inset. This is
+    /// the test that fails the day a seventh register arrives with a long name,
+    /// and the fix then is a wider button or a shorter name, deliberately.
+    func testEveryToneNameFitsTheFixedWidthButtonItIsPrintedOn() {
+        let room = SuggestionBar.toneButtonWidth - 2 * SuggestionBar.toneButtonInset
+        let names = ToneStyle.allCases.map(\.title) + [ToneSetting.customTitle]
+
+        for name in names {
+            XCTAssertFalse(name.isEmpty)
+            let width = (name as NSString).size(
+                withAttributes: [.font: SuggestionBar.toneLabelFont]
+            ).width
+            XCTAssertLessThanOrEqual(
+                width, room,
+                "\"\(name)\" needs \(width)pt and the button offers \(room)pt, so it truncates")
+        }
+    }
+
+    /// The other half of the same constraint, and the one a "does it fit" test
+    /// cannot see: the button is allowed to be wider than its 44pt neighbours, but
+    /// not so wide that the three candidates stop being readable on the narrowest
+    /// screen the app runs on. 375pt is an iPhone SE; the bar's chrome is the two
+    /// 44pt edge buttons, this one, and two hairline separators.
+    func testTheButtonLeavesTheCandidatesRoomOnTheNarrowestScreen() {
+        let separator = 1 + 2 * Theme.Space.xxs
+        let chrome = 2 * Theme.Space.xxs + 44 + SuggestionBar.toneButtonWidth + 44 + 2 * separator
+        let perCandidate = (375 - chrome) / 3
+
+        XCTAssertGreaterThanOrEqual(
+            perCandidate, 55,
+            "each candidate gets \(perCandidate)pt, which is narrower than a six-letter word")
     }
 }

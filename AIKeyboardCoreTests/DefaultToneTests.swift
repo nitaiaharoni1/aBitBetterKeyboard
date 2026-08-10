@@ -168,10 +168,16 @@ final class DefaultToneTests: XCTestCase {
 
         XCTAssertEqual(engine.tones, [.professional], "the bar ignored the stored default tone")
         XCTAssertEqual(engine.fixCount, 0, "the one-tap action ran Fix, which has no tone to run by")
-        XCTAssertEqual(
-            controller.overlay, .aiResult(.variants(.professional)),
-            "the result panel does not name the register it just ran")
+        // **The answer arrives in the banner now, not in a panel over the keys.**
+        // What is worth pinning is unchanged in substance: that the surface showing
+        // the result names the action that produced it. `runningAction` is what the
+        // banner labels itself from, and a version that left it nil renders the
+        // idle hint over three fresh rewrites.
+        XCTAssertEqual(controller.overlay, .none, "the one-tap rewrite covered the keys")
+        XCTAssertEqual(controller.runningAction, .rewrite)
+        XCTAssertEqual(controller.selectedTone, .professional)
         XCTAssertEqual(controller.variants.first?.text, "rewritten")
+        XCTAssertEqual(controller.bannerOptions.first?.text, "rewritten")
     }
 
     /// The residue case.
@@ -259,10 +265,15 @@ final class DefaultToneTests: XCTestCase {
         controller.runDefaultTone()
         await settle(controller)
 
-        XCTAssertEqual(controller.aiError, .refused, "the failure never reached the panel")
-        XCTAssertEqual(controller.overlay, .aiResult(.variants(.confident)))
+        XCTAssertEqual(controller.aiError, .refused, "the failure never reached the banner")
+        XCTAssertEqual(controller.overlay, .none)
         XCTAssertTrue(controller.variants.isEmpty)
         XCTAssertFalse(controller.isWorking)
+        // The reason has to be *shown*, against the action that produced it.
+        // `aiError` being set was always true of the broken version too — what it
+        // could not do is name the action, because nothing recorded which one ran.
+        XCTAssertEqual(controller.runningAction, .rewrite)
+        XCTAssertEqual(controller.selectedTone, .confident)
     }
 
     // MARK: The user's own tone
@@ -336,7 +347,9 @@ final class DefaultToneTests: XCTestCase {
             controller.selectedToneIsCustom,
             "Rewrite is titled \"\(ToneSetting.customTitle)\" and lights a chip nobody picked")
         XCTAssertNil(controller.selectedTone)
-        XCTAssertEqual(controller.overlay, .aiResult(.variants(nil)))
+        // Rewrite from the menu closes the menu: the answer lands in the banner and
+        // the keys come back. The panel it used to push is gone for this action.
+        XCTAssertEqual(controller.overlay, .none)
     }
 
     /// The same for the tone panel, which is the other way back into a register

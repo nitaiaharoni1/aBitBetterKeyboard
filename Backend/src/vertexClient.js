@@ -37,13 +37,17 @@ const THINKING_BUDGET = 512;
 // If you want temperature 0 for text, that is a reasonable thing to want. Measure
 // it first: `Bar/ai-text/harness/run-real.sh`, two runs a side, and read per-entry
 // verdicts rather than the total — one run is not evidence on that bar either.
-function buildRequestBody({ instructions, prompt, fields, image }) {
+function buildRequestBody({ instructions, prompt, fields, image, audio }) {
   // Image first, prompt text second — the same order
   // `Bar/screen-context/harness/vertex_vision.py`'s `call` sends the corpus
   // through, kept for consistency rather than because the order is itself
   // measured to matter with a fixed schema.
   const parts = [];
   if (image) parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
+  // Audio before the prompt for the same reason the frame is: it is the thing
+  // being read, and `Bar/dictation/harness/transcribe.py` sends it in this
+  // order, so every number on that bar was bought with this arrangement.
+  if (audio) parts.push({ inlineData: { mimeType: audio.mimeType, data: audio.data } });
   parts.push({ text: prompt });
 
   const generationConfig = {
@@ -51,7 +55,13 @@ function buildRequestBody({ instructions, prompt, fields, image }) {
     responseSchema: buildResponseSchema(fields),
     thinkingConfig: { thinkingBudget: THINKING_BUDGET }
   };
-  if (image) generationConfig.temperature = 0;
+  // 0 for both media paths. On the screen bar that is what every published
+  // number was taken at; on the dictation bar it is what makes the bar
+  // deterministic at all — two full runs came back byte for byte identical,
+  // which no other corpus in this repo does. Transcription has a right answer,
+  // so sampling can only move the output away from it. Text is still left
+  // unset, because that is what `Bar/ai-text` was scored at.
+  if (image || audio) generationConfig.temperature = 0;
 
   return {
     systemInstruction: { parts: [{ text: instructions }] },
@@ -108,7 +118,7 @@ export function createVertexClient({
   const endpoint = `${endpointBase}/projects/${project}/locations/global/publishers/google/models/${model}:generateContent`;
 
   return {
-    async call({ instructions, prompt, fields, image }) {
+    async call({ instructions, prompt, fields, image, audio }) {
       let accessToken;
       try {
         accessToken = await tokenProvider.getAccessToken();
@@ -121,7 +131,7 @@ export function createVertexClient({
         response = await fetchImpl(endpoint, {
           method: "POST",
           headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
-          body: JSON.stringify(buildRequestBody({ instructions, prompt, fields, image }))
+          body: JSON.stringify(buildRequestBody({ instructions, prompt, fields, image, audio }))
         });
       } catch (error) {
         return { kind: "unavailable", message: `Could not reach Vertex: ${error.message}` };

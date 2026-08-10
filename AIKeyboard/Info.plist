@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  A partial Info.plist, merged into the one `GENERATE_INFOPLIST_FILE = YES`
+	  builds. Everything else this app declares is still a build setting; this
+	  file exists for the one key Xcode's generator does not know.
+
+	  `INFOPLIST_KEY_UIBackgroundModes = audio` is accepted as a build setting,
+	  survives `-showBuildSettings`, and never reaches the built Info.plist —
+	  the generator has a fixed list of keys it understands and this is not one
+	  of them. It failed completely silently, and what it would have cost is the
+	  whole feature: without the audio background mode iOS suspends this app the
+	  moment the user switches to the app they are writing in, which is the only
+	  moment dictation is ever used. `Scripts/prove-dictation.sh` check 2 reads
+	  the built plist, not the build setting, for exactly that reason.
+
+	  The recording session is also the *only* thing this mode is for. Nothing
+	  here plays audio, and a session closes itself after 5, 15 or 60 minutes —
+	  see `SharedStore.dictationSessionMinutes`, which deliberately has no
+	  "never".
+	-->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
+</dict>
+</plist>

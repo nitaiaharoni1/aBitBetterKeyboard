@@ -48,12 +48,27 @@ final class KeyboardViewController: UIInputViewController {
         controller.onAdvanceToNextKeyboard = { [weak self] in
             self?.advanceToNextInputMode()
         }
+        // Only a `UIInputViewController` can put the keyboard away, and the
+        // package does not have one. Without this the Hide keyboard key a user
+        // added in the layout editor would draw, animate, click and do nothing —
+        // which is exactly the shape of the defect that made this whole keyboard
+        // type nothing on a device for the length of its development.
+        controller.onDismissKeyboard = { [weak self] in
+            self?.dismissKeyboard()
+        }
 
         install(KeyboardView(controller: controller))
 
         // The context strip appears and disappears with the capture session, so
         // the height we ask the host app for has to follow it.
         controller.$screenContext
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateKeyboardHeight() }
+            .store(in: &cancellables)
+
+        // The layout is edited in the companion app, which is another process, so
+        // the height changes without anything in here having asked for it.
+        controller.$customization
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateKeyboardHeight() }
             .store(in: &cancellables)
@@ -90,6 +105,16 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        // **Re-read before measuring, and both before the keyboard is on screen.**
+        // The layout is edited in the companion app, and iOS keeps this process
+        // alive in the background, so the first appearance after an edit is the
+        // one that has to be right. Reading it in `viewDidAppear` instead left
+        // `updateKeyboardHeight()` measuring the *previous* layout: a keyboard
+        // that had just gained a number row came up at the old height, clipped
+        // the new row, and jumped taller a runloop turn later when the
+        // `$customization` sink landed — that sink is `.receive(on: RunLoop.main)`
+        // and so is never synchronous with this.
+        controller?.reloadCustomization()
         updateKeyboardHeight()
     }
 
@@ -155,19 +180,38 @@ final class KeyboardViewController: UIInputViewController {
     /// the home indicator over the keyboard — so that is measured and everything
     /// else is not.
     private func ownUIHeightFraction() -> Double {
+        // The layout, because a Roomy keyboard with both optional rows on covers
+        // half again what the default does, and the band has to leave all of it
+        // out. See `KeyboardGeometry.ownUIHeightFraction`.
+        let layout = controller?.customization ?? .default
         guard let window = view.window else {
             return KeyboardGeometry.ownUIHeightFraction(
-                screenHeight: KeyboardGeometry.referenceScreenHeight)
+                screenHeight: KeyboardGeometry.referenceScreenHeight, layout: layout)
         }
         let screenHeight = window.screen.bounds.height
         let ourBottom = window.frame.minY + view.convert(view.bounds, to: window).maxY
         return KeyboardGeometry.ownUIHeightFraction(
-            screenHeight: screenHeight, gapBelow: screenHeight - ourBottom)
+            screenHeight: screenHeight, gapBelow: screenHeight - ourBottom, layout: layout)
     }
 
+    /// **Both channels stop here, and the dictation one is not optional.**
+    ///
+    /// Screen context stops for the reason `viewDidAppear` gives: polling a page
+    /// from a keyboard nobody can see costs battery to learn nothing. Dictation
+    /// stops for a stronger reason. `DictationRequest.keyboardAliveAt` is a
+    /// dead-man's switch — the recorder abandons an open utterance whose keyboard
+    /// has stopped writing it — and a `RunLoop` timer left running in a keyboard
+    /// the user has dismissed goes on refreshing it, which is the one thing that
+    /// defeats it. The microphone would then stay open, in another process, on
+    /// nobody's behalf, until the sixty-second cap. Leaving it to the extension
+    /// being killed is not good enough: iOS keeps the process around after the
+    /// keyboard goes away, and how long for is not ours to decide.
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         ScreenContextSession.shared.stopConsuming()
+        // Withdraws the utterance and stops the poll. A no-op unless dictation
+        // was actually up; see `KeyboardController.stopDictation`.
+        controller?.stopDictation(insert: false)
     }
 
     /// The host app decides how tall the keyboard is only if we tell it. The
@@ -175,7 +219,11 @@ final class KeyboardViewController: UIInputViewController {
     /// during rotation.
     private func updateKeyboardHeight() {
         guard let controller else { return }
-        let height = Theme.Metrics.totalHeight(withContextStrip: controller.showsScreenContextStrip)
+        // The banner is a constant row that is always counted, so the only thing
+        // that moves this number now is the layout. See `Theme.Metrics.bannerHeight`
+        // for why a strip that appears and disappears was worse than one that is
+        // always there.
+        let height = Theme.Metrics.totalHeight(for: controller.customization)
 
         guard let heightConstraint else {
             let constraint = view.heightAnchor.constraint(equalToConstant: height)

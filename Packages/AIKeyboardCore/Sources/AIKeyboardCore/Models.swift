@@ -79,11 +79,18 @@ public enum ToneStyle: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 
     /// **No tone may wear a sparkle, and Clearer did.** SF `sparkle` and SF
-    /// `sparkles` are the same drawing at different counts, and the one-tap tone
-    /// button sits directly beside the AI menu's `SparkleMark` in
-    /// `SuggestionBar` — so the shipped default tone put two sparkles side by
-    /// side, one running a rewrite and one opening a panel, and every instruction
-    /// that named "✨" pointed at both. `ToneIconTests` holds the rule.
+    /// `sparkles` are the same drawing at different counts. These six are drawn in
+    /// the tone picker and on a result variant, both inside a panel whose header
+    /// carries `SparkleMark`, so a sparkle here still puts two of them on one
+    /// screen meaning two different things.
+    ///
+    /// It used to be worse and closer: the one-tap button in `SuggestionBar` wore
+    /// this symbol directly beside that bar's own `SparkleMark`, so the shipped
+    /// default tone put two sparkles side by side, one running a rewrite and one
+    /// opening a panel, and every instruction that named "✨" pointed at both. That
+    /// button now wears `SuggestionBar.toneButtonSymbol` and names the tone in
+    /// words underneath — see its doc comment for why. `ToneIconTests` holds both
+    /// halves of the rule.
     public var icon: String {
         switch self {
         case .clearer: return "eyeglasses"
@@ -220,11 +227,15 @@ public struct RewriteVariant: Identifiable, Sendable {
 
 // MARK: - Suggestions
 
-/// A word offered in the suggestion bar. `language` drives the small tint that
-/// marks a candidate coming from the other language mid-sentence.
+/// A word offered in the suggestion bar.
 public struct Suggestion: Identifiable, Sendable, Equatable {
     public let id = UUID()
     public let text: String
+    /// Which language the candidate came from, which is not always the layout on
+    /// screen: `SuggestionEngine.languages(in:)` reads the sentence and offers
+    /// Hebrew words mid-English and back. Provenance only — the bar used to draw
+    /// a `LanguageTag` from it and no longer does, because the word is already
+    /// written in its own script and the badge only cost it room.
     public let language: KeyboardLanguage
     /// The middle slot is what a space press will commit, the way iOS marks it.
     public let isDefault: Bool

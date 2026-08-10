@@ -227,3 +227,48 @@ test("a screen read sends temperature 0 and a text action sends none", async () 
   assert.equal(bodies[0].generationConfig.thinkingConfig.thinkingBudget, 512);
   assert.equal(bodies[1].generationConfig.thinkingConfig.thinkingBudget, 512);
 });
+
+// MARK: - The audio path
+//
+// Dictation. Same inlineData shape as a frame, a different field and a
+// different endpoint, for the reason `validateMedia` in `requestHandler.js`
+// gives: a recording of somebody's voice should be able to have a different
+// retention rule from a picture of their screen.
+
+test("an audio part is added before the prompt text", async () => {
+  let captured;
+  const fetchImpl = async (url, init) => {
+    captured = init;
+    return okResponse();
+  };
+  const client = createVertexClient({ project: "p", model: "m", tokenProvider: tokenProviderStub(), fetchImpl });
+  await client.call({
+    instructions: "transcribe",
+    prompt: "what was said",
+    fields: [],
+    audio: { mimeType: "audio/wav", data: "UklGRg==" }
+  });
+  const body = JSON.parse(captured.body);
+  assert.deepEqual(body.contents[0].parts[0], { inlineData: { mimeType: "audio/wav", data: "UklGRg==" } });
+  assert.deepEqual(body.contents[0].parts[1], { text: "what was said" });
+});
+
+// Not symmetry for its own sake. `Bar/dictation/` is deterministic *because* of
+// this line — two full runs of the identical configuration came back byte for
+// byte identical, which no other corpus in this repo manages — and every number
+// on that bar was taken with it.
+test("the audio path sends temperature 0", async () => {
+  let captured;
+  const fetchImpl = async (url, init) => {
+    captured = init;
+    return okResponse();
+  };
+  const client = createVertexClient({ project: "p", model: "m", tokenProvider: tokenProviderStub(), fetchImpl });
+  await client.call({
+    instructions: "transcribe",
+    prompt: "what was said",
+    fields: [],
+    audio: { mimeType: "audio/wav", data: "UklGRg==" }
+  });
+  assert.equal(JSON.parse(captured.body).generationConfig.temperature, 0);
+});

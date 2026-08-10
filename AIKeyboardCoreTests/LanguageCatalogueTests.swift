@@ -112,34 +112,46 @@ final class LanguageCatalogueTests: XCTestCase {
         }
     }
 
-    /// Every row has to fit an iPhone 17 Pro in portrait. The tolerance is one key
-    /// gap; a layout that is genuinely too wide overruns by whole keys.
+    /// Every row has to fit the screen, and there is no tolerance left to hide in.
     ///
-    /// It used to be slack for one row: Hebrew's bottom row overran by 5.1pt,
-    /// because nine letters plus delete leave `widths` less than the 1.15-unit
-    /// floor it gives a stretcher. Moving delete to the top row — which is where
-    /// Apple's own Hebrew keyboard has it — takes that to zero, and the delete key
-    /// comes out 54.3pt, the same width as English's.
+    /// **This used to allow one key gap of overspill, and one row was using it.**
+    /// Hebrew's bottom row ran 5.1pt over: nine letters plus delete divide out at
+    /// exactly one unit each, and `widths` floored the delete key to 1.15 units on
+    /// the way past. That floor is now asked only where the even share is *under*
+    /// a letter key — see `KeyboardLayout.widths` — so nothing needs the slack and
+    /// the assertion is the real one: a row is at most as wide as the keyboard.
+    ///
+    /// Two widths, because a floor only bites on the narrow one: an iPhone 17 Pro
+    /// at 402pt, and 320pt, which is what Display Zoom gives a modern iPhone. The
+    /// narrow case caught a second floor of the same shape — `unitWidth` asked for
+    /// 20pt keys where Bulgarian's thirteen columns had room for 18.6, and its top
+    /// two rows ran 18pt off the side. The bottom row is included by `allRows`, so
+    /// the letters plane's punctuation key is measured with the rest.
+    ///
+    /// The epsilon is floating-point dust, not slack: a row of ten keys that
+    /// divides evenly comes back as 396.0000000000001 against an available 396.
     func testNoRowOverflowsTheKeyboard() {
-        let width: CGFloat = 402
         let sideInset = Theme.Metrics.sideInset
         let spacing = Theme.Metrics.keySpacing
-        let available = width - sideInset * 2
 
-        for language in KeyboardLanguage.allCases {
-            for plane in [KeyboardPlane.letters, .numbers, .symbols] {
-                let columns = KeyboardLayout.columns(for: language, plane: plane)
-                let unit = KeyboardLayout.unitWidth(
-                    totalWidth: width, spacing: spacing, sideInset: sideInset, columns: columns)
-                for row in allRows(language, plane) {
-                    let widths = KeyboardLayout.widths(
-                        for: row, totalWidth: available, unitWidth: unit, spacing: spacing)
-                    let total =
-                        widths.reduce(0, +) + spacing * CGFloat(row.keys.count - 1)
-                        + row.sideInsetUnits * (unit + spacing) * 2
-                    XCTAssertLessThanOrEqual(
-                        total, available + spacing,
-                        "\(language.displayName) \(plane) row \(row.id) is \(total - available)pt too wide")
+        for width in [CGFloat(402), 320] {
+            let available = width - sideInset * 2
+            for language in KeyboardLanguage.allCases {
+                for plane in [KeyboardPlane.letters, .numbers, .symbols] {
+                    let columns = KeyboardLayout.columns(for: language, plane: plane)
+                    let unit = KeyboardLayout.unitWidth(
+                        totalWidth: width, spacing: spacing, sideInset: sideInset, columns: columns)
+                    for row in allRows(language, plane) {
+                        let widths = KeyboardLayout.widths(
+                            for: row, totalWidth: available, unitWidth: unit, spacing: spacing)
+                        let total =
+                            widths.reduce(0, +) + spacing * CGFloat(row.keys.count - 1)
+                            + row.sideInsetUnits * (unit + spacing) * 2
+                        XCTAssertLessThanOrEqual(
+                            total, available + 0.001,
+                            "\(language.displayName) \(plane) row \(row.id) is "
+                                + "\(total - available)pt too wide at \(width)pt")
+                    }
                 }
             }
         }
@@ -192,16 +204,19 @@ final class LanguageCatalogueTests: XCTestCase {
         XCTAssertEqual(KeyboardLayout.columns(for: .english, plane: .letters), 10)
     }
 
-    /// **Delete closes exactly one row, and which row is a measurement.** Sixty
-    /// three layouts put it at the end of the bottom row; Apple's Hebrew keyboard
-    /// puts it at the end of the *top* row, beside eight letters, and
-    /// `Bar/layouts/stock-rendered-rows.json` is the photograph of that.
+    /// **Delete closes exactly one row, and it is the bottom row in all
+    /// sixty-four.** Apple's Hebrew keyboard is the one measured layout that puts
+    /// it elsewhere — at the end of the short *top* row, beside eight letters, per
+    /// `Bar/layouts/stock-rendered-rows.json` — and this keyboard deliberately
+    /// does not follow it there. A swipe along the space bar changes language
+    /// mid-sentence, so a delete key that follows Apple moves rows under a thumb
+    /// already reaching for it; that is the trade `KeyboardLayout.letters(for:)`
+    /// names.
     ///
     /// The wrong implementations this rejects are both real shapes: delete on
     /// every row (a `map` that appends it unconditionally), and delete on no row
-    /// at all for Hebrew (a `deleteRow` the row builder never reads, which is what
-    /// happens when the field is added and the loop is not).
-    func testDeleteClosesOneRowAndItIsTheRowAppleUses() {
+    /// at all (an index the row builder never reaches).
+    func testDeleteClosesTheBottomRowInEveryLanguage() {
         for language in KeyboardLanguage.allCases {
             let rows = KeyboardLayout.rows(for: language, plane: .letters)
             let carrying = rows.filter { row in row.keys.contains { $0.cap == .backspace } }
@@ -210,12 +225,50 @@ final class LanguageCatalogueTests: XCTestCase {
                 "\(language.displayName) has delete on \(carrying.count) letter rows")
             guard let row = carrying.first else { continue }
             XCTAssertEqual(
-                row.id, language == .hebrew ? 0 : 2,
+                row.id, 2,
                 "\(language.displayName) puts delete on row \(row.id)")
             XCTAssertEqual(
                 row.keys.last?.cap, .backspace,
                 "\(language.displayName) does not end that row with delete")
         }
+    }
+
+    /// The letters plane's punctuation key types the script's own marks, and it
+    /// exists there and nowhere else.
+    ///
+    /// **The two failures worth naming.** A key hardcoded to `.,?!` would type a
+    /// Latin question mark on an Arabic keyboard, which is why the marks are read
+    /// from the same `punctuationMarks` the numbers plane prints. And the same key
+    /// on the numbers plane would sit beside the `.` already in that row under the
+    /// identity `char-.` twice over — undefined `ForEach` behaviour, not a
+    /// cosmetic clash. `testNoPlaneHasTwoKeysWithTheSameIdentity` catches the
+    /// second only because the id here is explicit; this pins that it is.
+    func testThePunctuationKeyIsOnTheLettersPlaneAndTypesTheScriptsOwnMarks() {
+        for language in KeyboardLanguage.allCases {
+            let onLetters = bottomKeys(language, .letters).filter {
+                $0.id == KeyboardLayout.punctuationKeyID
+            }
+            XCTAssertEqual(
+                onLetters.count, 1,
+                "\(language.displayName) has \(onLetters.count) punctuation keys on letters")
+            for plane in [KeyboardPlane.numbers, .symbols] {
+                XCTAssertFalse(
+                    bottomKeys(language, plane).contains { $0.id == KeyboardLayout.punctuationKeyID },
+                    "\(language.displayName) repeats the punctuation key on \(plane)")
+            }
+
+            guard let key = onLetters.first else { continue }
+            let marks = KeyboardLayout.punctuationMarks(for: language).map(String.init)
+            XCTAssertEqual(key.cap, .character(marks[0]))
+            XCTAssertEqual(key.alternates, Array(marks.dropFirst()))
+        }
+
+        // The scripts that write these marks differently, spelled out rather than
+        // derived, so a change to `punctuationMarks` has to be deliberate.
+        XCTAssertEqual(KeyboardLayout.punctuationMarks(for: .arabic), ".،؟!'")
+        XCTAssertEqual(KeyboardLayout.punctuationMarks(for: .persian), ".،؟!'")
+        XCTAssertEqual(KeyboardLayout.punctuationMarks(for: .greek), ".,;!'")
+        XCTAssertEqual(KeyboardLayout.punctuationMarks(for: .hebrew), ".,?!'")
     }
 
     // MARK: Reachability
@@ -621,17 +674,6 @@ final class LanguageCatalogueTests: XCTestCase {
         XCTAssertEqual(Self.appleSpaceCaption(for: .hebrew, in: uiKit), "רווח")
     }
 
-    /// Apple has no localised return-key cap anywhere on this machine — the near
-    /// misses are VoiceOver phrasings ("Volver", "वापस जाएँ") — so the fourteen
-    /// that shipped with a word keep it and nothing added since invents one.
-    /// `KeyView` draws the return glyph for the rest.
-    func testOnlyTheOriginalFourteenClaimAReturnCaption() {
-        let named = KeyboardLanguage.allCases.filter { $0.returnLabel != nil }
-        XCTAssertEqual(named.count, 14, "\(named.map(\.rawValue)) claim a return caption")
-        XCTAssertEqual(KeyboardLanguage.english.returnLabel, "return")
-        XCTAssertNil(KeyboardLanguage.tamil.returnLabel)
-    }
-
     /// The flag is the region CLDR calls this language's likely home, which is a
     /// fact about CLDR and not a claim about where the language is spoken. It is
     /// derived rather than chosen, so Catalan flies Spain's flag and Welsh the
@@ -811,6 +853,10 @@ final class LanguageCatalogueTests: XCTestCase {
 
     private func allKeys(_ language: KeyboardLanguage, _ plane: KeyboardPlane) -> [KeySpec] {
         allRows(language, plane).flatMap(\.keys)
+    }
+
+    private func bottomKeys(_ language: KeyboardLanguage, _ plane: KeyboardPlane) -> [KeySpec] {
+        KeyboardLayout.bottomRow(for: language, plane: plane, showsGlobe: true).keys
     }
 
     /// Everything the letters plane can produce: the keys themselves and their

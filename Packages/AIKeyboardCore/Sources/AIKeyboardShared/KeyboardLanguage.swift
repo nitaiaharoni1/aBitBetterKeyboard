@@ -64,6 +64,27 @@ public struct KeyboardLanguage: RawRepresentable, Hashable, Identifiable, Codabl
     /// route anything.
     public var languageTag: String { definition.tag }
 
+    /// The catalogue language for a BCP-47 tag, or nil.
+    ///
+    /// **The one caller is dictation, and the reason is a defect worth naming.**
+    /// A transcript's direction was being decided by counting letters
+    /// (`SuggestionEngine.languages(in:)`), and on the sentence this product
+    /// exists for that counts wrong: `בוא נעשה sync על ה-roadmap` is ten Hebrew
+    /// letters against eleven Latin ones, so a Hebrew sentence with two English
+    /// words in it was laid out left to right. The transcriber already reports
+    /// what it *heard*, most-spoken first, which is a better answer than any
+    /// count of glyphs — this is what turns that report into a language.
+    ///
+    /// Matched on the primary subtag, so `he-IL`, `he` and `HE` all land on
+    /// Hebrew and a region nobody has a keyboard for cannot miss.
+    public init?(languageTag: String) {
+        let primary = languageTag.split(separator: "-").first?.lowercased() ?? ""
+        guard !primary.isEmpty,
+            let match = KeyboardLanguage.allCases.first(where: { $0.languageTag.lowercased() == primary })
+        else { return nil }
+        self = match
+    }
+
     /// Upper case by this language's own rules.
     ///
     /// **Turkish is why this exists and why `String.uppercased()` is not enough.**
@@ -140,19 +161,15 @@ public struct KeyboardLanguage: RawRepresentable, Hashable, Identifiable, Codabl
     /// puts there.
     public var spaceLabel: String { definition.spaceLabel ?? nativeName }
 
-    /// What the return key says, or nil when nothing verified says it.
-    ///
-    /// **Apple's resources do not answer this one, and the near miss is worth
-    /// naming so nobody goes looking twice.** The only per-language "return"
-    /// string on this machine is
-    /// `AccessibilitySharedSupport.framework/<lang>.lproj/iOS.strings`, and it
-    /// is VoiceOver's phrasing rather than a key cap: Spanish "Volver", Hindi
-    /// "वापस जाएँ", Russian "Клавиша «Ввод»". `KBLayouts_iPhone.dat` holds
-    /// `return` as an untranslated internal key id. So the fourteen keep the
-    /// words they shipped with, marked here as the unverified strings they are,
-    /// and every language added since draws the return glyph instead of a word
-    /// nobody has checked. `KeyView` is the one reader.
-    public var returnLabel: String? { definition.returnLabel }
+    // There is no `returnLabel`, and the search for one is worth recording so
+    // nobody runs it twice. Apple's resources do not answer it: the only
+    // per-language "return" string on this machine is
+    // `AccessibilitySharedSupport.framework/<lang>.lproj/iOS.strings`, and it is
+    // VoiceOver's phrasing rather than a key cap — Spanish "Volver", Hindi
+    // "वापस जाएँ", Russian "Клавиша «Ввод»" — while `KBLayouts_iPhone.dat` holds
+    // `return` as an untranslated internal key id. Fourteen languages did carry
+    // an unverified word here; `KeyView` now draws the glyph for all of them,
+    // which is right in every language and needs no translation.
 
     // MARK: The catalogue
 
@@ -286,7 +303,6 @@ private struct Definition: Sendable {
     let currency: String
     let lettersLabel: String?
     let spaceLabel: String?
-    let returnLabel: String?
 
     init(
         id: String,
@@ -300,7 +316,6 @@ private struct Definition: Sendable {
         currency: String,
         lettersLabel: String? = nil,
         spaceLabel: String? = nil,
-        returnLabel: String? = nil,
         digits: String = "1234567890"
     ) {
         self.id = id
@@ -316,7 +331,6 @@ private struct Definition: Sendable {
         self.currency = currency
         self.lettersLabel = lettersLabel
         self.spaceLabel = spaceLabel
-        self.returnLabel = returnLabel
     }
 }
 
@@ -356,42 +370,42 @@ extension Definition {
     static let english = Definition(
         id: "english", tag: "en", displayName: "English", nativeName: "English",
         shortName: "EN", flag: "🇺🇸", script: .latin, spellChecker: "en_US",
-        currency: "$", lettersLabel: "ABC", spaceLabel: "space", returnLabel: "return")
+        currency: "$", lettersLabel: "ABC", spaceLabel: "space")
 
     static let hebrew = Definition(
         id: "hebrew", tag: "he", displayName: "Hebrew", nativeName: "עברית",
         shortName: "עב", flag: "🇮🇱", script: .hebrew, spellChecker: "he_IL",
-        currency: "₪", lettersLabel: "אבג", spaceLabel: "רווח", returnLabel: "שורה")
+        currency: "₪", lettersLabel: "אבג", spaceLabel: "רווח")
 
     static let arabic = Definition(
         id: "arabic", tag: "ar", displayName: "Arabic", nativeName: "العربية",
         shortName: "ع", flag: "🇸🇦", script: .arabic, spellChecker: "ar",
-        currency: "$", lettersLabel: "ابج", spaceLabel: "مسافة", returnLabel: "إدخال")
+        currency: "$", lettersLabel: "ابج", spaceLabel: "مسافة")
 
     static let french = Definition(
         id: "french", tag: "fr", displayName: "French", nativeName: "Français",
         shortName: "FR", flag: "🇫🇷", script: .latin, spellChecker: "fr_FR",
-        currency: "€", lettersLabel: "ABC", spaceLabel: "espace", returnLabel: "retour")
+        currency: "€", lettersLabel: "ABC", spaceLabel: "espace")
 
     static let german = Definition(
         id: "german", tag: "de", displayName: "German", nativeName: "Deutsch",
         shortName: "DE", flag: "🇩🇪", script: .latin, spellChecker: "de_DE",
-        currency: "€", lettersLabel: "ABC", spaceLabel: "Leerzeichen", returnLabel: "Return")
+        currency: "€", lettersLabel: "ABC", spaceLabel: "Leerzeichen")
 
     static let greek = Definition(
         id: "greek", tag: "el", displayName: "Greek", nativeName: "Ελληνικά",
         shortName: "ΕΛ", flag: "🇬🇷", script: .greek, spellChecker: "el_GR",
-        currency: "€", lettersLabel: "ΑΒΓ", spaceLabel: "διάστημα", returnLabel: "επιστροφή")
+        currency: "€", lettersLabel: "ΑΒΓ", spaceLabel: "διάστημα")
 
     static let hindi = Definition(
         id: "hindi", tag: "hi", displayName: "Hindi", nativeName: "हिन्दी",
         shortName: "हि", flag: "🇮🇳", script: .devanagari, spellChecker: "hi",
-        currency: "₹", lettersLabel: "अआइ", spaceLabel: "स्पेस", returnLabel: "एंटर")
+        currency: "₹", lettersLabel: "अआइ", spaceLabel: "स्पेस")
 
     static let italian = Definition(
         id: "italian", tag: "it", displayName: "Italian", nativeName: "Italiano",
         shortName: "IT", flag: "🇮🇹", script: .latin, spellChecker: "it_IT",
-        currency: "€", lettersLabel: "ABC", spaceLabel: "spazio", returnLabel: "invio")
+        currency: "€", lettersLabel: "ABC", spaceLabel: "spazio")
 
     /// The one shipped language Apple has no spell checker for: `fa` is not in
     /// `UITextChecker.availableLanguages`, so the suggestion bar offers the
@@ -399,33 +413,33 @@ extension Definition {
     static let persian = Definition(
         id: "persian", tag: "fa", displayName: "Persian", nativeName: "فارسی",
         shortName: "فا", flag: "🇮🇷", script: .arabic, spellChecker: nil,
-        currency: "﷼", lettersLabel: "ابپ", spaceLabel: "فاصله", returnLabel: "ورود",
+        currency: "﷼", lettersLabel: "ابپ", spaceLabel: "فاصله",
         digits: "۱۲۳۴۵۶۷۸۹۰")
 
     static let portuguese = Definition(
         id: "portuguese", tag: "pt", displayName: "Portuguese", nativeName: "Português",
         shortName: "PT", flag: "🇧🇷", script: .latin, spellChecker: "pt_BR",
-        currency: "R$", lettersLabel: "ABC", spaceLabel: "espaço", returnLabel: "retorno")
+        currency: "R$", lettersLabel: "ABC", spaceLabel: "espaço")
 
     static let russian = Definition(
         id: "russian", tag: "ru", displayName: "Russian", nativeName: "Русский",
         shortName: "РУ", flag: "🇷🇺", script: .cyrillic, spellChecker: "ru_RU",
-        currency: "₽", lettersLabel: "АБВ", spaceLabel: "пробел", returnLabel: "ввод")
+        currency: "₽", lettersLabel: "АБВ", spaceLabel: "пробел")
 
     static let spanish = Definition(
         id: "spanish", tag: "es", displayName: "Spanish", nativeName: "Español",
         shortName: "ES", flag: "🇪🇸", script: .latin, spellChecker: "es_ES",
-        currency: "€", lettersLabel: "ABC", spaceLabel: "espacio", returnLabel: "intro")
+        currency: "€", lettersLabel: "ABC", spaceLabel: "espacio")
 
     static let turkish = Definition(
         id: "turkish", tag: "tr", displayName: "Turkish", nativeName: "Türkçe",
         shortName: "TR", flag: "🇹🇷", script: .latin, spellChecker: "tr_TR",
-        currency: "₺", lettersLabel: "ABC", spaceLabel: "boşluk", returnLabel: "giriş")
+        currency: "₺", lettersLabel: "ABC", spaceLabel: "boşluk")
 
     static let ukrainian = Definition(
         id: "ukrainian", tag: "uk", displayName: "Ukrainian", nativeName: "Українська",
         shortName: "УК", flag: "🇺🇦", script: .cyrillic, spellChecker: "uk_UA",
-        currency: "₴", lettersLabel: "АБВ", spaceLabel: "пробіл", returnLabel: "ввід")
+        currency: "₴", lettersLabel: "АБВ", spaceLabel: "пробіл")
 
     // MARK: The fifty added in one pass, every field read off Apple's own data
     //

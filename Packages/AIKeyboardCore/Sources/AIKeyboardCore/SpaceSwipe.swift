@@ -103,7 +103,9 @@ public enum SpaceSwipe {
 
     // MARK: What the space bar says before anyone touches it
 
-    /// The space bar's caption when no finger is on it.
+    /// The language codes the space bar prints, in the order they are drawn, and
+    /// which of them is lit — the first entry is leftmost, and `active` is the one
+    /// shown lit.
     ///
     /// **The gesture had no affordance at all, and that is the defect this
     /// answers.** `KeyboardController.announceLanguage` names the language for
@@ -113,21 +115,42 @@ public enum SpaceSwipe {
     /// Hebrew — and no reason to think it does anything but insert a space. The
     /// owner of the first device this shipped to had to be told.
     ///
-    /// So at rest the key names the language it will type in, the way Gboard's
-    /// does, and `showsSlideAffordance` puts a chevron either side of it: the name
-    /// says which of the enabled languages is on, and the chevrons say there are
-    /// others that way. It costs no permanent room in the suggestion bar and it
-    /// answers a question — "which language am I in?" — that nothing at rest
-    /// answered.
+    /// So at rest the key prints a strip of language codes above its ordinary
+    /// caption, with the one in use lit, and `showsSlideAffordance` puts a chevron
+    /// at each end of the key: the lit code says which language is on, the unlit
+    /// ones say which others the gesture reaches, and the chevrons say the way to
+    /// reach them. It is the shape SwiftKey ships. It costs no permanent room in
+    /// the suggestion bar and it answers a question — "which language am I in?" —
+    /// that nothing at rest answered.
     ///
-    /// **With one language enabled there is nothing to slide to**, so the caption
-    /// goes back to the ordinary word and the chevrons go: an affordance for a
-    /// gesture that cannot move is worse than none. `SpaceSwipe.places` already
-    /// returns 0 for that case, so the two agree.
-    public static func restingCaption(
-        for language: KeyboardLanguage, languageCount: Int
-    ) -> String {
-        languageCount > 1 ? language.nativeName : language.spaceLabel
+    /// **The first version of this replaced the caption with the language name**,
+    /// which named the language on but never the ones off, so the chevrons pointed
+    /// at nothing the user could see. The strip names both, and the caption goes
+    /// back to being the word for space.
+    ///
+    /// **Above three enabled languages the strip is a window rather than a list**,
+    /// because a phone's space bar has room for about three codes and this keyboard
+    /// offers sixty-four languages. The window is what a swipe left reaches, where
+    /// you are, and what a swipe right reaches — so it stays an answer to "where
+    /// does this gesture go", which a truncated list would not be. It wraps at both
+    /// ends exactly as `language(from:in:places:)` does, because a strip that
+    /// stopped at the edge would promise a dead end the gesture does not have.
+    ///
+    /// **With one language enabled there is nothing to slide to**, so the strip is
+    /// empty and the chevrons go: an affordance for a gesture that cannot move is
+    /// worse than none. `SpaceSwipe.places` already returns 0 for that case, so the
+    /// two agree.
+    public static func codeStrip(
+        active: KeyboardLanguage, in enabled: [KeyboardLanguage]
+    ) -> [KeyboardLanguage] {
+        guard enabled.count > 1 else { return [] }
+        guard enabled.count > 3 else { return enabled }
+        // Not `?? 0`: a language that is not in the list has no neighbours to
+        // show, and centring the window on the first entry would light a code the
+        // user is not typing in.
+        guard let centre = enabled.firstIndex(of: active) else { return Array(enabled.prefix(3)) }
+        let count = enabled.count
+        return [-1, 0, 1].map { enabled[((centre + $0) % count + count) % count] }
     }
 
     /// Whether the space bar shows the two chevrons that say it slides, and what
@@ -334,7 +357,7 @@ struct LanguageCallout: View {
     var body: some View {
         VStack(spacing: 4) {
             Text("\(indication.language.flag) \(indication.language.nativeName)")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Theme.Keys.label)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)

@@ -1,0 +1,353 @@
+[
+  {
+    "id": "en-01",
+    "language_mix": "en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.17,
+    "speech": "yes",
+    "languages": "en",
+    "text": "Can you review the deck before the board meeting on Thursday morning?"
+  },
+  {
+    "id": "en-02",
+    "language_mix": "en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.46,
+    "speech": "yes",
+    "languages": "en",
+    "text": "I pushed the fix to staging, but the pipeline is still failing on the integration tests."
+  },
+  {
+    "id": "en-03",
+    "language_mix": "en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.55,
+    "speech": "yes",
+    "languages": "en",
+    "text": "Let's move the stand up to 9:15 so Yotam can join from Tel Aviv."
+  },
+  {
+    "id": "en-04",
+    "language_mix": "en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.53,
+    "speech": "yes",
+    "languages": "en",
+    "text": "We closed the seed round last week, 12 million led by Aleph."
+  },
+  {
+    "id": "en-05",
+    "language_mix": "en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 1.85,
+    "speech": "yes",
+    "languages": "en",
+    "text": "The customer in Berlin wants sock two compliance before they sign the contract."
+  },
+  {
+    "id": "en-06",
+    "language_mix": "en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.68,
+    "speech": "yes",
+    "languages": "en",
+    "text": "Please send me the invoice from the vendor. I need it for the quarterly report."
+  },
+  {
+    "id": "en-07",
+    "language_mix": "en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.21,
+    "speech": "yes",
+    "languages": "en",
+    "text": "I think we should ship the beta to 100 users first and see what breaks."
+  },
+  {
+    "id": "en-08",
+    "language_mix": "en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.26,
+    "speech": "yes",
+    "languages": "en",
+    "text": "Rabbit is Sunday so ask door about the migration script."
+  },
+  {
+    "id": "en-09",
+    "language_mix": "en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 1.92,
+    "speech": "yes",
+    "languages": "en",
+    "text": "The latency went up after the deploy. Can you check the database connection pool?"
+  },
+  {
+    "id": "en-10",
+    "language_mix": "en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 1.86,
+    "speech": "yes",
+    "languages": "en",
+    "text": "We need to hire two more back-end engineers before the end of the quarter."
+  },
+  {
+    "id": "en-11",
+    "language_mix": "en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.26,
+    "speech": "yes",
+    "languages": "en",
+    "text": "I'll be working from home tomorrow. Ping me on Slack if anything urgent comes up."
+  },
+  {
+    "id": "en-12",
+    "language_mix": "en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.27,
+    "speech": "yes",
+    "languages": "en",
+    "text": "The demo with Wix went well. They want to start a pilot in September."
+  },
+  {
+    "id": "he-01",
+    "language_mix": "he",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 3.32,
+    "speech": "yes",
+    "languages": "he",
+    "text": "נועה, תעדכני בבקשה את הדוח לפני הישיבה עם ההנהלה מחר ב-10:30."
+  },
+  {
+    "id": "he-02",
+    "language_mix": "he",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.93,
+    "speech": "yes",
+    "languages": "he",
+    "text": "דיברתי עם יואב מהצוות של מובילה A, הם רוצים לראות הדגמה בשבוע הבא."
+  },
+  {
+    "id": "he-03",
+    "language_mix": "he",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.44,
+    "speech": "yes",
+    "languages": "he",
+    "text": "צריך לסגור את התקציב לרבעון הבא עד יום חמישי, אחרת זה נדחה לינואר."
+  },
+  {
+    "id": "he-04",
+    "language_mix": "he",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 3.82,
+    "speech": "yes",
+    "languages": "he,en",
+    "text": "שלחתי לשירה את החוזה ב-WhatsApp, היא אמרה שתחזור אליי אחרי הצהריים."
+  },
+  {
+    "id": "he-05",
+    "language_mix": "he",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.98,
+    "speech": "yes",
+    "languages": "he",
+    "text": "הפגישה עם המשקיעים של פיטנגו נדחתה ליום שלישי הבא בשעה 9:00 בבוקר."
+  },
+  {
+    "id": "he-06",
+    "language_mix": "he",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 3.4,
+    "speech": "yes",
+    "languages": "he",
+    "text": "אבישי ביקש שנעביר את כל הקבצים לתיקייה המשותפת לפני סוף החודש."
+  },
+  {
+    "id": "he-07",
+    "language_mix": "he",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.18,
+    "speech": "yes",
+    "languages": "he",
+    "text": "יש לנו תקלה בשרת של הלקוח בחיפה, אני נוסע לשם מחר בבוקר."
+  },
+  {
+    "id": "he-08",
+    "language_mix": "he",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.52,
+    "speech": "yes",
+    "languages": "he",
+    "text": "תגידי לרונית שאני מאחר לישיבת הצוות, יש פקקים בכביש 6."
+  },
+  {
+    "id": "he-09",
+    "language_mix": "he",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 4.07,
+    "speech": "yes",
+    "languages": "he",
+    "text": "המנהל הכללי של CXD7XB3Q פוינט אמר שהם מגייסים עוד 200 מהנדסים השנה."
+  },
+  {
+    "id": "he-10",
+    "language_mix": "he",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.14,
+    "speech": "yes",
+    "languages": "he",
+    "text": "אני חושב שכדאי לנו לבדוק את זה עוד פעם לפני שאנחנו מעלים לאוויר."
+  },
+  {
+    "id": "he-11",
+    "language_mix": "he",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.08,
+    "speech": "yes",
+    "languages": "he",
+    "text": "כשתביא לי בבקשה סיכום קצר של השיחה עם הלקוח חוט מייל מייל."
+  },
+  {
+    "id": "he-12",
+    "language_mix": "he",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.22,
+    "speech": "yes",
+    "languages": "he",
+    "text": "הגשנו את הבקשה לרשות החדשנות. התשובה אמורה להגיע תוך שישה שבועות."
+  },
+  {
+    "id": "mix-01",
+    "language_mix": "he-en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.84,
+    "speech": "yes",
+    "languages": "he,en",
+    "text": "בוא נסכם קצר על ה roadmap של Q3 לפני ה standup."
+  },
+  {
+    "id": "mix-02",
+    "language_mix": "he-en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.59,
+    "speech": "yes",
+    "languages": "he,en",
+    "text": "אני אשלח לך את ה document מחר בבוקר אחרי שאני מסיים את ה review."
+  },
+  {
+    "id": "mix-03",
+    "language_mix": "he-en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.68,
+    "speech": "yes",
+    "languages": "he,en",
+    "text": "צריך לעשות deploy ל production אחרי set test סוברים ב CI?"
+  },
+  {
+    "id": "mix-04",
+    "language_mix": "he-en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.58,
+    "speech": "yes",
+    "languages": "he,en",
+    "text": "שלחתי לך invite ל meeting ב Zoom, תאשר בבקשה ב calendar."
+  },
+  {
+    "id": "mix-05",
+    "language_mix": "he-en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 3.36,
+    "speech": "yes",
+    "languages": "he,en",
+    "text": "הדיזיינר elite הם הקפס לפיגמה, תעברי עליהם לפני הספרינט planning."
+  },
+  {
+    "id": "mix-06",
+    "language_mix": "he-en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 4.35,
+    "speech": "yes",
+    "languages": "he,en",
+    "text": "יש באג בבקלג'ין של האפליקציה, ה-QA פתחו טיקט ב-BGX D7 XB3 YRKA."
+  },
+  {
+    "id": "mix-07",
+    "language_mix": "he-en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 4.09,
+    "speech": "yes",
+    "languages": "he,en",
+    "text": "המשקיעים רוצים לראות את ה metrics של ה churn ברבעון האחרון."
+  },
+  {
+    "id": "mix-08",
+    "language_mix": "he-en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.81,
+    "speech": "yes",
+    "languages": "he,en",
+    "text": "תעשה לי favor ותכתוב summary של הכל עם הלקוח"
+  },
+  {
+    "id": "mix-09",
+    "language_mix": "he-en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.54,
+    "speech": "yes",
+    "languages": "he,en",
+    "text": "האן onboarding של העובדים החדשים מתחיל ביום ראשון עם ה-HR."
+  },
+  {
+    "id": "mix-10",
+    "language_mix": "he-en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.3,
+    "speech": "yes",
+    "languages": "he,en",
+    "text": "צריך לעדכן את ה pricing באתר לפני ה launch של הגרסה החדשה."
+  },
+  {
+    "id": "mix-11",
+    "language_mix": "he-en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 3.39,
+    "speech": "yes",
+    "languages": "he,en",
+    "text": "אני בטרימוט היום, אפשר לדבר איתי ב-Slack או ב-WhatsApp."
+  },
+  {
+    "id": "mix-12",
+    "language_mix": "he-en",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.05,
+    "speech": "yes",
+    "languages": "he,en",
+    "text": "הבנק אנד של דניאל מוכן, חסר רק ה integration עם ה API של החברה."
+  },
+  {
+    "id": "trap-noise",
+    "language_mix": "trap",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 1.76,
+    "speech": "no",
+    "languages": null,
+    "text": ""
+  },
+  {
+    "id": "trap-silence",
+    "language_mix": "trap",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.26,
+    "speech": "no",
+    "languages": null,
+    "text": ""
+  },
+  {
+    "id": "trap-tone",
+    "language_mix": "trap",
+    "config": "gemini-2.5-flash thinking=512 temp=0 wav16k variant=loanwords taken=2026-08-10",
+    "seconds": 2.1,
+    "speech": "no",
+    "languages": null,
+    "text": ""
+  }
+]

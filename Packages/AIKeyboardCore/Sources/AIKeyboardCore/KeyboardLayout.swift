@@ -13,6 +13,35 @@ public enum KeyCap: Equatable, Sendable {
     case space
     case ret
     case dictation
+    /// The three controls that used to exist only as chrome in the suggestion
+    /// bar, plus the three the layout editor adds.
+    ///
+    /// They are caps rather than special-cased views because the point of the
+    /// editor is that a user can move them into the grid, and a grid key is a
+    /// `KeySpec`. Drawing them here also means one implementation: a control
+    /// cannot behave differently depending on which of the two places it was put.
+    case emoji
+    case aiMenu
+    case quickTone
+    case cursorLeft
+    case cursorRight
+    case hideKeyboard
+    /// Reply and Fix, run straight from a key.
+    ///
+    /// **They exist because the action row made them destinations rather than
+    /// menu items.** `aiMenu` opens a panel that lists four actions and costs a
+    /// tap to reach any of them; with a row of actions under the keys, the two
+    /// that need no further choice run outright. Rewrite keeps needing one — a
+    /// register — so it stays `quickTone`, which runs the default and holds the
+    /// rest behind a long press.
+    ///
+    /// Fix is deliberately not folded into `quickTone`. `KeyboardController`
+    /// `runDefaultTone` carries the reason the one-tap button is Rewrite and not
+    /// Fix: `Prompts.fix` keeps the writer's register on purpose and `EditScope`
+    /// undoes any change the model cannot name as a mistake, so a tone pointed at
+    /// Fix would have nothing to do.
+    case aiReply
+    case aiFix
 
     public var isFunctionKey: Bool {
         switch self {
@@ -32,6 +61,15 @@ public enum KeyCap: Equatable, Sendable {
         case .space: return "Space"
         case .ret: return "Return"
         case .dictation: return "Dictate"
+        case .emoji: return "Emoji"
+        case .aiMenu: return "AI actions"
+        case .quickTone: return "One-tap rewrite"
+        case .cursorLeft: return "Cursor left"
+        case .cursorRight: return "Cursor right"
+        case .hideKeyboard: return "Hide keyboard"
+        // The action's own title, so the key and the row label cannot drift.
+        case .aiReply: return AIAction.reply.title
+        case .aiFix: return AIAction.fix.title
         }
     }
 }
@@ -68,6 +106,16 @@ public struct KeySpec: Identifiable, Equatable, Sendable {
         self.id = id ?? KeySpec.identifier(for: cap)
     }
 
+    /// The id without the uniquing suffix a compiled custom key carries.
+    ///
+    /// `char-,#a1b2c3d4` addresses as `char-,`. Every key that is not compiled
+    /// from a `SlotSpec` has no suffix and answers itself. This is what
+    /// `KeyView`'s accessibility identifier is built from, so `key-space` finds
+    /// the space bar whether it came from `bottomRow` or from a custom layout.
+    public var addressableID: String {
+        id.split(separator: "#", maxSplits: 1).first.map(String.init) ?? id
+    }
+
     private static func identifier(for cap: KeyCap) -> String {
         switch cap {
         case .character(let value): return "char-\(value)"
@@ -78,6 +126,17 @@ public struct KeySpec: Identifiable, Equatable, Sendable {
         case .space: return "space"
         case .ret: return "return"
         case .dictation: return "dictation"
+        case .emoji: return "emoji"
+        case .aiMenu: return "ai-menu"
+        case .quickTone: return "quick-tone"
+        case .cursorLeft: return "cursor-left"
+        case .cursorRight: return "cursor-right"
+        case .hideKeyboard: return "hide-keyboard"
+        // Kebab-case like their neighbours, because these reach a UI test and a
+        // screen reader through `addressableID`: `key-ai-reply` is what a test
+        // addresses, and it must not change once anything is written against it.
+        case .aiReply: return "ai-reply"
+        case .aiFix: return "ai-fix"
         }
     }
 }
@@ -130,8 +189,8 @@ public enum KeyboardLayout {
     /// the same way. Reserving `functionKeyUnits` per stretcher fixes all three
     /// and moves no layout that was already correct: English needs 7 + 3 = 10,
     /// which is the ten it already had. The budget is asked of every row rather
-    /// than of the bottom one alone, because delete does not always stand there —
-    /// see `LetterLayout.deleteRow`.
+    /// than of the bottom one alone, because a row that is not the bottom one can
+    /// still be the widest.
     public static func columns(for language: KeyboardLanguage, plane: KeyboardPlane) -> Int {
         guard plane == .letters, let layout = letterLayouts[language] else { return 10 }
         let needed = layout.rows.indices.map { index in
@@ -140,14 +199,11 @@ public enum KeyboardLayout {
         return max(10, needed.max() ?? 10)
     }
 
-    /// How much of a row is taken by the function keys standing in it. Shift is
-    /// always on the bottom row and delete is on `deleteRow`, which is not the
-    /// bottom row for every language.
+    /// How much of a row is taken by the function keys standing in it. Shift and
+    /// delete both stand on the bottom row, in every language.
     private static func stretchUnits(of layout: LetterLayout, row index: Int) -> CGFloat {
-        var units: CGFloat = 0
-        if index == 2, layout.hasCase { units += functionKeyUnits }
-        if index == layout.deleteRow { units += functionKeyUnits }
-        return units
+        guard index == 2 else { return 0 }
+        return layout.hasCase ? functionKeyUnits * 2 : functionKeyUnits
     }
 
     // MARK: Letters
@@ -208,26 +264,16 @@ public enum KeyboardLayout {
         let rows: [[String]]
         /// Whether the script has upper and lower case, and so a shift key.
         let hasCase: Bool
-        /// Which row delete stands at the end of.
-        ///
-        /// The bottom row for sixty-three of the sixty-four, and the **top** row
-        /// for Hebrew, which is where Apple puts it: its Hebrew keyboard is 8 / 10
-        /// / 9 letters and it fills the short top row rather than making the
-        /// bottom one ten wide. Measured, not remembered — the stock keyboard's
-        /// rows are in `Bar/layouts/stock-rendered-rows.json` and the photograph
-        /// they came from is `Bar/layouts/stock/he_IL.png`. Shift never moves,
-        /// because no layout that needs one needs this.
-        let deleteRow: Int
         /// Long-press alternates, keyed by the character on the key.
         let alternates: [String: [String]]
 
         /// Rows written as strings, one character per key.
         init(
-            _ rows: [String], hasCase: Bool = true, deleteRow: Int = 2,
+            _ rows: [String], hasCase: Bool = true,
             alternates: [String: [String]] = [:]
         ) {
             self.init(
-                keys: rows.map { $0.map(String.init) }, hasCase: hasCase, deleteRow: deleteRow,
+                keys: rows.map { $0.map(String.init) }, hasCase: hasCase,
                 alternates: alternates)
         }
 
@@ -240,12 +286,11 @@ public enum KeyboardLayout {
         /// the five leading matras fuse into a single grapheme cluster and the
         /// keyboard silently draws four keys too few.
         init(
-            keys rows: [[String]], hasCase: Bool = true, deleteRow: Int = 2,
+            keys rows: [[String]], hasCase: Bool = true,
             alternates: [String: [String]] = [:]
         ) {
             self.rows = rows
             self.hasCase = hasCase
-            self.deleteRow = deleteRow
             self.alternates = alternates
         }
     }
@@ -268,15 +313,23 @@ public enum KeyboardLayout {
         let columns = CGFloat(columns(for: language, plane: .letters))
 
         // Shift opens the bottom row when the script has case, and delete closes
-        // whichever row `deleteRow` names. Both take whatever the letters leave;
+        // that same row in every language. Both take whatever the letters leave;
         // the inset stops that being a half-row-wide delete key on a layout whose
         // row is short, as Arabic's seven-letter bottom one is against twelve
         // columns.
+        //
+        // **Delete stands in the same place in all sixty-four, and that is a
+        // product decision over a fidelity one.** Apple's Hebrew keyboard puts it
+        // at the end of the *top* row — `Bar/layouts/stock/he_IL.png` is the
+        // photograph — but this keyboard changes language on a swipe along the
+        // space bar, so following Apple made delete jump rows mid-sentence under
+        // a thumb that was already reaching for it. Nothing else in the keyboard
+        // moves when the language does; delete does not either.
         return layout.rows.indices.map { index in
             var keys: [KeySpec] = []
             if index == 2, layout.hasCase { keys.append(KeySpec(.shift, width: .remainderShare)) }
             keys += chars(layout.rows[index], alternates: layout.alternates)
-            if index == layout.deleteRow { keys.append(KeySpec(.backspace, width: .remainderShare)) }
+            if index == 2 { keys.append(KeySpec(.backspace, width: .remainderShare)) }
             return KeyRow(
                 id: index,
                 keys: keys,
@@ -327,15 +380,12 @@ public enum KeyboardLayout {
             ["qwertyuiop", "asdfghjkl", "zxcvbnm"], alternates: latin()),
 
         // 22 letters plus 5 final forms across 8 / 10 / 9 keys, and no case, so no
-        // shift key. Delete stands at the right-hand end of the *top* row, which
-        // is where Apple's own Hebrew keyboard puts it — the one layout measured
-        // here that does not put it on the bottom row, and it is the short top row
-        // that makes room. The claim this comment used to make was that delete
-        // "sits at the trailing edge, which mirrors to the left of the screen";
-        // nobody had checked, and the stock keyboard says otherwise on both
-        // counts.
+        // shift key. Apple puts delete at the end of the short *top* row here;
+        // this keyboard keeps it on the bottom row with every other language, for
+        // the reason `letters(for:)` gives — the language changes under the user's
+        // thumb, so the keys around it must not.
         .hebrew: LetterLayout(
-            ["קראטוןםפ", "שדגכעיחלךף", "זסבהנמצתץ"], hasCase: false, deleteRow: 0),
+            ["קראטוןםפ", "שדגכעיחלךף", "זסבהנמצתץ"], hasCase: false),
 
         // Apple's `Arabic`: 12 / 10 / 7. أ إ آ ء ؤ ئ ى are on its shift plane,
         // and Arabic has no case, so they are long presses here.
@@ -736,14 +786,25 @@ public enum KeyboardLayout {
     /// Apple's own Spanish layout puts ¡ and ¿ on one key, and a phone has no room
     /// for it, so they are the long presses of the marks that close the sentence.
     private static func punctuation(for language: KeyboardLanguage) -> [KeySpec] {
-        let opening = openingMarks[language] ?? [:]
+        let extras: [String: [String]]
         switch language.script {
-        case .arabic:
-            return chars(".،؟!'", alternates: alternates(["،": ",", "؟": "?"]))
-        case .greek:
-            return chars(".,;!'", alternates: alternates([";": "?"]))
-        default:
-            return chars(".,?!'", alternates: opening)
+        case .arabic: extras = alternates(["،": ",", "؟": "?"])
+        case .greek: extras = alternates([";": "?"])
+        default: extras = openingMarks[language] ?? [:]
+        }
+        return chars(punctuationMarks(for: language), alternates: extras)
+    }
+
+    /// The five marks themselves, in the order the numbers plane prints them.
+    ///
+    /// The bottom row's punctuation key offers the same five, so the two cannot
+    /// drift: a script that writes its question mark as ؟ has to get ؟ in both
+    /// places or the letters plane types a mark the language does not use.
+    public static func punctuationMarks(for language: KeyboardLanguage) -> String {
+        switch language.script {
+        case .arabic: return ".،؟!'"
+        case .greek: return ".,;!'"
+        default: return ".,?!'"
         }
     }
 
@@ -757,7 +818,8 @@ public enum KeyboardLayout {
     // MARK: Bottom row
 
     /// Sparkle and emoji live in the suggestion bar, so this row stays close to
-    /// the system layout: plane switch, globe, space, dictation, return.
+    /// the system layout: plane switch, globe, space, dictation, punctuation,
+    /// return.
     public static func bottomRow(
         for language: KeyboardLanguage, plane: KeyboardPlane, showsGlobe: Bool
     ) -> KeyRow {
@@ -771,9 +833,35 @@ public enum KeyboardLayout {
         if showsGlobe { keys.append(KeySpec(.globe, width: .unit(1.0))) }
         keys.append(KeySpec(.space, width: .flexible))
         keys.append(KeySpec(.dictation, width: .unit(1.0)))
+        if plane == .letters { keys.append(punctuationKey(for: language)) }
         keys.append(KeySpec(.ret, width: .unit(2.2)))
         return KeyRow(id: 3, keys: keys)
     }
+
+    /// The letters plane's one punctuation key: a full stop on the cap, the other
+    /// four marks of the script behind a long press.
+    ///
+    /// **Letters plane only, and its identity is its own.** On the numbers and
+    /// symbols planes all five marks are already on the row above, so a sixth way
+    /// to type a full stop would only cost the space bar a unit — and it would put
+    /// two keys with the id `char-.` on one plane, which is a `ForEach` with
+    /// duplicate identity rather than a cosmetic clash. Hence the explicit id;
+    /// `LanguageCatalogueTests` fails if it is dropped.
+    /// Internal rather than private so `CustomLayoutCompiler` can build the same
+    /// key for a custom row. A second spelling of it there would be a copy that
+    /// loses the alternates the first time somebody changes one of them.
+    static func punctuationKey(for language: KeyboardLanguage) -> KeySpec {
+        let marks = punctuationMarks(for: language).map(String.init)
+        return KeySpec(
+            .character(marks[0]),
+            width: .unit(1.0),
+            id: punctuationKeyID,
+            alternates: Array(marks.dropFirst()))
+    }
+
+    /// Read by `KeyView`, which draws this one key's long presses in miniature
+    /// above the mark it types.
+    public static let punctuationKeyID = "punctuation"
 
     // MARK: Width solving
 
@@ -802,14 +890,19 @@ public enum KeyboardLayout {
         }
 
         // Flexible and remainder-share keys both mean "take what the fixed keys
-        // left behind", so they split the leftover evenly. The floor keeps shift
-        // and delete tappable on a narrow screen.
+        // left behind", so they split the leftover evenly.
+        //
+        // **The floor keeps shift and delete tappable on a narrow screen, and it
+        // is the only thing here that can push a row past the keyboard's width**,
+        // so it is asked only where it is needed: when the even share is already
+        // a full letter key wide, the key is tappable and widening it just runs
+        // off the side. Hebrew is the layout that shows it — nine letters plus
+        // delete divide out at exactly one unit, and floored to 1.15 the row ran
+        // 5.1pt off an iPhone 17 Pro.
         let stretchCount = row.keys.filter { $0.width == .flexible || $0.width == .remainderShare }.count
         let leftover = max(0, available - fixedTotal)
-        let stretchWidth =
-            stretchCount > 0
-            ? max(unitWidth * 1.15, leftover / CGFloat(stretchCount))
-            : 0
+        let share = stretchCount > 0 ? leftover / CGFloat(stretchCount) : 0
+        let stretchWidth = share < unitWidth ? max(unitWidth * 1.15, share) : share
 
         return row.keys.map { key in
             switch key.width {
@@ -820,12 +913,21 @@ public enum KeyboardLayout {
     }
 
     /// Width of a standard letter key for a keyboard of this width.
+    ///
+    /// **The floor here is a guard against a degenerate width, not a minimum key
+    /// size, and it used to be both.** At `max(20, …)` a thirteen-column layout on
+    /// a 320pt screen — which is what Display Zoom gives a modern iPhone — asked
+    /// for 20pt keys where there was room for 18.6, and Bulgarian's top two rows
+    /// ran 18pt off the side. A key that is a little narrow is worse than a key
+    /// the right size and better than a key that is not on the screen, so the
+    /// division wins and the floor only stops a zero-width `GeometryReader` pass
+    /// producing zero or negative frames.
     public static func unitWidth(
         totalWidth: CGFloat, spacing: CGFloat, sideInset: CGFloat, columns: Int = 10
     ) -> CGFloat {
         let columns = CGFloat(max(1, columns))
         let usable = totalWidth - sideInset * 2 - spacing * (columns - 1)
-        return max(20, usable / columns)
+        return max(1, usable / columns)
     }
 
     // MARK: Helpers

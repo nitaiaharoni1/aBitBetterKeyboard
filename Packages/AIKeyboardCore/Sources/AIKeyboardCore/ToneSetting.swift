@@ -44,17 +44,22 @@ public enum ToneSetting: Equatable, Sendable {
         }
     }
 
+    /// What the one-tap button in `SuggestionBar` prints under its glyph, and what
+    /// its accessibility label says.
+    ///
+    /// There is deliberately no `icon` beside this. There was, and the bar button
+    /// was the reader that made it worth having: the button drew the tone's own
+    /// symbol and nothing else, which told a user which of six registers a tap
+    /// would run and never that the tap rewrote anything at all. The symbol is
+    /// fixed now and this string is what varies, so a tone is named in words rather
+    /// than drawn as a rebus. That left one reader — the custom chip in
+    /// `AIResultPanel.toneChips`, which only ever hits the `.custom` branch — so the
+    /// two-branch switch became a literal at its one call site rather than a
+    /// property whose built-in half nothing could reach.
     public var title: String {
         switch self {
         case .builtIn(let tone): return tone.title
         case .custom: return Self.customTitle
-        }
-    }
-
-    public var icon: String {
-        switch self {
-        case .builtIn(let tone): return tone.icon
-        case .custom: return "square.and.pencil"
         }
     }
 

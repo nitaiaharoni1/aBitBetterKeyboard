@@ -76,9 +76,21 @@ func fingerprint(
 }
 
 /// What the keyboard publishes about itself on this device, and the crop the
-/// producer derives from it. `Theme.Metrics.totalHeight(withContextStrip: true)`
-/// is 292 pt and the corpus renders an iPhone 17 Pro's 874 pt.
-let ownUIFraction = 292.0 / 874.0
+/// producer derives from it. The corpus renders an iPhone 17 Pro's 874 pt.
+///
+/// **364, not 292, and the difference is the action row.** `Theme.Metrics
+/// .totalHeight()` was 292 when the keyboard was a suggestion bar over four key
+/// rows, with the context strip counted only while a capture session was live.
+/// It is now a constant `ActionBanner` (48) over the bar (46) over five key rows
+/// (270).
+///
+/// Overridable, and that is how `Band.maximumOwnUI` was re-derived rather than
+/// nudged: `OWN_UI_POINTS=370 run-fingerprint.sh` is the first value that misses
+/// a conversation switch, and the table in that constant's doc comment is this
+/// sweep. Keep this in step with `Theme.Metrics.totalHeight()` — it is the whole
+/// point of the harness that the number here is the number that ships.
+let ownUIPoints = ProcessInfo.processInfo.environment["OWN_UI_POINTS"].flatMap(Double.init) ?? 364.0
+let ownUIFraction = ownUIPoints / 874.0
 var ownIntent: CaptureIntentStandIn { CaptureIntentStandIn(fraction: ownUIFraction) }
 
 /// `CaptureIntent` lives in the same target but pulls in the shared-page code

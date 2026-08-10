@@ -123,7 +123,7 @@ public final class ScreenContextSession: ObservableObject {
     /// bundle shares with every other test in the process, and a test that wrote
     /// a real backend URL into it would leak into the ones that assert there is
     /// none.
-    var isScreenReadingConfigured: () -> Bool = { BackendTransport.configured() != nil }
+    var isScreenReadingConfigured: () -> Bool = { BackendTransport.isReady() }
 
     /// The app and the keyboard each have exactly one of these. Internal rather
     /// than private so a test can drive an isolated session against an isolated

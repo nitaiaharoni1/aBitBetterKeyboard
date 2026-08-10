@@ -174,6 +174,22 @@ public final class KeyboardController: ObservableObject {
     /// panel has to restate the one it answered.
     @Published public var replyContext: ScreenContext?
 
+    /// Which action the banner is currently reporting on, or nil when nothing has
+    /// been asked for.
+    ///
+    /// **The banner is the only surface that has to name the action, and it is the
+    /// first one that could not work it out from what it was showing.** A panel
+    /// carried its own title because it was pushed by the tap; a strip that is
+    /// always on screen is handed three replies with nothing saying whether they
+    /// came from Reply or from Rewrite. Set by `beginWork` and cleared by
+    /// `clearBanner`, so it cannot outlive the answers it labels.
+    @Published public var runningAction: AIAction?
+
+    /// Which of the answers the banner is showing. Always a valid index into
+    /// `bannerOptions`, because `BannerState.resolve` clamps it — an action that
+    /// returns fewer options than the last one would otherwise page past the end.
+    @Published public var bannerIndex = 0
+
     /// Why the last AI call produced nothing. The panel shows this instead of an
     /// empty result, which is the one outcome the user cannot act on.
     @Published public var aiError: AIEngineError?
@@ -197,7 +213,16 @@ public final class KeyboardController: ObservableObject {
     @Published public var isDictating = false
     @Published public var dictationTranscript = ""
     @Published public var dictationIsRightToLeft = false
+    /// Why there is no transcript, in a sentence fit to show. Empty otherwise.
+    @Published public var dictationFailure = ""
     @Published public var waveformPhase: Double = 0
+
+    /// What the keyboard can do about dictation right now. The panel reads it
+    /// directly; there is nothing to mirror, and mirroring it would be a second
+    /// copy of a state that changes ten times a second.
+    public var dictationAvailability: DictationSession.Availability { dictation.availability }
+    public var dictationLevel: Double { dictation.level }
+    public var dictationRemainingSeconds: Double? { dictation.remainingSeconds }
 
     @Published public var recentEmoji: [String] = ["😂", "🙏", "❤️", "👍", "🔥", "😅"]
 
@@ -207,6 +232,20 @@ public final class KeyboardController: ObservableObject {
 
     /// Called when the globe key is tapped inside the real extension.
     public var onAdvanceToNextKeyboard: (() -> Void)?
+
+    /// Called when a Hide keyboard key is tapped inside the real extension.
+    ///
+    /// Nothing in this package can dismiss a keyboard: only
+    /// `UIInputViewController.dismissKeyboard()` can, and the package does not
+    /// have one. Nil in the app preview, where there is nothing to dismiss.
+    public var onDismissKeyboard: (() -> Void)?
+
+    /// The shape of the keyboard right now.
+    ///
+    /// Published so the view redraws when the app changes it, and
+    /// `private(set)` so the only way in is `apply(_:)` — which is where the
+    /// repair that only this process can make happens.
+    @Published public private(set) var customization: KeyboardCustomization = .default
 
     // MARK: Dependencies
 
@@ -226,11 +265,19 @@ public final class KeyboardController: ObservableObject {
     private let store: SharedStore
     private let engine: RoutedIntelligence
 
-    private var dictationTask: Task<Void, Never>?
+    /// The keyboard's end of the dictation channel. Injectable for the same
+    /// reason `engine` is: `AIKeyboardCoreTests` carries no App Group
+    /// entitlement, so a test drives both ends of a real channel rooted in a
+    /// temporary directory.
+    let dictation: DictationSession
+
     private var waveformTask: Task<Void, Never>?
     private var workingTask: Task<Void, Never>?
     private var languageSwitchTask: Task<Void, Never>?
-    private var scriptIndex = 0
+    /// The user tapped Insert and the words have not arrived yet. Insertion is
+    /// deferred because the recording is transcribed in another process.
+    private var pendingDictationInsert = false
+    private var dictationObservers = Set<AnyCancellable>()
     private var lastSpaceTapAt: Date?
     private var spaceTouch = SpaceSwipe.Touch()
     private var cancellables = Set<AnyCancellable>()
@@ -245,14 +292,26 @@ public final class KeyboardController: ObservableObject {
         target: TextTarget?,
         store: SharedStore = .shared,
         language: KeyboardLanguage = .english,
-        engine: RoutedIntelligence? = nil
+        engine: RoutedIntelligence? = nil,
+        dictation: DictationSession = .shared
     ) {
         self.target = target
         self.store = store
         self.language = language
-        // No backend URL ships in this build, so the cloud half is usually nil
-        // and Hebrew reports why rather than being handed to a model that would
-        // answer it in English.
+        self.dictation = dictation
+        // This build ships pointing at a deployed backend
+        // (`BackendTransport.bundledDefaultURL`), so the cloud half is normally
+        // present and Hebrew has somewhere to run. It was nil for the life of
+        // every install before 2026-08-10: the service existed in `Backend/` and
+        // had never been deployed, so `configured()` answered nil, Hebrew Fix,
+        // Rewrite, Tone and Reply had no engine at all, and the best-effort branch
+        // could not save them either — Apple's model rejects a whole session whose
+        // *instructions* are Hebrew. That is what "the AI does not work" was.
+        //
+        // Resolved once, here, at construction. A URL typed into settings while the
+        // keyboard is already on screen is not picked up until the extension is
+        // rebuilt by iOS, which is the ordinary case anyway — the host app changing
+        // a field tears the keyboard down first.
         self.engine =
             engine
             ?? RoutedIntelligence.standard(
@@ -279,7 +338,47 @@ public final class KeyboardController: ObservableObject {
             .sink { [weak self] unanswered in self?.screenReadWentUnanswered = unanswered }
             .store(in: &cancellables)
 
+        apply(store.storedKeyboardLayout)
         refreshSuggestions()
+    }
+
+    // MARK: The layout
+
+    /// Takes a layout, repairing what only this process knows.
+    ///
+    /// **The globe is put back here and nowhere else.** Whether the key is
+    /// required is `needsInputModeSwitchKey`, which is a property of the *device*
+    /// and unknown to the store: a layout saved on a phone with one keyboard
+    /// installed is missing nothing, and becomes a trap the day a second one is
+    /// added. `SharedStore.decodeLayout` therefore validates with
+    /// `showsGlobe: false`, and this is where the device's own answer is applied.
+    ///
+    /// A layout that is still unusable after the repair falls all the way back to
+    /// the default, because a keyboard that cannot draw itself is not a state the
+    /// user can get out of from inside the keyboard.
+    public func apply(_ layout: KeyboardCustomization) {
+        var repaired = layout
+        let hasGlobe = (repaired.bottomRow + repaired.cursorRow).contains { $0.action == .globe }
+        if showsGlobeKey, !hasGlobe {
+            // Second from the start, which is where it stands in every preset:
+            // beside the plane key and away from the space bar.
+            let index = min(1, repaired.bottomRow.count)
+            repaired.bottomRow.insert(SlotSpec(action: .globe, width: .units(1.0)), at: index)
+        }
+        guard LayoutValidator.isUsable(repaired, showsGlobe: showsGlobeKey) else {
+            customization = .default
+            return
+        }
+        customization = repaired
+    }
+
+    /// Re-reads the layout from the shared store.
+    ///
+    /// Called when the keyboard comes on screen, because that is the moment after
+    /// the app — a different process — may have changed it. See
+    /// `SharedStore.storedKeyboardLayout`.
+    public func reloadCustomization() {
+        apply(store.storedKeyboardLayout)
     }
 
     /// Reply is worth offering for as long as a session is live, whether or not
@@ -293,11 +392,40 @@ public final class KeyboardController: ObservableObject {
         screenContextIsPermitted && screenContext.isLive
     }
 
-    /// The strip earns its height whenever screen context has something to say,
-    /// which includes having stopped: an ending that hides itself has told the
-    /// user screen context is off.
-    public var showsScreenContextStrip: Bool {
-        screenContextIsPermitted && screenContext.isVisible
+    /// What screen context has to say when it has not read anything, or nil when
+    /// it has nothing to say at all.
+    ///
+    /// **This is what is left of `ScreenContextStrip`, and the strip is gone.** It
+    /// was a 30pt row that appeared and disappeared with the session; the banner is
+    /// always drawn and already shows the reading itself, so the only part that
+    /// needed a home was the five states that are not a reading. The strip's own
+    /// restart button is not reproduced: it offered the same `BroadcastPickerButton`
+    /// the setup panel holds, and Reply reaches that panel in one tap through the
+    /// banner's own Set up button — see `ScreenContextPrompt`, which is the single
+    /// place that decides whether starting a broadcast could get anywhere.
+    ///
+    /// `.off` returns nil rather than a sentence, because a phone that has never
+    /// started a broadcast is not in an error state and the banner has an ordinary
+    /// hint to show instead.
+    public var screenContextHint: String? {
+        guard screenContextIsPermitted else { return nil }
+        switch screenContext {
+        case .off:
+            return nil
+        case .starting:
+            return "Starting screen context…"
+        case .watching:
+            // The offer, not a claim: nothing has been read, because a read only
+            // ever happens in answer to a tap on Reply.
+            return screenReadWentUnanswered
+                ? "The last screen read didn't work" : "Tap Reply to answer what's on screen"
+        case .ready:
+            return nil
+        case .paused:
+            return "Screen context is paused"
+        case .ended(let reason):
+            return reason.explanation
+        }
     }
 
     /// Whether a capture session is running right now, as opposed to the scripted
@@ -477,6 +605,45 @@ public final class KeyboardController: ObservableObject {
         case .dictation:
             Feedback.actionPress()
             startDictation()
+        case .emoji:
+            Feedback.modifierPress()
+            show(overlay == .emoji ? .none : .emoji)
+        case .aiMenu:
+            Feedback.modifierPress()
+            show(overlay == .aiMenu ? .none : .aiMenu)
+        case .aiReply:
+            // Straight to the action. Reply is deliberately not guarded on
+            // `hasTextToWorkWith` — answering a message you have not started
+            // writing is the whole point of it — and `run(_:)` already carries
+            // that exception, plus the explanation for a tap with no session
+            // behind it.
+            run(.reply)
+        case .aiFix:
+            run(.fix)
+        case .quickTone:
+            Feedback.actionPress()
+            // The same three-way answer `SuggestionBar`'s own button gives, asked
+            // of the same function, so the key and the button cannot disagree
+            // about what a tap does on an empty field. That divergence has already
+            // shipped once between the bar and the panel behind it.
+            switch SuggestionBar.toneTap(
+                hasTextToWorkWith: hasTextToWorkWith, isWorking: isWorking)
+            {
+            case .rewrite: runDefaultTone()
+            case .openMenu: show(.aiMenu)
+            case .ignore: break
+            }
+        case .cursorLeft:
+            Feedback.keyPress()
+            target?.adjustTextPosition(byCharacterOffset: -1)
+            refreshSuggestions()
+        case .cursorRight:
+            Feedback.keyPress()
+            target?.adjustTextPosition(byCharacterOffset: 1)
+            refreshSuggestions()
+        case .hideKeyboard:
+            Feedback.modifierPress()
+            onDismissKeyboard?()
         }
     }
 
@@ -549,13 +716,13 @@ public final class KeyboardController: ObservableObject {
     }
 
     /// The languages the globe and a slide along the space bar both move through.
-    private var enabledLanguages: [KeyboardLanguage] {
+    ///
+    /// Public because the space bar prints their codes, not just their number: it
+    /// says which language is on and which the slide reaches. See
+    /// `SpaceSwipe.codeStrip`.
+    public var enabledLanguages: [KeyboardLanguage] {
         store.enabledLanguages.isEmpty ? [.english, .hebrew] : store.enabledLanguages
     }
-
-    /// How many of them there are, which is what decides whether the space bar
-    /// wears the chevrons that say it slides. See `SpaceSwipe.restingCaption`.
-    public var enabledLanguageCount: Int { enabledLanguages.count }
 
     /// The globe key. Still one step per tap, and still hands the keyboard over to
     /// iOS when the user has only enabled one of ours — the swipe is an addition
@@ -811,15 +978,30 @@ public final class KeyboardController: ObservableObject {
         stopDictation(insert: false)
         withAnimation(Theme.Motion.panel) {
             overlay = .none
-            variants = []
-            replies = []
-            replyContext = nil
-            selectedTone = nil
-            selectedToneIsCustom = false
-            isWorking = false
-            aiError = nil
-            aiProvenance = nil
+            clearBannerState()
         }
+    }
+
+    /// Everything one action leaves behind, cleared together.
+    ///
+    /// **Extracted because there are now two ways to finish an action and only one
+    /// of them closes a panel.** A result used to live in an overlay, so dismissing
+    /// the overlay was the same event as discarding the answer; with results in the
+    /// banner, accepting one or dismissing a failure has to clear the same eight
+    /// properties without touching `overlay`. Two spellings of this list is how a
+    /// stale `variants` array survives into the next action and gets shown under
+    /// its name.
+    private func clearBannerState() {
+        variants = []
+        replies = []
+        replyContext = nil
+        selectedTone = nil
+        selectedToneIsCustom = false
+        isWorking = false
+        aiError = nil
+        aiProvenance = nil
+        runningAction = nil
+        bannerIndex = 0
     }
 
     // MARK: AI
@@ -842,7 +1024,13 @@ public final class KeyboardController: ObservableObject {
             break
         case .fix:
             let source = aiSourceText
-            beginWork(showing: .aiResult(.fix)) { [engine] in
+            // **No overlay.** Fix, Rewrite and Reply now report in the banner, so
+            // the keys stay visible and usable while the call runs — the user can
+            // see the sentence being corrected, which is the one thing the panel
+            // that used to cover them hid. `AIResultPanel` survives for the single
+            // case that cannot be a strip: the screen-context setup screen, which
+            // holds `BroadcastPickerButton`, a real `UIView`.
+            beginWork(.fix, showing: .none) { [engine] in
                 try await engine.fix(source)
             } apply: { controller, text in
                 controller.aiResultText = text
@@ -858,7 +1046,7 @@ public final class KeyboardController: ObservableObject {
             selectedTone = nil
             selectedToneIsCustom = false
             let source = aiSourceText
-            beginWork(showing: .aiResult(.variants(nil))) { [engine] in
+            beginWork(.rewrite, showing: .none) { [engine] in
                 try await engine.variants(for: source, tone: nil)
             } apply: { controller, variants in
                 controller.variants = variants
@@ -910,14 +1098,18 @@ public final class KeyboardController: ObservableObject {
             aiError = .screenNotRead(
                 "Screen context does not read password fields, and this field either is one or would not say."
             )
-            withAnimation(Theme.Motion.panel) { overlay = .aiResult(.replies) }
+            // Named, so the banner can label the refusal with the action that was
+            // refused. Without it `BannerState.resolve` has an error and nothing to
+            // attribute it to, and falls back to the idle hint — which would make a
+            // refusal look like nothing having happened at all.
+            runningAction = .reply
             return
         }
 
         // A reply replaces nothing; it is inserted where the cursor already is.
         aiSourceText = ""
         replyContext = nil
-        beginWork(showing: .aiResult(.replies)) { [engine, weak self] in
+        beginWork(.reply, showing: .none) { [engine, weak self] in
             let context = try await session.contextForReply()
             await MainActor.run { self?.replyContext = context }
             return try await engine.replies(to: context)
@@ -930,6 +1122,56 @@ public final class KeyboardController: ObservableObject {
         Feedback.modifierPress()
         aiSourceText = aiSourceText.isEmpty ? aiTargetText : aiSourceText
         runTone(.builtIn(tone))
+    }
+
+    /// The registers a long press on the one-tap rewrite key offers, in the order
+    /// the popup draws them.
+    ///
+    /// **The default leads, because index 0 of an alternates popup is the no-op.**
+    /// `KeyView` treats lifting on the first item as "the long press changed
+    /// nothing", which for a letter means the character it already inserted. The
+    /// same rule has to hold here or a user who holds the key, looks, and lifts
+    /// without moving gets a register they did not pick — so the first item is
+    /// what a plain tap would have run.
+    ///
+    /// The user's own tone sits second when it is *selected* and is not already the
+    /// default. Written but switched off is deliberately absent: `ToneSetting` only
+    /// resolves to `.custom` when `prefersCustomTone` is on, so with the switch off
+    /// there is no instruction to send and the entry would be a name drawn over the
+    /// built-in register standing behind it. `AIResultPanel.toneChips` draws its
+    /// custom chip on exactly the same condition, and the two surfaces disagreeing
+    /// about which registers exist is drift this repo has shipped once already.
+    /// It cannot be a seventh `ToneStyle` either: that enum's raw values are the
+    /// persisted setting. See `ToneSetting`.
+    ///
+    /// Read through the store rather than off a published copy, for the reason
+    /// `defaultTone` gives — Settings is a different process.
+    public var toneAlternates: [String] {
+        let setting = store.toneSetting
+        var titles = [setting.title]
+        if setting.instruction == nil, customTone != nil { titles.append(ToneSetting.customTitle) }
+        titles += ToneStyle.allCases.map(\.title).filter { $0 != setting.title }
+        return titles
+    }
+
+    /// Runs one of `toneAlternates` by the name the popup drew.
+    ///
+    /// By title rather than by index, because the popup and the controller would
+    /// otherwise have to agree about an ordering that `toneAlternates` builds from
+    /// a stored setting — and they would disagree the moment the default tone
+    /// changed between the key being drawn and the finger lifting.
+    ///
+    /// The same two refusals as `runDefaultTone`: nothing to rewrite is a key that
+    /// should not have fired, and a call in flight must not be thrown away by a
+    /// second one.
+    public func selectTone(named title: String) {
+        guard hasTextToWorkWith, !isWorking else { return }
+        if title == ToneSetting.customTitle, let custom = customTone {
+            selectTone(custom)
+            return
+        }
+        guard let tone = ToneStyle.allCases.first(where: { $0.title == title }) else { return }
+        selectTone(tone)
     }
 
     /// The same, for the tone the user wrote. The panel's seventh chip.
@@ -999,7 +1241,19 @@ public final class KeyboardController: ObservableObject {
         selectedTone = tone
         selectedToneIsCustom = instruction != nil
         let source = aiSourceText
-        beginWork(showing: .aiResult(.variants(tone))) { [engine] in
+        // **The one call with two callers and two homes.** From the action row's
+        // one-tap key there is no panel and the answer belongs in the banner; from
+        // `AIMenuPanel`'s Tone row the user is standing in a panel of tone chips
+        // and taking it away under them would be a screen that vanishes when you
+        // use it. So the destination is wherever the user already is, with the
+        // title re-tagged to the register that is now running.
+        let destination: KeyboardOverlay
+        if case .aiResult(.variants) = overlay {
+            destination = .aiResult(.variants(tone))
+        } else {
+            destination = overlay
+        }
+        beginWork(.rewrite, showing: destination) { [engine] in
             try await engine.variants(for: source, tone: tone, instruction: instruction)
         } apply: { controller, variants in
             controller.variants = variants
@@ -1014,6 +1268,7 @@ public final class KeyboardController: ObservableObject {
     /// Apple Intelligence switched off, a language no engine covers, a guardrail
     /// that fires on a benign Hebrew sign-off.
     private func beginWork<Value: Sendable>(
+        _ action: AIAction,
         showing destination: KeyboardOverlay,
         work: @escaping @Sendable () async throws -> AIOutput<Value>,
         apply: @MainActor @escaping (KeyboardController, Value) -> Void
@@ -1022,6 +1277,19 @@ public final class KeyboardController: ObservableObject {
         isWorking = true
         aiError = nil
         aiProvenance = nil
+        // Named here rather than at the four call sites, so an action that reports
+        // in the banner cannot be started without saying which action it is.
+        runningAction = action
+        // Back to the first answer. Kept from the previous action this would page
+        // straight to option 3 of a set that now has one member — clamped rather
+        // than crashing, but showing the wrong thing.
+        bannerIndex = 0
+        // The previous action's answers, gone before this one's arrive. `apply`
+        // only ever sets its own kind, so a Rewrite after a Reply would otherwise
+        // leave three replies sitting in `replies` for `bannerOptions` to find.
+        variants = []
+        replies = []
+        aiResultText = ""
         withAnimation(Theme.Motion.panel) { overlay = destination }
 
         workingTask = Task { [weak self] in
@@ -1054,6 +1322,91 @@ public final class KeyboardController: ObservableObject {
         Feedback.success()
         replaceTargetText(with: text)
         dismissOverlay()
+    }
+
+    // MARK: The banner
+
+    /// Whatever the last action produced, flattened into one list the banner can
+    /// page through.
+    ///
+    /// **Three differently-shaped results, one shape here.** Fix answers with a
+    /// single corrected sentence, Rewrite with three versions labelled by the
+    /// decision each takes, Reply with three answers labelled by intent. The
+    /// banner shows one at a time and applies whichever is showing, so it needs
+    /// them to be one type; teaching it about `RewriteVariant` and `ReplyOption`
+    /// separately would mean three copies of the paging and three of the Use
+    /// button.
+    ///
+    /// **Empty while a result panel is open**, because `AIMenuPanel`'s Tone row
+    /// still runs a rewrite into `AIResultPanel` and the answer must not be drawn
+    /// twice, once in the panel the user is standing in and once in the strip
+    /// above it.
+    public var bannerOptions: [BannerOption] {
+        if case .aiResult(let kind) = overlay, kind != .needsScreenContext { return [] }
+
+        if !replies.isEmpty {
+            // The reading the replies were written about, not whatever the screen
+            // has moved on to — same reason `replyContext` is held separately from
+            // `screenContext`.
+            let language = replyContext?.language ?? screenContext.context?.language ?? .english
+            return replies.map {
+                BannerOption(id: $0.id, label: $0.intent, text: $0.text, language: language)
+            }
+        }
+        if !variants.isEmpty {
+            return variants.map {
+                BannerOption(
+                    id: $0.id,
+                    label: $0.label ?? $0.tone.title,
+                    text: $0.text,
+                    language: Self.language(of: $0.text, fallback: language))
+            }
+        }
+        guard !aiResultText.isEmpty else { return [] }
+        // Fix has one answer and no label: there is nothing to tell it apart from,
+        // and "FIXED" over the corrected sentence is a word that earns none of the
+        // room it costs on a one-line strip.
+        return [
+            BannerOption(
+                label: "",
+                text: aiResultText,
+                language: Self.language(of: aiResultText, fallback: language))
+        ]
+    }
+
+    /// Which language a generated sentence is written in.
+    ///
+    /// The keyboard's own layout is the fallback and deliberately not the answer:
+    /// a rewrite of a Hebrew sentence is Hebrew whichever layout is on screen when
+    /// it lands, and a slide along the space bar mid-call would otherwise flip the
+    /// alignment of an answer that had already arrived.
+    static func language(of text: String, fallback: KeyboardLanguage) -> KeyboardLanguage {
+        SuggestionEngine.languages(in: text).first ?? fallback
+    }
+
+    /// Accepts the answer the banner is showing.
+    public func useBannerOption() {
+        let options = bannerOptions
+        guard options.indices.contains(bannerIndex) else { return }
+        applyResult(options[bannerIndex].text)
+    }
+
+    /// Pages to one of the other answers.
+    public func showBannerOption(_ index: Int) {
+        guard bannerOptions.indices.contains(index), index != bannerIndex else { return }
+        Feedback.modifierPress()
+        withAnimation(Theme.Motion.content) { bannerIndex = index }
+    }
+
+    /// Throws the last action's answer away without accepting it.
+    ///
+    /// Separate from `dismissOverlay` because there is usually no overlay: this is
+    /// what the banner's Dismiss button calls after a failure, and closing a panel
+    /// that is not open would take the emoji grid down with it if one happened to
+    /// be.
+    public func clearBanner() {
+        Feedback.modifierPress()
+        withAnimation(Theme.Motion.content) { clearBannerState() }
     }
 
     /// Puts the answer where the text that was sent came from.
@@ -1204,55 +1557,129 @@ public final class KeyboardController: ObservableObject {
 
     // MARK: Dictation
 
+    /// Opens an utterance in the containing app's session, or explains why it
+    /// cannot.
+    ///
+    /// **Two destinations now, chosen by whether there is anything to record
+    /// into.** A live session reports in the banner, so the keys stay under the
+    /// user's thumb while they speak and the transcript lands in the field they can
+    /// see. Anything else opens the panel, because the useful thing to say then is
+    /// three sentences long and names an app, a screen and a button: nothing in an
+    /// app extension can start a recording session or launch its own app, so it is
+    /// a dead end the user has to be walked out of by hand. `DictationPanel
+    /// .explanation` is that text, and a one-line strip cannot hold it.
+    ///
+    /// Failing silently, or playing something that looks like dictation, is what
+    /// both of these replaced.
     public func startDictation() {
-        withAnimation(Theme.Motion.panel) { overlay = .dictation }
-        isDictating = true
+        if !dictation.availability.isLive {
+            withAnimation(Theme.Motion.panel) { overlay = .dictation }
+        }
         dictationTranscript = ""
+        dictationFailure = ""
+        pendingDictationInsert = false
 
-        let script = MockDictation.script(at: scriptIndex)
-        scriptIndex += 1
-        dictationIsRightToLeft = script.isRightToLeft
+        dictation.startWatching()
+        observeDictation()
+        isDictating = dictation.beginUtterance()
+        if isDictating { Feedback.modifierPress() }
 
         waveformTask?.cancel()
         waveformTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                self?.waveformPhase += 0.14
+                // Driven by the level the recorder publishes rather than by a
+                // constant, so the bars answer the room. They used to advance at
+                // a fixed rate whatever was happening, which is the tell that a
+                // waveform is a decoration; this one stops moving in silence.
+                guard let self else { return }
+                self.waveformPhase += 0.05 + self.dictation.level * 0.5
                 try? await Task.sleep(for: .milliseconds(45))
-            }
-        }
-
-        dictationTask?.cancel()
-        dictationTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(500))
-            for (index, word) in script.words.enumerated() {
-                guard !Task.isCancelled, let self else { return }
-                withAnimation(.easeOut(duration: 0.14)) {
-                    self.dictationTranscript += self.dictationTranscript.isEmpty ? word : " " + word
-                }
-                try? await Task.sleep(for: MockDictation.delay(forWordAt: index))
             }
         }
     }
 
+    /// `insert: true` finishes the utterance and inserts whatever comes back.
+    ///
+    /// **The insertion is deferred, because the words do not exist yet.** The
+    /// recording is closed here and transcribed in the containing app, so this
+    /// arms `pendingDictationInsert` and the transcript is inserted by
+    /// `observeDictation` when it lands. Nothing is inserted for a recording that
+    /// had no speech in it or that failed — the panel says which, and the user
+    /// keeps whatever they had already typed.
     public func stopDictation(insert: Bool) {
-        dictationTask?.cancel()
         waveformTask?.cancel()
-        dictationTask = nil
         waveformTask = nil
 
-        let transcript = dictationTranscript
+        if insert, isDictating {
+            pendingDictationInsert = true
+            isDictating = false
+            dictation.stopUtterance()
+            return
+        }
+
+        // **Nothing to stop, nothing to write.** `dismissOverlay()` calls this on
+        // every panel close, including the emoji and AI panels, and an
+        // unconditional `cancelUtterance()` would take the channel's write lock
+        // and bump a sequence in a shared page every time somebody shut the emoji
+        // grid. Worse, it would cancel an utterance that a *different* panel
+        // close has nothing to do with.
+        guard isDictating || pendingDictationInsert || overlay == .dictation else { return }
+
+        pendingDictationInsert = false
         isDictating = false
-
-        if insert, !transcript.isEmpty {
-            Feedback.success()
-            let needsSpace = !contextBefore.isEmpty && !contextBefore.hasSuffix(" ")
-            target?.insertText((needsSpace ? " " : "") + transcript)
-            refreshSuggestions()
-        }
+        dictation.cancelUtterance()
+        dictation.stopWatching()
         dictationTranscript = ""
+        dictationFailure = ""
+    }
 
-        if insert {
-            withAnimation(Theme.Motion.panel) { overlay = .none }
+    /// Which way to lay the transcript out.
+    ///
+    /// **The transcriber's own answer first, a letter count only as a fallback.**
+    /// Counting letters gets the sentence this product exists for backwards:
+    /// `בוא נעשה sync על ה-roadmap` carries ten Hebrew letters and eleven Latin
+    /// ones, so `SuggestionEngine.languages(in:)` — which counts, deliberately,
+    /// for the suggestion bar's purposes — calls it English and the panel laid a
+    /// Hebrew sentence out left to right. The model reports what it *heard*,
+    /// most-spoken first, and speech has no such tie.
+    static func isRightToLeft(reported: String, text: String) -> Bool {
+        if let tag = reported.split(separator: ",").first,
+            let language = KeyboardLanguage(languageTag: String(tag))
+        {
+            return language.isRightToLeft
         }
+        return SuggestionEngine.languages(in: text).first?.isRightToLeft == true
+    }
+
+    /// Mirrors the session's published state onto this controller, which is what
+    /// the panel is bound to, and performs the deferred insertion.
+    private func observeDictation() {
+        guard dictationObservers.isEmpty else { return }
+
+        dictation.$transcript
+            .sink { [weak self] text in
+                guard let self, !text.isEmpty else { return }
+                self.dictationTranscript = text
+                self.dictationIsRightToLeft = Self.isRightToLeft(
+                    reported: self.dictation.transcriptLanguages, text: text)
+                guard self.pendingDictationInsert else { return }
+                self.pendingDictationInsert = false
+                Feedback.success()
+                let needsSpace = !self.contextBefore.isEmpty && !self.contextBefore.hasSuffix(" ")
+                self.target?.insertText((needsSpace ? " " : "") + text)
+                self.refreshSuggestions()
+                self.dictation.stopWatching()
+                withAnimation(Theme.Motion.panel) { self.overlay = .none }
+            }
+            .store(in: &dictationObservers)
+
+        dictation.$failure
+            .sink { [weak self] detail in
+                guard let self, !detail.isEmpty else { return }
+                self.pendingDictationInsert = false
+                self.isDictating = false
+                self.dictationFailure = detail
+            }
+            .store(in: &dictationObservers)
     }
 }

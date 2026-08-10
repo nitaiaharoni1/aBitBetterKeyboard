@@ -50,8 +50,10 @@ final class VisionLanguageTests: XCTestCase {
 /// prose figures had already drifted before anyone noticed.
 ///
 /// Same standing instruction as `VisionLanguageTests`: a failure here is not a
-/// broken test. It is permission to revisit `MockDictation` and the dictation half
-/// of `README.md`, because the reason dictation is mocked would have gone away.
+/// broken test. It is permission to revisit `CloudDictation`, because the reason
+/// every transcription in this product is a network call would have gone away —
+/// an on-device Hebrew transcriber is the one thing that would make the
+/// recording never leave the phone.
 ///
 /// **And writing it turned up why nobody had: the iOS Simulator answers with an
 /// empty list.** `SpeechTranscriber.supportedLocales` returns *zero* locales here

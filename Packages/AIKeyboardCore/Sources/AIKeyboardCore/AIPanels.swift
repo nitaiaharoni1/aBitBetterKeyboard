@@ -15,7 +15,7 @@ struct PanelHeader: View {
             if let onBack {
                 Button(action: onBack) {
                     Image(systemName: "chevron.backward")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(Theme.Glyph.medium(14))
                         .foregroundStyle(Theme.Keys.secondaryLabel)
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
@@ -42,7 +42,7 @@ struct PanelHeader: View {
 
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(Theme.Glyph.medium(13))
                     .foregroundStyle(Theme.Keys.secondaryLabel)
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(Theme.Keys.function.opacity(0.6)))
@@ -110,7 +110,7 @@ public struct AIMenuPanel: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Image(systemName: action.icon)
-                        .font(.system(size: 17, weight: .medium))
+                        .font(Theme.Glyph.medium(17))
                         .foregroundStyle(Theme.Brand.gradient)
 
                     // Reply is the only action whose availability changes minute
@@ -124,7 +124,7 @@ public struct AIMenuPanel: View {
                 .frame(height: 22)
 
                 Text(action.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Theme.Keys.label)
 
                 Text(subtitle(for: action))
@@ -286,10 +286,10 @@ public struct AIResultPanel: View {
         VStack(spacing: Theme.Space.xs) {
             Spacer(minLength: 0)
             Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 22, weight: .light))
+                .font(Theme.Glyph.font(22))
                 .foregroundStyle(Theme.Keys.secondaryLabel)
             Text(error.title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Theme.Keys.label)
             Text(error.message)
                 .font(.system(size: 13))
@@ -314,7 +314,7 @@ public struct AIResultPanel: View {
     private var bestEffortNotice: some View {
         HStack(spacing: 5) {
             Image(systemName: "info.circle")
-                .font(.system(size: 10, weight: .medium))
+                .font(Theme.Glyph.font(10))
             Text("Best effort — this language isn't fully supported on device")
                 .font(.system(size: 11))
                 .fixedSize(horizontal: false, vertical: true)
@@ -339,7 +339,7 @@ public struct AIResultPanel: View {
                     Divider().overlay(Theme.Keys.secondaryLabel.opacity(0.2))
 
                     Text(controller.aiResultText)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(Theme.Keys.label)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -396,7 +396,10 @@ public struct AIResultPanel: View {
                 if let custom = controller.customTone {
                     chip(
                         title: custom.title,
-                        icon: custom.icon,
+                        // Spelled out rather than asked of `ToneSetting`, which no
+                        // longer answers it: the six built-ins keep `ToneStyle.icon`
+                        // and this branch only ever runs for the custom one.
+                        icon: "square.and.pencil",
                         isSelected: controller.selectedToneIsCustom
                     ) {
                         controller.selectTone(custom)
@@ -427,7 +430,7 @@ public struct AIResultPanel: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(Theme.Glyph.font(11))
                 Text(title)
                     .font(.system(size: 13, weight: .medium))
             }
@@ -453,7 +456,7 @@ public struct AIResultPanel: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     Image(systemName: variant.tone.icon)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(Theme.Glyph.medium(10))
                     // Rewrite labels the decision each version takes; Tone has
                     // only the register, which is already the card's title.
                     Text((variant.label ?? variant.tone.title).uppercased())
@@ -525,7 +528,7 @@ public struct AIResultPanel: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 4) {
                     Image(systemName: reply.icon)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(Theme.Glyph.medium(10))
                     Text(reply.intent.uppercased())
                         .font(.system(size: 10, weight: .semibold))
                         .tracking(0.6)
@@ -583,7 +586,7 @@ public struct AIResultPanel: View {
         VStack(spacing: Theme.Space.sm) {
             VStack(spacing: 4) {
                 Text(prompt.title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Theme.Keys.label)
 
                 Text(prompt.detail)
@@ -642,7 +645,12 @@ public struct AIResultPanel: View {
     private var prompt: ScreenContextPrompt {
         ScreenContextPrompt(
             canReachChannel: CaptureChannel.isReachable,
-            cloudConfigured: BackendTransport.configured() != nil,
+            // `isReady`, not `configured() != nil`. A broadcast that starts with no
+            // token ends inside a second on `.notConfigured`, after asking the user
+            // for the screen-recording permission and recording their screen for
+            // nothing — and a shipped URL makes `configured()` true from the first
+            // launch, so this is the check that keeps that from happening.
+            cloudConfigured: BackendTransport.isReady(),
             ended: endedReason)
     }
 
@@ -651,7 +659,7 @@ public struct AIResultPanel: View {
     private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Theme.Text.onBrand)
                 .frame(maxWidth: .infinity)
                 .frame(height: Theme.Metrics.minTouchTarget)
@@ -667,7 +675,7 @@ public struct AIResultPanel: View {
     private func secondaryButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(Theme.Keys.label)
                 .frame(maxWidth: .infinity)
                 .frame(height: Theme.Metrics.minTouchTarget)
@@ -729,7 +737,7 @@ struct ScreenContextPrompt: Equatable {
         guard cloudConfigured else {
             title = "Screen context can't run yet"
             detail =
-                "Reading a screen needs a cloud model, and none is set up. \(BackendTransport.setUpRecovery)"
+                "Reading a screen needs the cloud model, and it is not finished being set up. \(BackendTransport.setUpRecovery)"
             offersPicker = false
             return
         }

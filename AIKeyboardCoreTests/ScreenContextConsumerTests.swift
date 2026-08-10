@@ -36,6 +36,16 @@ final class ScreenContextConsumerTests: XCTestCase {
         writer = try XCTUnwrap(CaptureChannelWriter(directory: directory))
         channel = ScreenContextChannel(reader: CaptureChannelReader(directory: directory))
         session = ScreenContextSession()
+        // **Injected, because the default answer stopped being nil.**
+        // `isScreenReadingConfigured` defaults to
+        // `BackendTransport.configured() != nil`, and once a `bundledDefaultURL`
+        // shipped that is true on every install — so `isWorthReporting` retired
+        // `.notConfigured` before this suite could observe it and
+        // `testASessionWithNoReaderIsReportedAsUnconfigured` failed against a
+        // session that was behaving correctly. The seam is a `var` closure for
+        // exactly this; the suite simply was not using it, so the test's outcome
+        // depended on whether a backend happened to be reachable.
+        session.isScreenReadingConfigured = { false }
         session.startConsuming(channel, as: .keyboard)
     }
 
@@ -321,6 +331,10 @@ final class ScreenContextConsumerTests: XCTestCase {
     /// The reason comes from `refusalToStart`, so a producer that stopped refusing
     /// fails this rather than passing it.
     func testASessionWithNoReaderIsReportedAsUnconfigured() throws {
+        // `isScreenReadingConfigured` is pinned false in `setUp`, which is what
+        // makes `.notConfigured` observable at all now that a backend URL ships
+        // by default. Stated there rather than here, so every test in the suite
+        // gets the same answer.
         writer.begin()
         let refusal = try XCTUnwrap(
             ScreenContextEndReason.refusalToStart(canRead: false),

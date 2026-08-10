@@ -1,0 +1,205 @@
+[
+  {
+    "id": "ar",
+    "language": "arabic",
+    "speech": "yes",
+    "languages": "ar,en",
+    "text": "ساارسل لك ال document غدا صباحا بعد ال standup."
+  },
+  {
+    "id": "bg",
+    "language": "bulgarian",
+    "speech": "yes",
+    "languages": "bg,en",
+    "text": "Ще ти изпратя deck и мен утре сутринта, след standup."
+  },
+  {
+    "id": "ca",
+    "language": "catalan",
+    "speech": "yes",
+    "languages": "ca",
+    "text": "Te enviaré el document de demà al matí, després de l'standup."
+  },
+  {
+    "id": "hr",
+    "language": "croatian",
+    "speech": "yes",
+    "languages": "sr",
+    "text": "Poslaću ti dokument sutra ujutro nakon standupa."
+  },
+  {
+    "id": "cs",
+    "language": "czech",
+    "speech": "yes",
+    "languages": "cs",
+    "text": "Pošlu ti ten dokument zítra ráno, po standupu."
+  },
+  {
+    "id": "da",
+    "language": "danish",
+    "speech": "yes",
+    "languages": "da",
+    "text": "Jeg sender dig det dokument i morgen tidlig efter standup."
+  },
+  {
+    "id": "nl",
+    "language": "dutch",
+    "speech": "yes",
+    "languages": "nl",
+    "text": "Ik stuur je het document morgenochtend naar de standaard."
+  },
+  {
+    "id": "fi",
+    "language": "finnish",
+    "speech": "yes",
+    "languages": "fi",
+    "text": "olla ensin uudet dokumentit huomenna aamulla standupin jälkeen."
+  },
+  {
+    "id": "fr",
+    "language": "french",
+    "speech": "yes",
+    "languages": "fr",
+    "text": "Je t'enverrai le document demain matin après le stand up."
+  },
+  {
+    "id": "de",
+    "language": "german",
+    "speech": "yes",
+    "languages": "de",
+    "text": "Ich schicke dir das Dokument morgen früh, nachdem es denn ab."
+  },
+  {
+    "id": "el",
+    "language": "greek",
+    "speech": "yes",
+    "languages": "el,en",
+    "text": "Θα σου στείλω το document αύριο το πρωί, μετά το standup."
+  },
+  {
+    "id": "hi",
+    "language": "hindi",
+    "speech": "yes",
+    "languages": "hi,en",
+    "text": "मैं तुम्हें कल सुबह डॉक्यूमेंट भेज दूंगा स्टैंडर्ड के बाद"
+  },
+  {
+    "id": "hu",
+    "language": "hungarian",
+    "speech": "yes",
+    "languages": "hu",
+    "text": "Holnap reggel elküldöm neked a dokumentet, a standup után."
+  },
+  {
+    "id": "id",
+    "language": "indonesian",
+    "speech": "yes",
+    "languages": "id",
+    "text": "Saya akan mengirimkan dokumen besok pagi setelah standuk."
+  },
+  {
+    "id": "it",
+    "language": "italian",
+    "speech": "yes",
+    "languages": "it",
+    "text": "Ti manderò il document domani mattina, dopo lo stand up."
+  },
+  {
+    "id": "lt",
+    "language": "lithuanian",
+    "speech": "yes",
+    "languages": "lt,en",
+    "text": "atsiųsiu tau dokumentą rytoj ryte. Po stand up."
+  },
+  {
+    "id": "ms",
+    "language": "malay",
+    "speech": "yes",
+    "languages": "ms",
+    "text": "Saya akan hantar dokumen esok pagi selepas tanduk."
+  },
+  {
+    "id": "nb",
+    "language": "norwegian",
+    "speech": "yes",
+    "languages": "nb",
+    "text": "Jeg sender deg dokument i morgen tidlig etter stang."
+  },
+  {
+    "id": "pl",
+    "language": "polish",
+    "speech": "yes",
+    "languages": "pt",
+    "text": "Vou te enviar o documento amanhã de manhã, por favor."
+  },
+  {
+    "id": "pt",
+    "language": "portuguese",
+    "speech": "yes",
+    "languages": "pt",
+    "text": "Vou enviar-te o documento amanhã de manhã, depois do stand-up."
+  },
+  {
+    "id": "ro",
+    "language": "romanian",
+    "speech": "yes",
+    "languages": "ro",
+    "text": "îți trimite document mâine dimineață după stand up."
+  },
+  {
+    "id": "ru",
+    "language": "russian",
+    "speech": "yes",
+    "languages": "ru,en",
+    "text": "Я отправлю тебе document завтра утром после stand up."
+  },
+  {
+    "id": "sk",
+    "language": "slovak",
+    "speech": "yes",
+    "languages": "sr",
+    "text": "Poslaću ti dokument sutra rano, pa stani do mene."
+  },
+  {
+    "id": "sl",
+    "language": "slovenian",
+    "speech": "yes",
+    "languages": "sl",
+    "text": "Poslal ti bom dokument jutri zjutraj, postani dober."
+  },
+  {
+    "id": "es",
+    "language": "spanish",
+    "speech": "yes",
+    "languages": "es",
+    "text": "Le enviaré el documento mañana por la mañana después del stand up."
+  },
+  {
+    "id": "sv",
+    "language": "swedish",
+    "speech": "yes",
+    "languages": "sv",
+    "text": "Jag skickar dig dokument imorgon bitti, efter stand up."
+  },
+  {
+    "id": "ta",
+    "language": "tamil",
+    "speech": "yes",
+    "languages": "ta,en",
+    "text": "நான் நாளை காலை டாக்குமெண்ட் அனுப்புகிறேன் ஸ்டாண்ட் அப் பிறகு."
+  },
+  {
+    "id": "tr",
+    "language": "turkish",
+    "speech": "yes",
+    "languages": "tr",
+    "text": "Sana dokümanı yarın sabah stand up'tan sonra göndereceğim."
+  },
+  {
+    "id": "uk",
+    "language": "ukrainian",
+    "speech": "yes",
+    "languages": "uk",
+    "text": "Я надішлю тобі документ завтра вранці після стендап."
+  }
+]

@@ -13,21 +13,25 @@ Node.js, zero runtime dependencies.
 
 ## What it does
 
-Two endpoints, both POST, both JSON, matching `CloudTransport.swift` exactly:
+Three endpoints, all POST, all JSON, matching `CloudTransport.swift` exactly:
 
 - `POST /v1/text` — text actions (Fix, Rewrite, Tone, Reply)
+- `POST /v1/audio` — one WAV of an utterance, for dictation (its own endpoint
+  for the same reason the screen has one: a recording of somebody's voice earns
+  its own retention rule)
 - `POST /v1/screen` — one downscaled JPEG of the user's screen (its own
   endpoint so images can carry their own retention rule, separate from text)
 
-Both take `{instructions, prompt, fields, image?}` and forward it to Vertex AI
+All three take `{instructions, prompt, fields, image?, audio?}` and forward it to Vertex AI
 Gemini as one `generateContent` call, built the way the scoring harnesses
 build it (`Bar/ai-text/harness/VertexTransport.swift`,
 `Bar/screen-context/harness/vertex_vision.py`) — **including where those two
 disagree**: `vertex_vision.py` sets `temperature: 0` and `VertexTransport.swift`
-sets no temperature at all, so `/v1/screen` sends it and `/v1/text` does not.
-That asymmetry is the point; sending 0 on both would look tidier and would mean
-every text action ran a configuration the ai-text corpus never graded. Shared by
-both: a `responseSchema` built from `fields` with `propertyOrdering` preserved
+sets no temperature at all, so `/v1/screen` and `/v1/audio` send it and
+`/v1/text` does not (`src/vertexClient.js`: `if (image || audio)`).
+That asymmetry is the point; sending 0 on all three would look tidier and would
+mean every text action ran a configuration the ai-text corpus never graded.
+Shared by all three: a `responseSchema` built from `fields` with `propertyOrdering` preserved
 (`src/schema.js`), and `thinkingConfig.thinkingBudget: 512` — capped, not off:
 0 breaks the Hebrew/English code-switching this product exists for, and
 unbounded pushes the tail to 17–18s (see `VertexTransport.swift`'s comment on
@@ -61,9 +65,11 @@ failure:
 | anything else | `{"error": "<message>"}`, surfaced to the user verbatim |
 
 `GET /healthz` is the one endpoint outside this table: 200 `text/plain`, no
-gate, because Cloud Run's own probes carry no bearer token.
+gate, because Cloud Run's own probes carry no bearer token. It answers that way
+locally and 404s on the deployment, which is Google's frontend and not this
+service — see "Known gaps".
 
-A 200 response to either POST is either `{"fields": {...}}` or `{"refused": true}`. The
+A 200 response to any of the three is either `{"fields": {...}}` or `{"refused": true}`. The
 second is for a decline that isn't a safety verdict — Vertex's `RECITATION`
 and `OTHER` finish reasons — so a log reader can tell "unsafe" apart from
 "declined for some other reason" even though the client reads both the same
@@ -108,8 +114,25 @@ port but always hand it a fake `vertexClient`.
 ## Deploying
 
 ```bash
-PROJECT=handi-project REGION=us-central1 ./deploy.sh
+BACKEND_TOKEN=... PROJECT=handi-project REGION=europe-west1 ./deploy.sh
 ```
+
+**Live since 2026-08-10** at
+`https://aikeyboard-backend-cq6zxsdx5a-ew.a.run.app`, in `handi-project`,
+`europe-west1`. That address is the one the app ships pointing at
+(`BackendTransport.bundledDefaultURL`); the token is not in the bundle and is
+typed into `Settings › AI › Cloud model`. Deploying it took two grants this
+README did not mention and `deploy.sh` does not make: `cloudbuild.googleapis.com`
+had never been enabled on the project, and the Cloud Build default service
+account (`<projectNumber>-compute@developer.gserviceaccount.com`) needed
+`roles/cloudbuild.builds.builder` before `--source=.` could read its own upload.
+Both are one-time and already done here. Allow a few minutes for an IAM grant to
+propagate — two deploys failed with the same `PERMISSION_DENIED` after the role
+was correctly bound, and the third succeeded with nothing else changed.
+
+That deployment is also what retired this file's "the metadata-server token path
+has never run against a real metadata server" gap: every answered call through
+the Cloud Run service takes it, since there is no `gcloud` on that host.
 
 Not run automatically by anything — deploy by hand. The script grants the
 Cloud Run default runtime identity `roles/aiplatform.user` (idempotent, safe
@@ -152,11 +175,16 @@ Put the same value in the app's `cloudBackendToken` setting beside its URL. See
   caller is a genuine unmodified copy of this app on real Apple hardware rather
   than proving it knows a string. That needs a client change and an Apple key,
   and it has not been done.
-- **The metadata-server token path has never run against a real metadata
-  server.** It matches the documented shape and is covered by
-  `test/token.test.js` with a fake `fetch`, but there is no Cloud Run
-  instance deployed yet to exercise it against the real one — `deploy.sh` was
-  written and not run, per the task that produced this service.
+- **`/healthz` answers locally and 404s in the deployment, and it is not this
+  service that refuses it.** `curl localhost:8080/healthz` returns `ok`; the same
+  path on Cloud Run comes back as Google's own HTML 404, without the
+  `server: Google Frontend` header that this service's real 404s carry, so the
+  request is being answered in front of the container rather than by it. Nothing
+  in the app calls it — `BackendTransport` only ever posts to `/v1/text`,
+  `/v1/screen` and `/v1/audio`, all three of which were checked against the
+  deployment — so this is documentation drift rather than an outage. Do not "fix" it in `httpServer.js`: line 86 matches the path exactly and
+  is provably reached, since `/nonsense` on the same deployment returns this
+  service's own JSON 404.
 - **`Bar/`'s harnesses are not wired to call this service.** They still talk
   to Vertex directly with a `gcloud` token on the scoring machine
   (`VertexTransport.swift`, `vertex_vision.py`) — that's deliberate, so a

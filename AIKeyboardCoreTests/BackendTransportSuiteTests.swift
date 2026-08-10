@@ -13,7 +13,13 @@ final class BackendTransportSuiteTests: XCTestCase {
         let suite = UserDefaults(suiteName: "BackendTransportSuiteTests")!
         suite.removePersistentDomain(forName: "BackendTransportSuiteTests")
 
-        XCTAssertNil(BackendTransport.configured(defaults: suite))
+        // An empty store is a stock install, and a stock install now reaches the
+        // backend this build ships with — see
+        // `CloudIntelligenceTests.testAnAbsentOrEmptyURLFallsBackToTheBundledBackend`
+        // for why that stopped being nil. What proves *this* suite is the one being
+        // read is the pair below: a value put here is honoured, and a bad value put
+        // here is refused, neither of which could happen against `.standard`.
+        XCTAssertNotNil(BackendTransport.configured(defaults: suite))
 
         suite.set("https://backend.example.com", forKey: "cloudBackendURL")
         XCTAssertNotNil(BackendTransport.configured(defaults: suite))

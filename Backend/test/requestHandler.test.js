@@ -117,3 +117,40 @@ test("field order reaches the vertex client unmodified", async () => {
     ["decision", "versionA", "versionB"]
   );
 });
+
+test("an audio object with a non-string data field is rejected", async () => {
+  const bad = { ...validBody, audio: { mimeType: "audio/wav", data: 12345 } };
+  const result = await handleRequest(bad, {
+    vertexClient: fakeClient(async () => ({ kind: "ok", fields: {} }))
+  });
+  assert.equal(result.status, 400);
+  assert.match(result.body.error, /audio\.data/);
+});
+
+test("audio is forwarded to the vertex client", async () => {
+  let seen;
+  const vertexClient = {
+    call: async (request) => {
+      seen = request;
+      return { kind: "ok", fields: { speech: "yes", languages: "he,en", text: "shalom" } };
+    }
+  };
+  const result = await handleRequest({ ...validBody, audio: { mimeType: "audio/wav", data: "UklGRg==" } }, { vertexClient });
+  assert.equal(result.status, 200);
+  assert.deepEqual(seen.audio, { mimeType: "audio/wav", data: "UklGRg==" });
+  assert.equal(result.body.fields.text, "shalom");
+});
+
+// Guessing which endpoint a two-media body meant is worse than refusing it.
+test("a body carrying both image and audio is rejected", async () => {
+  const both = {
+    ...validBody,
+    image: { mimeType: "image/jpeg", data: "Zm9v" },
+    audio: { mimeType: "audio/wav", data: "UklGRg==" }
+  };
+  const result = await handleRequest(both, {
+    vertexClient: fakeClient(async () => ({ kind: "ok", fields: {} }))
+  });
+  assert.equal(result.status, 400);
+  assert.match(result.body.error, /not both/);
+});

@@ -60,11 +60,13 @@ final class RenderedRowOrderTests: XCTestCase {
         assertRendersLikeStock(stock["en_US"], "English", rowForRow: true)
         XCTAssertTrue(
             deleteIsOnTheRight(), "English draws delete on the left of the keyboard")
+        assertCandidatesRunLeftToRight("English")
 
         // The globe cycles the enabled languages, which start as English, Hebrew.
         cycleLanguage()
         capture("hebrew")
         assertRendersLikeStock(stock["he_IL"], "Hebrew", rowForRow: true)
+        assertCandidatesRunLeftToRight("Hebrew")
         // The claim `KeyboardLayout` used to carry was that delete "sits at the
         // trailing edge, which mirrors to the left of the screen". Apple's own
         // Hebrew keyboard puts it at the *right*, and so does its Arabic one.
@@ -119,6 +121,30 @@ final class RenderedRowOrderTests: XCTestCase {
                 name.hasPrefix("key-char-") ? String(name.dropFirst("key-char-".count)) : nil
             }
         }
+    }
+
+    /// The three suggestion slots are drawn in the same three places whatever the
+    /// language is.
+    ///
+    /// **Measured on screen for the same reason the letter rows are.** The bar
+    /// used to hand the candidates the language's own `layoutDirection`, so slot 0
+    /// was drawn last on Hebrew and the three words swapped ends the instant a
+    /// slide along the space bar changed language — with the word a thumb was
+    /// travelling towards now at the other end of the bar. Nothing that reads
+    /// `controller.suggestions` can see that: the array is in the same order
+    /// either way, which is exactly the trap `RenderedRowOrderTests` exists for.
+    private func assertCandidatesRunLeftToRight(_ name: String) {
+        let centres = (0..<3).compactMap { slot -> CGFloat? in
+            let element = element("suggestion-\(slot)")
+            return element.exists ? element.frame.midX : nil
+        }
+        guard centres.count == 3 else {
+            XCTFail("\(name) shows \(centres.count) suggestions, not three")
+            return
+        }
+        XCTAssertEqual(
+            centres, centres.sorted(),
+            "\(name) draws the suggestions in reverse: slot 0 is not the leftmost")
     }
 
     /// True when delete is drawn on the right half of the keyboard, which is where

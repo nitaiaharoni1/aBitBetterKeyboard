@@ -21,6 +21,7 @@ struct MainTabView: View {
 struct HomeView: View {
     @EnvironmentObject private var store: SharedStore
     @StateObject private var session = ScreenContextSession.shared
+    @StateObject private var dictation = DictationService.shared
     @Environment(\.scenePhase) private var scenePhase
     @State private var showsPlayground = false
 
@@ -39,6 +40,7 @@ struct HomeView: View {
                 ScrollView {
                     VStack(spacing: Theme.Space.md) {
                         screenContextCard
+                        dictationCard
                         setupCard
                         playgroundCard
                         if !store.isSubscribed { upgradeCard }
@@ -125,6 +127,66 @@ struct HomeView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home-screen-context")
+    }
+
+    // MARK: Dictation
+
+    /// Beside Screen Context because it is the same kind of thing: a session
+    /// somebody has to start, that can be running right now, and that the
+    /// keyboard cannot start for them. LIVE means a microphone is open in this
+    /// app; nothing else earns that badge.
+    private var dictationCard: some View {
+        NavigationLink {
+            DictationView()
+        } label: {
+            Card {
+                HStack(spacing: Theme.Space.sm) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .fill(
+                                dictation.isRunning
+                                    ? AnyShapeStyle(Theme.Semantic.record.opacity(0.14))
+                                    : AnyShapeStyle(Theme.Brand.softGradient)
+                            )
+                            .frame(width: 38, height: 38)
+
+                        Image(systemName: dictation.isRunning ? "mic.fill" : "mic")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(
+                                dictation.isRunning
+                                    ? AnyShapeStyle(Theme.Semantic.record)
+                                    : AnyShapeStyle(Theme.Brand.gradient))
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 5) {
+                            Text("Dictation")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(Theme.Text.primary)
+
+                            if dictation.isRunning { badge("LIVE", colour: Theme.Semantic.record) }
+                        }
+
+                        Text(
+                            dictation.isRunning
+                                ? "The keyboard's microphone button works now"
+                                : "Start a session here to dictate from the keyboard"
+                        )
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Text.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.Text.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home-dictation")
     }
 
     private func badge(_ text: String, colour: Color) -> some View {
@@ -287,9 +349,10 @@ struct HomeView: View {
                         Text("AI Keyboard Pro")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(Theme.Text.primary)
-                        // "cloud dictation" was in this list. There is no
-                        // dictation at all in this build, in either process, so a
-                        // paid tier cannot have a better one. See `MockDictation`.
+                        // "cloud dictation" was in this list when there was no
+                        // dictation at all. There is now, and it is cloud — the only
+                        // kind Hebrew can have — but it is the *only* kind, so a
+                        // paid tier still has nothing better to sell.
                         //
                         // "Unlimited rewrites and every tone" went the same way and
                         // for the same reason: nothing meters a rewrite and nothing
@@ -358,8 +421,14 @@ struct PlaygroundView: View {
     /// and these two were left behind; the name now comes from
     /// `SuggestionBar.aiButtonName`, so there is one spelling of it.
     static let seedSentence = "i dont think we should do it because its not make sense"
-    static let seedPlaceholder = "Type in Hebrew or English, then tap \(SuggestionBar.aiButtonName)"
+    static let seedPlaceholder =
+        "Type in Hebrew or English, then use \(SuggestionBar.aiButtonName)"
+    /// **One tap, not two, and the actions are named because they are on screen
+    /// now.** This used to say "tap ✨, then Fix", which was the panel flow: the
+    /// sparkle opened a menu and Fix was a row inside it. Fix and Rewrite are keys
+    /// in the action row, so the instruction that matches what the user is looking
+    /// at is the name of the key.
     static let seedHint =
-        "This sentence has mistakes in it on purpose. Tap \(SuggestionBar.aiButtonName), then Fix to "
-        + "correct it, or Tone to say it another way."
+        "This sentence has mistakes in it on purpose. Tap Fix in \(SuggestionBar.aiButtonName) to "
+        + "correct it, or Rewrite to say it another way."
 }

@@ -85,8 +85,10 @@ TEST_RUNNER_SHOT_DIR=/tmp/shots xcodebuild test -project AIKeyboard.xcodeproj \
   in `AIKeyboard/AIKeyboardApp.swift`.
 - `capture(_:)` writes a numbered PNG per screen, so a test doubles as the
   screenshot walkthrough. Keep the names descriptive; they become filenames.
-- Dictation timings are real sleeps (streaming script),
-  so `settle(_:)` waits have to exceed them or the assertion races the animation.
+- Dictation crosses a process boundary, so its UI test holds both processes up
+  for a fixed window rather than waiting on an element; the verdict is read out
+  of the extension's log by `Scripts/prove-dictation.sh`, like the other two
+  cross-process suites.
 
 ## Workflow
 

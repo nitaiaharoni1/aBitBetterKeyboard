@@ -77,10 +77,26 @@
 			);
 			target = AA00000000000000000014 /* AIKeyboardBroadcast */;
 		};
+		AA00000000000000000037 /* Exceptions for "AIKeyboard" folder in "AIKeyboard" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = AA00000000000000000010 /* AIKeyboard */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		AA00000000000000000030 /* AIKeyboard */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = AIKeyboard; sourceTree = "<group>"; };
+		AA00000000000000000030 /* AIKeyboard */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				AA00000000000000000037 /* Exceptions for "AIKeyboard" folder in "AIKeyboard" target */,
+			);
+			explicitFileTypes = {};
+			explicitFolders = ();
+			path = AIKeyboard;
+			sourceTree = "<group>";
+		};
 		AA00000000000000000031 /* AIKeyboardExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -507,6 +523,7 @@
 				CURRENT_PROJECT_VERSION = 3;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AIKeyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "AI Keyboard";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AI Keyboard uses the microphone so you can dictate instead of typing.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition turns what you say into text you can insert anywhere.";
@@ -538,6 +555,7 @@
 				CURRENT_PROJECT_VERSION = 3;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AIKeyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "AI Keyboard";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AI Keyboard uses the microphone so you can dictate instead of typing.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition turns what you say into text you can insert anywhere.";
