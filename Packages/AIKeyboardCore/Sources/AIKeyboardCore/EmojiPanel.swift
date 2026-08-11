@@ -366,8 +366,8 @@ struct EmojiCategoryRow: View {
 /// so this carries the same rules rather than inventing a second look: a resting
 /// cap like every key now wears (`restingCap` — warm white card for the tabs,
 /// soft graphite for delete), the letter-white cap and the graphite glyph under
-/// a finger, `Theme.Radius.key` corners, and the same keycap depth — top sheen,
-/// contact line and ambient lift, settled a point on press — drawn from
+/// a finger, `Theme.Radius.key` corners, and the same keycap depth — contact line
+/// and ambient lift, settled a point on press — drawn from
 /// `KeyView`'s own recipe (`capKind`), so the panel and the keys cannot drift.
 struct KeyStyleButton<Label: View>: View {
 
@@ -405,7 +405,6 @@ struct KeyStyleButton<Label: View>: View {
         ZStack {
             RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
                 .fill(fill)
-                .overlay(alignment: .top) { KeyView.capSheen(kind: capKind, height: height) }
                 .shadow(
                     color: KeyView.contactShadow(for: capKind),
                     radius: 0, x: 0, y: isPressed ? 1 : 2

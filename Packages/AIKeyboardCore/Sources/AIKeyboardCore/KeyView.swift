@@ -97,7 +97,6 @@ public struct KeyView: View {
         ZStack {
             RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
                 .fill(background)
-                .overlay(alignment: .top) { Self.capSheen(kind: capKind, height: height) }
                 .shadow(
                     color: Self.contactShadow(for: capKind),
                     radius: 0, x: 0, y: isPressed ? 1 : 2

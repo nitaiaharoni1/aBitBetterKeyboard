@@ -36,15 +36,16 @@ public struct ActionBanner: View {
 
             trailing
         }
-        .padding(.horizontal, Theme.Space.md)
+        .padding(.trailing, Theme.Space.md)
         .padding(.vertical, Theme.Space.xxs)
         .frame(maxWidth: .infinity)
         .frame(height: Theme.Metrics.bannerHeight)
         .background(
             RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                 .fill(surface)
-                .padding(.horizontal, Theme.Space.xs)
-                .padding(.vertical, Theme.Space.xxs)
+                .padding(.trailing, Theme.Space.xs)
+                .padding(.top, Theme.Space.xxs)
+                .padding(.bottom, Theme.Space.xxs)
         )
         // **Pinned, like every other control row in this keyboard.** The label,
         // the paging dots and the Use button are targets, and a slide along the

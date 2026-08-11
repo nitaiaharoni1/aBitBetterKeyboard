@@ -81,10 +81,9 @@ extension KeyView {
 
     // MARK: Depth
     //
-    // The keycap's physical read, from the Editor's Desk mock: a sheen of light
-    // along the cap's top edge, a crisp 2pt contact line under it, and a faint
-    // ambient lift. Dark and orange caps carry the deeper contact lines. All
-    // static so `KeyStyleButton` — the panel's key-styled controls — draws the
+    // The keycap's physical read: a crisp 2pt contact line under it and a faint
+    // ambient lift. Dark and orange caps carry the deeper contact lines. Both
+    // are static so `KeyStyleButton` — the panel's key-styled controls — draws
     // identical material rather than a second opinion of it.
 
     /// The contact line: the hard shadow where the cap meets the keyboard.
@@ -105,37 +104,6 @@ extension KeyView {
         case .soft: return .black.opacity(0.08)
         case .action: return Theme.Brand.action.opacity(0.30)
         }
-    }
-
-    /// The ceramic top edge. A pure white lip on the warm-white caps; the same
-    /// idea at a whisper on the dark and orange ones, and dimmed across the
-    /// board in dark mode, where every cap is already dark.
-    static func topHighlight(for kind: CapKind) -> Color {
-        switch kind {
-        case .letter: return sheenWhite(light: 1, dark: 0.18)
-        case .strong: return sheenWhite(light: 0.14, dark: 0.10)
-        case .soft: return sheenWhite(light: 0.18, dark: 0.14)
-        case .action: return sheenWhite(light: 0.20, dark: 0.20)
-        }
-    }
-
-    private static func sheenWhite(light: Double, dark: Double) -> Color {
-        Color(
-            UIColor { traits in
-                UIColor.white.withAlphaComponent(traits.userInterfaceStyle == .dark ? dark : light)
-            })
-    }
-
-    /// The sheen itself: light fading down over the top fifth of the cap,
-    /// clipped to the cap's shape so the lip follows the rounded corners.
-    static func capSheen(kind: CapKind, height: CGFloat) -> some View {
-        let highlight = topHighlight(for: kind)
-        return LinearGradient(
-            colors: [highlight, highlight.opacity(0)],
-            startPoint: .top, endPoint: .bottom
-        )
-        .frame(height: height * 0.2)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous))
     }
 
     var accessibilityValue: String {
