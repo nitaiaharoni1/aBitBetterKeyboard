@@ -72,16 +72,23 @@ struct LanguagesView: View {
                         }
                     }
 
-                    // Without Full Access, none of these choices reaches the
-                    // keyboard. Keep the warning short and only show it while it
-                    // is actionable.
-                    if setup.fullAccess != .confirmed {
-                        Text("Full Access is off. Changes here won’t reach the keyboard.")
-                            .font(Theme.Fonts.caption)
-                            .foregroundStyle(Theme.Text.tertiary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
                 }
+            }
+
+            // Without Full Access, none of these choices reaches the keyboard.
+            // Keep the warning quiet, outside the primary content card, and only
+            // show it while it is actionable.
+            if setup.fullAccess != .confirmed {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.xxs) {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 11, weight: .regular))
+
+                    Text("Full Access is off. Changes here won’t reach the keyboard.")
+                        .font(Theme.Fonts.micro.weight(.regular))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundStyle(Theme.Text.tertiary)
+                .padding(.horizontal, Theme.Space.xxs)
             }
         }
     }
