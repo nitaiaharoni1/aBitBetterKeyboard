@@ -46,6 +46,60 @@ extension SharedStore {
         set { write(newValue, forKey: Key.cloudSessionToken) }
     }
 
+    /// The App Attest key the current attempt is attesting with, kept across
+    /// attempts and across launches.
+    ///
+    /// **Stored because Apple's retry instruction is "the same key and the same
+    /// `clientDataHash`".** `serverUnavailable` is documented as transient and
+    /// documented as retryable *only* that way — asking again with a fresh key
+    /// and a fresh challenge is a different request, and Apple says repeating
+    /// the identical one is what preserves the device's risk metric. A key that
+    /// lived in a local made every retry a new device as far as Apple's service
+    /// was concerned.
+    ///
+    /// Cleared on success, because a key can be attested exactly once: keeping it
+    /// would make the ninety-day refresh fail with `invalidKey` on its first try
+    /// every single time. Also cleared *on* `invalidKey`, which is the answer for
+    /// a key from an install Apple no longer recognises.
+    public var attestKeyId: String {
+        get { defaults.string(forKey: Key.attestKeyId) ?? "" }
+        set { write(newValue, forKey: Key.attestKeyId) }
+    }
+
+    /// What the last attestation attempt did, in one sentence a person can read.
+    ///
+    /// **The whole point is that this used to be nothing at all.** Attestation is
+    /// the only thing standing between a fresh install and a working keyboard, it
+    /// runs unattended at launch, and every failure went into a `try?`. So an
+    /// install where it failed showed "Open AI Keyboard once to reconnect" on
+    /// every AI action, the user opened the app, the app said "Open AI Keyboard
+    /// once to connect it", and there was no third screen — no log, no code, no
+    /// reason — anywhere on the device or on the server. That is the state this
+    /// property exists to end.
+    public var attestationReport: String {
+        get { defaults.string(forKey: Key.attestationReport) ?? "" }
+        set { write(newValue, forKey: Key.attestationReport) }
+    }
+
+    /// When that attempt happened. Also the automatic path's cooldown: a launch
+    /// and a foreground both ask, and attestation is rate-limited by Apple, so
+    /// two attempts a few seconds apart spend a real allowance to learn the same
+    /// thing twice.
+    public var attestationCheckedAt: Date? {
+        get {
+            let stamp = defaults.double(forKey: Key.attestationCheckedAt)
+            return stamp > 0 ? Date(timeIntervalSince1970: stamp) : nil
+        }
+        set {
+            objectWillChange.send()
+            guard let newValue else {
+                defaults.removeObject(forKey: Key.attestationCheckedAt)
+                return
+            }
+            defaults.set(newValue.timeIntervalSince1970, forKey: Key.attestationCheckedAt)
+        }
+    }
+
     /// Whether an AI action would find a cloud engine right now. The same question
     /// `BackendTransport.configured` answers, asked of this store so a screen can
     /// render it.

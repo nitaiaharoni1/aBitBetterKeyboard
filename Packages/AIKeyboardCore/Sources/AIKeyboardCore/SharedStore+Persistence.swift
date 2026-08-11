@@ -20,6 +20,13 @@ extension SharedStore {
             // run would otherwise wipe the backend whoever is developing this
             // typed in, and it is the one setting here that cannot be recovered by
             // tapping a switch back on.
+            //
+            // Nor the four the cloud connection is made of — `cloudSessionToken`,
+            // `attestKeyId`, `attestationReport`, `attestationCheckedAt`. Those
+            // are not settings at all: clearing them makes the next launch raise a
+            // fresh attestation, and Apple rate-limits those per device, so a UI
+            // suite that resets between cases would spend a real allowance per
+            // test to arrive back where it started.
         ] {
             defaults.removeObject(forKey: key)
         }

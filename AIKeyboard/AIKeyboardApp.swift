@@ -80,6 +80,7 @@ struct RootView: View {
     @EnvironmentObject private var store: SharedStore
     @ObservedObject private var handoffTrigger = DictationHandoffTrigger.shared
     @Binding var selectedMainTab: MainTab
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -103,8 +104,27 @@ struct RootView: View {
             if SharedStore.shared.consumeDictationHandoff() {
                 DictationHandoffTrigger.shared.activate()
             }
+            // **Unstructured, where this used to be a `.task`.** A `.task` is
+            // cancelled when its view goes away, and this view is a `Group`
+            // whose branch swaps the moment onboarding finishes — so the one
+            // attestation an install got could be killed part-way by the user
+            // tapping Done, and nothing retried it. Attestation guards itself
+            // against overlapping runs, so it does not need the view to own its
+            // lifetime.
+            Task { await AppAttestation.refreshIfNeeded(store: store) }
         }
-        .task { await AppAttestation.refreshIfNeeded(store: store) }
+        // **Launch is not enough, and believing it was is half of why the cloud
+        // was dead.** Attestation can fail for reasons that are gone a minute
+        // later — Apple's own service answering `serverUnavailable`, no network
+        // at the instant of a cold start, the run suspended when the user left
+        // for the app they were typing in. A single unretried attempt per launch
+        // turned any of those into an install that 401s on every AI action until
+        // somebody force-quits and reopens. `refreshIfNeeded` is cheap when there
+        // is nothing to do and holds its own cooldown, so this cannot loop.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await AppAttestation.refreshIfNeeded(store: store) }
+        }
         // Full-screen so the swipe-back gesture is the main affordance, which
         // matches the instruction this screen gives. A `.sheet` presents with
         // a drag handle that pulls focus away from the "swipe back" message.

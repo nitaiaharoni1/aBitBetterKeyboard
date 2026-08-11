@@ -26,6 +26,7 @@ struct CloudModelFieldSection: View {
     #if DEBUG
     @State private var token = ""
     #endif
+    @State private var isConnecting = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
@@ -127,9 +128,36 @@ struct CloudModelFieldSection: View {
                     .fixedSize(horizontal: false, vertical: true)
                     #endif
 
+                    // **What the last connection attempt actually did, which
+                    // this screen never said.** `AppAttestation` fills the
+                    // bearer, it runs unattended at launch, and every failure
+                    // used to go into a `try?` — so an install where it failed
+                    // read "Open AI Keyboard once to connect it" here *and* on
+                    // every AI action in the keyboard, which is advice to do the
+                    // thing that had just silently not worked. There was no
+                    // third screen to go to and no reason recorded anywhere on
+                    // the device. This is that reason.
+                    if !store.attestationReport.isEmpty {
+                        Text(reportLine)
+                            .font(Theme.Fonts.micro)
+                            .foregroundStyle(Theme.Text.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("cloud-model-report")
+                    }
+
                     PrimaryButton(title: "Save", icon: "checkmark") { save() }
                         .disabled(!isUsable && !typedURL.isEmpty)
                         .accessibilityIdentifier("cloud-model-save")
+
+                    // Offered whatever the state, because "connected" can go
+                    // stale — a token has ninety days and the service can be
+                    // redeployed under a new signing secret, and both look like
+                    // a working setup right up until the next AI action 401s.
+                    SecondaryButton(title: isConnecting ? "Connecting…" : "Try again") {
+                        reconnect()
+                    }
+                    .disabled(isConnecting)
+                    .accessibilityIdentifier("cloud-model-reconnect")
                 }
             }
         }
@@ -140,6 +168,26 @@ struct CloudModelFieldSection: View {
             #endif
         }
     }
+
+    // MARK: Connecting
+
+    private func reconnect() {
+        isConnecting = true
+        Task {
+            await AppAttestation.attestNow(store: store)
+            isConnecting = false
+        }
+    }
+
+    /// The report with its age, because a stale sentence read as a live one is
+    /// the failure this whole line exists to end: "Apple's attestation service
+    /// didn't answer" from four days ago describes nothing about right now.
+    private var reportLine: String {
+        guard let checked = store.attestationCheckedAt else { return store.attestationReport }
+        return "\(store.attestationReport) \(Self.age.localizedString(for: checked, relativeTo: Date()))"
+    }
+
+    private static let age = RelativeDateTimeFormatter()
 
     // MARK: Validation and persistence
 
@@ -195,9 +243,15 @@ struct CloudModelFieldSection: View {
         // Nothing here for a shipping install to paste in: `AppAttestation`
         // fills the bearer at launch, so the only honest report is whether
         // that attempt has succeeded, not whether a field is filled in.
+        //
+        // **"Open AI Keyboard once to connect it" was being read by somebody
+        // standing in AI Keyboard.** It is the right sentence in the keyboard,
+        // where the app is somewhere else; here it is an instruction to do the
+        // thing you are already doing. The line under it says why, and the
+        // button under that is the action.
         return store.hasCloudModel
             ? "Saved and connected."
-            : "Saved. Open AI Keyboard once to connect it."
+            : "Saved, but not connected. AI actions will be refused until it is."
         #endif
     }
 
