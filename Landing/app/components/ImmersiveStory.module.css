@@ -1,0 +1,685 @@
+.pin {
+  padding-top: clamp(72px, 10vw, 104px);
+}
+
+.head {
+  position: relative;
+}
+
+.progress {
+  display: none;
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--orange);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.scene {
+  margin-top: 34px;
+}
+
+/* --- Fallback: readable vertical step sequence (default, no-JS safe) --- */
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  padding: 20px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+}
+
+.stepIndex {
+  color: var(--orange-deep);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.stepTitle {
+  margin: 8px 0 6px;
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.stepBody {
+  margin: 0;
+  max-width: 320px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.stepVisual {
+  margin-top: 16px;
+}
+
+.miniChat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.miniBubble {
+  margin: 0;
+  align-self: flex-start;
+  max-width: 90%;
+  padding: 8px 12px;
+  border-radius: 13px;
+  background: var(--canvas);
+  font-size: 13px;
+}
+
+.miniChip {
+  margin: 0;
+  align-self: flex-start;
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: var(--orange-soft);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.miniPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.miniPills span {
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--canvas);
+  font-size: 12.5px;
+}
+
+.miniTone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.miniToneActive {
+  color: var(--orange-deep);
+}
+
+.miniTrack {
+  position: relative;
+  flex: 1;
+  max-width: 160px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--line);
+}
+
+.miniKnob {
+  position: absolute;
+  top: 50%;
+  left: 82%;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: var(--orange-action);
+  transform: translateX(-50%);
+}
+
+.miniDictate {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.miniWave {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 26px;
+}
+
+.miniWaveBar {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--soft-graphite);
+}
+
+.miniSentence {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+
+.miniMsg {
+  max-width: 320px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--canvas);
+}
+
+.miniMsg p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.miniSent {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--orange-deep);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+/* --- Animated stage (hidden unless the pinned experience takes over) --- */
+
+.stage {
+  display: none;
+}
+
+.phone {
+  position: relative;
+  width: min(400px, 100%);
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  background: var(--white);
+  box-shadow: 0 30px 60px rgba(44, 48, 49, 0.14);
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 178px;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--canvas);
+}
+
+.msgIn {
+  align-self: flex-start;
+  max-width: 82%;
+  padding: 8px 12px 9px;
+  border-radius: 14px;
+  background: var(--white);
+  box-shadow: 0 1px 2px rgba(44, 48, 49, 0.06);
+}
+
+.msgName {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.msgText {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+.msgOut {
+  position: relative;
+  align-self: flex-end;
+  max-width: 86%;
+  padding: 9px 12px 10px;
+  border: 1px solid var(--orange-soft);
+  border-radius: 14px;
+  background: var(--white);
+  box-shadow: 0 8px 18px rgba(44, 48, 49, 0.1);
+}
+
+.sentTag {
+  position: absolute;
+  top: -11px;
+  right: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--orange-action);
+  color: var(--white);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.doodle {
+  position: absolute;
+  top: 74px;
+  left: 34px;
+  width: 110px;
+  height: 120px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.doodlePath {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.contextChip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 4px 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--orange-soft);
+  color: var(--graphite);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+  box-shadow: 0 4px 10px rgba(238, 116, 66, 0.18);
+}
+
+.chipSpark {
+  flex: none;
+  color: var(--orange-action);
+}
+
+.composer {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.draft {
+  flex: 1;
+  min-height: 40px;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--white);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.draftStack {
+  display: inline-grid;
+  vertical-align: bottom;
+}
+
+.draftStack > span {
+  grid-area: 1 / 1;
+}
+
+.sendBtn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  border-radius: 13px;
+  background: var(--orange-action);
+  color: var(--white);
+  font-size: 15px;
+  box-shadow:
+    0 6px 14px rgba(238, 116, 66, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.kb {
+  margin-top: 10px;
+  padding: 8px;
+  border-radius: 16px;
+  background: #e9e8e3;
+}
+
+.barSlot {
+  position: relative;
+  height: 42px;
+  margin-bottom: 7px;
+}
+
+.bar {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.strip > span {
+  flex: 1;
+  color: var(--graphite);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.aiBtn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--orange-action);
+  color: var(--white);
+  font-size: 13px;
+  box-shadow:
+    0 4px 10px rgba(238, 116, 66, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.barDot {
+  flex: none;
+  width: 30px;
+  color: var(--soft-graphite);
+  font-size: 13px;
+}
+
+.panel {
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+}
+
+.panelLabel {
+  flex: none;
+  color: var(--orange-deep);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.tone {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+}
+
+.toneWord {
+  flex: none;
+  color: var(--muted);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.toneActive {
+  color: var(--orange-deep);
+}
+
+.toneTrack {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--line);
+}
+
+.knob {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: var(--orange-action);
+  box-shadow: 0 2px 6px rgba(238, 116, 66, 0.4);
+}
+
+.recDot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--record);
+}
+
+.wave {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 100%;
+}
+
+.waveBar {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--record);
+  transform-origin: center;
+}
+
+.waveLabel {
+  flex: none;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.kbRow {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 5px;
+}
+
+.kbRow:last-child {
+  margin-bottom: 0;
+}
+
+.key {
+  display: grid;
+  place-items: center;
+  width: 9%;
+  height: 38px;
+  border-radius: 7px;
+  background: var(--white);
+  color: var(--graphite);
+  font-size: 13.5px;
+  box-shadow:
+    0 2px 0 rgba(44, 48, 49, 0.16),
+    0 6px 12px rgba(44, 48, 49, 0.05),
+    inset 0 1px 0 #ffffff;
+}
+
+.keyWide {
+  width: 14%;
+  font-size: 12px;
+}
+
+.keySoft {
+  background: var(--soft-graphite);
+  color: var(--white);
+  box-shadow:
+    0 2px 0 rgba(44, 48, 49, 0.4),
+    0 6px 12px rgba(44, 48, 49, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.keyDark {
+  background: var(--graphite);
+  color: var(--white);
+  box-shadow:
+    0 2px 0 rgba(20, 22, 22, 0.5),
+    0 6px 12px rgba(44, 48, 49, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.keyOrange {
+  background: var(--orange-action);
+  color: var(--white);
+  box-shadow:
+    0 2px 0 rgba(185, 80, 35, 0.55),
+    0 6px 14px rgba(238, 116, 66, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.keySpace {
+  width: 48%;
+  color: var(--soft-graphite);
+  font-size: 11.5px;
+}
+
+.micKey {
+  position: relative;
+}
+
+.micDot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--record);
+}
+
+/* --- Pinned mode (applied by JS only when the matchMedia condition passes) --- */
+
+.root.pinned .pin {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100vh;
+  padding-top: 0;
+}
+
+.root.pinned .progress {
+  display: block;
+  height: 2px;
+  margin-top: 20px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.root.pinned .scene {
+  display: grid;
+  grid-template-columns: minmax(230px, 290px) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(28px, 4.5vw, 64px);
+  margin-top: clamp(20px, 4vh, 40px);
+}
+
+.root.pinned .steps {
+  display: grid;
+}
+
+.root.pinned .step {
+  grid-area: 1 / 1;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  opacity: 0;
+}
+
+.root.pinned .step:first-child {
+  opacity: 1;
+}
+
+.root.pinned .stepTitle {
+  font-size: clamp(26px, 3vw, 36px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.root.pinned .stepVisual {
+  display: none;
+}
+
+.root.pinned .stage {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.root.pinned [data-el="msg-in"],
+.root.pinned [data-el="context-chip"],
+.root.pinned [data-el="draft"],
+.root.pinned [data-el="refined"],
+.root.pinned [data-el="dictated"],
+.root.pinned [data-el="strip-b"],
+.root.pinned [data-el="panel-rewrite"],
+.root.pinned [data-el="panel-wave"],
+.root.pinned [data-el="mic-dot"],
+.root.pinned [data-el="msg-out"],
+.root.pinned [data-el="sent-tag"],
+.root.pinned [data-el="doodle-head"] {
+  opacity: 0;
+}
+
+@media (min-width: 768px) and (max-height: 800px) {
+  .root.pinned .chat {
+    min-height: 148px;
+  }
+
+  .root.pinned .key {
+    height: 32px;
+  }
+
+  .root.pinned .barSlot {
+    height: 38px;
+  }
+
+  .root.pinned .stepTitle {
+    font-size: 24px;
+  }
+}
+
+/* --- Reduced motion: always the static sequence, even if JS added the class --- */
+
+@media (prefers-reduced-motion: reduce) {
+  .root.pinned .pin {
+    display: block;
+    height: auto;
+    padding-top: clamp(72px, 10vw, 104px);
+  }
+
+  .root.pinned .scene {
+    display: block;
+  }
+
+  .root.pinned .steps {
+    display: flex;
+  }
+
+  .root.pinned .step {
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    background: var(--white);
+    opacity: 1;
+  }
+
+  .root.pinned .stepVisual {
+    display: block;
+  }
+
+  .root.pinned .stage {
+    display: none;
+  }
+
+  .root.pinned .progress {
+    display: none;
+  }
+}

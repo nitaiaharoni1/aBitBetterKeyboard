@@ -1,0 +1,165 @@
+.stage {
+  position: relative;
+  width: 100%;
+  margin: 0;
+  padding: clamp(14px, 2.4vw, 24px);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--white);
+}
+
+.doodleArrow {
+  position: absolute;
+  top: -34px;
+  left: -60px;
+  width: 92px;
+  pointer-events: none;
+  transform: rotate(8deg);
+}
+
+.doodleStar {
+  position: absolute;
+  right: -8px;
+  bottom: -14px;
+  width: 44px;
+  pointer-events: none;
+}
+
+.keyboard {
+  padding: 13px 9px 10px;
+  border-radius: 22px;
+  background: #e9e8e3;
+  box-shadow: 0 30px 60px rgba(44, 48, 49, 0.16);
+}
+
+.bar {
+  display: grid;
+  grid-template-columns: 41px 1fr 1fr 1fr 41px;
+  align-items: center;
+  height: 50px;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.bar > span {
+  text-align: center;
+}
+
+.ai {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: 35px;
+  height: 35px;
+  border-radius: 11px;
+  background: var(--orange-action);
+  color: var(--white);
+  font-size: 16px;
+  box-shadow:
+    0 6px 14px rgba(238, 116, 66, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.barIcon {
+  color: var(--soft-graphite);
+  font-size: 15px;
+}
+
+.row {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+.row:last-child {
+  margin-bottom: 0;
+}
+
+.key {
+  display: grid;
+  place-items: center;
+  width: calc((100% - 45px) / 10);
+  height: 48px;
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--graphite);
+  font-size: 18px;
+  box-shadow:
+    0 2px 0 rgba(44, 48, 49, 0.16),
+    0 8px 16px rgba(44, 48, 49, 0.06),
+    inset 0 1px 0 #ffffff;
+}
+
+.middleRow .key {
+  width: calc((100% - 40px) / 9);
+}
+
+.soft {
+  background: var(--soft-graphite);
+  color: var(--white);
+  box-shadow:
+    0 2px 0 rgba(44, 48, 49, 0.4),
+    0 8px 16px rgba(44, 48, 49, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.dark {
+  background: var(--graphite);
+  color: var(--white);
+  box-shadow:
+    0 2px 0 rgba(20, 22, 22, 0.5),
+    0 8px 16px rgba(44, 48, 49, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.orange {
+  background: var(--orange-action);
+  color: var(--white);
+  box-shadow:
+    0 2px 0 rgba(185, 80, 35, 0.55),
+    0 8px 18px rgba(238, 116, 66, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.wide {
+  width: 13%;
+  font-size: 15px;
+}
+
+.space {
+  width: 46%;
+  color: var(--soft-graphite);
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .doodleArrow {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .keyboard {
+    padding: 10px 6px 8px;
+    border-radius: 18px;
+  }
+
+  .key {
+    height: 44px;
+    border-radius: 7px;
+    font-size: 15px;
+  }
+
+  .bar {
+    height: 44px;
+  }
+
+  .wide {
+    font-size: 13px;
+  }
+
+  .space {
+    font-size: 12px;
+  }
+}

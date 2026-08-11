@@ -1,0 +1,35 @@
+.header {
+  padding: 20px 0;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wordmark {
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 12px;
+  background: var(--orange-action);
+  color: var(--white);
+  font-size: 14px;
+  font-weight: 650;
+  box-shadow:
+    0 10px 24px rgba(238, 116, 66, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: background 0.15s ease;
+}
+
+.cta:hover {
+  background: var(--orange-deep);
+}
