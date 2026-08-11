@@ -15,6 +15,9 @@ xcodebuild build -project AIKeyboard.xcodeproj -scheme AIKeyboard \
 xcodebuild test -project AIKeyboard.xcodeproj -scheme AIKeyboard \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 
+# Ship to TestFlight (archive, sign, upload; no Apple login needed)
+Scripts/release-testflight.sh
+
 # Format (the PostToolUse hook already does this per edited file)
 xcrun swift-format --in-place --recursive \
   AIKeyboard AIKeyboardExtension AIKeyboardBroadcast AIKeyboardUITests AIKeyboardCoreTests Packages
