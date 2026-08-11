@@ -207,6 +207,29 @@ final class PersonalDictionaryTests: XCTestCase {
         XCTAssertEqual(committed("שלום בלי-פרופ.", in: .hebrew), "שלום בלי-פרופ. ")
     }
 
+    /// **The mark that got through: the curly apostrophe.** `Nitai's` was
+    /// protected and `Nitai’s` committed as `Nita’s`, because the two places that
+    /// were supposed to fold one apostrophe onto the other did not.
+    /// `SuggestionEngine.comparable` carried its own copy of
+    /// `SeedLanguageModel.fold` whose apostrophe rule was
+    /// `replacingOccurrences(of: "'", with: "'")` — ASCII on both sides, so a
+    /// no-op — and `wordCore` tested `hasSuffix("'s") || hasSuffix("'s")`, two
+    /// branches that look like the two apostrophes and are the same eight bytes.
+    ///
+    /// It is not an exotic spelling. The apostrophe key's long press offers `’`,
+    /// and a host field with smart quotes on — the default everywhere except this
+    /// suite's own `MockTextTarget` — rewrites a typed `'` to `’` inside the
+    /// document that `currentWordPrefix` reads back, so this is what an ordinary
+    /// possessive looks like by the time the keyboard sees it.
+    func testTheCurlyApostropheIsTheSameApostrophe() {
+        SharedStore.shared.personalDictionary = SharedStore.shippedPersonalDictionary
+
+        XCTAssertEqual(
+            committed("This is Nitai\u{2019}s", in: .english), "This is Nitai\u{2019}s ",
+            "the list stopped protecting the name the moment the apostrophe curled")
+        XCTAssertEqual(committed("This is Nitai's", in: .english), "This is Nitai's ")
+    }
+
     /// The negative half. With the list emptied the same words are still destroyed,
     /// so the test above is about the dictionary — and the mark itself survives
     /// either way, which is the separate repair below.

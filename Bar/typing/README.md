@@ -28,8 +28,23 @@ separates "the ranker is wrong" from "the candidate was never generated".
 Misses against an **open** `acceptable` list are printed but never counted as
 failures, because that list is a sample and never a whitelist.
 
-The score at the time of writing is **73/76 judged**, up from 47/76 before the
-engine was made context-aware.
+**The commit column used to be the offered column relabelled for `acceptable`
+entries, which is 40 of the 76.** Their pass was computed from whether the right
+word appeared anywhere and then printed under `commit`, so an entry that offered
+the right word in slot 2 while bolding a non-word in slot 1 counted as a pass:
+`he-comp-07` committed `מון` for `מונ` with `מונית` beside it, and the headline
+never moved. It is measured now, for every entry that types a word, against the
+test that the bold slot holds either what was typed or one of the good answers —
+declining to complete is conservative, not wrong. An entry with an empty prefix is
+not asked at all, because `insertSpace` commits nothing where no word is in
+progress.
+
+The score at the time of writing is **72/76 judged**, from 47/76 before the engine
+was made context-aware. It read 73/76 under the scorer that did not measure the
+commit column; the same engine scored 71/76 the first time it was measured
+honestly, and the entry that closed the gap is `he-comp-07`. The one commit
+failure left in `acceptable-closed` is `en-comp-03`, where `respon` commits
+`respond` against a closed list of `response`/`responses`.
 
 `corpus.json` is **the exam**: 90 frozen moments mid-typing, each one a context, a
 word in progress, and a note saying what it is probing. It never changes once a

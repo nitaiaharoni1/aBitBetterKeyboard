@@ -14,7 +14,12 @@ Three things are counted, and they are not the same question:
   commit   The bold slot is what the space bar inserts. For an `intended` entry
            this is the only score that matters to a user: offering the right word
            in slot 2 while committing the wrong one in slot 1 is still a keyboard
-           that types the wrong word.
+           that types the wrong word. Asked of every entry with a word in
+           progress, `acceptable` ones included — for a year this column was the
+           `offered` column relabelled for those, and it hid an entry that
+           committed a Hebrew non-word while counting as a pass. Where the corpus
+           entry types nothing the column is blank rather than zero, because
+           `insertSpace` commits nothing when no word is in progress.
   offered  The right word appears in any of the three slots. A weaker pass, worth
            counting separately because it separates "the ranker is wrong" from
            "the candidate was never generated" — two different bugs.
@@ -80,15 +85,18 @@ def score(outputs, corpus):
             "kind": None,
             "pass": None,
             "offered": None,
+            "commit": None,
         }
 
         if entry.get("mustNotCorrect"):
             row["kind"] = "mustNotCorrect"
-            row["pass"] = commits == typed
+            row["commit"] = commits == typed
+            row["pass"] = row["commit"]
         elif entry.get("intended"):
             row["kind"] = "intended"
             want = norm(entry["intended"])
-            row["pass"] = commits == want
+            row["commit"] = commits == want
+            row["pass"] = row["commit"]
             row["offered"] = want in slots
         elif entry.get("acceptable"):
             closed = entry.get("acceptableIsClosed", False)
@@ -96,9 +104,27 @@ def score(outputs, corpus):
             hit = bool(want & set(slots))
             row["kind"] = "acceptable-closed" if closed else "acceptable-open"
             row["offered"] = hit
+            # **The commit column used to be the offered column relabelled here,
+            # and that is 40 of the 76 judged entries reporting a number nobody
+            # measured.** `row["pass"]` was set from `hit` and printed under
+            # `commit`, so an entry that offered the right word in slot 2 while
+            # bolding a non-word in slot 1 counted as a pass — which is what
+            # `he-comp-07` did, committing `מון` for `מונ` with `מונית` sitting
+            # beside it. This file's own docstring says why that is the wrong
+            # answer: the bold slot is what the space bar inserts.
+            #
+            # Leaving the typed word alone is not a failure — declining to
+            # complete is the conservative half of the trade this engine is built
+            # on — so the test is that the bold slot is either what was typed or
+            # one of the good answers. With an empty prefix there is nothing to
+            # ask: `KeyboardController.insertSpace` commits nothing when no word
+            # is in progress, so the bold slot there is a tap target.
+            row["commit"] = None if not typed else (commits == typed or commits in want)
             # An open list is a sample, not a whitelist: a miss is not a failure,
-            # so it is recorded as unknown rather than as False.
-            row["pass"] = hit if closed else None
+            # so it is recorded as unknown rather than as False. Its *commit* is
+            # judged anyway, because "the space bar inserted a word that is on
+            # neither list" needs no closed list to be wrong.
+            row["pass"] = (hit and row["commit"] is not False) if closed else None
         else:
             row["kind"] = "unjudged"
         rows.append(row)
@@ -108,11 +134,17 @@ def score(outputs, corpus):
 def summarise(rows):
     buckets = {}
     for row in rows:
-        bucket = buckets.setdefault(row["kind"], {"n": 0, "pass": 0, "offered": 0, "judged": 0})
+        bucket = buckets.setdefault(
+            row["kind"],
+            {"n": 0, "pass": 0, "offered": 0, "judged": 0, "commit": 0, "commitJudged": 0},
+        )
         bucket["n"] += 1
         if row["pass"] is not None:
             bucket["judged"] += 1
             bucket["pass"] += int(row["pass"])
+        if row["commit"] is not None:
+            bucket["commitJudged"] += 1
+            bucket["commit"] += int(row["commit"])
         if row["offered"]:
             bucket["offered"] += 1
     return buckets
@@ -127,20 +159,26 @@ def report(rows, label):
         bucket = buckets.get(kind)
         if not bucket:
             continue
+        # `offered` is not a question that can be asked of `mustNotCorrect`: there
+        # is no word to have offered, only a word to have left alone. It printed
+        # `0/12` there, which reads as twelve failures.
+        offered = (
+            f"   {bucket['offered']:3d}/{bucket['n']:<3d} offered"
+            if kind != "mustNotCorrect"
+            else "   (n/a)"
+        )
+        # Counted from the rows that were asked, never from `pass`. Every entry
+        # with an empty prefix is absent from the denominator, because nothing is
+        # committed where no word is in progress.
+        commit = (
+            f"{bucket['commit']:3d}/{bucket['commitJudged']:<3d} commit"
+            if bucket["commitJudged"]
+            else f"{'':11s}"
+        )
         if bucket["judged"]:
             total_pass += bucket["pass"]
             total_judged += bucket["judged"]
-            # `offered` is not a question that can be asked of `mustNotCorrect`:
-            # there is no word to have offered, only a word to have left alone. It
-            # printed `0/12` there, which reads as twelve failures.
-            offered = (
-                f"   {bucket['offered']:3d}/{bucket['n']:<3d} offered"
-                if kind != "mustNotCorrect"
-                else "   (n/a)"
-            )
-            print(f"  {kind:20s} {bucket['pass']:3d}/{bucket['judged']:<3d} commit{offered}")
-        else:
-            print(f"  {kind:20s} {'':11s}   {bucket['offered']:3d}/{bucket['n']:<3d} offered")
+        print(f"  {kind:20s} {commit}{offered}")
     print(f"  {'TOTAL (judged)':20s} {total_pass:3d}/{total_judged:<3d}")
     return total_pass, total_judged
 
@@ -173,6 +211,16 @@ def main():
     for row in rows:
         if row["pass"] is False:
             print(f"    {row['id']:12s} {row['kind']:18s} commits {row['commits']!r}  slots {row['slots']}")
+    # An open list cannot say a *miss* is wrong, but it can say a commit is: the
+    # space bar inserted a word that is neither what the user typed nor one of the
+    # answers anybody thought was good. `cs-11` lived here, committing `לף`.
+    committed_elsewhere = [
+        row for row in rows if row["kind"] == "acceptable-open" and row["commit"] is False
+    ]
+    if committed_elsewhere:
+        print("\n  open-list entries that still commit something off the list:")
+        for row in committed_elsewhere:
+            print(f"    {row['id']:12s} commits {row['commits']!r}  slots {row['slots']}")
     print("\n  open-list misses (NOT failures, the list is a sample):")
     for row in rows:
         if row["kind"] == "acceptable-open" and not row["offered"]:

@@ -2,6 +2,28 @@ import SwiftUI
 import UIKit
 import Combine
 
+/// A keyboard interaction that an in-app host can use to guide a demo.
+///
+/// The keyboard itself never branches on this value. It reports only interactions
+/// that cannot be inferred reliably from the document text, such as choosing a
+/// suggestion or inserting an emoji.
+public struct KeyboardInteraction: Identifiable, Equatable, Sendable {
+    public enum Kind: Equatable, Sendable {
+        case suggestion
+        case emoji
+        case dictation
+        case languageSwitch
+    }
+
+    /// Unique so two consecutive interactions of the same kind still publish a change.
+    public let id = UUID()
+    public let kind: Kind
+
+    init(_ kind: Kind) {
+        self.kind = kind
+    }
+}
+
 // MARK: - Controller
 
 /// All keyboard state and every text mutation. Views stay declarative and dumb.
@@ -16,6 +38,7 @@ public final class KeyboardController: ObservableObject {
     @Published public var overlay: KeyboardOverlay = .none
     @Published public var suggestions: [Suggestion] = []
     @Published public var pressedKeyID: String?
+    @Published public private(set) var lastInteraction: KeyboardInteraction?
 
     /// The language a slide along the space bar is pointing at, or the one the
     /// keyboard has just landed on. Nil the rest of the time, which is when the
@@ -326,6 +349,10 @@ public final class KeyboardController: ObservableObject {
     public func attach(target: TextTarget) {
         self.target = target
         refreshSuggestions()
+    }
+
+    func reportInteraction(_ kind: KeyboardInteraction.Kind) {
+        lastInteraction = KeyboardInteraction(kind)
     }
 }
 

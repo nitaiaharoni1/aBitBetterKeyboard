@@ -13,30 +13,51 @@ extension SuggestionEngine {
     @MainActor
     static let sharedChecker = UITextChecker()
 
-    /// The word with its last letter put into final form.
+    /// The word with its last letter put into final form, when that lands on a
+    /// word the seed list knows.
     ///
-    /// **Asks no dictionary, deliberately, and the first version of this did.**
-    /// The obvious shape is "offer it when the typed word is misspelled and the
-    /// corrected one is not". That was written, and it never fired: inside the
-    /// engine `isKnownWord("שלומ")` comes back *true*, while the same call on a
-    /// checker that has already been used for Hebrew comes back false. Whatever
-    /// the cause — a dictionary that loads lazily is the obvious suspect — a rule
-    /// whose correctness depends on `UITextChecker` having warmed up is a rule
-    /// that silently does nothing on the first word a user types, which is the
-    /// worst possible time.
+    /// **It asks the seed list and it must never ask `UITextChecker`, and the
+    /// difference between those two is the whole history of this function.** The
+    /// obvious shape is "offer it when the typed word is misspelled and the
+    /// corrected one is not". That was written against the checker, and it never
+    /// fired: inside the engine `isKnownWord("שלומ")` comes back *true*, while
+    /// the same call on a checker that has already been used for Hebrew comes
+    /// back false. A rule whose correctness depends on `UITextChecker` having
+    /// warmed up is a rule that silently does nothing on the first word a user
+    /// types, which is the worst possible time. So it was rewritten to ask
+    /// nothing at all.
     ///
-    /// It does not need one. Five Hebrew letters change shape at the end of a
-    /// word and a word may not end in the ordinary form: that is orthography, not
-    /// statistics, and it is true whether or not any dictionary agrees. The cost
-    /// of asking nothing is that a user midway through `שלומדים` is also offered
-    /// `שלום` — which is a correct suggestion for a word that, at that instant,
-    /// genuinely is spelled wrong.
+    /// **Asking nothing was worse, and it was measured over the whole
+    /// vocabulary.** Five letters change shape at the end of a Hebrew word, and
+    /// a *finished* word may not end in the ordinary form — but a word in
+    /// progress ends in whatever letter was typed last, and 20% of the mid-word
+    /// keystrokes in the 353-word seed list end in one of those five. This lands
+    /// as `.orthography`, which outranks every completion source, and
+    /// `shouldAutocorrect` returns true on it above the seed check, so it took
+    /// the bold slot: typing `פגישה` bolded `ף` at the first letter, `מכונית`
+    /// bolded `מך`, `נכון` bolded `נך`, and `לפגישה` bolded `לף` while `לפגישה`
+    /// itself never reached the bar. 17 of 35 measured keystroke moments bolded
+    /// a non-word. Worse than the noise, it *committed* on real input: `אפ`
+    /// ("app") went to `אף` ("nose") and `קליפ` to `קליף`, because Hebrew writes
+    /// its loanwords with the ordinary form at the end.
+    ///
+    /// The seed list settles it without reintroducing the cold-checker problem:
+    /// it is a bundled JSON, folded once at load, and it answers the same on the
+    /// first keystroke of a session as on the thousandth. 66 of its words end in
+    /// a final form, which is the common core this slip happens in — `שלומ` →
+    /// `שלום`, `צריכ` → `צריך`, `כספ` → `כסף`, `דרכ` → `דרך`. It is the same gate
+    /// `SeedLanguageModel.neighbours` and `LayoutTransposition` already use, and
+    /// for the same reason: a rule that rewrites what the user typed may only
+    /// ever land on a word that is common enough to be worth the interruption.
     ///
     /// The table itself moved to `HebrewMorphology`, which is where the rest of
     /// the facts about how Hebrew spells a word end.
     @MainActor
     static func hebrewFinalFormCorrection(of prefix: String) -> String? {
-        HebrewMorphology.inFinalForm(prefix)
+        guard let corrected = HebrewMorphology.inFinalForm(prefix),
+            SeedLanguageModel.knows(corrected, in: .hebrew)
+        else { return nil }
+        return corrected
     }
 
     /// Latin words that appear inside Hebrew sentences and that `UITextChecker`
@@ -339,9 +360,21 @@ extension SuggestionEngine {
         // itself common needs no neighbours (`bus` must never be shown `but`), and
         // a word that is not is worth asking about however many completions it
         // happens to have.
-        if !SeedLanguageModel.knows(prefix, in: typedLanguage) {
+        //
+        // **Asked about `wordCore`, not the keystrokes, and a comma was the whole
+        // bug.** `neighbours` refuses a candidate shorter than what was typed, so
+        // a trailing mark counted as a letter and pushed every real neighbour
+        // under the floor: `teh` corrected to `the` and `teh,` corrected to
+        // nothing. In Hebrew there is no second path to fall back on — Apple's
+        // checker calls `תדוה` and `שלמו` perfectly good words, so this rule is
+        // the only one that sees them — and `תדוה,` came back holding one slot,
+        // the typo, with `תודה` never generated at all. Greeting somebody or
+        // ending a clause is the commonest way a word meets a mark, so this was
+        // most of the ground the rule was written to cover.
+        let core = wordCore(prefix)
+        if !SeedLanguageModel.knows(core, in: typedLanguage) {
             out +=
-                SeedLanguageModel.neighbours(of: prefix, in: typedLanguage, limit: 2)
+                SeedLanguageModel.neighbours(of: core, in: typedLanguage, limit: 2)
                 .enumerated()
                 .map {
                     Candidate(
@@ -476,8 +509,14 @@ extension SuggestionEngine {
         // animal into a vehicle. `SuggestionEngineTests` caught it. Asking
         // `UITextChecker` as well costs one call on a path that has already
         // decided the word is unusual.
+        //
+        // **`word`, not `prefix`** — the same trailing-mark trap the offer side
+        // fell into. `neighbours` measures length against what it is given, so
+        // `teh,` was four characters against a three-letter `the` and the rule
+        // that fixes the commonest English typo stopped firing the moment a comma
+        // followed it.
         if !known,
-            SeedLanguageModel.neighbours(of: prefix, in: typedLanguage, limit: 3)
+            SeedLanguageModel.neighbours(of: word, in: typedLanguage, limit: 3)
                 .contains(where: { SeedLanguageModel.fold($0) == winner })
         {
             return true
@@ -497,18 +536,33 @@ extension SuggestionEngine {
 
     /// The word inside what was typed, with the marks that sit at its edges
     /// without belonging to it taken off.
+    ///
+    /// **Both apostrophes, spelled as an escape, because the curly one did not
+    /// survive being written literally.** This read
+    /// `hasSuffix("'s") || hasSuffix("'s")` — two branches that look like the two
+    /// apostrophes and are the same eight bytes, so the second was dead and
+    /// `Nitai’s` was never reduced to `Nitai`. That is not a hypothetical
+    /// spelling: the apostrophe key's long press offers `’`
+    /// (`KeyboardLayout+NumbersSymbols`), and a host field with smart quotes on —
+    /// the default everywhere except this repo's own test helper — turns a typed
+    /// `'` into `’` inside the document that `currentWordPrefix` reads back.
     static func wordCore(_ typed: String) -> String {
         let trimmed = typed.trimmingCharacters(in: .punctuationCharacters)
-        guard trimmed.hasSuffix("'s") || trimmed.hasSuffix("'s") else { return trimmed }
+        guard trimmed.hasSuffix("'s") || trimmed.hasSuffix("\u{2019}s") else { return trimmed }
         return String(trimmed.dropLast(2)).trimmingCharacters(in: .punctuationCharacters)
     }
 
     /// A word reduced to the form two spellings of it have in common, for
     /// comparing what is being typed against the user's own list.
+    ///
+    /// **`SeedLanguageModel.fold` rather than a second spelling of it.** This
+    /// carried its own copy of the same three moves, and the copy's apostrophe
+    /// rule was `replacingOccurrences(of: "'", with: "'")` — ASCII on both sides,
+    /// so it did nothing. The measured cost was the personal dictionary silently
+    /// letting go of a word the moment it wore a curly apostrophe: `Nitai's` was
+    /// protected and `Nitai’s` committed as `Nita’s`.
     static func comparable(_ word: String) -> String {
-        wordCore(word).lowercased()
-            .replacingOccurrences(of: "־", with: "-")
-            .replacingOccurrences(of: "'", with: "'")
+        SeedLanguageModel.fold(wordCore(word))
     }
 
     @MainActor

@@ -49,7 +49,7 @@ extension KeyboardController {
                 localSlotCount: suggestions.count))
     }
 
-    /// Put the model's words into slots 1 and 2.
+    /// Put the model's words into the slots the local tier is not holding.
     ///
     /// **Three things this must never do, and they are the contract the async tier
     /// is allowed to exist under.**
@@ -57,10 +57,26 @@ extension KeyboardController {
     /// It never touches slot 0, because that is the literal keystrokes and the
     /// user must always be able to commit exactly what they typed.
     ///
-    /// It never moves the bold slot. `markDefault` is re-applied at whatever index
-    /// the local tier chose, so what the space bar commits is decided by
-    /// deterministic local code and cannot change while somebody is looking at the
-    /// bar deciding whether to press space.
+    /// It never changes what the space bar would insert. **Pinning the bold
+    /// *index* is not enough and this used to do only that**: `markDefault` was
+    /// re-applied at the local tier's index over a list whose contents the model
+    /// had already replaced, so the word under the bold slot became the model's
+    /// while the index stood still. That is the exact harm the two-tier split
+    /// exists to prevent — the user reads the bar, pauses to think, presses space,
+    /// and gets a word they never saw. It is reachable wherever the local tier
+    /// autocorrects with a thin bar: four of the ninety corpus entries sit at
+    /// default index 1 with two slots (`tomorow` → `tomorrow`), which is exactly
+    /// the state `PredictiveRefiner.shouldRefine` lets through mid-word, and
+    /// `refine` serves a cached answer synchronously, so not even the 300 ms
+    /// cushion stands between the keystroke and the swap.
+    ///
+    /// **The pin is scoped to a word in progress, because that is when space
+    /// commits at all.** `insertSpace` leaves an empty prefix alone, so with
+    /// nothing typed the bold slot is a tap target rather than something the space
+    /// bar will insert — and refining the likeliest next word is the whole point
+    /// of the tier. So: prefix empty, everything below slot 0 is the model's to
+    /// replace; mid-word, the default slot's contents are the local tier's and
+    /// stay.
     ///
     /// And it never applies to a document that has moved on. The answer took
     /// hundreds of milliseconds to arrive; if the word in progress changed while
@@ -70,19 +86,36 @@ extension KeyboardController {
             let first = suggestions.first
         else { return }
         let defaultIndex = suggestions.firstIndex(where: \.isDefault) ?? 0
-        var merged = [first]
-        for word in words where SeedLanguageModel.fold(word) != SeedLanguageModel.fold(first.text) {
-            merged.append(Suggestion(text: word, language: language))
-            if merged.count == 3 { break }
-        }
-        // Backfilled from what the local tier had, so a model that returned one
-        // usable word costs the user a slot rather than leaving a gap.
-        for candidate in suggestions.dropFirst() where merged.count < suggestions.count {
-            if !merged.contains(where: {
-                SeedLanguageModel.fold($0.text) == SeedLanguageModel.fold(candidate.text)
-            }) {
-                merged.append(candidate)
-            }
+        var held = [0: first]
+        if !prefix.isEmpty { held[defaultIndex] = suggestions[defaultIndex] }
+
+        // The model's words, then what the local tier had, so a model that
+        // returned one usable word costs the user a slot rather than leaving a
+        // gap.
+        //
+        // **Every held word is in `seen` before the first slot is filled, not as
+        // its own slot comes up.** Filling in order is only enough while the held
+        // slots are a run from zero, which today they are — `defaultIndex` is 0 or
+        // 1 and slot 0 is always held. That is a fact about `shouldAutocorrect` in
+        // another file, and the cost of it changing is the same word twice in the
+        // bar: the model returns something folding to the held default, it is
+        // unseen at the free slot above, and the held copy lands underneath it.
+        // Seeding the set makes that impossible here rather than elsewhere.
+        let pool =
+            words.map { Suggestion(text: $0, language: language) } + suggestions.dropFirst()
+        var merged: [Suggestion] = []
+        var seen = Set(held.values.map { SeedLanguageModel.fold($0.text) })
+        for slot in suggestions.indices {
+            // `continue`, not `break`: a pool with nothing left for a free slot
+            // must not take the held slots under it down with it, because the
+            // held default is the one thing this function exists to protect.
+            // `markDefault` clamps, so a short list still bolds it.
+            guard
+                let choice = held[slot]
+                    ?? pool.first(where: { !seen.contains(SeedLanguageModel.fold($0.text)) })
+            else { continue }
+            seen.insert(SeedLanguageModel.fold(choice.text))
+            merged.append(choice)
         }
         suggestions = SuggestionEngine.markDefault(merged, at: defaultIndex)
     }
@@ -108,6 +141,7 @@ extension KeyboardController {
         learnWordJustCommitted()
         target?.insertText(" ")
         refreshSuggestions()
+        reportInteraction(.suggestion)
     }
 
     /// Remember the word the user has just finished, and the pair it makes with

@@ -14,8 +14,10 @@ import XCTest
 /// both true of a completely dead engine. Nothing below leans on either.
 ///
 /// The numbers quoted in the comments come from `Bar/typing/harness/run.sh`
-/// against `Bar/typing/corpus.json`, which went from 47/76 to 73/76 over this
-/// work.
+/// against `Bar/typing/corpus.json`, which went from 47/76 to 72/76 over this
+/// work. It read 73/76 until `score.py` was made to measure the commit column it
+/// had been printing the offered column into; the same engine scores 71/76 under
+/// the honest one.
 @MainActor
 final class ContextAwareSuggestionTests: XCTestCase {
 
@@ -92,6 +94,31 @@ final class ContextAwareSuggestionTests: XCTestCase {
         XCTAssertTrue(
             results.contains { $0.text == "מונית" },
             "got \(results.map(\.text)) — a neighbour crowded out the word being typed")
+    }
+
+    /// **A mark after the word used to switch this whole rule off.** `neighbours`
+    /// refuses a candidate shorter than what it is given, so a comma counted as a
+    /// letter and put every real neighbour under the floor. In English there is a
+    /// second path — `UITextChecker.guesses` still reached `receive` from
+    /// `recieve,` — but in Hebrew there is none, because Apple's checker calls
+    /// `תדוה` and `שלמו` perfectly good words, so the whole correction disappeared:
+    /// the bar came back holding one slot, the typo, with the right word never
+    /// generated at all.
+    ///
+    /// The English half asserts on the *default*, because `the` was in the bar for
+    /// `teh,` before this and simply was not what space would insert.
+    func testAMarkAfterTheWordDoesNotSwitchOffTheNeighbourRule() {
+        let withMark = SuggestionEngine.suggestions(
+            prefix: "תדוה,", context: "", languages: [.hebrew], personal: emptyPersonal())
+        XCTAssertTrue(
+            withMark.contains { $0.text == "תודה" },
+            "got \(withMark.map(\.text)) — one slot means the rule never ran")
+
+        let english = SuggestionEngine.suggestions(
+            prefix: "teh,", context: "I ", languages: [.english], personal: emptyPersonal())
+        XCTAssertEqual(
+            english.first(where: \.isDefault)?.text, "the",
+            "got \(english.map(\.text)) — the mark cost the correction the bold slot")
     }
 
     // MARK: Hebrew morphology
@@ -284,6 +311,21 @@ final class ContextAwareSuggestionTests: XCTestCase {
             "a capitalised first word must not miss the phrase key")
     }
 
+    /// **A newline closes the thought too, and the code said so in a comment while
+    /// doing the opposite.** `previousWords` trimmed the whole context, which takes
+    /// the line break off the end, and then split on whitespace, which a line break
+    /// also is — so the boundary was invisible twice over and `See you\n` predicted
+    /// `tomorrow` exactly as `See you ` does. The second assertion is the one that
+    /// rejects the old build; the first is here so a fix that simply stopped
+    /// reading context cannot pass.
+    func testANewlineClosesTheThoughtAsAFullStopDoes() {
+        XCTAssertEqual(SuggestionEngine.previousWords(in: "See you "), ["See", "you"])
+        XCTAssertEqual(SuggestionEngine.previousWords(in: "See you\n"), [])
+        XCTAssertEqual(
+            SuggestionEngine.previousWords(in: "Thanks. See you\nI am "), ["I", "am"],
+            "a line break must not hide the line the cursor is actually on")
+    }
+
     /// Context must not replace a valid English word that sits outside the seed.
     ///
     /// "sorrow" is absent from the seed (uncommon in chat), so it clears the
@@ -320,19 +362,75 @@ final class ContextAwareSuggestionTests: XCTestCase {
 
     // MARK: The async tier
 
-    /// The contract the second tier exists under. It may replace slots 1 and 2 and
-    /// nothing else, and it may not move the bold slot — otherwise a pause in
-    /// typing silently changes what the space bar is about to insert.
-    func testRefinementNeverTouchesSlotZeroOrTheDefault() {
-        let before = [
-            Suggestion(text: "recieve", language: .english),
-            Suggestion(text: "receive", language: .english, isDefault: true),
-            Suggestion(text: "received", language: .english)
-        ]
-        let after = SuggestionEngine.markDefault(
-            [before[0], Suggestion(text: "REFINED", language: .english), before[2]], at: 1)
-        XCTAssertEqual(after.first?.text, "recieve")
-        XCTAssertEqual(after.firstIndex(where: \.isDefault), 1)
+    /// The contract the second tier exists under. It may replace the slots the
+    /// local tier is not holding, and it may not change what the space bar is
+    /// about to insert — otherwise a pause in typing silently swaps the word.
+    ///
+    /// **The version of this test that stood here passed against the bug it is
+    /// named after, which is the trap `AGENTS.md` names.** It never called
+    /// `applyRefinement`: it built the merged list by hand as
+    /// `[before[0], Suggestion("REFINED"), before[2]]`, handed that to
+    /// `markDefault(at: 1)` and asserted the default was still at index 1 — which
+    /// it was, holding `REFINED`. That is a demonstration of the defect written as
+    /// an assertion that it is fine. This one drives the real controller and
+    /// asserts on the default's *text*, which only the fixed build gets right: the
+    /// broken one answers `REFINED`.
+    func testRefinementNeverChangesWhatTheSpaceBarWouldCommit() {
+        withBarSettingsOn {
+            let target = MockTextTarget(text: "recieve")
+            let controller = KeyboardController(target: target, language: .english)
+            controller.refreshSuggestions()
+
+            XCTAssertEqual(
+                controller.suggestions.first(where: \.isDefault)?.text, "receive",
+                "the local tier has to be autocorrecting for this test to be about anything")
+
+            controller.applyRefinement(["REFINED", "REFINEDER"], for: "recieve")
+
+            XCTAssertEqual(
+                controller.suggestions.first?.text, "recieve",
+                "slot 0 is the literal keystrokes")
+            XCTAssertEqual(
+                controller.suggestions.first(where: \.isDefault)?.text, "receive",
+                "the model may not decide what space inserts: "
+                    + "\(controller.suggestions.map(\.text))")
+        }
+    }
+
+    /// The other half of the same rule. With nothing typed the bold slot is a tap
+    /// target and not something the space bar will insert — `insertSpace` leaves an
+    /// empty prefix alone — so refining the likeliest next word is exactly what the
+    /// tier is for and must still happen.
+    func testRefinementMayReplaceTheNextWordPrediction() {
+        withBarSettingsOn {
+            let target = MockTextTarget(text: "See you ")
+            let controller = KeyboardController(target: target, language: .english)
+            controller.refreshSuggestions()
+            XCTAssertFalse(controller.suggestions.isEmpty)
+
+            controller.applyRefinement(["Thursday"], for: "")
+
+            XCTAssertTrue(
+                controller.suggestions.contains { $0.text == "Thursday" },
+                "with no word in progress the model's answer has to reach the bar: "
+                    + "\(controller.suggestions.map(\.text))")
+        }
+    }
+
+    /// Pins the two settings the controller re-reads at every keystroke, and puts
+    /// them back. Both ship on, but both are *stored*, so a developer who turned
+    /// either off in the app would otherwise watch the two tests above fail for a
+    /// reason that has nothing to do with the async tier.
+    private func withBarSettingsOn(_ body: () -> Void) {
+        let store = SharedStore.shared
+        let (autocorrect, predictions) = (store.autocorrect, store.predictions)
+        store.autocorrect = true
+        store.predictions = true
+        defer {
+            store.autocorrect = autocorrect
+            store.predictions = predictions
+        }
+        body()
     }
 
     /// Mid-word, a suggestion that does not start with what has been typed is not a

@@ -251,8 +251,20 @@ public enum SuggestionEngine {
     /// `Thank you so much. ` would be reading across a boundary the writer just
     /// drew. Empty means there is nothing to predict *from*, which is a different
     /// answer from "no prediction" and the callers treat it as one.
+    ///
+    /// **The newline half of that was written down and not implemented.** This
+    /// began by trimming the whole context, which takes the line break off the
+    /// end, and then split on whitespace, which a line break also is — so a
+    /// newline was invisible twice over and `See you\n` predicted `tomorrow`
+    /// exactly as `See you ` does. Reading only the last line is what makes the
+    /// sentence in the comment true; it also stops a space pressed at the head of
+    /// a fresh line teaching `PersonalLanguageModel` the previous line's last
+    /// word a second time.
     static func previousWords(in context: String, limit: Int = 2) -> [String] {
-        let trimmed = context.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lineStart =
+            context.lastIndex(where: \.isNewline).map { context.index(after: $0) }
+            ?? context.startIndex
+        let trimmed = context[lineStart...].trimmingCharacters(in: .whitespacesAndNewlines)
         var out: [String] = []
         for token in trimmed.split(whereSeparator: \.isWhitespace).suffix(limit) {
             if token.last.map({ ".!?…،؟".contains($0) }) == true {
@@ -291,17 +303,6 @@ public enum SuggestionEngine {
     ) -> String {
         guard let first = source.first, first.isUppercase else { return candidate }
         return language.uppercased(String(candidate.prefix(1))) + candidate.dropFirst()
-    }
-
-    static func dedupe(_ items: [Suggestion], limit: Int) -> [Suggestion] {
-        var seen = Set<String>()
-        var out: [Suggestion] = []
-        for item in items where !seen.contains(item.text.lowercased()) {
-            seen.insert(item.text.lowercased())
-            out.append(item)
-            if out.count == limit { break }
-        }
-        return out
     }
 
     static func markDefault(_ items: [Suggestion], at defaultIndex: Int) -> [Suggestion] {

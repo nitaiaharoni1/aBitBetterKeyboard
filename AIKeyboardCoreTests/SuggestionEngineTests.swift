@@ -195,16 +195,64 @@ extension SuggestionEngineTests {
         XCTAssertEqual(results.first?.text, "שלומ", "the literal keystrokes stay available")
     }
 
-    /// The other four letters, so the rule is not a single hardcoded word.
+    /// The other letters, so the rule is not a single hardcoded word.
+    ///
+    /// **The pair that used to sit here was `("איפ", "אף")`, behind a
+    /// `where typed != "איפ"` that skipped it** — a case somebody found wrong and
+    /// switched off rather than deleted, leaving a loop that read as two letters
+    /// and tested one. It was wrong twice over: `inFinalForm("איפ")` is `איף`, not
+    /// `אף`, so the expectation never matched the rule under test. These four are
+    /// real slips onto real words, one per remaining letter.
     @MainActor
     func testTheOtherFinalFormsAreCorrectedToo() {
-        for (typed, corrected) in [("צריכ", "צריך"), ("איפ", "אף")] where typed != "איפ" {
+        for (typed, corrected) in [
+            ("צריכ", "צריך"), ("נכונ", "נכון"), ("כספ", "כסף"), ("קובצ", "קובץ")
+        ] {
             let results = SuggestionEngine.suggestions(
                 prefix: typed, context: "", languages: [.hebrew])
             XCTAssertTrue(
                 results.contains { $0.text == corrected },
                 "\(typed) should offer \(corrected): \(results.map(\.text))")
         }
+    }
+
+    /// **A word in progress ends in whatever was typed last, and this rule used to
+    /// treat that as a spelling mistake.** Five letters change shape at the end of
+    /// a Hebrew word, and 20% of the mid-word keystrokes across the seed
+    /// vocabulary land on one of them, so an ungated rule fired on a fifth of all
+    /// Hebrew typing: it took the bold slot, because `.orthography` outranks every
+    /// completion source and `shouldAutocorrect` answered on it above the seed
+    /// check, and it pushed the word being typed out of the bar.
+    ///
+    /// Measured on the build before the gate: `פ` bolded `ף` while `פגישה` sat
+    /// unbolded beside it, `מכ` bolded `מך`, `נכ` bolded `נך`, `כמ` bolded `כם`.
+    /// Asserting on the *default* rather than on membership is what rejects that
+    /// build — the correction was in the bar either way.
+    @MainActor
+    func testAWordInProgressIsNotCorrectedToItsOwnFinalForm() {
+        for (typed, nonWord) in [("פ", "ף"), ("מכ", "מך"), ("נכ", "נך"), ("כמ", "כם")] {
+            let results = SuggestionEngine.suggestions(
+                prefix: typed, context: "", languages: [.hebrew])
+            XCTAssertFalse(
+                results.contains { $0.text == nonWord },
+                "\(nonWord) is not a word and must not be offered: \(results.map(\.text))")
+            XCTAssertNotEqual(
+                results.first(where: \.isDefault)?.text, nonWord,
+                "and above all it must not be what the space bar commits")
+        }
+    }
+
+    /// The other side of that gate, in the language's own loanwords. Hebrew writes
+    /// a borrowed word ending in `p` with the ordinary form — `קליפ` is "clip" —
+    /// so an ungated rule did not merely add noise mid-word, it committed a
+    /// different word for a finished one.
+    @MainActor
+    func testALoanwordEndingInAnOrdinaryFormIsLeftAlone() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "קליפ", context: "ראיתי ", languages: [.hebrew, .english])
+        XCTAssertNotEqual(
+            results.first(where: \.isDefault)?.text, "קליף",
+            "space committed קליף for קליפ: \(results.map(\.text))")
     }
 
     /// It must not fire on a word that is already right. A Hebrew word ending in
