@@ -37,12 +37,12 @@ public enum Theme {
 
     // MARK: Brand
 
-    /// One signature hue, deep teal, held across the app and the keyboard. The
-    /// gradient is same-hue and stays reserved for AI moments only: the sparkle
-    /// key, the AI panel header, an active suggestion. Never for chrome.
+    /// One signature hue, a warm orange, held across the app and the keyboard.
+    /// The gradient is same-hue and stays reserved for AI moments only: the
+    /// sparkle key, the AI panel header, an active suggestion. Never for chrome.
     public enum Brand {
-        public static let start = Color(hex: 0x0D9488)  // teal
-        public static let end = Color(hex: 0x0F766E)  // deep teal
+        public static let start = Color(hex: 0xEE7442)  // orange
+        public static let end = Color(hex: 0xD9632F)  // deep orange
 
         public static let gradient = LinearGradient(
             colors: [start, end],
@@ -56,19 +56,18 @@ public enum Theme {
             endPoint: .bottomTrailing
         )
 
-        /// Tint, icons, strokes, and accent text sitting on a page background.
-        /// Brightens in dark mode so small glyphs stay legible.
-        public static let solid = Color.adaptive(light: 0x0F766E, dark: 0x2DD4BF)
+        /// Tint, icons, strokes, and accent text use the signature orange.
+        public static let solid = start
 
-        /// Fills that carry `Text.onBrand` copy. Stays deep in dark mode so
-        /// white button text keeps its contrast.
-        public static let action = Color(hex: 0x0F766E)
+        /// Primary action fills use the same signature orange as the brand.
+        public static let action = start
     }
 
     // MARK: Semantic
 
     public enum Semantic {
-        public static let record = Color(hex: 0xFF453A)
+        /// The only red in the product: recording and errors, nothing else.
+        public static let record = Color(hex: 0xC84B47)
         public static let success = Color.adaptive(light: 0x0F9D58, dark: 0x30D158)
         public static let warning = Color.adaptive(light: 0xB45309, dark: 0xF59E0B)
     }
@@ -90,14 +89,21 @@ public enum Theme {
         /// was about 8% lighter than we were. Stock iOS paints its keyboard
         /// 0xE2E4E8 — measured off `Bar/layouts/stock/en_US.png` — so adopting it
         /// leaves no seam to see. Moving this moves the band back.
-        public static let background = Color.adaptive(light: 0xE2E4E8, dark: 0x161618)
-        public static let letter = Color.adaptive(light: 0xFFFFFF, dark: 0x4E4E51)
+        public static let background = Color.adaptive(light: 0xE2E4E8, dark: 0x1E2122)
+        public static let letter = Color.adaptive(light: 0xFFFEFA, dark: 0x54595B)
         public static let function = Color.adaptive(light: 0xADB3BE, dark: 0x2C2C2E)
+        /// Deep graphite cap, used by the strongest function keys (shift, plane
+        /// switch). White glyphs only — never put `Keys.label` text on it.
+        public static let functionStrong = Color.adaptive(light: 0x2C3031, dark: 0x171A1B)
+        /// Soft graphite cap for secondary controls (delete, emoji).
+        public static let functionSoft = Color.adaptive(light: 0x626766, dark: 0x3A3F40)
+        /// Label colour for glyphs sitting on `functionStrong` / `functionSoft`.
+        public static let labelOnFunction = Color.adaptive(light: 0xFFFEFA, dark: 0xF4F3EF)
         /// Pressed state inverts: letters darken, function keys lighten.
-        public static let letterPressed = Color.adaptive(light: 0xADB3BE, dark: 0x6C6C70)
-        public static let functionPressed = Color.adaptive(light: 0xFFFFFF, dark: 0x4E4E51)
-        public static let label = Color.adaptive(light: 0x000000, dark: 0xFFFFFF)
-        public static let secondaryLabel = Color.adaptive(light: 0x3C3C43, dark: 0xC7C7CC)
+        public static let letterPressed = Color.adaptive(light: 0xE4E1DB, dark: 0x6C7072)
+        public static let functionPressed = Color.adaptive(light: 0xFFFEFA, dark: 0x54595B)
+        public static let label = Color.adaptive(light: 0x2C3031, dark: 0xF4F3EF)
+        public static let secondaryLabel = Color.adaptive(light: 0x626766, dark: 0xC7C7CC)
         public static let shadow = Color.adaptive(light: 0x898A8D, dark: 0x000000)
         /// The panel that slides over the key rows (AI, emoji, dictation), and the
         /// banner's pill.
@@ -108,23 +114,23 @@ public enum Theme {
         /// banner's idle pill is this colour at half opacity — a 2-unit lift,
         /// which is a strip the user cannot see is a strip. This keeps it at the
         /// same fraction of the distance from `background` to a white key.
-        public static let panel = Color.adaptive(light: 0xEFF1F5, dark: 0x1C1C1F)
-        public static let card = Color.adaptive(light: 0xFFFFFF, dark: 0x2C2C31)
+        public static let panel = Color.adaptive(light: 0xF4F3EF, dark: 0x242829)
+        public static let card = Color.adaptive(light: 0xFFFEFA, dark: 0x2E3435)
     }
 
     // MARK: App surfaces
 
     public enum Surface {
-        public static let background = Color.adaptive(light: 0xF4F6F6, dark: 0x0B0D0D)
-        public static let raised = Color.adaptive(light: 0xFFFFFF, dark: 0x151A1A)
-        public static let elevated = Color.adaptive(light: 0xFFFFFF, dark: 0x1F2626)
-        public static let separator = Color.adaptive(light: 0xE1E6E5, dark: 0x283030)
+        public static let background = Color.adaptive(light: 0xF4F3EF, dark: 0x1E2122)
+        public static let raised = Color.adaptive(light: 0xFFFEFA, dark: 0x262B2C)
+        public static let elevated = Color.adaptive(light: 0xFFFEFA, dark: 0x2E3435)
+        public static let separator = Color.adaptive(light: 0xDEDFDA, dark: 0x3A4041)
     }
 
     public enum Text {
-        public static let primary = Color.adaptive(light: 0x0D1414, dark: 0xF2F5F4)
-        public static let secondary = Color.adaptive(light: 0x59625F, dark: 0x9AA4A1)
-        public static let tertiary = Color.adaptive(light: 0x89918F, dark: 0x6C7572)
+        public static let primary = Color.adaptive(light: 0x2C3031, dark: 0xF4F3EF)
+        public static let secondary = Color.adaptive(light: 0x626766, dark: 0xA6AAA8)
+        public static let tertiary = Color.adaptive(light: 0x9A9C98, dark: 0x7E8381)
         public static let onBrand = Color.white
     }
 
@@ -134,7 +140,9 @@ public enum Theme {
     // the role instead. Keyboard chrome keeps its own sizes in `Glyph`.
 
     public enum Fonts {
-        /// Screen-level hero line, used once per screen at most.
+        /// Screen-level hero line, used once per screen at most. The product's
+        /// voice is SF Pro Display at heavy weights with tight tracking — the
+        /// web hero uses the same stack at 800 / -.055em.
         public static let display = Font.system(size: 28, weight: .bold)
         /// Card and section titles.
         public static let title = Font.system(size: 20, weight: .semibold)
@@ -189,11 +197,23 @@ public enum Theme {
     }
 
     public enum Radius {
-        public static let key: CGFloat = 5
-        public static let chip: CGFloat = 10
-        public static let card: CGFloat = 16
-        public static let sheet: CGFloat = 24
+        public static let key: CGFloat = 8
+        public static let chip: CGFloat = 12
+        public static let card: CGFloat = 20
+        public static let sheet: CGFloat = 28
         public static let pill: CGFloat = 999
+    }
+
+    // MARK: Depth
+    //
+    // The house shadow is a low, soft lift — felt rather than seen. Reserved
+    // for heroes, sheets, and keycaps; rows and inline chrome stay flat so the
+    // hierarchy reads.
+
+    public enum Depth {
+        public static let color = Color.black.opacity(0.08)
+        public static let radius: CGFloat = 24
+        public static let y: CGFloat = 12
     }
 
     // MARK: Motion
@@ -205,5 +225,13 @@ public enum Theme {
         public static let panel = Animation.spring(response: 0.34, dampingFraction: 0.86)
         /// Content appearing inside a panel that is already open.
         public static let content = Animation.spring(response: 0.28, dampingFraction: 0.9)
+    }
+}
+
+public extension View {
+    /// Applies the `Theme.Depth` ambient shadow. For cards and heroes; pair
+    /// with a hairline border, never stacked on top of rows.
+    func ambientDepth() -> some View {
+        shadow(color: Theme.Depth.color, radius: Theme.Depth.radius, y: Theme.Depth.y)
     }
 }

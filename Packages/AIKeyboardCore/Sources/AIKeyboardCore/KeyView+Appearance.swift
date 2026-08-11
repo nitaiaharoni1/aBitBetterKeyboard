@@ -1,41 +1,141 @@
 import SwiftUI
+import UIKit
 
 extension KeyView {
 
     // MARK: Appearance
 
-    /// Whether this key carries a cap of its own at rest.
+    /// The cap a key wears, by its role in the palette.
     ///
-    /// **Only the keys that insert something do.** Letters and the space bar are
-    /// what a finger aims at a hundred times a message, and a drawn cap is what it
-    /// aims at. Shift, delete, the plane switch, Settings, return and dictation are
-    /// controls rather than targets, so they are drawn as bare glyphs on the
-    /// keyboard's own surface. Their touch targets are unchanged — `KeyboardLayout`
-    /// still gives them the same widths — but the boundary is no longer painted,
-    /// which is why the press cap below is not decoration: with the resting cap
-    /// gone it is the whole of the feedback that a control was hit.
-    var hasRestingCap: Bool {
+    /// **Every key carries a cap of its own at rest**, and the colour carries
+    /// the role — warm white for letters, space and the AI actions, deep
+    /// graphite for shift and the plane switch, soft graphite for the other
+    /// controls, orange for return. The fill, the glyph's colour and the whole
+    /// depth recipe below are all keyed off this one switch, so a cap can never
+    /// take one role's colour with another role's shadow. `KeyStyleButton`
+    /// takes the same enum for the same reason.
+    enum CapKind {
+        case letter, strong, soft, action
+    }
+
+    var capKind: CapKind {
         switch spec.cap {
-        case .character, .space: return true
-        default: return false
+        // Warm white stays dominant: letters, space, and the AI actions, whose
+        // accent is the glyph's tint rather than the cap.
+        case .character, .space, .quickTone, .aiReply, .aiFix:
+            return .letter
+        // The strongest controls: shift and the plane switch.
+        case .shift, .plane:
+            return .strong
+        // The main action.
+        case .ret:
+            return .action
+        // Delete, emoji, dictation and the neutral controls.
+        default:
+            return .soft
         }
     }
 
-    var showsCap: Bool { hasRestingCap || isPressed }
+    /// The cap worn at rest.
+    var restingCap: Color {
+        switch capKind {
+        case .letter: return Theme.Keys.letter
+        case .strong: return Theme.Keys.functionStrong
+        case .action: return Theme.Brand.action
+        case .soft: return Theme.Keys.functionSoft
+        }
+    }
+
+    /// Whether the resting cap is a dark graphite one, which is what decides the
+    /// glyph: warm white on the graphite caps, graphite on everything light.
+    var restsOnDarkCap: Bool { capKind == .strong || capKind == .soft }
 
     var background: Color {
-        guard hasRestingCap else {
-            // Under a finger a control takes the *letter* cap, not the old
-            // function grey. Grey on grey was legible as a press only because a
-            // resting cap sat beside it to compare against; with nothing drawn at
-            // rest the pressed state has to be the light one.
-            if isPressed { return Theme.Keys.functionPressed }
-            // Soft brand fill while this key's action is the one the banner is
-            // reporting — same recipe as `SuggestionBar.edgeButton`'s active tint.
-            if isActionActive { return Theme.Brand.solid.opacity(0.14) }
-            return .clear
+        if isPressed {
+            switch spec.cap {
+            // The white caps darken a step — the letter-key inversion.
+            case .character, .space, .quickTone, .aiReply, .aiFix:
+                return Theme.Keys.letterPressed
+            // Every dark or orange cap lightens to the letter white under a
+            // finger, the way stock iOS inverts its function keys.
+            default:
+                return Theme.Keys.functionPressed
+            }
         }
-        return isPressed ? Theme.Keys.letterPressed : Theme.Keys.letter
+        // Soft brand fill while this key's action is the one the banner is
+        // reporting — same recipe as `SuggestionBar.edgeButton`'s active tint.
+        if isActionActive { return Theme.Brand.solid.opacity(0.14) }
+        return restingCap
+    }
+
+    /// The glyph's colour, resolved against the fill actually behind it.
+    ///
+    /// Pressed and active fills are light in every appearance, so their glyph is
+    /// graphite whatever the resting cap was; at rest the dark caps take the
+    /// warm-white `labelOnFunction` and the orange return takes `Text.onBrand`.
+    var labelColor: Color {
+        if isPressed || isActionActive { return Theme.Keys.label }
+        if spec.cap == .ret { return Theme.Text.onBrand }
+        return restsOnDarkCap ? Theme.Keys.labelOnFunction : Theme.Keys.label
+    }
+
+    // MARK: Depth
+    //
+    // The keycap's physical read, from the Editor's Desk mock: a sheen of light
+    // along the cap's top edge, a crisp 2pt contact line under it, and a faint
+    // ambient lift. Dark and orange caps carry the deeper contact lines. All
+    // static so `KeyStyleButton` — the panel's key-styled controls — draws the
+    // identical material rather than a second opinion of it.
+
+    /// The contact line: the hard shadow where the cap meets the keyboard.
+    static func contactShadow(for kind: CapKind) -> Color {
+        switch kind {
+        case .letter: return .black.opacity(0.16)
+        case .strong: return .black.opacity(0.45)
+        case .soft: return .black.opacity(0.35)
+        case .action: return Color(hex: 0xB95023, alpha: 0.55)
+        }
+    }
+
+    /// The ambient lift: soft, wide, and barely there.
+    static func ambientShadow(for kind: CapKind) -> Color {
+        switch kind {
+        case .letter: return .black.opacity(0.06)
+        case .strong: return .black.opacity(0.10)
+        case .soft: return .black.opacity(0.08)
+        case .action: return Theme.Brand.action.opacity(0.30)
+        }
+    }
+
+    /// The ceramic top edge. A pure white lip on the warm-white caps; the same
+    /// idea at a whisper on the dark and orange ones, and dimmed across the
+    /// board in dark mode, where every cap is already dark.
+    static func topHighlight(for kind: CapKind) -> Color {
+        switch kind {
+        case .letter: return sheenWhite(light: 1, dark: 0.18)
+        case .strong: return sheenWhite(light: 0.14, dark: 0.10)
+        case .soft: return sheenWhite(light: 0.18, dark: 0.14)
+        case .action: return sheenWhite(light: 0.20, dark: 0.20)
+        }
+    }
+
+    private static func sheenWhite(light: Double, dark: Double) -> Color {
+        Color(
+            UIColor { traits in
+                UIColor.white.withAlphaComponent(traits.userInterfaceStyle == .dark ? dark : light)
+            })
+    }
+
+    /// The sheen itself: light fading down over the top fifth of the cap,
+    /// clipped to the cap's shape so the lip follows the rounded corners.
+    static func capSheen(kind: CapKind, height: CGFloat) -> some View {
+        let highlight = topHighlight(for: kind)
+        return LinearGradient(
+            colors: [highlight, highlight.opacity(0)],
+            startPoint: .top, endPoint: .bottom
+        )
+        .frame(height: height * 0.2)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous))
     }
 
     var accessibilityValue: String {

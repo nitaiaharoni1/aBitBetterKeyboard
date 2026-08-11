@@ -3,23 +3,14 @@ import AIKeyboardCore
 
 // MARK: - Background
 
-/// The flat app surface with a whisper of brand at the top edge. Static on
-/// purpose: the old drifting colour blobs cost a 90pt blur and a repeatForever
-/// animation on every screen, and motion that communicates nothing is noise.
+/// The flat app surface, and nothing else. The old brand whisper at the top
+/// edge went with the Warm White / Orange / Graphite direction: orange is
+/// reserved for AI moments, primary actions and selection, so the canvas
+/// carries no tint at all. Still one named place, so the surface is painted
+/// exactly once per screen.
 struct AmbientBackground: View {
-    var intensity: Double = 1
-
     var body: some View {
         Theme.Surface.background
-            .overlay(alignment: .top) {
-                LinearGradient(
-                    colors: [Theme.Brand.solid.opacity(0.05 * intensity), .clear],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 300)
-                .allowsHitTesting(false)
-            }
             .ignoresSafeArea()
             .accessibilityHidden(true)
     }
@@ -172,6 +163,11 @@ struct StatusCapsule: View {
 
 // MARK: - IconBadge
 
+/// The small square icon tile that leads rows and info blocks. Resting state
+/// is the direction's small-icon-button look: a graphite glyph on an inset
+/// warm-canvas well with a hairline, matching the field/chip language of
+/// `CloudModelFieldSection` and the layout editor. Pass `tint` for state and
+/// AI moments — recording red, or brand orange where the row *is* the feature.
 struct IconBadge: View {
     let systemName: String
     var tint: Color?
@@ -179,11 +175,15 @@ struct IconBadge: View {
     var body: some View {
         Image(systemName: systemName)
             .font(.system(size: 14, weight: .medium))
-            .foregroundStyle(tint ?? Theme.Brand.solid)
+            .foregroundStyle(tint ?? Theme.Text.primary)
             .frame(width: 30, height: 30)
             .background(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill((tint ?? Theme.Brand.solid).opacity(0.13))
+                    .fill(Theme.Surface.background)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(Theme.Surface.separator, lineWidth: 1)
             )
             .accessibilityHidden(true)
     }
@@ -221,6 +221,22 @@ extension Divider {
     /// A `Divider` tinted with `Theme.Surface.separator`.
     static var themed: some View {
         Divider().overlay(Theme.Surface.separator)
+    }
+}
+
+// MARK: - Graphite hero treatment
+
+extension View {
+    /// The top edge of the mock's `.hero-card`: a 1pt white line at 12%,
+    /// pulled in past the corner curves so it reads as light catching the
+    /// slab's top face. Reserved for the one graphite hero per screen, and
+    /// paired with `.ambientDepth()`.
+    func graphiteTopHighlight(cornerRadius: CGFloat = Theme.Radius.card) -> some View {
+        overlay(alignment: .top) {
+            Color.white.opacity(0.12)
+                .frame(height: 1)
+                .padding(.horizontal, cornerRadius)
+        }
     }
 }
 

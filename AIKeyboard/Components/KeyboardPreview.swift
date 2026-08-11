@@ -84,7 +84,7 @@ struct KeyboardPreview: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
-                        .strokeBorder(Theme.Brand.solid.opacity(0.35), lineWidth: 1.5)
+                        .strokeBorder(Theme.Surface.separator, lineWidth: 1)
                 )
                 .padding(Theme.Space.sm)
         }

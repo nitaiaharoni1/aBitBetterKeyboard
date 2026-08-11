@@ -88,6 +88,10 @@ public struct EmojiPanel: View {
         .onChange(of: controller.recentEmoji) { _, recent in
             sections = Self.sections(recent: recent)
         }
+        // The panel is a surface of its own over the key rows, so it wears the
+        // warm panel colour rather than the keyboard's background; the category
+        // row's card caps are read against it.
+        .background(Theme.Keys.panel)
         // Emoji read left to right regardless of the keyboard language, and so
         // does the strip they sit in: a horizontal `ScrollView` in a right-to-left
         // environment starts at the far end, which would open Hebrew's grid on the
@@ -273,10 +277,11 @@ struct EmojiScrollOffsetKey: PreferenceKey {
 /// The row under the grid: a category per tab, delete pinned at the end.
 ///
 /// **Drawn as keys, because it is a key row.** It takes the keyboard's own key
-/// height, `Theme.Radius.key` corners and the same press treatment every control
-/// on the bottom row has — no cap at rest, `Theme.Keys.functionPressed` under a
-/// finger. The selected tab is the one exception and wears a resting cap, which
-/// is the only thing on this keyboard that means *a target*.
+/// height, `Theme.Radius.key` corners and the same press treatment every key now
+/// has — a resting cap at rest, the letter-white cap under a finger. The tabs
+/// wear the warm white card against the panel; the selected tab is the row's one
+/// orange moment, the soft brand fill and solid glyph the bar's active edge
+/// button also wears. Delete wears the same soft graphite cap as the real one.
 ///
 /// **There is no `אבג` key here.** The way back to the letters is the Emoji key
 /// in the action row, which says `אבג` while the grid is open — see
@@ -321,11 +326,16 @@ struct EmojiCategoryRow: View {
                 // No `Feedback` call of its own: `deleteBackward` already fires
                 // one per character, and the button's own press haptic on top of
                 // it made a single tap buzz twice.
-                feedback: nil, action: onDelete
+                feedback: nil,
+                // The same cap the real delete key wears, so the row's one
+                // editing control matches it exactly.
+                restingCap: Theme.Keys.functionSoft,
+                capKind: .soft,
+                glyphColor: Theme.Keys.labelOnFunction,
+                action: onDelete
             ) {
                 Image(systemName: "delete.left")
                     .font(Theme.Glyph.font(19))
-                    .foregroundStyle(Theme.Keys.label)
             }
             .accessibilityLabel("Delete")
         }
@@ -336,23 +346,29 @@ struct EmojiCategoryRow: View {
         let isSelected = selected == id
         return KeyStyleButton(
             width: nil, height: height, isSelected: isSelected,
+            // The selected tab's glyph goes brand with its fill; the rest keep
+            // the quiet secondary graphite on their warm white cards.
+            glyphColor: isSelected ? Theme.Brand.solid : Theme.Keys.secondaryLabel,
             action: { onSelect(id) }
         ) {
             Image(systemName: icon)
                 .font(Theme.Glyph.font(19))
-                .foregroundStyle(isSelected ? Theme.Keys.label : Theme.Keys.secondaryLabel)
         }
         .accessibilityLabel(id)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 
-/// A button that looks and presses like a function key.
+/// A button that looks and presses like a key.
 ///
 /// The keyboard's own controls — `123`, delete, shift — are drawn by `KeyView`,
 /// which is built around a `KeySpec` and a `KeyCap`. A category tab is neither,
-/// so this carries the same three rules rather than inventing a fourth look: no
-/// cap at rest, the light cap under a finger, and `Theme.Radius.key` corners.
+/// so this carries the same rules rather than inventing a second look: a resting
+/// cap like every key now wears (`restingCap` — warm white card for the tabs,
+/// soft graphite for delete), the letter-white cap and the graphite glyph under
+/// a finger, `Theme.Radius.key` corners, and the same keycap depth — top sheen,
+/// contact line and ambient lift, settled a point on press — drawn from
+/// `KeyView`'s own recipe (`capKind`), so the panel and the keys cannot drift.
 struct KeyStyleButton<Label: View>: View {
 
     /// Nil spreads the button across the space left over, which is how the tabs
@@ -364,6 +380,14 @@ struct KeyStyleButton<Label: View>: View {
     var repeats = false
     /// The press haptic, or nil for a control whose action already fires one.
     var feedback: (() -> Void)? = Feedback.modifierPress
+    /// The cap worn at rest.
+    var restingCap: Color = Theme.Keys.card
+    /// Which keycap recipe the depth comes from: the tabs' warm white cards are
+    /// `.letter`, delete's soft graphite is `.soft`.
+    var capKind: KeyView.CapKind = .letter
+    /// The glyph's colour at rest. Under a finger the cap goes light and the
+    /// glyph flips to `Theme.Keys.label`, exactly as `KeyView`'s do.
+    var glyphColor: Color = Theme.Keys.label
     let action: () -> Void
     @ViewBuilder let label: () -> Label
 
@@ -381,13 +405,22 @@ struct KeyStyleButton<Label: View>: View {
         ZStack {
             RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
                 .fill(fill)
+                .overlay(alignment: .top) { KeyView.capSheen(kind: capKind, height: height) }
                 .shadow(
-                    color: Theme.Keys.shadow.opacity(isPressed || isSelected ? 0.45 : 0),
-                    radius: 0, x: 0, y: 1)
+                    color: KeyView.contactShadow(for: capKind),
+                    radius: 0, x: 0, y: isPressed ? 1 : 2
+                )
+                .shadow(
+                    color: KeyView.ambientShadow(for: capKind),
+                    radius: isPressed ? 3 : 7, x: 0, y: isPressed ? 2 : 4
+                )
             label()
+                .foregroundStyle(isPressed ? Theme.Keys.label : glyphColor)
         }
         .frame(width: width, height: height)
         .frame(maxWidth: width == nil ? .infinity : nil)
+        .offset(y: isPressed ? 1 : 0)
+        .animation(Theme.Motion.quick, value: isPressed)
         .contentShape(Rectangle())
         .gesture(press)
         .onChange(of: isTouching) { _, touching in
@@ -425,6 +458,7 @@ struct KeyStyleButton<Label: View>: View {
 
     private var fill: Color {
         if isPressed { return Theme.Keys.functionPressed }
-        return isSelected ? Theme.Keys.letter : .clear
+        if isSelected { return Theme.Brand.solid.opacity(0.14) }
+        return restingCap
     }
 }

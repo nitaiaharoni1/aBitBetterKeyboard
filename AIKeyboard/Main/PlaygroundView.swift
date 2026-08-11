@@ -26,6 +26,10 @@ struct PlaygroundView: View {
                 )
             }
             .background(Theme.Surface.background)
+            // Presented sheets carry the house depth token. The iPhone sheet
+            // fills the window and clips it away; it reads where the sheet
+            // floats, as on iPad.
+            .ambientDepth()
             .navigationTitle("Playground")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

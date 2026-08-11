@@ -14,7 +14,7 @@ struct LanguagesView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AmbientBackground(intensity: 0.7)
+                AmbientBackground()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.Space.lg) {
@@ -30,6 +30,7 @@ struct LanguagesView: View {
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
                 Text("Languages")
                     .font(Theme.Fonts.display)
+                    .tracking(-0.5)
                     .foregroundStyle(Theme.Text.primary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, Theme.Space.md)

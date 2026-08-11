@@ -3,11 +3,16 @@ import SwiftUI
 
 // MARK: - HomeFeatureCard
 
-/// Shared shell for one feature row in the home screen's grouped features card
-/// (Screen Context, Dictation). Handles the 38pt icon tile (red when active,
-/// brand soft gradient when idle, both AI moments), title + optional status
-/// capsule, detail text, and chevron. The grouping card itself lives in
-/// `HomeView`, so rows sit flush against each other with a hairline between.
+/// Shared shell for one feature row in the home screen's graphite features card
+/// (Screen Context, Dictation). Handles the 38pt icon chip (flat orange with a
+/// white glyph, the direction's feature-card mark; red when a session is live),
+/// title + optional status capsule, detail text, and chevron. The grouping card
+/// itself lives in `HomeView`, so rows sit flush against each other with a
+/// hairline between.
+///
+/// The labels ride on `Theme.Keys.labelOnFunction`, the token the keyboard
+/// pairs with its graphite function keys — it is exactly this pairing, white
+/// copy on graphite, so the card needs no local colours of its own.
 private struct HomeFeatureCard<Destination: View>: View {
     let icon: String
     let activeIcon: String
@@ -25,26 +30,19 @@ private struct HomeFeatureCard<Destination: View>: View {
             HStack(spacing: Theme.Space.sm) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .fill(
-                            isActive
-                                ? AnyShapeStyle(Theme.Semantic.record.opacity(0.14))
-                                : AnyShapeStyle(Theme.Brand.softGradient)
-                        )
+                        .fill(isActive ? Theme.Semantic.record : Theme.Brand.action)
                         .frame(width: 38, height: 38)
 
                     Image(systemName: isActive ? activeIcon : icon)
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(
-                            isActive
-                                ? AnyShapeStyle(Theme.Semantic.record)
-                                : AnyShapeStyle(Theme.Brand.gradient))
+                        .foregroundStyle(Theme.Text.onBrand)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: Theme.Space.xxs) {
                         Text(title)
                             .font(Theme.Fonts.headline)
-                            .foregroundStyle(Theme.Text.primary)
+                            .foregroundStyle(Theme.Keys.labelOnFunction)
 
                         if let badge {
                             StatusCapsule(text: badge.text, colour: badge.colour)
@@ -53,7 +51,7 @@ private struct HomeFeatureCard<Destination: View>: View {
 
                     Text(detail)
                         .font(Theme.Fonts.callout)
-                        .foregroundStyle(Theme.Text.secondary)
+                        .foregroundStyle(Theme.Keys.labelOnFunction.opacity(0.62))
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -61,7 +59,7 @@ private struct HomeFeatureCard<Destination: View>: View {
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.Text.tertiary)
+                    .foregroundStyle(Theme.Keys.labelOnFunction.opacity(0.45))
             }
             .padding(.vertical, Theme.Space.xs)
             .contentShape(Rectangle())

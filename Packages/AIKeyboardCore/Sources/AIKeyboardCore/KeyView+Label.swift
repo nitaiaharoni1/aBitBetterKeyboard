@@ -35,34 +35,34 @@ extension KeyView {
             }
 
         case .shift:
-            // **The fill is the entire shift state now.** The key used to say it
-            // twice, with a white cap under a filled arrow; the cap is gone with
-            // every other control's, so this glyph carries it alone.
+            // **The glyph is the entire shift state.** Outline at rest, filled
+            // when on, capslock when latched — warm white on the deep graphite
+            // cap in every case, so the fill of the arrow does the talking.
             Image(systemName: shift == .locked ? "capslock.fill" : (shift == .on ? "shift.fill" : "shift"))
                 .font(Theme.Glyph.font(19))
-                .foregroundStyle(Theme.Keys.label)
+                .foregroundStyle(labelColor)
 
         case .backspace:
             Image(systemName: "delete.left")
                 .font(Theme.Glyph.font(19))
-                .foregroundStyle(Theme.Keys.label)
+                .foregroundStyle(labelColor)
 
         case .plane(_, let text):
             Text(text)
                 .font(.system(size: 16, weight: .light))
-                .foregroundStyle(Theme.Keys.label)
+                .foregroundStyle(labelColor)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
 
         case .globe:
             Image(systemName: "globe")
                 .font(Theme.Glyph.font(18))
-                .foregroundStyle(Theme.Keys.label)
+                .foregroundStyle(labelColor)
 
         case .settings:
             Image(systemName: "gearshape")
                 .font(Theme.Glyph.font(18))
-                .foregroundStyle(Theme.Keys.label)
+                .foregroundStyle(labelColor)
 
         case .space:
             spaceLabel
@@ -75,7 +75,7 @@ extension KeyView {
             // translation nobody has checked. The arrow needs neither.
             Image(systemName: "return")
                 .font(Theme.Glyph.font(17))
-                .foregroundStyle(Theme.Keys.label)
+                .foregroundStyle(labelColor)
 
         case .dictation:
             // Outline, not `mic.fill`. A solid microphone reads as *recording* —
@@ -101,7 +101,7 @@ extension KeyView {
             if isEmojiOpen {
                 Text(language.lettersPlaneLabel)
                     .font(.system(size: 16, weight: .light))
-                    .foregroundStyle(Theme.Keys.label)
+                    .foregroundStyle(labelColor)
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
             } else {
@@ -133,17 +133,17 @@ extension KeyView {
         case .cursorLeft:
             Image(systemName: "arrow.left")
                 .font(Theme.Glyph.font(17))
-                .foregroundStyle(Theme.Keys.label)
+                .foregroundStyle(labelColor)
 
         case .cursorRight:
             Image(systemName: "arrow.right")
                 .font(Theme.Glyph.font(17))
-                .foregroundStyle(Theme.Keys.label)
+                .foregroundStyle(labelColor)
 
         case .hideKeyboard:
             Image(systemName: "keyboard.chevron.compact.down")
                 .font(Theme.Glyph.font(17))
-                .foregroundStyle(Theme.Keys.label)
+                .foregroundStyle(labelColor)
 
         case .aiReply:
             actionLabel(
@@ -164,8 +164,24 @@ extension KeyView {
     /// Dictate deliberately use their familiar glyphs alone there, but regain
     /// captions when moved to another wide row.
     ///
-    /// Custom placements keep each action's own tint. In the shipped action row,
-    /// every glyph and caption uses the same neutral label color as the other keys.
+    /// The tint `actionLabel` resolves, against the cap the key is wearing.
+    ///
+    /// On the dark caps — emoji and dictation — the glyph is the warm-white
+    /// `labelOnFunction` at rest, because a brand tint on soft graphite is
+    /// neither readable nor the neutral control that key is. On the light AI
+    /// caps, custom placements keep each action's own brand tint while the
+    /// shipped action row uses the same neutral label colour as the other keys.
+    /// Under a finger every cap goes light and the glyph goes graphite, exactly
+    /// as `KeyView.labelColor` has it.
+    ///
+    /// A function rather than an `if` inside the `@ViewBuilder` below: a branch
+    /// statement in a builder body is parsed as view content, not as flow.
+    func actionTint(_ tint: Color) -> Color {
+        if isPressed { return Theme.Keys.label }
+        if restsOnDarkCap && !isActionActive { return Theme.Keys.labelOnFunction }
+        return usesNeutralActionTint ? Theme.Keys.label : tint
+    }
+
     @ViewBuilder
     func actionLabel(
         icon: String,
@@ -173,7 +189,7 @@ extension KeyView {
         tint: Color,
         showsCaption: Bool = true
     ) -> some View {
-        let resolvedTint = usesNeutralActionTint ? Theme.Keys.label : tint
+        let resolvedTint = actionTint(tint)
 
         if showsCaption, width >= Self.captionMinimumWidth {
             VStack(spacing: 1) {

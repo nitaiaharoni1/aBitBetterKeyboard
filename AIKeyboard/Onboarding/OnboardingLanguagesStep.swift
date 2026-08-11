@@ -50,13 +50,19 @@ struct LanguageToggleRow: View {
                 // The token the globe key and the space bar carry, in place of
                 // the old flag emoji: no emoji in this UI, and the user meets
                 // the mark here that the keyboard later labels the language with.
+                // The tile stays graphite-on-canvas; the orange on this row is
+                // the selection itself — the stroke and the check.
                 Text(language.shortName)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.Brand.solid)
+                    .foregroundStyle(Theme.Text.primary)
                     .frame(width: 34, height: 34)
                     .background(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Theme.Brand.solid.opacity(0.12))
+                            .fill(Theme.Surface.background)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(Theme.Surface.separator, lineWidth: 1)
                     )
 
                 VStack(alignment: .leading, spacing: 1) {

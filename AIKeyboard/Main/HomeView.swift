@@ -16,7 +16,7 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AmbientBackground(intensity: 0.7)
+                AmbientBackground()
 
                 ScrollView {
                     VStack(spacing: Theme.Space.lg) {
@@ -30,13 +30,24 @@ struct HomeView: View {
                 }
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
-                Text("AI Keyboard")
-                    .font(Theme.Fonts.display)
-                    .foregroundStyle(Theme.Text.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, Theme.Space.md)
-                    .padding(.vertical, Theme.Space.xxs)
-                    .background(Theme.Surface.background.opacity(0.96))
+                VStack(alignment: .leading, spacing: 0) {
+                    // The hero voice: heavy SF Pro with tight tracking (the web
+                    // hero's weight-800 / -.055em spec, ≈ -1.4pt at this size).
+                    // Only this line and the onboarding welcome headline carry
+                    // it; every other display line keeps the plain style.
+                    Text("AI Keyboard")
+                        .font(.system(size: 28, weight: .heavy))
+                        .tracking(-1.4)
+                        .foregroundStyle(Theme.Text.primary)
+
+                    DoodleSwash()
+                        .frame(width: 140, height: 10)
+                        .offset(x: 3, y: 1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, Theme.Space.md)
+                .padding(.vertical, Theme.Space.xxs)
+                .background(Theme.Surface.background.opacity(0.96))
             }
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showsPlayground) {
@@ -57,14 +68,30 @@ struct HomeView: View {
 
     /// The two AI features share one card with a hairline between the rows:
     /// two separate cards read as clutter above the setup checklist.
+    ///
+    /// **The card is this screen's one graphite moment.** The design direction
+    /// gives a feature card a graphite fill with orange icon chips once per
+    /// screen, and this is Home's: the rows' white labels ride on
+    /// `Theme.Keys.functionStrong` (the graphite/white pairing the keyboard
+    /// uses for its strong function keys), and the divider between them is a
+    /// light hairline because `Divider.themed` is mixed for warm white. As the
+    /// screen's hero it also carries the editor's-desk lift — the top-edge
+    /// highlight and ambient shadow — which every other card here stays flat
+    /// to protect.
     private var featureCard: some View {
-        Card {
-            VStack(spacing: 0) {
-                HomeScreenContextCard()
-                Divider.themed
-                HomeDictationCard()
-            }
+        VStack(spacing: 0) {
+            HomeScreenContextCard()
+            Divider().overlay(Theme.Keys.labelOnFunction.opacity(0.14))
+            HomeDictationCard()
         }
+        .padding(Theme.Space.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                .fill(Theme.Keys.functionStrong)
+        )
+        .graphiteTopHighlight()
+        .ambientDepth()
     }
 
     // MARK: Setup
@@ -135,11 +162,13 @@ struct HomeView: View {
 
                 Spacer(minLength: Theme.Space.xs)
 
+                // The screen's primary action wears the flat orange chip;
+                // the wash-and-tint version belonged to the old direction.
                 Image(systemName: "arrow.right")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Theme.Brand.solid)
+                    .foregroundStyle(Theme.Text.onBrand)
                     .frame(width: 38, height: 38)
-                    .background(Circle().fill(Theme.Brand.solid.opacity(0.12)))
+                    .background(Circle().fill(Theme.Brand.action))
             }
             .padding(Theme.Space.md)
             .background(
@@ -164,7 +193,7 @@ struct HomeView: View {
         } label: {
             Card {
                 HStack(alignment: .top, spacing: Theme.Space.sm) {
-                    IconBadge(systemName: "sparkles")
+                    IconBadge(systemName: "sparkles", tint: Theme.Brand.solid)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("AI Keyboard Pro")
                             .font(Theme.Fonts.headline)

@@ -14,7 +14,7 @@ struct ScreenContextView: View {
 
     var body: some View {
         ZStack {
-            AmbientBackground(intensity: isCapturing ? 1 : 0.5)
+            AmbientBackground()
 
             ScrollView {
                 VStack(spacing: Theme.Space.md) {

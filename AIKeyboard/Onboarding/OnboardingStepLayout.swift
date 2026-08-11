@@ -11,6 +11,11 @@ struct StepLayout<Content: View>: View {
     var eyebrow: String?
     let title: String
     let subtitle: String
+    /// Set only on the welcome step: the title takes the hero voice (heavy,
+    /// tight-tracked SF Pro, like the web hero's weight-800 / -.055em spec)
+    /// and this word at the end of it gets the editor's-pen circle. Every
+    /// other step keeps the plain display style.
+    var circledWord: String?
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -29,10 +34,15 @@ struct StepLayout<Content: View>: View {
                                 .foregroundStyle(Theme.Brand.solid)
                         }
 
-                        Text(title)
-                            .font(Theme.Fonts.display)
-                            .foregroundStyle(Theme.Text.primary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        if let circledWord, title.hasSuffix(circledWord) {
+                            heroTitle(word: circledWord)
+                        } else {
+                            Text(title)
+                                .font(Theme.Fonts.display)
+                                .tracking(-0.5)
+                                .foregroundStyle(Theme.Text.primary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
 
                         Text(subtitle)
                             .font(Theme.Fonts.body)
@@ -51,12 +61,38 @@ struct StepLayout<Content: View>: View {
         .scrollBounceBehavior(.basedOnSize)
     }
 
-    /// Flat on purpose: the brand gradient stays with the welcome hero and the
-    /// keyboard's own AI moments, so a step icon never competes with either.
+    /// The one marketing headline in onboarding. The circled word sits on its
+    /// own line so the pen mark has a steady frame to wrap — the same
+    /// explicit breaking the mock's h1 uses — and the two parts combine back
+    /// into one accessibility element so the sentence reads whole.
+    private func heroTitle(word: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title.dropLast(word.count))
+                .font(.system(size: 28, weight: .heavy))
+                .tracking(-1.4)
+                .foregroundStyle(Theme.Text.primary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(word)
+                .font(.system(size: 28, weight: .heavy))
+                .tracking(-1.4)
+                .foregroundStyle(Theme.Text.primary)
+                .overlay {
+                    DoodleCircle()
+                        .padding(.horizontal, -10)
+                        .padding(.vertical, -12)
+                }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Graphite on warm white, on purpose: orange stays with the eyebrow, the
+    /// primary button and AI moments, so a step icon never competes with any
+    /// of them.
     private func iconWell(_ systemName: String) -> some View {
         Image(systemName: systemName)
             .font(.system(size: 24, weight: .light))
-            .foregroundStyle(Theme.Brand.solid)
+            .foregroundStyle(Theme.Text.primary)
             .frame(width: 56, height: 56)
             .background(
                 RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)

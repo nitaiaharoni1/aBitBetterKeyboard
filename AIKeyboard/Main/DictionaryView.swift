@@ -8,7 +8,7 @@ struct DictionaryView: View {
 
     var body: some View {
         ZStack {
-            AmbientBackground(intensity: 0.5)
+            AmbientBackground()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Space.lg) {
@@ -39,11 +39,11 @@ struct DictionaryView: View {
                 .padding(.horizontal, Theme.Space.sm)
                 .frame(height: 46)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                         .fill(Theme.Surface.raised)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                         .strokeBorder(Theme.Surface.separator, lineWidth: 1)
                 )
 
@@ -53,8 +53,8 @@ struct DictionaryView: View {
                     .foregroundStyle(Theme.Text.onBrand)
                     .frame(width: 46, height: 46)
                     .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Theme.Brand.gradient)
+                        RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+                            .fill(Theme.Brand.action)
                     )
             }
             .pressable()
@@ -103,6 +103,7 @@ struct DictionaryView: View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.xs) {
             Text("\(store.personalDictionary.count)")
                 .font(Theme.Fonts.display)
+                .tracking(-0.5)
                 .foregroundStyle(Theme.Text.primary)
             Text(
                 store.personalDictionary.count == 1
@@ -118,6 +119,14 @@ struct DictionaryView: View {
 
     private var emptyState: some View {
         VStack(spacing: Theme.Space.xs) {
+            // The pen pointing back up at the add field: the one doodle this
+            // screen gets, and only while there is nothing to list.
+            DoodleArrow()
+                .frame(width: 40, height: 36)
+                .rotationEffect(.degrees(-90))
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.trailing, Theme.Space.xxl)
+
             Image(systemName: "character.book.closed")
                 .font(.system(size: 34))
                 .foregroundStyle(Theme.Text.tertiary)

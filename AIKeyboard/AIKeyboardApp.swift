@@ -151,7 +151,7 @@ private struct DictationHandoffView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AmbientBackground(intensity: 0.5)
+                AmbientBackground()
 
                 VStack(spacing: Theme.Space.lg) {
                     Spacer()

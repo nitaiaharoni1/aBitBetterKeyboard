@@ -3,8 +3,9 @@ import SwiftUI
 
 /// The icon, headline and subhead at the top of `ScreenContextView`.
 ///
-/// `isCapturing` is passed in rather than computed here because the parent
-/// also uses it for `AmbientBackground`'s intensity.
+/// The idle tile is a quiet inset well with a graphite glyph — the feature's
+/// state colour is red, and it belongs to the one state that is actually
+/// recording. Orange stays off this hero: it marks actions, not status.
 struct ScreenContextHeroSection: View {
     @ObservedObject var session: ScreenContextSession
     let isCapturing: Bool
@@ -15,16 +16,19 @@ struct ScreenContextHeroSection: View {
                 Circle()
                     .fill(
                         isCapturing
-                            ? AnyShapeStyle(Theme.Semantic.record.opacity(0.16))
-                            : AnyShapeStyle(Theme.Brand.softGradient)
+                            ? Theme.Semantic.record.opacity(0.16)
+                            : Theme.Surface.raised
                     )
                     .frame(width: 104, height: 104)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(Theme.Surface.separator, lineWidth: 1)
+                            .opacity(isCapturing ? 0 : 1)
+                    )
 
                 Image(systemName: heroIcon)
                     .font(.system(size: 34, weight: .medium))
-                    .foregroundStyle(
-                        isCapturing
-                            ? AnyShapeStyle(Theme.Semantic.record) : AnyShapeStyle(Theme.Brand.gradient))
+                    .foregroundStyle(isCapturing ? Theme.Semantic.record : Theme.Text.primary)
             }
             .padding(.top, Theme.Space.sm)
             .animation(Theme.Motion.quick, value: isCapturing)
@@ -35,6 +39,7 @@ struct ScreenContextHeroSection: View {
 
             Text(headline)
                 .font(Theme.Fonts.display)
+                .tracking(-0.5)
                 .foregroundStyle(Theme.Text.primary)
                 .multilineTextAlignment(.center)
 

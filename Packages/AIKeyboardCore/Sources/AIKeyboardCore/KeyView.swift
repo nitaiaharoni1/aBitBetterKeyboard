@@ -97,11 +97,25 @@ public struct KeyView: View {
         ZStack {
             RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
                 .fill(background)
-                .shadow(color: Theme.Keys.shadow.opacity(showsCap ? 0.45 : 0), radius: 0, x: 0, y: 1)
+                .overlay(alignment: .top) { Self.capSheen(kind: capKind, height: height) }
+                .shadow(
+                    color: Self.contactShadow(for: capKind),
+                    radius: 0, x: 0, y: isPressed ? 1 : 2
+                )
+                .shadow(
+                    color: Self.ambientShadow(for: capKind),
+                    radius: isPressed ? 3 : 7, x: 0, y: isPressed ? 2 : 4
+                )
 
             label
         }
         .frame(width: width, height: height)
+        // The press, felt: the cap — label with it — settles a point onto its
+        // contact line and the lift goes out from under it. An offset, not
+        // layout, so no neighbour moves; applied before the overlays, so the
+        // callouts stay anchored where the key sits at rest.
+        .offset(y: isPressed ? 1 : 0)
+        .animation(Theme.Motion.quick, value: isPressed)
         .overlay(alignment: .bottom) { callout }
         .overlay(alignment: .bottom) { alternatesPopup }
         .overlay(alignment: .bottom) { languageCallout }

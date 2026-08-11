@@ -8,7 +8,8 @@ struct WelcomeStep: View {
         StepLayout(
             title: "One keyboard for how you actually write",
             subtitle:
-                "Hebrew and English in the same sentence, fixed and rewritten without leaving the app you are in."
+                "Hebrew and English in the same sentence, fixed and rewritten without leaving the app you are in.",
+            circledWord: "write"
         ) {
             hero
                 .opacity(appeared ? 1 : 0)
@@ -23,6 +24,7 @@ struct WelcomeStep: View {
                 )
                 InfoRow(
                     icon: "sparkles",
+                    tint: Theme.Brand.solid,
                     title: "Fix and rewrite in one tap",
                     detail: "Small edits on the text in front of you, not a chatbot to talk to."
                 )
@@ -55,27 +57,31 @@ struct WelcomeStep: View {
         }
     }
 
-    /// The brand mark over the two scripts the keyboard is for. A picture
-    /// rather than a fifth bullet: the four rows below carry the specifics,
-    /// this carries the reason to read them. It is also the one place the
-    /// brand gradient appears in onboarding — the product-identity moment
-    /// every other step stays flat to protect.
+    /// The graphite slab with the orange icon chip, over the two scripts the
+    /// keyboard is for. A picture rather than a fifth bullet: the four rows
+    /// below carry the specifics, this carries the reason to read them. It is
+    /// onboarding's one hero moment — the same graphite-and-orange treatment
+    /// the design direction gives a screen's feature card, with its top-edge
+    /// highlight and ambient lift — and every other step stays flat to
+    /// protect it.
     private var hero: some View {
         HStack {
             Spacer()
             ZStack {
-                Circle()
-                    .fill(Theme.Brand.softGradient)
-                    .frame(width: 148, height: 148)
+                RoundedRectangle(cornerRadius: Theme.Radius.sheet, style: .continuous)
+                    .fill(Theme.Keys.functionStrong)
+                    .frame(width: 132, height: 132)
+                    .graphiteTopHighlight(cornerRadius: Theme.Radius.sheet)
+                    .ambientDepth()
 
-                Circle()
-                    .fill(Theme.Brand.gradient)
-                    .frame(width: 96, height: 96)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Theme.Brand.action)
+                    .frame(width: 56, height: 56)
 
                 // Not `SparkleMark`: that component always draws the brand
-                // gradient, which would be invisible over the same gradient.
+                // gradient, which would be invisible over the orange chip.
                 Image(systemName: "sparkles")
-                    .font(.system(size: 36, weight: .medium))
+                    .font(.system(size: 26, weight: .medium))
                     .foregroundStyle(Theme.Text.onBrand)
 
                 Text("א")
@@ -84,7 +90,7 @@ struct WelcomeStep: View {
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(Theme.Surface.raised))
                     .overlay(Circle().strokeBorder(Theme.Surface.separator, lineWidth: 1))
-                    .offset(x: -58, y: -34)
+                    .offset(x: -62, y: -40)
 
                 Text("A")
                     .font(.system(size: 24, weight: .bold))
@@ -92,7 +98,7 @@ struct WelcomeStep: View {
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(Theme.Surface.raised))
                     .overlay(Circle().strokeBorder(Theme.Surface.separator, lineWidth: 1))
-                    .offset(x: 58, y: 34)
+                    .offset(x: 62, y: 40)
             }
             Spacer()
         }

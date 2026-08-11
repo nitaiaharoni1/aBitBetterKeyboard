@@ -30,7 +30,7 @@ struct DictationView: View {
 
     var body: some View {
         ZStack {
-            AmbientBackground(intensity: 0.5)
+            AmbientBackground()
 
             ScrollView {
                 VStack(spacing: Theme.Space.md) {

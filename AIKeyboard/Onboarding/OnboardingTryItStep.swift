@@ -22,6 +22,7 @@ struct TryItStep: View {
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 Text("Try it here first")
                     .font(Theme.Fonts.display)
+                    .tracking(-0.5)
                     .foregroundStyle(Theme.Text.primary)
 
                 // Describes the screen; it does not instruct. The instruction is

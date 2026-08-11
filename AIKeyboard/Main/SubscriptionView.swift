@@ -76,6 +76,7 @@ struct SubscriptionView: View {
 
             Text("AI Keyboard Pro")
                 .font(Theme.Fonts.display)
+                .tracking(-0.5)
                 .foregroundStyle(Theme.Text.primary)
 
             // Said at the top, where the price is, rather than only in the

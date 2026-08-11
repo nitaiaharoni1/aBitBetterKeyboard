@@ -58,18 +58,18 @@ struct SettingsTypingSection: View {
                             learnedWordCount = 0
                         } label: {
                             HStack(spacing: Theme.Space.sm) {
-                                IconBadge(systemName: "trash")
+                                IconBadge(systemName: "trash", tint: Theme.Semantic.record)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Forget what it learned")
                                     Text("\(learnedWordCount) words remembered on this device")
-                                        .font(.footnote)
-                                        .foregroundStyle(.secondary)
+                                        .font(Theme.Fonts.caption)
+                                        .foregroundStyle(Theme.Text.secondary)
                                 }
                                 Spacer(minLength: 0)
                             }
                         }
                         .buttonStyle(.plain)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Theme.Semantic.record)
                     }
                     Divider.themed
                     ToggleRow(
