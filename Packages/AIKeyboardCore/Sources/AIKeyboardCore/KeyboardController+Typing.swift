@@ -202,6 +202,7 @@ extension KeyboardController {
         // of its own, so anything saved "on the way out" is saved never.
         store.recentEmoji = recentEmoji
         refreshSuggestions()
+        reportInteraction(.emoji)
     }
 
     /// Four full columns of the strip at ten columns across — enough that the tab

@@ -38,6 +38,7 @@ extension KeyboardController {
         }
         announceLanguage(destination, in: enabled, pending: false)
         refreshSuggestions()
+        reportInteraction(.languageSwitch)
     }
 
     /// One touch on the space bar, which is the only key whose meaning is not

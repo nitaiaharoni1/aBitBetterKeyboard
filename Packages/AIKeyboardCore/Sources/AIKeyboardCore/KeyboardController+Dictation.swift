@@ -5,6 +5,7 @@ extension KeyboardController {
     // MARK: Dictation
 
     public func startDictation() {
+        reportInteraction(.dictation)
         // **These three resets are above the guard, not below it, and that is not
         // tidiness.** They used to run unconditionally, before the availability
         // check opened the panel; putting the check first left the no-session tap
