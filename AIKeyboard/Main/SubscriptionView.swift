@@ -68,15 +68,22 @@ struct SubscriptionView: View {
 
     private var hero: some View {
         VStack(spacing: Theme.Space.xs) {
-            SparkleMark(size: 40)
+            Image(systemName: "sparkles")
+                .font(Theme.Glyph.medium(34))
+                .foregroundStyle(Theme.Brand.solid)
+                .accessibilityHidden(true)
                 .padding(.top, Theme.Space.sm)
 
             Text("AI Keyboard Pro")
-                .font(.system(size: 28, weight: .bold))
+                .font(Theme.Fonts.display)
                 .foregroundStyle(Theme.Text.primary)
 
+            // Said at the top, where the price is, rather than only in the
+            // footer a scroll away: this screen charges nothing.
+            StatusCapsule(text: "MOCK PAYWALL", colour: Theme.Text.secondary)
+
             Text("For people who write all day, in two languages, in somebody else's app.")
-                .font(.system(size: 15))
+                .font(Theme.Fonts.body)
                 .foregroundStyle(Theme.Text.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -94,10 +101,10 @@ struct SubscriptionView: View {
                         IconBadge(systemName: icon)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(title)
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(Theme.Fonts.body.weight(.semibold))
                                 .foregroundStyle(Theme.Text.primary)
                             Text(detail)
-                                .font(.system(size: 13))
+                                .font(Theme.Fonts.caption)
                                 .foregroundStyle(Theme.Text.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -127,17 +134,17 @@ struct SubscriptionView: View {
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(plan.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.Fonts.callout.weight(.semibold))
                     .foregroundStyle(Theme.Text.secondary)
 
                 Text(plan.price)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(Theme.Fonts.title.weight(.bold))
                     .foregroundStyle(Theme.Text.primary)
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
 
                 Text(plan.note ?? plan.period)
-                    .font(.system(size: 12))
+                    .font(Theme.Fonts.micro)
                     .foregroundStyle(plan.note == nil ? Theme.Text.secondary : Theme.Brand.solid)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -152,7 +159,7 @@ struct SubscriptionView: View {
                 RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                     .strokeBorder(
                         isSelected
-                            ? AnyShapeStyle(Theme.Brand.gradient) : AnyShapeStyle(Theme.Surface.separator),
+                            ? AnyShapeStyle(Theme.Brand.solid) : AnyShapeStyle(Theme.Surface.separator),
                         lineWidth: isSelected ? 2 : 1
                     )
             )
@@ -180,7 +187,7 @@ struct SubscriptionView: View {
                     ? "Renews \(selectedPlan.price) \(selectedPlan.period)"
                     : "Then \(selectedPlan.price) \(selectedPlan.period) · cancel anytime"
             )
-            .font(.system(size: 13))
+            .font(Theme.Fonts.caption)
             .foregroundStyle(Theme.Text.secondary)
         }
     }
@@ -190,7 +197,7 @@ struct SubscriptionView: View {
             "Mock paywall. Nothing is charged and no purchase is made. Nothing in the list above is "
                 + "limited either, for anyone: there is no free tier for it to be held back from."
         )
-        .font(.system(size: 12))
+        .font(Theme.Fonts.caption)
         .foregroundStyle(Theme.Text.tertiary)
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)

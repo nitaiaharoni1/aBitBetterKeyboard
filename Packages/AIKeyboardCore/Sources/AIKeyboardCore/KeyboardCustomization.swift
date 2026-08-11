@@ -88,10 +88,10 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
         showsNumberRow: false,
         bottomRow: [
             SlotSpec(action: .numbersPlane, width: .units(1.3)),
-            SlotSpec(action: .globe, width: .units(1.0)),
+            SlotSpec(action: .settings, width: .units(1.0)),
             SlotSpec(action: .space, width: .fill),
             SlotSpec(action: .punctuation, width: .units(1.0)),
-            SlotSpec(action: .ret, width: .units(2.2))
+            SlotSpec(action: .ret, width: .units(KeyboardLayout.functionKeyUnits))
         ],
         cursorRow: Self.actionRow
     )

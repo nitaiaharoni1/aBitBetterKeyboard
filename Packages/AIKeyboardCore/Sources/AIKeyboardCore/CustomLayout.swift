@@ -15,6 +15,7 @@ public enum SlotAction: Codable, Hashable, Sendable {
     case numbersPlane
     case symbolsPlane
     case globe
+    case settings
     case space
     case ret
     case dictation
@@ -52,6 +53,7 @@ public enum SlotAction: Codable, Hashable, Sendable {
         case .numbersPlane: return "Numbers"
         case .symbolsPlane: return "Symbols"
         case .globe: return "Next keyboard"
+        case .settings: return "Settings"
         case .space: return "Space"
         case .ret: return "Return"
         case .dictation: return "Dictation"
@@ -72,7 +74,7 @@ public enum SlotAction: Codable, Hashable, Sendable {
     /// `.space` is absent on purpose: the validator requires exactly the one that
     /// is already there, and a second space bar is not a layout anybody wants.
     public static let catalogue: [SlotAction] = [
-        .backspace, .ret, .shift, .numbersPlane, .symbolsPlane, .globe,
+        .backspace, .ret, .shift, .numbersPlane, .symbolsPlane, .globe, .settings,
         .dictation, .emoji, .reply, .fix, .quickTone, .punctuation,
         .cursorLeft, .cursorRight, .hideKeyboard,
         .text(","), .text("?"), .text("!"), .text("@"), .text(".com")
@@ -153,7 +155,7 @@ public struct LayoutGeometry: Codable, Equatable, Sendable {
     public static let rowSpacingRange: ClosedRange<CGFloat> = 8...16
 
     /// Today's `Theme.Metrics` values, so the shipped default is a no-op.
-    public static let `default` = LayoutGeometry(keyHeight: 42, rowSpacing: 12, reach: .full)
+    public static let `default` = LayoutGeometry(keyHeight: 40, rowSpacing: 12, reach: .full)
 
     public init(keyHeight: CGFloat, rowSpacing: CGFloat, reach: Reach) {
         self.keyHeight = keyHeight

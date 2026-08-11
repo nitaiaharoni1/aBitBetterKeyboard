@@ -4,6 +4,7 @@ import AIKeyboardCore
 @main
 struct AIKeyboardApp: App {
     @StateObject private var store = SharedStore.shared
+    @State private var selectedMainTab: MainTab = .home
 
     init() {
         let arguments = ProcessInfo.processInfo.arguments
@@ -54,20 +55,36 @@ struct AIKeyboardApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            RootView(selectedMainTab: $selectedMainTab)
                 .environmentObject(store)
                 .tint(Theme.Brand.solid)
+                .onOpenURL { url in
+                    if url == SharedStore.settingsURL {
+                        selectedMainTab = .settings
+                    } else if url == SharedStore.dictationStartURL {
+                        // The keyboard recorded a handoff before opening us. Consume it
+                        // so the cold-launch path and this warm-launch path do not both
+                        // auto-start (only one process writes, only one read counts).
+                        // Guard on the return value: an arbitrary external open of this
+                        // URL with no fresh shared request must not auto-start the mic.
+                        if SharedStore.shared.consumeDictationHandoff() {
+                            DictationHandoffTrigger.shared.activate()
+                        }
+                    }
+                }
         }
     }
 }
 
 struct RootView: View {
     @EnvironmentObject private var store: SharedStore
+    @ObservedObject private var handoffTrigger = DictationHandoffTrigger.shared
+    @Binding var selectedMainTab: MainTab
 
     var body: some View {
         Group {
             if store.hasCompletedOnboarding {
-                MainTabView()
+                MainTabView(selection: $selectedMainTab)
             } else {
                 OnboardingFlow()
             }
@@ -78,7 +95,154 @@ struct RootView: View {
         // screen show what the capture session is actually doing, and it never
         // writes `intent.keyboardVisible`, because the keyboard is the only
         // thing that can honestly claim to be on screen.
-        .onAppear { ScreenContextSession.shared.startConsuming(.shared, as: .observer) }
+        .onAppear {
+            ScreenContextSession.shared.startConsuming(.shared, as: .observer)
+            // Cold-launch fallback: the keyboard wrote a handoff before the app
+            // was running. Consume it here so the hot-path `onOpenURL` and this
+            // path cannot both trigger auto-start.
+            if SharedStore.shared.consumeDictationHandoff() {
+                DictationHandoffTrigger.shared.activate()
+            }
+        }
         .task { await AppAttestation.refreshIfNeeded(store: store) }
+        // Full-screen so the swipe-back gesture is the main affordance, which
+        // matches the instruction this screen gives. A `.sheet` presents with
+        // a drag handle that pulls focus away from the "swipe back" message.
+        .fullScreenCover(isPresented: $handoffTrigger.isPresented) {
+            DictationHandoffView()
+                .environmentObject(store)
+        }
+    }
+}
+
+// MARK: - Handoff trigger
+
+/// A singleton that signals when a keyboard-initiated dictation handoff should
+/// be presented. Observable so `RootView` can react without coupling to the URL
+/// handling code. `ObservableObject` rather than `@Observable` to match the
+/// rest of the app's Combine pattern.
+@MainActor
+final class DictationHandoffTrigger: ObservableObject {
+    static let shared = DictationHandoffTrigger()
+    @Published var isPresented = false
+
+    func activate() {
+        isPresented = true
+    }
+}
+
+// MARK: - Handoff screen
+
+/// A focused modal that appears when the app is opened by a keyboard handoff
+/// request. It starts a dictation session automatically and tells the user to
+/// swipe back.
+///
+/// **Does not stop the session when dismissed.** The whole point of the handoff
+/// is to start a recording the keyboard borrows, and closing this sheet is
+/// returning to the app — not ending dictation. The session self-terminates
+/// after the duration the user chose.
+private struct DictationHandoffView: View {
+    @EnvironmentObject private var store: SharedStore
+    @StateObject private var service = DictationService.shared
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var phase: HandoffPhase = .starting
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                AmbientBackground(intensity: 0.5)
+
+                VStack(spacing: Theme.Space.lg) {
+                    Spacer()
+
+                    phaseContent
+
+                    Spacer()
+
+                    if phase == .ready {
+                        Text("Swipe back to the app you were writing in.")
+                            .font(Theme.Fonts.body)
+                            .foregroundStyle(Theme.Text.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, Theme.Space.lg)
+                    }
+                }
+                .padding(.horizontal, Theme.Space.md)
+                .padding(.bottom, Theme.Space.xl)
+            }
+            .navigationTitle("Starting Dictation")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
+        .task { await autoStart() }
+        // Do not stop the session on disappear. The user is switching back to
+        // their app, which is exactly when dictation should be live.
+    }
+
+    private var phaseContent: some View {
+        VStack(spacing: Theme.Space.md) {
+            switch phase {
+            case .starting:
+                ProgressView()
+                    .scaleEffect(1.5)
+                Text("Starting dictation session…")
+                    .font(Theme.Fonts.title)
+                    .foregroundStyle(Theme.Text.primary)
+
+            case .ready:
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 48))
+                    .foregroundStyle(Theme.Semantic.record)
+                Text("Session running")
+                    .font(Theme.Fonts.title)
+                    .foregroundStyle(Theme.Text.primary)
+                Text("The keyboard can dictate now. Tap the mic key to start each recording.")
+                    .font(Theme.Fonts.body)
+                    .foregroundStyle(Theme.Text.secondary)
+                    .multilineTextAlignment(.center)
+
+            case .failed(let message):
+                Image(systemName: "mic.slash.fill")
+                    .font(.system(size: 48))
+                    .foregroundStyle(Theme.Text.tertiary)
+                Text("Couldn't start dictation")
+                    .font(Theme.Fonts.title)
+                    .foregroundStyle(Theme.Text.primary)
+                Text(message)
+                    .font(Theme.Fonts.body)
+                    .foregroundStyle(Theme.Semantic.record)
+                    .multilineTextAlignment(.center)
+                HStack(spacing: Theme.Space.sm) {
+                    SecondaryButton(title: "Close") { dismiss() }
+                    PrimaryButton(title: "Retry", icon: "arrow.clockwise") {
+                        phase = .starting
+                        Task { await autoStart() }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, Theme.Space.md)
+    }
+
+    private func autoStart() async {
+        // Idempotent: if the session is already running (e.g. the sheet was
+        // dismissed and re-shown without the session ending), skip the start.
+        if service.isRunning {
+            phase = .ready
+            return
+        }
+        let ok = await service.start(minutes: store.dictationSessionMinutes)
+        phase = ok ? .ready : .failed(service.lastError)
+    }
+
+    private enum HandoffPhase: Equatable {
+        case starting
+        case ready
+        case failed(String)
     }
 }

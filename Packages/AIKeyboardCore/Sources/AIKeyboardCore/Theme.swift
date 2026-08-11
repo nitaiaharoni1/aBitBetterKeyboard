@@ -37,11 +37,12 @@ public enum Theme {
 
     // MARK: Brand
 
-    /// The two ends of the signature gradient. Reserved for AI moments only:
-    /// the sparkle key, the AI panel header, an active suggestion. Never for chrome.
+    /// One signature hue, deep teal, held across the app and the keyboard. The
+    /// gradient is same-hue and stays reserved for AI moments only: the sparkle
+    /// key, the AI panel header, an active suggestion. Never for chrome.
     public enum Brand {
-        public static let start = Color(hex: 0x2DD4BF)  // teal
-        public static let end = Color(hex: 0x6366F1)  // indigo
+        public static let start = Color(hex: 0x0D9488)  // teal
+        public static let end = Color(hex: 0x0F766E)  // deep teal
 
         public static let gradient = LinearGradient(
             colors: [start, end],
@@ -50,13 +51,18 @@ public enum Theme {
         )
 
         public static let softGradient = LinearGradient(
-            colors: [start.opacity(0.18), end.opacity(0.18)],
+            colors: [start.opacity(0.14), end.opacity(0.14)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
 
-        /// Solid stand-in for the gradient where a single color is required.
-        public static let solid = Color.adaptive(light: 0x4F46E5, dark: 0x8B8CF9)
+        /// Tint, icons, strokes, and accent text sitting on a page background.
+        /// Brightens in dark mode so small glyphs stay legible.
+        public static let solid = Color.adaptive(light: 0x0F766E, dark: 0x2DD4BF)
+
+        /// Fills that carry `Text.onBrand` copy. Stays deep in dark mode so
+        /// white button text keeps its contrast.
+        public static let action = Color(hex: 0x0F766E)
     }
 
     // MARK: Semantic
@@ -109,17 +115,39 @@ public enum Theme {
     // MARK: App surfaces
 
     public enum Surface {
-        public static let background = Color.adaptive(light: 0xF6F7F9, dark: 0x0B0B0F)
-        public static let raised = Color.adaptive(light: 0xFFFFFF, dark: 0x17171C)
-        public static let elevated = Color.adaptive(light: 0xFFFFFF, dark: 0x20202A)
-        public static let separator = Color.adaptive(light: 0xE3E5EA, dark: 0x2A2A32)
+        public static let background = Color.adaptive(light: 0xF4F6F6, dark: 0x0B0D0D)
+        public static let raised = Color.adaptive(light: 0xFFFFFF, dark: 0x151A1A)
+        public static let elevated = Color.adaptive(light: 0xFFFFFF, dark: 0x1F2626)
+        public static let separator = Color.adaptive(light: 0xE1E6E5, dark: 0x283030)
     }
 
     public enum Text {
-        public static let primary = Color.adaptive(light: 0x0B0B0F, dark: 0xF5F5F7)
-        public static let secondary = Color.adaptive(light: 0x60636B, dark: 0x9C9CA6)
-        public static let tertiary = Color.adaptive(light: 0x8E9198, dark: 0x6E6E78)
+        public static let primary = Color.adaptive(light: 0x0D1414, dark: 0xF2F5F4)
+        public static let secondary = Color.adaptive(light: 0x59625F, dark: 0x9AA4A1)
+        public static let tertiary = Color.adaptive(light: 0x89918F, dark: 0x6C7572)
         public static let onBrand = Color.white
+    }
+
+    // MARK: Type scale
+    //
+    // The only font sizes the app uses. Raw `.system(size:)` calls drift; name
+    // the role instead. Keyboard chrome keeps its own sizes in `Glyph`.
+
+    public enum Fonts {
+        /// Screen-level hero line, used once per screen at most.
+        public static let display = Font.system(size: 28, weight: .bold)
+        /// Card and section titles.
+        public static let title = Font.system(size: 20, weight: .semibold)
+        /// Row titles, button labels, emphasized body.
+        public static let headline = Font.system(size: 17, weight: .semibold)
+        /// Default reading text.
+        public static let body = Font.system(size: 15)
+        /// Secondary body, subtitles.
+        public static let callout = Font.system(size: 14)
+        /// Supporting detail, timestamps, footers.
+        public static let caption = Font.system(size: 13)
+        /// Uppercase section labels and compact badges.
+        public static let micro = Font.system(size: 12, weight: .medium)
     }
 
     // MARK: Glyphs

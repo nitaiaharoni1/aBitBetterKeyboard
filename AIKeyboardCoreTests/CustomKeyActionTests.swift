@@ -90,7 +90,24 @@ final class CustomKeyActionTests: XCTestCase {
         XCTAssertEqual(target.inserted, [])
     }
 
+    func testSettingsKeyOpensTheContainingAppsSettingsTab() {
+        let (controller, target) = controller()
+        var openedURL: URL?
+        controller.onOpenContainingApp = { openedURL = $0 }
+
+        controller.press(.settings)
+
+        XCTAssertEqual(openedURL, SharedStore.settingsURL)
+        XCTAssertEqual(target.inserted, [], "the settings key must not type anything")
+    }
+
     // MARK: Applying a layout
+
+    func testAControllerDoesNotInventAnIOSGlobeBeforeItsHostAnswers() {
+        let controller = KeyboardController(target: RecordingTextTarget(), language: .english)
+        XCTAssertFalse(controller.customization.bottomRow.contains { $0.action == .globe })
+        XCTAssertTrue(controller.customization.bottomRow.contains { $0.action == .settings })
+    }
 
     /// The device decides whether the globe is drawn, and the stored layout does
     /// not know. A layout saved on a phone with one keyboard installed must not

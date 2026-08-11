@@ -80,12 +80,18 @@ final class DemoWalkthroughTests: XCTestCase {
     func testOnboarding() throws {
         app.launch()
 
-        let names = ["welcome", "languages", "add-keyboard", "full-access", "microphone", "try-it"]
+        let names = [
+            "welcome", "languages", "add-keyboard", "full-access", "switch", "microphone", "try-it"
+        ]
         for (index, name) in names.enumerated() {
             settle()
             capture("onboarding-\(name)")
             if index < names.count - 1 {
-                tap(app.buttons["Continue"], "Continue on \(name)")
+                // On the switch step the primary action is the confirmation it
+                // exists to collect; the walkthrough takes it, so the shot after
+                // this one is a wizard whose globe row has ticked.
+                let primary = name == "switch" ? "I've switched to it" : "Continue"
+                tap(app.buttons[primary], "\(primary) on \(name)")
             }
         }
 
@@ -98,6 +104,25 @@ final class DemoWalkthroughTests: XCTestCase {
         tap(app.buttons["Start typing"], "Start typing")
         settle(1.2)
         capture("home")
+
+        let globeConfirmation = element("setup-globe-switch")
+        XCTAssertTrue(
+            globeConfirmation.waitForExistence(timeout: 3)
+                && globeConfirmation.label.localizedCaseInsensitiveContains("confirmed"),
+            "the globe acknowledgement did not reach the Home setup card")
+
+        // A published value surviving one navigation proves only the in-memory
+        // path. Relaunch without `-uiTestReset` and require the same row to stay
+        // confirmed, so dropping either the defaults write or the load bridge
+        // fails here.
+        app.terminate()
+        app.launchArguments = []
+        app.launch()
+        let persistedConfirmation = element("setup-globe-switch")
+        XCTAssertTrue(
+            persistedConfirmation.waitForExistence(timeout: 5)
+                && persistedConfirmation.label.localizedCaseInsensitiveContains("confirmed"),
+            "the globe acknowledgement was lost when the app relaunched")
     }
 
     // MARK: The keyboard and its panels
@@ -185,7 +210,12 @@ final class DemoWalkthroughTests: XCTestCase {
         settle(0.6)
 
         // Hebrew
-        tap(element("key-globe"), "globe key")
+        let space = element("key-space")
+        space.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
+            .press(
+                forDuration: 0.1,
+                thenDragTo: space.coordinate(
+                    withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5)))
         settle(0.8)
         capture("keyboard-hebrew")
         tap(element("key-plane-123"), "numbers plane", timeout: 3)
@@ -225,10 +255,8 @@ final class DemoWalkthroughTests: XCTestCase {
         tap(element("home-playground"), "playground card")
         settle(1.4)
         // The banner, not a separate strip. `ScreenContextStrip` was a 30pt row
-        // that appeared and disappeared with the session; `ActionBanner` is always
-        // drawn and carries the live reading as its idle state, so this is the same
-        // screenshot of the same information without the keyboard changing height
-        // to show it.
+        // that appeared and disappeared with the session; `ActionBanner` carries
+        // the live reading when there is one (and is omitted while idle).
         capture("keyboard-context-banner")
 
         // And Reply is a key in the action row rather than a button inside the
@@ -269,10 +297,11 @@ final class DemoWalkthroughTests: XCTestCase {
 
     // MARK: Helpers
 
-    /// Onboarding is six taps; skip it when the screens under test come later.
+    /// Onboarding is seven taps; skip it when the screens under test come later.
     private func skipOnboardingIfPresent() {
         let start = app.buttons["Start typing"]
         let cont = app.buttons["Continue"]
+        let switched = app.buttons["I've switched to it"]
         var guardCount = 0
         while guardCount < 10 {
             settle(0.5)
@@ -280,6 +309,14 @@ final class DemoWalkthroughTests: XCTestCase {
                 start.tap()
                 settle(1.0)
                 return
+            }
+            // The switch step's primary action is its confirmation; tapping it
+            // both collects the answer and advances, exactly like Continue does
+            // everywhere else.
+            if switched.exists {
+                switched.tap()
+                guardCount += 1
+                continue
             }
             guard cont.exists else { return }
             cont.tap()

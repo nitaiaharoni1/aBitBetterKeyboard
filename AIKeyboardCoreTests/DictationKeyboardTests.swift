@@ -44,22 +44,25 @@ final class DictationKeyboardTests: XCTestCase {
     /// The state a stock install is in every time until the user opens the app.
     ///
     /// **The explanation moved from a panel to the banner, and it still has to be an
-    /// explanation.** Nothing in a keyboard extension can start a recording session
-    /// or launch its own app, so this is a dead end the user has to be walked out of
-    /// by hand — it must name the app and the screen, never spin. Asserting the block
-    /// alone would pass against the build that set one *and* opened `DictationPanel`
-    /// over every key, so the overlay is asserted with it.
+    /// explanation.** With no session running, the keyboard offers an "Open AI
+    /// Keyboard" button rather than a dead end — the host wires `onOpenContainingApp`
+    /// to do the actual opening. Asserting the block alone would pass against the build
+    /// that set one *and* opened `DictationPanel` over every key, so the overlay is
+    /// asserted with it.
     func testWithNoSessionTheBannerExplainsAndNothingIsDictated() async throws {
         controller.startDictation()
 
         XCTAssertEqual(controller.overlay, .none, "the keys must stay visible")
         XCTAssertNil(controller.block?.action, "dictation is not an AIAction")
         XCTAssertTrue(
-            controller.block?.detail.contains("Start dictation") ?? false,
-            "the way out is not named: \(controller.block?.detail ?? "nothing was said")")
-        XCTAssertEqual(
-            controller.block?.remedy, .none,
-            "nothing here can start a session, so it must not offer a button")
+            controller.block?.detail.contains("swipe back") ?? false,
+            "the way out is not described: \(controller.block?.detail ?? "nothing was said")")
+        if case .openApp(let url) = controller.block?.remedy {
+            XCTAssertEqual(url, SharedStore.dictationStartURL, "remedy must carry the dictation URL")
+        } else {
+            XCTFail(
+                "expected .openApp remedy for noSession, got \(String(describing: controller.block?.remedy))")
+        }
         XCTAssertFalse(controller.isDictating)
         guard case .noSession = controller.dictationAvailability else {
             return XCTFail("expected noSession, got \(controller.dictationAvailability)")
@@ -72,6 +75,23 @@ final class DictationKeyboardTests: XCTestCase {
         XCTAssertEqual(
             controller.dictationTranscript, "",
             "something is producing a transcript without a recording")
+    }
+
+    /// **The host callback fires on the first no-session tap**, not only when the
+    /// banner button is tapped. The banner `Link` is a second user-tapped path;
+    /// this pins the automatic one so a build that records the request but never
+    /// calls the callback leaves the user staring at the blocked strip with no
+    /// app opening.
+    func testNoSessionTapImmediatelyRequestsHandoffURL() {
+        var openedURLs: [URL] = []
+        controller.onOpenContainingApp = { openedURLs.append($0) }
+
+        controller.startDictation()
+
+        XCTAssertEqual(openedURLs.count, 1, "exactly one open request on the first no-session tap")
+        XCTAssertEqual(
+            openedURLs.first, SharedStore.dictationStartURL,
+            "the URL must be the stable dictation start deep link")
     }
 
     /// **A refusal from a session that closed itself must not resurface on the

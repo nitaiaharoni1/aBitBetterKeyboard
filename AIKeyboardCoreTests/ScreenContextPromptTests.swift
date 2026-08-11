@@ -28,9 +28,9 @@ final class ScreenContextPromptTests: XCTestCase {
             withoutCloud.offersPicker,
             "the keyboard offers to start a broadcast that iOS ends inside a second")
         XCTAssertTrue(
-            withoutCloud.detail.contains(BackendTransport.settingsPath),
+            withoutCloud.detail.contains(BackendTransport.setUpRecovery),
             "and it does not say what would make it work: \(withoutCloud.detail)")
-        XCTAssertEqual(withoutCloud.title, "Screen context can't run yet")
+        XCTAssertEqual(withoutCloud.title, "Cloud model not ready")
     }
 
     /// The other half, and it is not redundant: a version that simply never
@@ -56,7 +56,7 @@ final class ScreenContextPromptTests: XCTestCase {
         XCTAssertFalse(noCloud.offersPicker)
         XCTAssertFalse(deadEnding.offersPicker)
 
-        XCTAssertEqual(noChannel.title, "Screen context needs Full Access")
+        XCTAssertEqual(noChannel.title, "Needs Full Access")
         XCTAssertTrue(noChannel.detail.contains("Full Access"))
         // Full Access comes first, because without the App Group the keyboard
         // could not read a reading even if one existed — and it cannot see the
@@ -66,7 +66,7 @@ final class ScreenContextPromptTests: XCTestCase {
         XCTAssertNotEqual(noCloud.detail, noChannel.detail)
         XCTAssertEqual(
             deadEnding.detail,
-            "\(ScreenContextEndReason.notConfigured.explanation) "
+            "\(ScreenContextEndReason.notConfigured.explanation)\n"
                 + ScreenContextEndReason.notConfigured.recovery,
             "the panel and the strip have to print one page's ending the same way")
     }

@@ -85,12 +85,12 @@ public struct LayoutPreset: Identifiable, Sendable {
                 layout.barTrailing = [SlotSpec(action: .quickTone)]
                 layout.bottomRow = [
                     SlotSpec(action: .numbersPlane, width: .units(1.3)),
-                    SlotSpec(action: .globe, width: .units(1.0)),
+                    SlotSpec(action: .settings, width: .units(1.0)),
                     SlotSpec(action: .reply, width: .units(1.2)),
                     SlotSpec(action: .space, width: .fill),
                     SlotSpec(action: .dictation, width: .units(1.0)),
                     SlotSpec(action: .punctuation, width: .units(1.0)),
-                    SlotSpec(action: .ret, width: .units(1.8))
+                    SlotSpec(action: .ret, width: .units(KeyboardLayout.functionKeyUnits))
                 ]
                 return layout
             }())

@@ -24,7 +24,7 @@ struct PrimaryButton: View {
             .frame(height: 52)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Theme.Brand.gradient)
+                    .fill(Theme.Brand.action)
             )
             .opacity(isEnabled ? 1 : 0.45)
             .contentShape(Rectangle())

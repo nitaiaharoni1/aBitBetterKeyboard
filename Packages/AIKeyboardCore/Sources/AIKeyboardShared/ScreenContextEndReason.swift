@@ -89,9 +89,8 @@ public enum ScreenContextEndReason: UInt8, Codable, Sendable, CaseIterable {
         // survive being read by somebody who came here from a failed Hebrew
         // rewrite. See `BackendTransport.settingsPath`.
         case .notConfigured:
-            return "Screen context stopped: the cloud model is not finished being set up, "
-                + "and reading a screen needs it."
-        case .noFrames: return "Screen context stopped without ever receiving the screen."
+            return "The cloud model isn't ready, and reading a screen needs it."
+        case .noFrames: return "No screen frames arrived."
         }
     }
 

@@ -16,6 +16,7 @@ public extension SlotAction {
         case .numbersPlane: return .plane(.numbers, label: "123")
         case .symbolsPlane: return .plane(.symbols, label: "#+=")
         case .globe: return .globe
+        case .settings: return .settings
         case .space: return .space
         case .ret: return .ret
         case .dictation: return .dictation
@@ -46,6 +47,7 @@ public extension SlotAction {
         case .backspace: return "delete.left"
         case .numbersPlane, .symbolsPlane: return nil
         case .globe: return "globe"
+        case .settings: return "gearshape"
         case .space: return "space"
         case .ret: return "return"
         case .dictation: return "mic"

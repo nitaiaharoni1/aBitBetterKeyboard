@@ -53,7 +53,7 @@ Each area has hard-won findings with measured numbers behind them. Claude Code l
 | AI text actions | Every generated option is vetted before it reaches the panel, and the schema field order is load-bearing. | `.claude/rules/ai-text.md` |
 | Screen context and capture | The router never names a script, the thresholds differ between iOS and macOS, and the fingerprint band was wrong twice. | `.claude/rules/screen-context.md` |
 | Suggestion bar | The personal dictionary is read at the keystroke, punctuation defeats it, and both brand-tinted buttons were wrong. | `.claude/rules/suggestion-bar.md` |
-| Keyboard layout | Right-to-left rows are *not* mirrored, and delete never moves rows. | `.claude/rules/keyboard-layout.md` |
+| Keyboard layout | Right-to-left rows are *not* mirrored; delete moves to a strictly shortest top row, otherwise the bottom row. | `.claude/rules/keyboard-layout.md` |
 | Extension wiring | The in-app playground is not evidence that the keyboard works. | `.claude/rules/keyboard-wiring.md` |
 
 ## Documentation

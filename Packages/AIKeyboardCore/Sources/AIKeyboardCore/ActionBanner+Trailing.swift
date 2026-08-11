@@ -20,39 +20,68 @@ extension ActionBanner {
             }
 
         case .failed:
-            button("Dismiss", tint: nil, filled: false) { controller.clearBanner() }
-                .accessibilityIdentifier("banner-dismiss")
+            dismissButton(identifier: "banner-dismiss") { controller.clearBanner() }
 
         case .blocked(let block):
             switch block.remedy {
             case .none:
-                button("Dismiss", tint: nil, filled: false) { controller.clearBanner() }
-                    .accessibilityIdentifier("banner-blocked-dismiss")
+                dismissButton(identifier: "banner-blocked-dismiss") {
+                    controller.clearBanner()
+                }
             case .broadcastPicker:
                 pickerChip(block)
+            case .openApp(let url):
+                // Compact HStack: the X lets the user decline the handoff;
+                // the chip opens the app with a fresh timestamp on tap.
+                HStack(spacing: Theme.Space.xxs) {
+                    dismissButton(identifier: "banner-blocked-dismiss") {
+                        controller.clearBanner()
+                    }
+                    openAppChip(url)
+                }
             }
 
         case .dictating(_, let isListening):
-            button(
-                isListening ? "Stop" : "Cancel",
-                tint: LinearGradient(
-                    colors: [Theme.Semantic.record, Theme.Semantic.record],
-                    startPoint: .top, endPoint: .bottom),
-                filled: true
+            // Same × as every other way out of the strip. While recording it still
+            // inserts what was heard — that is what Stop did; the label is what
+            // says so to VoiceOver.
+            dismissButton(
+                identifier: "banner-stop",
+                label: isListening ? "Stop" : "Cancel"
             ) {
                 controller.stopDictation(insert: isListening)
             }
-            .accessibilityIdentifier("banner-stop")
 
         case .dictationFailed:
             // `stopDictation(insert: false)` rather than `clearBanner`: the reason
             // lives on the session, not on the banner, so clearing this side of it
             // would leave the sentence to reappear on the next tick.
-            button("Dismiss", tint: nil, filled: false) {
+            dismissButton(identifier: "banner-dictation-dismiss") {
                 controller.stopDictation(insert: false)
             }
-            .accessibilityIdentifier("banner-dictation-dismiss")
         }
+    }
+
+    /// Closes the strip. An × rather than a word, so the trailing chip stays a
+    /// target and the detail beside it keeps the width it needs to finish its
+    /// sentence. `label` is VoiceOver only.
+    func dismissButton(
+        identifier: String, label: String = "Dismiss", action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(Theme.Glyph.medium(12))
+                .foregroundStyle(Theme.Keys.secondaryLabel)
+                .frame(width: 32, height: 32)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+                        .fill(Theme.Keys.card)
+                )
+                .contentShape(Rectangle())
+        }
+        .pressable()
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(identifier)
     }
 
     /// Which of the answers is showing. Tappable as well as swipeable, because a
@@ -100,6 +129,35 @@ extension ActionBanner {
             .accessibilityLabel("Start screen context")
             .accessibilityHint("Opens the iOS screen broadcast picker. \(block.detail)")
             .accessibilityIdentifier("banner-start-broadcast")
+    }
+
+    /// A tappable chip that opens the containing app via a SwiftUI `Link`.
+    ///
+    /// This is the secondary, user-tapped path: the primary open was already
+    /// attempted automatically when the dictation key was tapped. The
+    /// `simultaneousGesture` refreshes the handoff timestamp before the URL
+    /// opens, so a user who waited more than 30 seconds since the initial tap
+    /// still lands a fresh request for the app to consume on cold launch.
+    func openAppChip(_ url: URL) -> some View {
+        Link(destination: url) {
+            Text("Open AI Keyboard")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Theme.Text.onBrand)
+                .lineLimit(1)
+                .padding(.horizontal, Theme.Space.sm)
+                .frame(height: 32)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+                        .fill(Theme.Brand.gradient)
+                )
+                .contentShape(Rectangle())
+        }
+        .pressable()
+        .simultaneousGesture(
+            TapGesture().onEnded { controller.recordDictationHandoff() }
+        )
+        .accessibilityIdentifier("banner-open-app")
+        .accessibilityHint("Opens AI Keyboard. After it starts, swipe back to continue.")
     }
 
     /// `LinearGradient?` rather than a generic `ShapeStyle`, because the one

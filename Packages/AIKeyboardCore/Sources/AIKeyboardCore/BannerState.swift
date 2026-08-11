@@ -98,10 +98,7 @@ public enum BannerState: Equatable {
     /// almost-identical arm the next time something can refuse.
     public struct Block: Equatable, Sendable {
 
-        /// What the user can do about it from inside the keyboard, which is almost
-        /// never anything: a keyboard extension has no `UIApplication`, so it cannot
-        /// open Settings, cannot launch the containing app and cannot start a
-        /// dictation session. See `.claude/rules/dictation.md`.
+        /// What the user can do about it from inside the keyboard.
         public enum Remedy: Equatable, Sendable {
             /// Nothing here can fix it. Dismiss is the only button.
             case none
@@ -110,6 +107,11 @@ public enum BannerState: Equatable {
             /// for the disassembly that establishes that, and for what it does not
             /// establish.
             case broadcastPicker
+            /// A button that asks the extension host to open the containing app at
+            /// the given URL. The host tries `extensionContext?.open(_:)` first and
+            /// falls back to the responder-chain workaround if that fails. The URL
+            /// is carried here so the view does not need to know it separately.
+            case openApp(URL)
         }
 
         /// Which action was refused, so the strip labels it with the same glyph and
@@ -195,7 +197,7 @@ public enum BannerState: Equatable {
         return .failed(
             action: runningAction,
             title: "Nothing came back",
-            detail: "The model answered with nothing. Try again, or edit it yourself.")
+            detail: "Try again, or edit it yourself.")
     }
 
     private static func idle(_ context: ScreenContext?, _ hint: String) -> BannerState {
@@ -210,4 +212,41 @@ public enum BannerState: Equatable {
     /// .aiButtonName` exists: the controls it points at are configurable, so it
     /// must not claim a particular one is in a particular place.
     public static let defaultHint = "Type, or pick an action below"
+
+    /// Whether the strip earns its row on screen.
+    ///
+    /// The idle instruction does not: "Type, or pick an action below" is what the
+    /// action row already says by existing. Everything else does — a live reading,
+    /// a model call, a refusal, a recording.
+    public var isPresented: Bool {
+        switch self {
+        case .hint: return false
+        case .context, .working, .options, .failed, .dictating, .blocked, .dictationFailed:
+            return true
+        }
+    }
+
+    /// Which action-row key should read as current, if any.
+    ///
+    /// A live screen-context reading is not an action the user started, so it
+    /// lights nothing. Dictation is not an `AIAction`, so it is named separately.
+    public var activeActionKey: ActionKey? {
+        switch self {
+        case .working(let action), .options(action: let action, _, _),
+            .failed(action: let action, _, _):
+            return .ai(action)
+        case .blocked(let block):
+            return block.action.map { .ai($0) } ?? .dictation
+        case .dictating, .dictationFailed:
+            return .dictation
+        case .hint, .context:
+            return nil
+        }
+    }
+
+    /// A key in the action row that the banner can mark as current.
+    public enum ActionKey: Equatable, Sendable {
+        case ai(AIAction)
+        case dictation
+    }
 }

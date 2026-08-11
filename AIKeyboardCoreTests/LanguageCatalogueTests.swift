@@ -93,8 +93,9 @@ final class LanguageCatalogueTests: LanguageCatalogueTestFixture {
         }
     }
 
-    /// **Delete is the same rect in all sixty-four languages and on all three
-    /// planes**, which is the whole point of `KeyWidth.pinned`.
+    /// **Delete keeps the same width and trailing edge in all sixty-four
+    /// languages and on all three planes**, which is the point of
+    /// `KeyWidth.pinned`.
     ///
     /// Three things together are what make the rendered frame identical, so all
     /// three are asserted: the resolved width is `pinnedWidth`, delete closes its
@@ -107,7 +108,7 @@ final class LanguageCatalogueTests: LanguageCatalogueTestFixture {
     /// 54.3pt, Hebrew's 34.2pt and the numbers plane's 94.5pt — three different
     /// keys. Asserting merely that a delete key *exists*, or that it is the last
     /// key in its row, passed against every one of those.
-    func testDeleteIsTheSameKeyInEveryLanguageAndOnEveryPlane() {
+    func testDeleteKeepsTheSameWidthAndTrailingEdgeInEveryLanguageAndOnEveryPlane() {
         let sideInset = Theme.Metrics.sideInset
         let spacing = Theme.Metrics.keySpacing
 
@@ -258,19 +259,14 @@ final class LanguageCatalogueTests: LanguageCatalogueTestFixture {
         XCTAssertEqual(KeyboardLayout.columns(for: .english, plane: .letters), 10)
     }
 
-    /// **Delete closes exactly one row, and it is the bottom row in all
-    /// sixty-four.** Apple's Hebrew keyboard is the one measured layout that puts
-    /// it elsewhere — at the end of the short *top* row, beside eight letters, per
-    /// `Bar/layouts/stock-rendered-rows.json` — and this keyboard deliberately
-    /// does not follow it there. A swipe along the space bar changes language
-    /// mid-sentence, so a delete key that follows Apple moves rows under a thumb
-    /// already reaching for it; that is the trade `KeyboardLayout.letters(for:)`
-    /// names.
+    /// Delete closes exactly one row. A strictly shortest top row carries it;
+    /// otherwise the bottom row does. Hebrew's 8 / 10 / 9 layout is currently the
+    /// only top-row case, matching `Bar/layouts/stock-rendered-rows.json`.
     ///
     /// The wrong implementations this rejects are both real shapes: delete on
     /// every row (a `map` that appends it unconditionally), and delete on no row
     /// at all (an index the row builder never reaches).
-    func testDeleteClosesTheBottomRowInEveryLanguage() {
+    func testDeleteClosesAStrictlyShortestTopRowOtherwiseTheBottomRow() {
         for language in KeyboardLanguage.allCases {
             let rows = KeyboardLayout.rows(for: language, plane: .letters)
             let carrying = rows.filter { row in row.keys.contains { $0.cap == .backspace } }
@@ -278,13 +274,25 @@ final class LanguageCatalogueTests: LanguageCatalogueTestFixture {
                 carrying.count, 1,
                 "\(language.displayName) has delete on \(carrying.count) letter rows")
             guard let row = carrying.first else { continue }
+            let counts = KeyboardLayout.letterLayouts[language]?.rows.map(\.count) ?? []
+            let expectedRow =
+                counts.count == 3 && counts[0] < counts[1] && counts[0] < counts[2] ? 0 : 2
             XCTAssertEqual(
-                row.id, 2,
+                row.id, expectedRow,
                 "\(language.displayName) puts delete on row \(row.id)")
             XCTAssertEqual(
                 row.keys.last?.cap, .backspace,
                 "\(language.displayName) does not end that row with delete")
         }
+
+        XCTAssertEqual(
+            KeyboardLayout.rows(for: .hebrew, plane: .letters)
+                .first { $0.keys.contains { $0.cap == .backspace } }?.id,
+            0)
+        XCTAssertEqual(
+            KeyboardLayout.rows(for: .arabic, plane: .letters)
+                .first { $0.keys.contains { $0.cap == .backspace } }?.id,
+            2)
     }
 
     /// The bottom row's punctuation key types the script's own marks, on every
@@ -322,6 +330,121 @@ final class LanguageCatalogueTests: LanguageCatalogueTestFixture {
         XCTAssertEqual(KeyboardLayout.punctuationMarks(for: .persian), ".،؟!'")
         XCTAssertEqual(KeyboardLayout.punctuationMarks(for: .greek), ".,;!'")
         XCTAssertEqual(KeyboardLayout.punctuationMarks(for: .hebrew), ".,?!'")
+    }
+
+    /// Holding any Hebrew letter offers that letter with a geresh and with a
+    /// gershayim, on all twenty-seven keys.
+    ///
+    /// **Two builds this rejects, and asserting the exact pair is what rejects
+    /// the second.** Before `hebrewMarks` existed every Hebrew letter carried no
+    /// alternates, and `KeyView.startAlternatesIfNeeded` opens nothing for a key
+    /// with fewer than two items, so the hold was dead. Writing the table through
+    /// `KeyboardLayout.alternates(_:)` instead splits `"צ׳"` into two entries —
+    /// U+05F3 and U+05F4 are spacing punctuation, not combining marks, so each
+    /// string is two `Character`s — and the popup then offers the letter again
+    /// beside a naked mark. A test that only asked whether the list was non-empty
+    /// passes on that.
+    func testEveryHebrewLetterOffersItsGereshAndGershayimOnALongPress() {
+        let letters = KeyboardLayout.rows(for: .hebrew, plane: .letters)
+            .flatMap(\.keys)
+            .compactMap { key -> (String, [String])? in
+                guard case .character(let value) = key.cap else { return nil }
+                return (value, key.alternates)
+            }
+        XCTAssertEqual(letters.count, 27, "Hebrew's rows are no longer 8 / 10 / 9")
+        for (letter, alternates) in letters {
+            XCTAssertEqual(
+                alternates, [letter + "\u{05F3}", letter + "\u{05F4}"],
+                "holding \(letter) offers \(alternates)")
+        }
+        XCTAssertEqual(KeyboardLayout.hebrewMarks["צ"], ["צ׳", "צ״"])
+        // The acronyms and loanwords the two marks exist for.
+        XCTAssertTrue(reachableLetters(.hebrew).contains("ה״"), "צה״ל needs ה״")
+        XCTAssertTrue(reachableLetters(.hebrew).contains("צ׳"), "צ׳יפס needs צ׳")
+        XCTAssertEqual("צ׳".count, 2, "the mark fused with its letter; the table is one key")
+        XCTAssertEqual("צ״".count, 2, "the mark fused with its letter; the table is one key")
+    }
+
+    /// Every Persian letter offers the half-space, and the hamza forms Apple
+    /// hides behind shift are still in front of it.
+    ///
+    /// U+200C is what separates a prefix or a suffix from its stem without
+    /// breaking the word — `می‌روم`, `کتاب‌ها` — and `InputMode_fa.plist` names
+    /// it as the one mark that appears inside a Persian word. Written `میروم` it
+    /// is a spelling mistake, and no plane here could type it.
+    ///
+    /// **Asserting `last` rather than the whole list is deliberate**: six letters
+    /// carry hamza forms as well, and a rule that replaced them instead of
+    /// appending to them would take ا's أ إ آ ء away — which is a regression no
+    /// assertion about the half-space alone can see. The second half of this test
+    /// is that one.
+    func testEveryPersianLetterOffersTheHalfSpaceWithoutLosingItsHamzaForms() {
+        let letters = KeyboardLayout.rows(for: .persian, plane: .letters)
+            .flatMap(\.keys)
+            .compactMap { key -> (String, [String])? in
+                guard case .character(let value) = key.cap else { return nil }
+                return (value, key.alternates)
+            }
+        XCTAssertEqual(letters.count, 31, "Persian's rows are no longer 12 / 11 / 8")
+        for (letter, alternates) in letters {
+            XCTAssertEqual(
+                alternates.last, letter + "\u{200C}",
+                "holding \(letter) offers \(alternates)")
+        }
+
+        let alef = letters.first { $0.0 == "ا" }?.1
+        XCTAssertEqual(alef, ["آ", "أ", "إ", "ء", "ا\u{200C}"])
+        for form in ["ة", "ى", "ء", "أ", "إ", "آ", "ؤ", "ژ"] {
+            XCTAssertTrue(reachableLetters(.persian).contains(form), "Persian lost \(form)")
+        }
+    }
+
+    /// The straight quotes carry the curved ones, which were on no plane.
+    ///
+    /// `UIKeyboardNonstopPunctuationCharacters` lists U+2019 as a mark that
+    /// appears *inside* a word in ten of the languages this keyboard ships, so a
+    /// word spelled with it could not be typed. The guillemets ride on `"`
+    /// because they are the primary quotation marks of Russian, Persian, Greek
+    /// and French.
+    func testTheStraightQuotesOfferTheCurvedOnes() {
+        for language in KeyboardLanguage.allCases {
+            let keys = KeyboardLayout.rows(for: language, plane: .numbers).flatMap(\.keys)
+            let name = language.displayName
+            XCTAssertEqual(
+                keys.first { $0.cap == .character("\"") }?.alternates, ["“", "”", "«", "»"],
+                "\(name) cannot reach the curved double quotes")
+            XCTAssertEqual(
+                keys.first { $0.cap == .character("'") }?.alternates, ["’", "‘"],
+                "\(name) cannot reach the typographic apostrophe")
+        }
+
+        // The script's own marks are still on the same row, in front of them.
+        let arabic = KeyboardLayout.rows(for: .arabic, plane: .numbers).flatMap(\.keys)
+        XCTAssertEqual(arabic.first { $0.cap == .character("،") }?.alternates, [","])
+        XCTAssertEqual(arabic.first { $0.cap == .character("؟") }?.alternates, ["?"])
+        let spanish = KeyboardLayout.rows(for: .spanish, plane: .numbers).flatMap(\.keys)
+        XCTAssertEqual(spanish.first { $0.cap == .character("?") }?.alternates, ["¿"])
+        XCTAssertEqual(spanish.first { $0.cap == .character("!") }?.alternates, ["¡"])
+    }
+
+    /// Catalan's `l` carries the punt volat, which is a letter's mark the same
+    /// way the geresh is and was reachable on no plane at all.
+    ///
+    /// `l·l` is a different sound from `ll` — `col·legi`, `paral·lel` — so
+    /// spelling it `ll` is an error rather than a shortcut. It arrives attached
+    /// to its letter, because picking an alternate *replaces* the character the
+    /// key already typed: a bare `·` would eat the `l` in front of it.
+    func testCatalanCanTypeThePuntVolat() {
+        let l = KeyboardLayout.rows(for: .catalan, plane: .letters)
+            .flatMap(\.keys)
+            .first { $0.cap == .character("l") }
+        XCTAssertEqual(l?.alternates, ["ł", "l·"])
+        XCTAssertFalse(
+            l?.alternates.contains("·") ?? true,
+            "a bare interpunt would replace the l it belongs to")
+        // Nowhere else offers it, which is why it had to go on the letter.
+        XCTAssertFalse(reachablePunctuation(.catalan).contains("·"))
+        XCTAssertTrue(reachablePunctuation(.greek).contains("·"), "Greek's is its ano teleia")
     }
 
     // Reachability tests live in LanguageReachabilityTests.swift.

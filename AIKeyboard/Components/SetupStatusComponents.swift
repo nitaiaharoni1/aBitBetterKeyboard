@@ -15,14 +15,15 @@ import SwiftUI
 /// rewrites work" off a green Full Access tick alone, which on a stock install is
 /// the opposite of the truth.
 extension SetupState {
-    static func current() -> SetupState {
+    static func current(store: SharedStore = .shared) -> SetupState {
         SetupState(
             presence: KeyboardPresence.load(),
             microphone: .current,
             // `isReady`, not `configured() != nil`: a build ships an address, so
             // the second is true before the token has been pasted in and this
             // screen would tick off a setup step the keyboard then 401s on.
-            cloudConfigured: BackendTransport.isReady())
+            cloudConfigured: BackendTransport.isReady(),
+            switchAcknowledged: store.hasAcknowledgedKeyboardSwitch)
     }
 }
 
@@ -51,15 +52,16 @@ struct StatusRow: View {
     var body: some View {
         HStack(spacing: Theme.Space.sm) {
             Image(systemName: symbol)
-                .font(.system(size: 20))
+                .font(.system(size: 18))
                 .foregroundStyle(tint)
+                .frame(width: 24, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(Theme.Fonts.body.weight(.medium))
                     .foregroundStyle(Theme.Text.primary)
                 Text(detail)
-                    .font(.system(size: 13))
+                    .font(Theme.Fonts.caption)
                     .foregroundStyle(Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -68,7 +70,11 @@ struct StatusRow: View {
 
             if check != .confirmed, let action {
                 Button(actionTitle, action: action)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(Theme.Fonts.callout.weight(.medium))
+                    .foregroundStyle(Theme.Brand.solid)
+                    .padding(.horizontal, Theme.Space.sm)
+                    .padding(.vertical, Theme.Space.xxs)
+                    .background(Capsule().strokeBorder(Theme.Surface.separator, lineWidth: 1))
                     .buttonStyle(.borderless)
             }
         }

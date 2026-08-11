@@ -8,13 +8,16 @@ import SwiftUI
 /// **It replaced two things and a panel.** `ScreenContextStrip` was a separate
 /// 30pt row that appeared and disappeared with the capture session, and every AI
 /// answer arrived in a panel that covered the keys — so the user could not see
-/// what they had typed while choosing how to rewrite it, and the keyboard's height
-/// changed twice per action. This is one strip, always present, and the keys are
-/// never covered.
+/// what they had typed while choosing how to rewrite it. This is one strip for
+/// every active moment, and the keys are never covered.
 ///
-/// Its height is constant for the same reason the one-tap button's width is: a
-/// strip that grows when an answer arrives moves the three candidates and the whole
-/// keyboard under the user's thumb, mid-sentence.
+/// **Absent when idle.** The default "Type, or pick an action below" instruction
+/// is what the action row already says by existing, so the strip is omitted until
+/// there is a live reading, a model call, a refusal or a recording. Its height
+/// while shown is still constant: a strip that grows when an answer arrives would
+/// move the three candidates under the thumb mid-choice. The host height follows
+/// presence; `KeyboardGeometry.ownUIHeightFraction` still reports the tallest form
+/// so a mid-read resize cannot move the fingerprint band.
 public struct ActionBanner: View {
 
     @ObservedObject var controller: KeyboardController
@@ -24,7 +27,7 @@ public struct ActionBanner: View {
     }
 
     public var body: some View {
-        HStack(spacing: Theme.Space.xs) {
+        HStack(alignment: .center, spacing: Theme.Space.xs) {
             leading
 
             content
@@ -33,13 +36,14 @@ public struct ActionBanner: View {
 
             trailing
         }
-        .padding(.horizontal, Theme.Space.sm)
-        .frame(height: Theme.Metrics.bannerHeight)
+        .padding(.horizontal, Theme.Space.md)
+        .padding(.vertical, Theme.Space.xxs)
         .frame(maxWidth: .infinity)
+        .frame(height: Theme.Metrics.bannerHeight)
         .background(
             RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                 .fill(surface)
-                .padding(.horizontal, Theme.Space.xxs)
+                .padding(.horizontal, Theme.Space.xs)
                 .padding(.vertical, Theme.Space.xxs)
         )
         // **Pinned, like every other control row in this keyboard.** The label,
@@ -54,24 +58,7 @@ public struct ActionBanner: View {
         .accessibilityElement(children: .contain)
     }
 
-    var state: BannerState {
-        BannerState.resolve(
-            isDictating: controller.isDictating,
-            dictationIsLive: controller.dictationAvailability.isLive,
-            dictationTranscript: controller.dictationTranscript,
-            dictationFailure: controller.dictationFailure,
-            isWorking: controller.isWorking,
-            runningAction: controller.runningAction,
-            error: controller.aiError,
-            block: controller.block,
-            options: controller.bannerOptions,
-            index: controller.bannerIndex,
-            screenContext: controller.screenContext.context,
-            // Screen context's own sentence when it has one — that is what is left
-            // of `ScreenContextStrip` — and the ordinary instruction when it does
-            // not. See `KeyboardController.screenContextHint`.
-            idleHint: controller.screenContextHint ?? BannerState.defaultHint)
-    }
+    var state: BannerState { controller.bannerState }
 
     var surface: Color {
         switch state {

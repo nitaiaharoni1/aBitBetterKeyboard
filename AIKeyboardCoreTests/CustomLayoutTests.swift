@@ -21,7 +21,7 @@ final class CustomLayoutTests: XCTestCase {
     /// the shape a synthesised `Codable` is most likely to get wrong. One of each.
     func testEveryActionRoundTrips() throws {
         let actions: [SlotAction] = [
-            .shift, .backspace, .numbersPlane, .symbolsPlane, .globe, .space, .ret,
+            .shift, .backspace, .numbersPlane, .symbolsPlane, .globe, .settings, .space, .ret,
             .dictation, .emoji, .quickTone, .cursorLeft, .cursorRight,
             .hideKeyboard, .text(".com")
         ]
@@ -41,7 +41,7 @@ final class CustomLayoutTests: XCTestCase {
     func testTheDefaultBottomRow() {
         XCTAssertEqual(
             KeyboardCustomization.default.bottomRow.map(\.action),
-            [.numbersPlane, .globe, .space, .punctuation, .ret])
+            [.numbersPlane, .settings, .space, .punctuation, .ret])
         XCTAssertFalse(
             KeyboardCustomization.default.bottomRow.contains { $0.action == .dictation },
             "dictation is on the action row; two of it is one too many")
@@ -146,7 +146,9 @@ final class CustomLayoutTests: XCTestCase {
     /// Each new cap needs a distinct accessibility label: that string is the only
     /// thing a VoiceOver user has to tell two icon keys apart.
     func testNewCapsHaveDistinctAccessibilityLabels() {
-        let caps: [KeyCap] = [.emoji, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard]
+        let caps: [KeyCap] = [
+            .settings, .emoji, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard
+        ]
         let labels = caps.map(\.accessibilityLabel)
         XCTAssertEqual(Set(labels).count, caps.count, "two caps share a label: \(labels)")
         XCTAssertFalse(labels.contains(where: \.isEmpty))
@@ -155,12 +157,16 @@ final class CustomLayoutTests: XCTestCase {
     /// Distinct ids for the same reason: `KeySpec.identifier(for:)` derives from
     /// the cap, and a collision is a `ForEach` with duplicate identity.
     func testNewCapsHaveDistinctSpecIDs() {
-        let caps: [KeyCap] = [.emoji, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard]
+        let caps: [KeyCap] = [
+            .settings, .emoji, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard
+        ]
         XCTAssertEqual(Set(caps.map { KeySpec($0).id }).count, caps.count)
     }
 
     func testTheNewCapsAreFunctionKeys() {
-        for cap in [KeyCap.emoji, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard] {
+        for cap in [
+            KeyCap.settings, .emoji, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard
+        ] {
             XCTAssertTrue(cap.isFunctionKey, "\(cap) should not be treated as a character key")
         }
     }
@@ -321,10 +327,10 @@ final class CustomLayoutTests: XCTestCase {
             Theme.Metrics.keyAreaHeight(for: LayoutPreset.named("compact")!.customization))
     }
 
-    /// The total is the key area plus the two constant rows above it. This used to
-    /// check that the context strip was added only while a session was live;
-    /// `bannerHeight` replaced it precisely so the keyboard stops changing height
-    /// under the user's thumb, so the property worth pinning is the opposite one.
+    /// The tallest total is the key area plus the two constant rows above it —
+    /// that is what the fingerprint crop and the layout editor's ceiling both
+    /// read. The live host height can omit the banner while idle; see
+    /// `totalHeight(for:showsBanner:)`.
     func testTheTotalIsTheKeyAreaPlusTheTwoConstantRows() {
         XCTAssertEqual(
             Theme.Metrics.totalHeight(for: .default),
@@ -333,7 +339,16 @@ final class CustomLayoutTests: XCTestCase {
             accuracy: 0.001)
     }
 
-    /// The layout is the only thing that moves the total now.
+    /// Omitting the banner shortens the live height by exactly that row.
+    func testOmittingTheBannerShortensTheLiveHeightByTheBanner() {
+        XCTAssertEqual(
+            Theme.Metrics.totalHeight(for: .default, showsBanner: true)
+                - Theme.Metrics.totalHeight(for: .default, showsBanner: false),
+            Theme.Metrics.bannerHeight,
+            accuracy: 0.001)
+    }
+
+    /// Across layouts, the tallest-form total still differs only by the key area.
     func testOnlyTheLayoutChangesTheTotalHeight() {
         let compact = LayoutPreset.named("compact")!.customization
         XCTAssertEqual(

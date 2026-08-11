@@ -16,7 +16,23 @@ extension KeyboardController {
     /// the space is typed in the order the fingers made it and against the
     /// candidate that was on screen when it was pressed.
     public func press(_ cap: KeyCap) {
-        if cap != .space, spaceTouch.interrupted() { insertSpace() }
+        if cap != .space, spaceTouch.interrupted() {
+            // Clicks *before* this key does, for the reason the space is typed
+            // before it: the other thumb pressed it first. `insertSpace` is
+            // reached from here as well as from the `.space` branch below, and
+            // only that branch goes through the line under this block.
+            Feedback.keyClick(KeyCap.space.clickSound)
+            insertSpace()
+        }
+
+        // **One click for this key, here, and nowhere else.** Which sound is the
+        // cap's own business (`KeyCap.clickSound`); this is the only line that
+        // plays one. Scattering the call down the branches below is what left
+        // backspace and every function key silent, and it is also what would make
+        // the accents popup click twice, since that popup reaches this function
+        // through a `deleteBackward()` the user never pressed. Above the
+        // emoji-search branch, because a key typing into that box is still a key.
+        Feedback.keyClick(cap.clickSound)
 
         // The emoji search box is the one thing on this keyboard that types into
         // something other than the document, so it gets first refusal on the key.
@@ -35,11 +51,13 @@ extension KeyboardController {
         case .globe:
             Feedback.modifierPress()
             advanceLanguage()
+        case .settings:
+            Feedback.modifierPress()
+            onOpenContainingApp?(SharedStore.settingsURL)
         case .space:
             insertSpace()
         case .ret:
             Feedback.keyPress()
-            Feedback.keyClick()
             target?.insertText("\n")
             shift = store.autocapitalise ? .on : .off
             refreshSuggestions()
@@ -47,7 +65,9 @@ extension KeyboardController {
             Feedback.actionPress()
             startDictation()
         case .emoji:
-            Feedback.modifierPress()
+            // No `modifierPress()` here: `show(_:)` fires one as its first line,
+            // and this key was buzzing twice for one tap.
+            //
             // From either emoji state this key is the way back to the letters,
             // which is what its `אבג` cap promises while the grid is open. It is
             // also the only way back: the category row has no `אבג` of its own,
@@ -96,7 +116,6 @@ extension KeyboardController {
     /// shows one letter and types another.
     func insertCharacter(_ value: String) {
         Feedback.keyPress()
-        Feedback.keyClick()
         // **Only the refusal, never the whole banner.** "Type something first" stops
         // being true the moment they type something. An *answer* has to survive the
         // same keystroke, because fixing a typo before accepting a rewrite is
@@ -110,7 +129,6 @@ extension KeyboardController {
 
     func insertSpace() {
         Feedback.keyPress()
-        Feedback.keyClick()
 
         // Two spaces in quick succession become a full stop, as on the system keyboard.
         let now = Date()
@@ -134,7 +152,7 @@ extension KeyboardController {
         // Not over a selection: there the space replaces what is selected, the
         // way it does on the system keyboard, and the partial word in front of
         // the selection is not what the user is typing over.
-        if store.autocorrect,
+        if store.storedAutocorrect,
             selection == nil,
             let candidate = suggestions.first(where: \.isDefault),
             !currentWordPrefix.isEmpty,
@@ -143,6 +161,9 @@ extension KeyboardController {
             replaceCurrentWord(with: candidate.text)
         }
 
+        // After any correction, so what gets remembered is the word that ended up
+        // in the field rather than the keystrokes that were replaced.
+        learnWordJustCommitted()
         target?.insertText(" ")
         refreshSuggestions()
     }
@@ -169,6 +190,9 @@ extension KeyboardController {
 
     public func insertEmoji(_ emoji: String) {
         Feedback.keyPress()
+        // Picked from the grid rather than pressed as a `KeyCap`, so this is the
+        // one insertion `press(_:)` never speaks for. It still put text in.
+        Feedback.keyClick(.tock)
         target?.insertText(emoji)
         recentEmoji.removeAll { $0 == emoji }
         recentEmoji.insert(emoji, at: 0)
@@ -189,7 +213,7 @@ extension KeyboardController {
     /// Whether this key belonged to the search box rather than to the document.
     ///
     /// **Only the four keys that edit a query are taken.** Shift, the plane
-    /// switch and the globe fall through on purpose: the whole reason search needs
+    /// switch and Settings fall through on purpose: the whole reason search needs
     /// the letters back is that the words being searched for are Hebrew *or*
     /// English, and a user who cannot reach the other alphabet can only search in
     /// one of them. Everything else falls through too, so a control the user put
@@ -198,13 +222,11 @@ extension KeyboardController {
         switch cap {
         case .character(let value):
             Feedback.keyPress()
-            Feedback.keyClick()
             setEmojiQuery(emojiQuery + (shift.isUppercase ? language.uppercased(value) : value))
             if shift == .on { shift = .off }
             return true
         case .space:
             Feedback.keyPress()
-            Feedback.keyClick()
             setEmojiQuery(emojiQuery + " ")
             return true
         case .backspace:

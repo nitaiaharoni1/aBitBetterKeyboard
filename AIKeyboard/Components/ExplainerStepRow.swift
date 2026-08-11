@@ -10,17 +10,17 @@ struct ExplainerStepRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Space.sm) {
             Text("\(number)")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Theme.Text.onBrand)
+                .font(Theme.Fonts.micro)
+                .foregroundStyle(Theme.Brand.solid)
                 .frame(width: 22, height: 22)
-                .background(Circle().fill(Theme.Brand.gradient))
+                .background(Circle().strokeBorder(Theme.Brand.solid, lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(Theme.Fonts.body.weight(.semibold))
                     .foregroundStyle(Theme.Text.primary)
                 Text(detail)
-                    .font(.system(size: 13))
+                    .font(Theme.Fonts.caption)
                     .foregroundStyle(Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

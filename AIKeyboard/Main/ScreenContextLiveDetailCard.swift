@@ -18,19 +18,20 @@ struct ScreenContextLiveDetailCard: View {
                         .fill(session.isLive ? Theme.Semantic.record : Theme.Text.tertiary)
                         .frame(width: 8, height: 8)
                     Text(statusLabel)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(Theme.Fonts.headline)
                         .foregroundStyle(Theme.Text.primary)
                     Spacer()
                     // Reachable: `MemoryGovernor` writes `degraded` when the
                     // capture process's own `phys_footprint` goes above its
                     // watermark, and reads are refused for as long as it stays
-                    // there.
+                    // there. Amber, not red: red is reserved for the recording
+                    // state itself, and this capsule is about a limit.
                     if session.status?.isDegraded == true {
-                        StatusCapsule(text: "LOW MEMORY", colour: Theme.Semantic.record)
+                        StatusCapsule(text: "LOW MEMORY", colour: Theme.Semantic.warning)
                     }
                 }
 
-                Divider().overlay(Theme.Surface.separator)
+                Divider.themed
 
                 HStack(spacing: 0) {
                     metric(value: "\(session.status?.readsStarted ?? 0)", label: "Screens sent")
@@ -39,23 +40,23 @@ struct ScreenContextLiveDetailCard: View {
                 }
 
                 if let context = session.state.context {
-                    Divider().overlay(Theme.Surface.separator)
+                    Divider.themed
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                         Text("LAST READ")
-                            .font(.system(size: 10, weight: .semibold))
-                            .tracking(0.6)
+                            .font(Theme.Fonts.micro)
+                            .tracking(0.8)
                             .foregroundStyle(Theme.Text.tertiary)
 
                         // No app name: this design has no live signal for which
                         // app is on screen, and a stale one beside a fresh
                         // message is worse than none.
                         Text(context.sender)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(Theme.Fonts.body.weight(.semibold))
                             .foregroundStyle(Theme.Text.primary)
 
                         Text(context.message)
-                            .font(.system(size: 13))
+                            .font(Theme.Fonts.callout)
                             .foregroundStyle(Theme.Text.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .environment(\.layoutDirection, context.language.layoutDirection)
@@ -82,11 +83,11 @@ struct ScreenContextLiveDetailCard: View {
     private func metric(value: String, label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.system(size: 18, weight: .bold))
+                .font(Theme.Fonts.title)
                 .foregroundStyle(Theme.Text.primary)
                 .contentTransition(.numericText())
             Text(label)
-                .font(.system(size: 11))
+                .font(Theme.Fonts.micro)
                 .foregroundStyle(Theme.Text.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)

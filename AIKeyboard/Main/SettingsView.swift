@@ -8,7 +8,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Theme.Surface.background.ignoresSafeArea()
+                AmbientBackground(intensity: 0.7)
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.Space.lg) {
@@ -22,7 +22,16 @@ struct SettingsView: View {
                     .padding(.bottom, Theme.Space.xl)
                 }
             }
-            .navigationTitle("Settings")
+            .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
+                Text("Settings")
+                    .font(Theme.Fonts.display)
+                    .foregroundStyle(Theme.Text.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Theme.Space.md)
+                    .padding(.vertical, Theme.Space.xxs)
+                    .background(Theme.Surface.background.opacity(0.96))
+            }
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 
@@ -87,7 +96,7 @@ struct SettingsView: View {
                 HStack(spacing: Theme.Space.sm) {
                     IconBadge(systemName: "arrow.counterclockwise", tint: Theme.Text.secondary)
                     Text("Replay onboarding")
-                        .font(.system(size: 16))
+                        .font(Theme.Fonts.body)
                         .foregroundStyle(Theme.Text.primary)
                     Spacer()
                 }
@@ -98,9 +107,9 @@ struct SettingsView: View {
     }
 
     private var footer: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: Theme.Space.xxs) {
             Text("AI Keyboard 0.1")
-                .font(.system(size: 13, weight: .medium))
+                .font(Theme.Fonts.caption.weight(.medium))
                 .foregroundStyle(Theme.Text.secondary)
             // Was "Mock build · no network, no model, no microphone". Two of
             // those three stopped being true when `MockAI` was replaced by
@@ -109,8 +118,8 @@ struct SettingsView: View {
             // because it is the one the user can feel: dictation streams a
             // script, and a keyboard extension has no microphone with or without
             // Full Access.
-            Text("Dictation is a scripted demo — iOS gives a keyboard no microphone")
-                .font(.system(size: 12))
+            Text("Dictation is a scripted demo. iOS gives a keyboard no microphone.")
+                .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Text.tertiary)
                 .multilineTextAlignment(.center)
         }

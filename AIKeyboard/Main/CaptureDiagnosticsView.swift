@@ -41,8 +41,8 @@ struct CaptureDiagnosticsView: View {
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 0) {
-                Divider().overlay(Theme.Surface.separator)
-                    .padding(.top, 8)
+                Divider.themed
+                    .padding(.top, Theme.Space.xs)
 
                 preamble
 
@@ -56,10 +56,14 @@ struct CaptureDiagnosticsView: View {
             header
         }
         .tint(Theme.Text.secondary)
-        .padding(16)
+        .padding(Theme.Space.md)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                 .fill(Theme.Surface.raised)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                .strokeBorder(Theme.Surface.separator, lineWidth: 1)
         )
         .accessibilityIdentifier("screen-context-developer-details")
     }
@@ -67,11 +71,11 @@ struct CaptureDiagnosticsView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("DEVELOPER DETAILS")
-                .font(.system(size: 10, weight: .semibold))
-                .tracking(0.6)
+                .font(Theme.Fonts.micro)
+                .tracking(0.8)
                 .foregroundStyle(Theme.Text.tertiary)
             Text("Raw capture counters. Not something you need to read.")
-                .font(.system(size: 12))
+                .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -85,10 +89,10 @@ struct CaptureDiagnosticsView: View {
                 + "stored anywhere, and one only leaves the device when you tap Reply. Nothing "
                 + "here changes how the keyboard behaves."
         )
-        .font(.system(size: 12))
+        .font(Theme.Fonts.caption)
         .foregroundStyle(Theme.Text.tertiary)
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.top, 12)
+        .padding(.top, Theme.Space.sm)
     }
 
     private var waiting: some View {
@@ -96,10 +100,10 @@ struct CaptureDiagnosticsView: View {
             "No broadcast has run on this device yet. Start screen context above, "
                 + "use the keyboard for a moment, and these fill in."
         )
-        .font(.system(size: 13))
+        .font(Theme.Fonts.caption)
         .foregroundStyle(Theme.Text.secondary)
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.top, 12)
+        .padding(.top, Theme.Space.sm)
     }
 
     @ViewBuilder
@@ -164,20 +168,20 @@ struct CaptureDiagnosticsView: View {
                 row("Reads refused for memory", "\(status.refusedMemory)", warn: true)
             }
         }
-        .padding(.top, 4)
+        .padding(.top, Theme.Space.xxs)
     }
 
     private func row(_ label: String, _ value: String, warn: Bool = false) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(label)
-                .font(.system(size: 13))
+                .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Text.secondary)
-            Spacer(minLength: 12)
+            Spacer(minLength: Theme.Space.sm)
             Text(value)
-                .font(.system(size: 13, weight: .medium).monospacedDigit())
-                .foregroundStyle(warn ? Theme.Semantic.record : Theme.Text.primary)
+                .font(Theme.Fonts.caption.weight(.medium).monospacedDigit())
+                .foregroundStyle(warn ? Theme.Semantic.warning : Theme.Text.primary)
                 .multilineTextAlignment(.trailing)
         }
-        .padding(.vertical, 7)
+        .padding(.vertical, Theme.Space.xs)
     }
 }

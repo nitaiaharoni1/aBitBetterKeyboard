@@ -151,7 +151,7 @@ extension SuggestionBar {
     private func toneHint(_ tap: ToneTap) -> String {
         switch tap {
         case .ignore: return "Working"
-        case .needsText: return "Nothing to rewrite yet. Says what to do about it"
+        case .needsText: return "Nothing to rewrite. Says what to do about it"
         // The same words `ToneSetting.settingsNote` points at this button with, so
         // "the one-tap rewrite button" names one control everywhere it is written.
         case .rewrite:

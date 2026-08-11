@@ -83,16 +83,16 @@ public enum AIEngineError: Error, Equatable, Sendable {
         switch self {
         case .modelNotReady: return "Model not ready"
         case .appleIntelligenceOff: return "Apple Intelligence is off"
-        case .deviceNotSupported: return "Not supported on this device"
+        case .deviceNotSupported: return "Device not supported"
         case .unsupportedLanguage: return "Language not supported"
-        case .refused: return "Can't rewrite this one"
-        case .inputTooLong: return "Text is too long"
-        case .needsFullAccess: return "Full Access needed"
-        case .cloudNotConfigured: return "No cloud model"
+        case .refused: return "Can't rewrite this"
+        case .inputTooLong: return "Text too long"
+        case .needsFullAccess: return "Needs Full Access"
+        case .cloudNotConfigured: return "Cloud model not ready"
         case .network: return "No connection"
         case .empty: return "Nothing came back"
-        case .invented: return "Nothing safe to suggest"
-        case .timedOut: return "Took too long"
+        case .invented: return "Nothing safe to show"
+        case .timedOut: return "Timed out"
         case .screenNotRead: return "Couldn't read the screen"
         case .failed: return "Couldn't finish"
         }
@@ -101,26 +101,26 @@ public enum AIEngineError: Error, Equatable, Sendable {
     public var message: String {
         switch self {
         case .modelNotReady:
-            return "The on-device model is still downloading. Try again in a few minutes."
+            return "Still downloading.\nTry again in a few minutes."
         case .appleIntelligenceOff:
-            return "Turn on Apple Intelligence in Settings to use AI actions on device."
+            return "Turn on Apple Intelligence in Settings to use AI on device."
         // The three that dead-end on the same missing setting name the same row.
         // Each of these used to end at "no cloud model is set up" and stop, which
         // is the whole of the Hebrew experience on a stock install: every AI
         // action fails, and none of them says where to go.
         case .deviceNotSupported:
             return
-                "This device can't run the on-device model, and the cloud model is not finished being set up. \(BackendTransport.setUpRecovery)"
+                "This device can't run AI on device.\n\(BackendTransport.setUpRecovery)"
         case .unsupportedLanguage(let script):
             return
-                "\(script.displayName) isn't one of the languages the on-device model supports, and the cloud model is not finished being set up. \(BackendTransport.setUpRecovery)"
+                "\(script.displayName) isn't supported on device.\n\(BackendTransport.setUpRecovery)"
         case .refused:
-            return "The model declined this text. Editing it slightly usually gets past it."
+            return "The model declined this text.\nEdit it slightly and try again."
         case .inputTooLong:
             return "Select a shorter passage and try again."
         case .needsFullAccess:
             return
-                "This language needs the cloud model, which needs Full Access. Turn it on in Settings › Keyboards."
+                "This needs the cloud model.\nTurn on Full Access in Settings › Keyboards."
         case .cloudNotConfigured:
             // **"None is set up" stopped being true, and this is the one error a
             // fresh install actually hits.** At runtime there is now exactly one
@@ -135,16 +135,16 @@ public enum AIEngineError: Error, Equatable, Sendable {
             // it has not been opened in ninety days and the session token it
             // wrote has expired. Either way there is no field to check — the fix
             // is opening the app, so that is the one thing this message says.
-            return "The cloud model turned this away. Open AI Keyboard once to reconnect."
+            return "Cloud model turned this away.\n\(BackendTransport.setUpRecovery)"
         case .network(let detail):
-            return detail.isEmpty ? "The cloud model couldn't be reached." : detail
+            return detail.isEmpty ? "Couldn't reach the cloud model." : detail
         case .empty:
-            return "The model returned an empty answer. Try again."
+            return "The model returned nothing.\nTry again."
         case .invented:
             return
-                "Every suggestion added a time, a date or a promise that wasn't in the message, so none were shown. Try again."
+                "Suggestions invented a time, date or reason that wasn't in the message, so none were shown."
         case .timedOut:
-            return "The model didn't answer in time. Try again."
+            return "Timed out.\nTry again."
         case .screenNotRead(let reason):
             // **The reason is the whole message, and it used to have a cause
             // stapled to it.** The sentence that lived here — "the last reading
@@ -155,7 +155,7 @@ public enum AIEngineError: Error, Equatable, Sendable {
             // today, a read request nothing answered because reading inside the
             // capture process is not built. Each of those is a different thing
             // for the user to do, and four of them were told the wrong one.
-            return reason.isEmpty ? "The screen wasn't read, so there was nothing to reply to." : reason
+            return reason.isEmpty ? "The screen wasn't read.\nNothing to reply to." : reason
         case .failed(let detail):
             return detail.isEmpty ? "Try again." : detail
         }

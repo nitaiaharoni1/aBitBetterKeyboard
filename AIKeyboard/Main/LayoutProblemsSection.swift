@@ -18,11 +18,12 @@ struct LayoutProblemsSection: View {
                                     systemName: issue.severity == .error
                                         ? "exclamationmark.triangle.fill" : "info.circle"
                                 )
+                                .font(Theme.Fonts.caption)
                                 .foregroundStyle(
                                     issue.severity == .error
                                         ? Theme.Semantic.record : Theme.Semantic.warning)
                                 Text(issue.message)
-                                    .font(.system(size: 13))
+                                    .font(Theme.Fonts.caption)
                                     .foregroundStyle(Theme.Text.primary)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Spacer(minLength: 0)

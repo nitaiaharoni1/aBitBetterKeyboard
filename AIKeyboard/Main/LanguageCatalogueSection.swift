@@ -18,7 +18,7 @@ struct LanguageCatalogueSection: View {
             if matches.isEmpty {
                 Card(padding: Theme.Space.xs) {
                     Text("No language matches \u{201C}\(query)\u{201D}.")
-                        .font(.system(size: 14))
+                        .font(Theme.Fonts.callout)
                         .foregroundStyle(Theme.Text.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(Theme.Space.sm)
@@ -40,7 +40,7 @@ struct LanguageCatalogueSection: View {
                 .foregroundStyle(Theme.Text.tertiary)
 
             TextField("Search \(KeyboardLanguage.allCases.count) languages", text: $query)
-                .font(.system(size: 16))
+                .font(Theme.Fonts.body)
                 .foregroundStyle(Theme.Text.primary)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -95,9 +95,9 @@ struct LanguageCatalogueSection: View {
     }
 
     private func scriptGroup(_ group: ScriptGroup) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
             Text("\(group.script.displayName) · \(group.languages.count)")
-                .font(.system(size: 12, weight: .semibold))
+                .font(Theme.Fonts.micro.weight(.semibold))
                 .foregroundStyle(Theme.Text.tertiary)
                 .padding(.leading, Theme.Space.xs)
                 .accessibilityLabel("\(group.script.displayName), \(group.languages.count) languages")
@@ -107,8 +107,7 @@ struct LanguageCatalogueSection: View {
                     ForEach(Array(group.languages.enumerated()), id: \.element.id) {
                         index, language in
                         if index > 0 {
-                            Divider()
-                                .overlay(Theme.Surface.separator)
+                            Divider.themed
                                 .padding(.leading, 46)
                         }
                         languageRow(for: language)
@@ -146,10 +145,10 @@ struct LanguageCatalogueSection: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(language.nativeName)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(Theme.Fonts.body.weight(.medium))
                     .foregroundStyle(Theme.Text.primary)
                 Text(subtitle(for: language))
-                    .font(.system(size: 12))
+                    .font(Theme.Fonts.caption)
                     .foregroundStyle(Theme.Text.secondary)
             }
 

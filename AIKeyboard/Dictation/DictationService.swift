@@ -21,10 +21,10 @@ import os
 /// session is already active keeps it across a switch, under the `audio`
 /// background mode. So the user starts a session here, in the foreground, and
 /// the keyboard then opens and closes utterances inside a session that is
-/// already live. Nothing in the keyboard can launch this app — `UIApplication`
-/// is unavailable to extensions and the responder-chain `openURL` workaround is
-/// explicitly disallowed — so when no session is running the keyboard says so
-/// and says where to go, rather than pretending.
+/// already live. When no session is running, the keyboard's "Open AI Keyboard"
+/// banner button asks the extension host to open this app via
+/// `extensionContext?.open(_:)`, and `DictationHandoffView` starts the session
+/// automatically on arrival.
 ///
 /// **What has actually run.** The channel, the gate, the encoder and the
 /// transcription are exercised by tests and by `Bar/dictation/`. The

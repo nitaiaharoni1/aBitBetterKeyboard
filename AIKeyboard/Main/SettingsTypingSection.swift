@@ -6,6 +6,16 @@ import SwiftUI
 struct SettingsTypingSection: View {
     @EnvironmentObject private var store: SharedStore
 
+    /// Read once when the card appears rather than every redraw: the count walks
+    /// the whole store, and nothing else on this screen can change it.
+    @State private var learnedWordCount = 0
+
+    /// Says what is kept, not that something is. A row promising the keyboard
+    /// "learns" without saying what it writes down is the kind of setting people
+    /// switch off on principle, and the honest answer is short enough to fit.
+    private let learningSubtitle =
+        "Remembers words and word pairs you type, on this device only. Never in password fields."
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             SectionHeader(title: "Typing")
@@ -13,7 +23,7 @@ struct SettingsTypingSection: View {
                 VStack(spacing: Theme.Space.sm) {
                     ToggleRow(
                         title: "Autocorrect",
-                        subtitle: "Commits the highlighted suggestion when you press space",
+                        subtitle: "Commits the bold suggestion when you press space",
                         icon: "text.badge.checkmark",
                         isOn: $store.autocorrect
                     )
@@ -30,6 +40,37 @@ struct SettingsTypingSection: View {
                         icon: "lightbulb",
                         isOn: $store.predictions
                     )
+                    Divider.themed
+                    ToggleRow(
+                        title: "Learn as you type",
+                        subtitle: learningSubtitle,
+                        icon: "brain",
+                        isOn: $store.learnsFromTyping
+                    )
+                    if learnedWordCount > 0 {
+                        Divider.themed
+                        // Only shown once there is something to clear. A row that
+                        // always reads "0 words" invites the user to press it to
+                        // find out what it does, and this is the one press here
+                        // that cannot be undone.
+                        Button(role: .destructive) {
+                            PersonalLanguageModel.shared.clear()
+                            learnedWordCount = 0
+                        } label: {
+                            HStack(spacing: Theme.Space.sm) {
+                                IconBadge(systemName: "trash")
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Forget what it learned")
+                                    Text("\(learnedWordCount) words remembered on this device")
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.red)
+                    }
                     Divider.themed
                     ToggleRow(
                         title: "Number row",
@@ -53,6 +94,7 @@ struct SettingsTypingSection: View {
                 }
             }
         }
+        .onAppear { learnedWordCount = PersonalLanguageModel.shared.learnedWordCount }
     }
 
     /// Writes `showsNumberRow` and, if that moves the layout away from its

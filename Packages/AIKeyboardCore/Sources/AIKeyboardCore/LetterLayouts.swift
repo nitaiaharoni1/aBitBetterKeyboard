@@ -17,12 +17,13 @@ extension KeyboardLayout {
             ["qwertyuiop", "asdfghjkl", "zxcvbnm"], alternates: latin()),
 
         // 22 letters plus 5 final forms across 8 / 10 / 9 keys, and no case, so no
-        // shift key. Apple puts delete at the end of the short *top* row here;
-        // this keyboard keeps it on the bottom row with every other language, for
-        // the reason `letters(for:)` gives — the language changes under the user's
-        // thumb, so the keys around it must not.
-        .hebrew: LetterLayout(
-            ["קראטוןםפ", "שדגכעיחלךף", "זסבהנמצתץ"], hasCase: false),
+        // shift key. The short top row carries delete, matching Apple's Hebrew
+        // keyboard.
+        //
+        // The long presses are `hebrewMarks` rather than a shift plane: a script
+        // with no case usually spends its alternates on the letters Apple hid
+        // behind shift, and Hebrew hides none.
+        .hebrew: LetterLayout(hebrewRows, hasCase: false, alternates: hebrewMarks),
 
         // Apple's `Arabic`: 12 / 10 / 7. أ إ آ ء ؤ ئ ى are on its shift plane,
         // and Arabic has no case, so they are long presses here.
@@ -32,13 +33,14 @@ extension KeyboardLayout {
             alternates: alternates(["ا": "أإآء", "و": "ؤ", "ي": "ئى", "ة": "ه"])),
 
         // Apple's `Persian – Standard`: 12 / 11 / 8. ژ and the hamza forms are on
-        // its shift plane.
+        // its shift plane, and `persianHalfSpace` rides on every letter beside
+        // them.
         .persian: LetterLayout(
-            ["ضصثقفغعهخحجچ", "شسیبلاتنمکگ", "ظطزرذدپو"],
+            persianRows,
             hasCase: false,
             alternates: alternates([
                 "ا": "آأإء", "و": "ؤ", "ی": "يئى", "ک": "ك", "ز": "ژ", "ه": "ة"
-            ])),
+            ]).merging(persianHalfSpace) { letters, half in letters + half }),
 
         // Apple's `Russian`: 12 / 11 / 9. ё is on the bracket key, which a phone
         // does not have, so it is the long press of е — as it is on iOS.
@@ -102,6 +104,69 @@ extension KeyboardLayout {
         .marathi: devanagariInScript,
         .nepali: devanagariInScript
     ]
+
+    /// Hebrew's three rows, named rather than written inline above so the geresh
+    /// table below is derived from the same twenty-seven keys instead of
+    /// restating them.
+    static let hebrewRows = ["קראטוןםפ", "שדגכעיחלךף", "זסבהנמצתץ"]
+
+    /// The two marks Hebrew writes *inside* a word, on every letter: hold צ and
+    /// the popup offers צ, then צ׳, then צ״.
+    ///
+    /// **Neither is reachable any other way, and that is measured rather than
+    /// assumed.** Sweeping Apple's own macOS Hebrew layout for the characters it
+    /// produces that this keyboard cannot type leaves the geresh U+05F3, the
+    /// gershayim U+05F4, the maqaf U+05BE and the niqqud. The first two are here.
+    /// The geresh carries the borrowed consonants of loanwords (ג׳ירפה, צ׳יפס),
+    /// ends an abbreviation (עמ׳) and marks a letter standing in for a number
+    /// (א׳ ב׳ ג׳); the gershayim sits before the last letter of an acronym, which
+    /// is how Hebrew writes most institutions and half its everyday nouns —
+    /// צה״ל, ארה״ב, דו״ח — so it can follow any letter of the alphabet too.
+    ///
+    /// **The whole alphabet, not the handful that conventionally take one.**
+    /// ג׳ ז׳ צ׳ ד׳ ת׳ are the list somebody would sit down and write for the
+    /// geresh, and the acronym rule alone already reaches every letter. A key
+    /// whose hold does something on some letters and nothing on others is a key
+    /// nobody learns to hold. It costs two entries each and no screen space: the
+    /// popup only exists under a finger that is already down.
+    ///
+    /// **Written as arrays because `alternates(_:)` would split each one in
+    /// half.** That helper takes one alternate per `Character`, which is right for
+    /// the accents it was built for and wrong here: U+05F3 and U+05F4 are spacing
+    /// punctuation rather than combining marks, so `"צ׳"` is two `Character`s and
+    /// the helper would offer צ and a bare ׳ as two separate long presses — the
+    /// same trap `devanagariInScript` hits from the other side, where two marks
+    /// that should have been separate fuse into one.
+    static let hebrewMarks: [String: [String]] = Dictionary(
+        uniqueKeysWithValues: hebrewRows.joined().map {
+            (String($0), [String($0) + "\u{05F3}", String($0) + "\u{05F4}"])
+        })
+
+    /// Persian's rows, named for the same reason Hebrew's are: the table below is
+    /// derived from them rather than restating them.
+    static let persianRows = ["ضصثقفغعهخحجچ", "شسیبلاتنمکگ", "ظطزرذدپو"]
+
+    /// The half-space, نیم‌فاصله, on every Persian letter: hold ی and the popup
+    /// offers ی then ی␣.
+    ///
+    /// **Persian is misspelled without it, and it is the one mark Apple's own
+    /// iOS Persian keyboard declares.** `InputMode_fa.plist` in the simulator
+    /// runtime lists `UIKeyboardNonstopPunctuationCharacters = "\u{200C}"` and
+    /// nothing else — the same key in `InputMode_he.plist` lists exactly the
+    /// geresh and the gershayim, which is what `hebrewMarks` carries. U+200C
+    /// separates a prefix or a suffix from its stem without breaking the word:
+    /// `می‌روم`, `کتاب‌ها`. Written `میروم` it is a spelling mistake, and this
+    /// keyboard could not type it at all.
+    ///
+    /// **It is the only alternate that draws nothing**, which is why
+    /// `KeyView.displayLabel` exists: `ی` and `ی‌` are the same picture in a
+    /// popup, since a zero-width character has no width and the letter before it
+    /// is isolated either way. The popup draws the half-space as `␣` and inserts
+    /// the real character.
+    static let persianHalfSpace: [String: [String]] = Dictionary(
+        uniqueKeysWithValues: persianRows.joined().map {
+            (String($0), [String($0) + "\u{200C}"])
+        })
 
     static let devanagariInScript = LetterLayout(
         keys: [

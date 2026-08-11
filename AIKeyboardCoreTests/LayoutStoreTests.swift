@@ -36,15 +36,50 @@ final class LayoutStoreTests: XCTestCase {
     /// inside the keyboard.
     func testAnInvalidStoredLayoutFallsBackToTheDefault() throws {
         var broken = KeyboardCustomization.default
+        // Reach validation rather than the named-preset refresh branch.
+        broken.preset = nil
         broken.bottomRow.removeAll { $0.action == .space }
         defaults.set(try JSONEncoder().encode(broken), forKey: SharedStore.layoutKey)
         XCTAssertEqual(SharedStore.decodeLayout(from: defaults), .default)
     }
 
-    func testAValidStoredLayoutComesBack() throws {
-        let roomy = LayoutPreset.named("roomy")!.customization
-        defaults.set(try JSONEncoder().encode(roomy), forKey: SharedStore.layoutKey)
-        XCTAssertEqual(SharedStore.decodeLayout(from: defaults), roomy)
+    /// A named preset stores identity, not a permanent snapshot. This fixture is
+    /// deliberately stale but valid: the old decoder returns it unchanged, while
+    /// the migration path has to replace it with today's Roomy definition.
+    func testANamedPresetReloadsItsCurrentDefinition() throws {
+        let current = LayoutPreset.named("roomy")!.customization
+        var stale = current
+        stale.geometry = .default
+        XCTAssertNotEqual(stale, current, "the fixture must differ from the current preset")
+
+        defaults.set(try JSONEncoder().encode(stale), forKey: SharedStore.layoutKey)
+        XCTAssertEqual(SharedStore.decodeLayout(from: defaults), current)
+    }
+
+    /// An edited layout has no preset identity and remains the user's snapshot.
+    func testAValidEditedLayoutComesBackUnchanged() throws {
+        var edited = LayoutPreset.named("roomy")!.customization
+        edited.preset = nil
+        edited.geometry = .default
+        defaults.set(try JSONEncoder().encode(edited), forKey: SharedStore.layoutKey)
+        XCTAssertEqual(SharedStore.decodeLayout(from: defaults), edited)
+    }
+
+    func testAnEditedLayoutMigratesTheOldInternalGlobeToSettings() throws {
+        var old = KeyboardCustomization.default
+        old.preset = nil
+        old.bottomRow = old.bottomRow.map { slot in
+            guard slot.action == .settings else { return slot }
+            var migrated = slot
+            migrated.action = .globe
+            return migrated
+        }
+        defaults.set(try JSONEncoder().encode(old), forKey: SharedStore.layoutKey)
+
+        let decoded = SharedStore.decodeLayout(from: defaults)
+
+        XCTAssertTrue(decoded.bottomRow.contains { $0.action == .settings })
+        XCTAssertFalse(decoded.bottomRow.contains { $0.action == .globe })
     }
 
     /// **A layout missing the globe decodes fine, and that is deliberate.**
@@ -53,6 +88,7 @@ final class LayoutStoreTests: XCTestCase {
     /// `KeyboardController.apply(_:)` puts it back where the answer is known.
     func testAGlobelessLayoutSurvivesTheStore() throws {
         var without = KeyboardCustomization.default
+        without.preset = nil
         without.bottomRow.removeAll { $0.action == .globe }
         defaults.set(try JSONEncoder().encode(without), forKey: SharedStore.layoutKey)
         XCTAssertEqual(SharedStore.decodeLayout(from: defaults), without)

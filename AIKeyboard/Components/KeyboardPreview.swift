@@ -22,13 +22,8 @@ struct KeyboardPreview: View {
         let document = MockTextTarget(text: seedText)
         _target = StateObject(wrappedValue: document)
         _controller = StateObject(
-            wrappedValue: {
-                let controller = KeyboardController(target: document, language: language)
-                // There is no other keyboard to switch to inside the app, so the globe
-                // key cycles languages only.
-                controller.showsGlobeKey = true
-                return controller
-            }())
+            wrappedValue: KeyboardController(target: document, language: language)
+        )
         self.showsDocument = showsDocument
         self.placeholder = placeholder
         self.seedText = seedText
@@ -65,7 +60,7 @@ struct KeyboardPreview: View {
         HStack(alignment: .top, spacing: 6) {
             SparkleMark(size: 13)
             Text(text)
-                .font(.system(size: 13))
+                .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -79,16 +74,16 @@ struct KeyboardPreview: View {
     private var document: some View {
         ScrollView {
             Text(target.text.isEmpty ? placeholder : target.text)
-                .font(.system(size: 17))
+                .font(Theme.Fonts.body)
                 .foregroundStyle(target.text.isEmpty ? Theme.Text.tertiary : Theme.Text.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(Theme.Space.sm)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                         .fill(Theme.Surface.raised)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                         .strokeBorder(Theme.Brand.solid.opacity(0.35), lineWidth: 1.5)
                 )
                 .padding(Theme.Space.sm)

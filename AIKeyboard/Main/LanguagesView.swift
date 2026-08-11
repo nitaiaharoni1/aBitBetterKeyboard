@@ -14,7 +14,7 @@ struct LanguagesView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Theme.Surface.background.ignoresSafeArea()
+                AmbientBackground(intensity: 0.7)
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.Space.lg) {
@@ -27,11 +27,20 @@ struct LanguagesView: View {
                 }
                 .scrollDismissesKeyboard(.immediately)
             }
-            .navigationTitle("Languages")
+            .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
+                Text("Languages")
+                    .font(Theme.Fonts.display)
+                    .foregroundStyle(Theme.Text.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Theme.Space.md)
+                    .padding(.vertical, Theme.Space.xxs)
+                    .background(Theme.Surface.background.opacity(0.96))
+            }
+            .toolbar(.hidden, for: .navigationBar)
         }
-        .onAppear { setup = .current() }
+        .onAppear { setup = .current(store: store) }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { setup = .current() }
+            if phase == .active { setup = .current(store: store) }
         }
     }
 
@@ -53,7 +62,7 @@ struct LanguagesView: View {
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
                     if store.enabledLanguages.isEmpty {
                         Text("None yet. Turn one on below.")
-                            .font(.system(size: 14))
+                            .font(Theme.Fonts.callout)
                             .foregroundStyle(Theme.Text.secondary)
                     } else {
                         FlowRow(spacing: Theme.Space.xs) {
@@ -63,23 +72,12 @@ struct LanguagesView: View {
                         }
                     }
 
-                    Text(
-                        store.enabledLanguages.count > 1
-                            ? "The globe key cycles these, in this order. A swipe along the space bar does the same."
-                            : "Turn on a second language and the globe key starts cycling between them."
-                    )
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.Text.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                    // The sentence above describes a keyboard that can see this
-                    // list, and without Full Access none of it reaches the
-                    // keyboard at all. Said here as well as in onboarding, because
-                    // this is the screen a user comes back to when the keyboard is
-                    // in the wrong language.
+                    // Without Full Access, none of these choices reaches the
+                    // keyboard. Keep the warning short and only show it while it
+                    // is actionable.
                     if setup.fullAccess != .confirmed {
-                        Text(SetupState.languagesNeedFullAccess)
-                            .font(.system(size: 13))
+                        Text("Full Access is off. Changes here won’t reach the keyboard.")
+                            .font(Theme.Fonts.caption)
                             .foregroundStyle(Theme.Text.tertiary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -93,7 +91,7 @@ struct LanguagesView: View {
             Text(language.flag)
                 .font(.system(size: 13))
             Text(language.nativeName)
-                .font(.system(size: 13, weight: .medium))
+                .font(Theme.Fonts.caption.weight(.medium))
                 .foregroundStyle(Theme.Text.primary)
         }
         .padding(.horizontal, 9)

@@ -181,8 +181,24 @@ extension KeyboardView {
                 // Only the Emoji key changes what it says when the grid opens,
                 // and only it is told. Same shape as `toneAlternates` above.
                 isEmojiOpen: key.cap == .emoji && controller.overlay.isEmoji,
+                // The shipped action row keeps these two familiar controls as
+                // glyphs. A custom placement in another row may use the caption.
+                showsActionCaption: row.id != KeyboardLayout.RowID.cursor
+                    || (key.cap != .emoji && key.cap != .dictation),
+                // Match the action row's labels to every other key. Custom
+                // placements keep their action-specific tint.
+                usesNeutralActionTint: row.id == KeyboardLayout.RowID.cursor,
+                // Which of Reply / Fix / Rewrite / Dictate / Emoji is the thing
+                // currently on screen — soft fill on that key. See
+                // `KeyboardController.isActionKeyActive`.
+                isActionActive: controller.isActionKeyActive(key.cap),
                 onPress: { controller.press($0) },
-                onRepeat: key.cap == .backspace ? { controller.deleteBackward() } : nil,
+                // Through `press` rather than straight to `deleteBackward`, so a
+                // held delete clicks on every repeat the way it buzzes on every
+                // repeat — and so a repeat inside the emoji search box eats the
+                // query rather than the user's message, which the direct call did
+                // not: `consumeForEmojiSearch` is reached from `press` alone.
+                onRepeat: key.cap == .backspace ? { controller.press(.backspace) } : nil,
                 onAlternate: alternateHandler(for: key),
                 onSpaceTouch: key.cap == .space ? { controller.spaceBarTouch($0) } : nil
             )

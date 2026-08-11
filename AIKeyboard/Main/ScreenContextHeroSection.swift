@@ -27,19 +27,33 @@ struct ScreenContextHeroSection: View {
                             ? AnyShapeStyle(Theme.Semantic.record) : AnyShapeStyle(Theme.Brand.gradient))
             }
             .padding(.top, Theme.Space.sm)
+            .animation(Theme.Motion.quick, value: isCapturing)
+
+            if let badge {
+                StatusCapsule(text: badge.text, colour: badge.colour)
+            }
 
             Text(headline)
-                .font(.system(size: 22, weight: .bold))
+                .font(Theme.Fonts.display)
                 .foregroundStyle(Theme.Text.primary)
                 .multilineTextAlignment(.center)
 
             Text(subhead)
-                .font(.system(size: 15))
+                .font(Theme.Fonts.body)
                 .foregroundStyle(Theme.Text.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// The same two badges the home card wears: SAMPLE over the scripted demo,
+    /// LIVE only while a capture session is running. Anything else gets none,
+    /// because a badge over "Not watching anything" would be noise.
+    private var badge: (text: String, colour: Color)? {
+        if session.source == .scripted { return ("SAMPLE", Theme.Text.tertiary) }
+        if isCapturing { return ("LIVE", Theme.Semantic.record) }
+        return nil
     }
 
     private var heroIcon: String {
@@ -77,9 +91,9 @@ struct ScreenContextHeroSection: View {
         case .paused:
             return "iOS paused the broadcast. It usually resumes on its own."
         case .ended(let reason):
-            // Word for word what the keyboard's strip prints, because it is the
-            // same two strings off the same reason.
-            return "\(reason.explanation) \(reason.recovery)"
+            // Word for word what the keyboard's strip and ScreenContextPrompt
+            // print, separated by a newline to match both.
+            return "\(reason.explanation)\n\(reason.recovery)"
         }
     }
 }

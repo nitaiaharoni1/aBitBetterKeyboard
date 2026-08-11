@@ -11,7 +11,8 @@ extension KeyboardLayout {
             KeyRow(
                 id: 1,
                 keys: chars(connectors(for: language))
-                    + [KeySpec(.character(language.currency))] + chars("&@\"")),
+                    + [KeySpec(.character(language.currency))]
+                    + chars("&@\"", alternates: quoteAlternates)),
             KeyRow(
                 id: 2,
                 keys: [KeySpec(.plane(.symbols, label: "#+="), width: .pinned)]
@@ -74,8 +75,30 @@ extension KeyboardLayout {
         case .greek: extras = alternates([";": "?"])
         default: extras = openingMarks[language] ?? [:]
         }
-        return chars(punctuationMarks(for: language), alternates: extras)
+        return chars(
+            punctuationMarks(for: language),
+            alternates: extras.merging(quoteAlternates) { script, quotes in script + quotes })
     }
+
+    /// The curved quotation marks, behind the two straight ones.
+    ///
+    /// **Measured rather than assumed, and the apostrophe is the one that
+    /// matters.** `UIKeyboardNonstopPunctuationCharacters` in each
+    /// `InputMode_<tag>.plist` is Apple's own list of the marks that appear
+    /// *inside* a word, and ten of the languages this keyboard ships — Danish,
+    /// Icelandic, both Norwegians, Portuguese, Romanian, Russian, Swedish,
+    /// Ukrainian, Indonesian — name U+2019 among them. It was reachable on no
+    /// plane, so a word written with the typographic apostrophe could not be
+    /// typed at all. The same key in the Hebrew and Persian files is what
+    /// `hebrewMarks` and `persianHalfSpace` answer.
+    ///
+    /// The guillemets ride on `"` because they are the primary quotation marks
+    /// of Russian, Ukrainian, Persian, Greek, French and Spanish, and iOS offers
+    /// them from the same key. Both entries are safe through `alternates(_:)`:
+    /// every one of these marks is a single `Character`.
+    private static let quoteAlternates: [String: [String]] = alternates([
+        "'": "’‘", "\"": "“”«»"
+    ])
 
     /// The five marks themselves, in the order the numbers plane prints them.
     ///
@@ -99,9 +122,10 @@ extension KeyboardLayout {
 
     // MARK: Bottom row
 
-    /// Sparkle and emoji live in the suggestion bar, so this row stays close to
-    /// the system layout: plane switch, globe, space, dictation, punctuation,
-    /// return.
+    /// Sparkle, emoji and dictation live in the action row, so this row stays
+    /// close to the system layout: plane switch, globe, space, punctuation,
+    /// return. Widths here are what `KeyboardCustomization.default.bottomRow`
+    /// copies — keep the two lists the same shape.
     public static func bottomRow(
         for language: KeyboardLanguage, plane: KeyboardPlane, showsGlobe: Bool
     ) -> KeyRow {
@@ -114,12 +138,12 @@ extension KeyboardLayout {
         var keys: [KeySpec] = [planeKey]
         if showsGlobe { keys.append(KeySpec(.globe, width: .unit(1.0))) }
         keys.append(KeySpec(.space, width: .flexible))
-        keys.append(KeySpec(.dictation, width: .unit(1.0)))
         // On every plane: the numbers plane already draws these five marks one
         // row up, and that is not a reason to move the one key a thumb finds
         // without looking. The ids do not collide — this one is `punctuation`.
         keys.append(punctuationKey(for: language))
-        keys.append(KeySpec(.ret, width: .unit(2.2)))
+        // Match Backspace in the row above. Both are trailing function keys.
+        keys.append(KeySpec(.ret, width: .unit(functionKeyUnits)))
         return KeyRow(id: 3, keys: keys)
     }
 

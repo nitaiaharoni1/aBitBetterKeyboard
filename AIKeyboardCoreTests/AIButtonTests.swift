@@ -100,7 +100,6 @@ final class SparkleReachabilityTests: XCTestCase {
             "the refusal has to say which of the four refusals it is")
     }
 
-
     /// **A refusal must not hide the next one.**
     ///
     /// `runReply`'s secure-field guard is the only place in the module that sets

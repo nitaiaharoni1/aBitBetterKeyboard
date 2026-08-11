@@ -3,37 +3,25 @@ import AIKeyboardCore
 
 // MARK: - Background
 
-/// Two slow-drifting colour blobs behind the content. Enough atmosphere to make
-/// the app feel like a product rather than a settings screen, cheap enough to
-/// leave running.
+/// The flat app surface with a whisper of brand at the top edge. Static on
+/// purpose: the old drifting colour blobs cost a 90pt blur and a repeatForever
+/// animation on every screen, and motion that communicates nothing is noise.
 struct AmbientBackground: View {
     var intensity: Double = 1
 
-    @State private var drift = false
-
     var body: some View {
-        ZStack {
-            Theme.Surface.background
-
-            Circle()
-                .fill(Theme.Brand.start.opacity(0.22 * intensity))
-                .frame(width: 320, height: 320)
-                .blur(radius: 90)
-                .offset(x: drift ? -90 : -130, y: drift ? -220 : -180)
-
-            Circle()
-                .fill(Theme.Brand.end.opacity(0.26 * intensity))
-                .frame(width: 300, height: 300)
-                .blur(radius: 90)
-                .offset(x: drift ? 130 : 90, y: drift ? -60 : -110)
-        }
-        .ignoresSafeArea()
-        .onAppear {
-            withAnimation(.easeInOut(duration: 9).repeatForever(autoreverses: true)) {
-                drift = true
+        Theme.Surface.background
+            .overlay(alignment: .top) {
+                LinearGradient(
+                    colors: [Theme.Brand.solid.opacity(0.05 * intensity), .clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 300)
+                .allowsHitTesting(false)
             }
-        }
-        .accessibilityHidden(true)
+            .ignoresSafeArea()
+            .accessibilityHidden(true)
     }
 }
 

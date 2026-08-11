@@ -46,11 +46,18 @@ public enum KeyboardLayout {
         return max(10, needed.max() ?? 10)
     }
 
-    /// How much of a row is taken by the function keys standing in it. Shift and
-    /// delete both stand on the bottom row, in every language.
+    /// How much of a row is taken by the function keys standing in it.
     private static func stretchUnits(of layout: LetterLayout, row index: Int) -> CGFloat {
-        guard index == 2 else { return 0 }
-        return layout.hasCase ? functionKeyUnits * 2 : functionKeyUnits
+        var units: CGFloat = index == deleteRow(of: layout) ? functionKeyUnits : 0
+        if index == 2, layout.hasCase { units += functionKeyUnits }
+        return units
+    }
+
+    private static func deleteRow(of layout: LetterLayout) -> Int {
+        guard layout.rows.count == 3 else { return 2 }
+        return layout.rows[0].count < layout.rows[1].count
+            && layout.rows[0].count < layout.rows[2].count
+            ? 0 : 2
     }
 
     // MARK: Letter layout model
@@ -158,32 +165,22 @@ public enum KeyboardLayout {
     private static func letters(for language: KeyboardLanguage) -> [KeyRow] {
         guard let layout = letterLayouts[language] else { return letters(for: .english) }
         let columns = CGFloat(columns(for: language, plane: .letters))
+        let deleteRow = deleteRow(of: layout)
 
-        // Shift opens the bottom row when the script has case, and delete closes
-        // that same row in every language. Both take whatever the letters leave;
-        // the inset stops that being a half-row-wide delete key on a layout whose
-        // row is short, as Arabic's seven-letter bottom one is against twelve
-        // columns.
-        //
-        // **Delete stands in the same place in all sixty-four, and that is a
-        // product decision over a fidelity one.** Apple's Hebrew keyboard puts it
-        // at the end of the *top* row — `Bar/layouts/stock/he_IL.png` is the
-        // photograph — but this keyboard changes language on a swipe along the
-        // space bar, so following Apple made delete jump rows mid-sentence under
-        // a thumb that was already reaching for it. Nothing else in the keyboard
-        // moves when the language does; delete does not either.
+        // Delete closes a strictly shortest top row; otherwise it stays on the
+        // bottom row. Hebrew is currently the only layout with that shape.
         return layout.rows.indices.map { index in
             var keys: [KeySpec] = []
             if index == 2, layout.hasCase { keys.append(KeySpec(.shift, width: .pinned)) }
             keys += chars(layout.rows[index], alternates: layout.alternates)
-            if index == 2 { keys.append(KeySpec(.backspace, width: .pinned)) }
+            if index == deleteRow { keys.append(KeySpec(.backspace, width: .pinned)) }
             return KeyRow(
                 id: index,
                 keys: keys,
                 // The delete row carries no side inset: with pinned ends, an
                 // inset only shrinks the letters between them and used to leave
                 // Arabic's delete inland while Hebrew's sat on the edge.
-                sideInsetUnits: index == 2
+                sideInsetUnits: index == deleteRow
                     ? 0
                     : max(0, (columns - CGFloat(layout.rows[index].count)) / 2))
         }

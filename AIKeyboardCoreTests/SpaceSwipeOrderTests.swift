@@ -151,8 +151,7 @@ final class SpaceSwipeOrderTests: XCTestCase {
     }
 
     /// The far end of a long list is reached by repeating the gesture rather than
-    /// by one long sweep, and the globe key steps the same way — so the two agree
-    /// and neither strands a language.
+    /// by one long sweep, so no language is stranded.
     func testEveryEnabledLanguageIsReachableByRepeatingTheSlide() {
         var landed = KeyboardLanguage.english
         var reached: Set<KeyboardLanguage> = [landed]

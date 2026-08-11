@@ -23,7 +23,7 @@ struct SettingsAISection: View {
                     HStack(spacing: Theme.Space.sm) {
                         IconBadge(systemName: "slider.horizontal.3")
                         Text("Default tone")
-                            .font(.system(size: 16))
+                            .font(Theme.Fonts.body)
                             .foregroundStyle(Theme.Text.primary)
                         Spacer()
                         Picker("Default tone", selection: toneChoice) {
@@ -72,14 +72,14 @@ struct SettingsAISection: View {
                 "Short and blunt, no pleasantries",
                 text: Binding(get: { store.customTone }, set: { store.customTone = $0 })
             )
-            .font(.system(size: 15))
+            .font(Theme.Fonts.body)
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .padding(.horizontal, Theme.Space.sm)
             .frame(height: 44)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Theme.Surface.raised)
+                    .fill(Theme.Surface.background)
             )
             .accessibilityIdentifier("row-custom-tone")
             .accessibilityLabel("Your own tone")
@@ -88,7 +88,7 @@ struct SettingsAISection: View {
             // it named the wrong one (a ✦ button nothing draws), and the app
             // target has no test host to catch that. See `ToneSetting.settingsNote`.
             Text(store.toneSetting.settingsNote)
-                .font(.system(size: 12))
+                .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

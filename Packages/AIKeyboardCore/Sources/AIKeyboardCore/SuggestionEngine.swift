@@ -53,10 +53,23 @@ import UIKit
 // Apple exposes no public API for predicting the *next* word from nothing typed
 // — that is QuickType's job, and QuickType is `UIKitCore`-private
 // (`UIDictationController` and its neighbours; there is no public
-// `UITextPredictor` a third-party keyboard can call). `nextWordSuggestions`
-// in `SuggestionEngine+NextWord.swift` is therefore still a small, fixed table,
-// exactly as it was in the mock — see its doc comment for why that is disclosed
-// rather than dressed up.
+// `UITextPredictor` a third-party keyboard can call). So `nextWordSuggestions`
+// is built out of what this keyboard can see for itself: what *this user* writes
+// after a word (`PersonalLanguageModel`), what people generally write after it
+// (`SeedLanguageModel`'s bigrams), and a handful of openers for a field with
+// nothing in it. None of that is a language model and none of it is presented as
+// one. **This paragraph used to end "still a small, fixed table, exactly as it
+// was in the mock", and stayed that way after the table was replaced** — which
+// is the failure mode the rest of this comment block exists to prevent, so it is
+// worth naming.
+//
+// **Two other things this file no longer does alone.** `UITextChecker` has no
+// frequency model, so the ranking it implied was wrong often enough to matter —
+// `helo` completed to `helot` and never to `hello`. `SeedLanguageModel` supplies
+// the missing prior and `SuggestionEngine+Candidates` does the ranking; this file
+// only decides which sources to ask. And Hebrew needed `HebrewMorphology` before
+// any of that could help it, because the language glues its commonest function
+// words to the front of the next one and no dictionary lists the glued forms.
 //
 // **The mock's `codeSwitchVocabulary` list was dropped here and had to come
 // back.** The argument for dropping it was that `en_US`'s own dictionary already
@@ -65,6 +78,10 @@ import UIKit
 // is asked about *prefixes*, every keystroke, and `sta` inside a Hebrew sentence
 // offers `still`, `stay`, `start` while `standup` never appears until all seven
 // letters are typed. See `codeSwitchVocabulary` in SuggestionEngine+Completions.swift.
+//
+// **Everything above is measurable and is measured.** `Bar/typing/harness/run.sh`
+// runs this engine over the 90 frozen moments in `Bar/typing/corpus.json` and
+// `score.py` grades it. Run it before and after any change here.
 public enum SuggestionEngine {
 
     // MARK: Script detection
@@ -170,27 +187,48 @@ public enum SuggestionEngine {
     ///     keyboard session, which is why the app's playground and most tests
     ///     pass only the first half. `KeyboardController.refreshSuggestions`
     ///     joins them.
+    ///   - personal: what this user's own typing has taught the keyboard. Defaults
+    ///     to the shared store; tests and `Bar/typing/harness` pass an empty
+    ///     in-memory one, so a score can never quietly inherit whatever the
+    ///     developer has been typing.
     @MainActor
     public static func suggestions(
         prefix: String,
         context: String,
         languages: [KeyboardLanguage],
-        supplementary: [String] = []
+        supplementary: [String] = [],
+        // Optional rather than defaulted to `.shared`, because a default argument
+        // is evaluated in the *caller's* isolation and `.shared` is main-actor
+        // isolated — which is a warning today and an error under Swift 6.
+        personal personalOrNil: PersonalLanguageModel? = nil
     ) -> [Suggestion] {
+        let personal = personalOrNil ?? .shared
         let trimmedPrefix = prefix.trimmingCharacters(in: .whitespacesAndNewlines)
         let contextLanguage =
             dominantLanguage(in: context, among: languages) ?? languages.first ?? .english
 
         if trimmedPrefix.isEmpty {
-            let results = nextWordSuggestions(context: context, contextLanguage: contextLanguage)
+            let results = nextWordSuggestions(
+                context: context, contextLanguage: contextLanguage, personal: personal)
             // Nothing is being typed, so nothing is at risk of being replaced;
-            // highlight the middle candidate the way the system keyboard does.
-            return markDefault(results, at: min(1, results.count - 1))
+            // bold the middle candidate the way the system keyboard does. The best
+            // guess *is* the middle one — `rank` returns best-first and this moves
+            // it there, rather than boldening whatever landed in the middle.
+            return markDefault(promoteToMiddle(results), at: min(1, results.count - 1))
         }
 
         let typedLanguage = script(of: trimmedPrefix, among: languages) ?? contextLanguage
+        let preceding = previousWords(in: context)
         let results = completions(
-            for: trimmedPrefix, typedLanguage: typedLanguage, supplementary: supplementary,
+            for: trimmedPrefix,
+            previousWords: preceding,
+            typedLanguage: typedLanguage,
+            // The other layout the user has enabled, for the case where every key
+            // was right and the plane was wrong. Nil when they have only one, in
+            // which case there is no other layout they could have been on.
+            otherLanguage: languages.first { $0.script != typedLanguage.script },
+            supplementary: supplementary,
+            personal: personal,
             // Latin letters inside a Hebrew sentence: the one case this product
             // exists for, and the one `UITextChecker` ranks worst. Scoped to
             // Hebrew rather than to "any non-Latin context", because the list was
@@ -199,8 +237,46 @@ public enum SuggestionEngine {
         return markDefault(
             results,
             at: shouldAutocorrect(
-                trimmedPrefix, typedLanguage: typedLanguage, results: results,
-                supplementary: supplementary) ? 1 : 0)
+                trimmedPrefix, previousWords: preceding,
+                typedLanguage: typedLanguage, results: results,
+                supplementary: supplementary, personal: personal) ? 1 : 0)
+    }
+
+    /// The committed words directly before the cursor, in order, at most `limit`
+    /// of them.
+    ///
+    /// **Stops at the end of a sentence, and that is the point of it.** A full
+    /// stop, a question mark or a newline closes the thought, so the words before
+    /// one are not context for the word after it: predicting `much` from
+    /// `Thank you so much. ` would be reading across a boundary the writer just
+    /// drew. Empty means there is nothing to predict *from*, which is a different
+    /// answer from "no prediction" and the callers treat it as one.
+    static func previousWords(in context: String, limit: Int = 2) -> [String] {
+        let trimmed = context.trimmingCharacters(in: .whitespacesAndNewlines)
+        var out: [String] = []
+        for token in trimmed.split(whereSeparator: \.isWhitespace).suffix(limit) {
+            if token.last.map({ ".!?…،؟".contains($0) }) == true {
+                // The boundary is between this token and the next, so everything
+                // gathered so far is on the far side of it.
+                out.removeAll()
+                continue
+            }
+            let word = String(token).trimmingCharacters(in: .punctuationCharacters)
+            if !word.isEmpty { out.append(word) }
+        }
+        return out
+    }
+
+    /// The best candidate moved into slot 1.
+    ///
+    /// Only for the empty-prefix case, where iOS's own convention is that the
+    /// middle slot is both bold and the likeliest word. Mid-word the convention is
+    /// the opposite — slot 0 is what you typed — so this must never run there.
+    private static func promoteToMiddle(_ items: [Suggestion]) -> [Suggestion] {
+        guard items.count >= 2 else { return items }
+        var reordered = items
+        reordered.swapAt(0, 1)
+        return reordered
     }
 
     // MARK: Shared helpers
@@ -240,12 +316,22 @@ public enum SuggestionEngine {
     /// not a stand-in: the system keyboard hardcodes the same class of rule, and
     /// `UITextChecker.guesses` cannot be trusted to fire on a two-letter prefix
     /// like `im`, which this needs to for `I'm` to correct the way users expect.
+    ///
+    /// **`id` was in here and had to come out.** Membership of this table is what
+    /// makes a word get replaced on the space bar, and `id` is an ordinary English
+    /// noun — so `That's a good id` committed as `That's a good I'd`, which is the
+    /// corpus's `nc-02`. The rest of the table has no such reading: nobody types
+    /// `dont` or `havent` meaning anything but the contraction. `I'd` is also the
+    /// rarest expansion in the set, so the trade is a common wrong correction
+    /// against an uncommon missing one. `were` is excluded for the same reason:
+    /// distinguishing it from `we're` would require word-specific context logic
+    /// this deliberately context-free table does not have.
     static let contractions: [String: String] = [
         "dont": "don't", "doesnt": "doesn't", "didnt": "didn't", "cant": "can't",
         "wont": "won't", "isnt": "isn't", "wasnt": "wasn't", "arent": "aren't",
         "werent": "weren't", "couldnt": "couldn't", "shouldnt": "shouldn't",
         "wouldnt": "wouldn't", "hasnt": "hasn't", "havent": "haven't", "hadnt": "hadn't",
-        "im": "I'm", "ive": "I've", "ill": "I'll", "id": "I'd",
+        "im": "I'm", "ive": "I've", "ill": "I'll",
         "youre": "you're", "youve": "you've", "youll": "you'll",
         "theyre": "they're", "theyve": "they've", "thats": "that's",
         "whats": "what's", "hes": "he's", "shes": "she's", "lets": "let's",

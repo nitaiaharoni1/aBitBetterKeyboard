@@ -98,8 +98,8 @@ public enum FrameReduction {
         /// |---|---|---|---|
         /// | 292 pt (before the action row) | 0.3340 | 0/29 | 0/30 |
         /// | 356 pt | 0.4073 | 0/29 | 0/30 |
-        /// | **364 pt (shipping)** | **0.4165** | **0/29** | **0/30** |
-        /// | 368 pt | 0.4210 | 0/29 | 0/30 |
+        /// | 364 pt | 0.4165 | 0/29 | 0/30 |
+        /// | **368 pt (shipping)** | **0.4210** | **0/29** | **0/30** |
         /// | 370 pt | 0.4233 | **1/29** | 0/30 |
         /// | 372 pt | 0.4256 | **1/29** | 0/30 |
         /// | 385 pt | 0.4405 | 1/29 | 0/30 |
@@ -110,14 +110,19 @@ public enum FrameReduction {
         /// `frame-hash.mjs` found at bottom-45%, where 23 of 29 switches are missed
         /// — this is its near edge rather than a second one.
         ///
-        /// So 0.42 is the ceiling (367 pt), the keyboard ships at 364 pt with 6 pt
-        /// of margin below the first failing measurement, and **the height of this
+        /// So the ceiling is the last measured 0-miss total — 368 pt on an
+        /// iPhone 17 Pro (874 pt), as a fraction — and **the height of this
         /// keyboard is now a constraint rather than a preference**: adding a row,
         /// or growing the banner past `Theme.Metrics.bannerHeight`, costs a
         /// conversation switch. `CustomLayoutTests` holds the shipped total under
         /// this; the layout editor can still exceed it, which is the user's choice
         /// to make and degrades only screen context.
-        public static let maximumOwnUI = 0.42
+        ///
+        /// **Not 0.42.** That was 367 pt, one point under the shipping total, so
+        /// `LayoutValidator` warned on the default layout and the crop left 1 pt of
+        /// keyboard inside the band on every read. The sweep's 368 row is the
+        /// number that actually measured clean.
+        public static let maximumOwnUI = 368.0 / 874.0
     }
 
     /// How much of the bottom to remove, given how much of the screen our own

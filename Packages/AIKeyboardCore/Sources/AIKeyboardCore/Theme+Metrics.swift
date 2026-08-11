@@ -8,34 +8,27 @@ extension Theme {
     // Getting these wrong is the fastest way to make a custom keyboard feel cheap.
 
     public enum Metrics {
-        public static let suggestionBarHeight: CGFloat = 46
+        public static let suggestionBarHeight: CGFloat = 36
 
         /// The strip above the suggestion bar: what the keyboard is doing, and the
         /// answer when it has one. See `ActionBanner`.
         ///
-        /// **Constant, and always counted.** It replaced `contextStripHeight`,
-        /// which was added to the total only while a capture session was live —
-        /// so the keyboard changed height when a session started, when it ended,
-        /// and again for every panel that opened over the keys. A strip that
-        /// appears is a keyboard that resizes under the user's thumb mid-sentence,
-        /// and it is also a moving fingerprint band: `KeyboardGeometry
-        /// .ownUIHeightFraction` feeds the crop that decides whether a reading is
-        /// still fresh, and a band that moves mid-read retires the answer the
-        /// user's own tap just paid a cloud call for.
+        /// **Constant while shown, omitted when idle.** The idle instruction is
+        /// gone — the action row is the affordance — so the host height follows
+        /// `BannerState.isPresented`. The fingerprint crop does not: see
+        /// `KeyboardGeometry.ownUIHeightFraction`, which still reports the tallest
+        /// form so a mid-read resize cannot move the band.
         ///
-        /// **48, and the last 8 points were taken back by a measurement rather
-        /// than a preference.** Two lines of 13pt under a label wants 56, and at 56
-        /// the keyboard totals 372 pt — 0.4256 of an iPhone 17 Pro, which is past
-        /// the point where the frame fingerprint stops telling two conversations
-        /// apart. `FrameReduction.Band.maximumOwnUI` carries the swept table; the
-        /// cliff is between 368 and 370 pt and it is sharp. 48 puts the total at
-        /// 364 with 6 points of margin.
+        /// **72, so a title plus three lines of detail fit without an ellipsis.**
+        /// Growing the strip alone would blow past the fingerprint cliff between
+        /// 368 and 370 (`FrameReduction.Band.maximumOwnUI`); the 16 pt comes from
+        /// a 36 pt suggestion bar and 40 pt keys, keeping the total at 368.
         ///
         /// The height of this keyboard is a constraint now, not a taste: another
         /// row, or a taller banner, costs a conversation switch on every screen
         /// read.
-        public static let bannerHeight: CGFloat = 48
-        public static let keyHeight: CGFloat = 42
+        public static let bannerHeight: CGFloat = 72
+        public static let keyHeight: CGFloat = 40
         public static let rowSpacing: CGFloat = 12
         public static let keySpacing: CGFloat = 6
         public static let sideInset: CGFloat = 3
@@ -65,20 +58,31 @@ extension Theme {
                 + topInset + bottomInset
         }
 
-        /// Total height the keyboard extension asks the host app for.
+        /// Tallest height the keyboard can ask the host for, for a given layout.
         ///
-        /// **No conditional term any more.** It used to add the context strip only
-        /// while a capture session was live; the banner that replaced that strip is
-        /// always drawn, so the keyboard is one height for a given layout and
-        /// changes only when the user changes the layout. `KeyboardViewController`
-        /// republishes the constraint from `controller.$customization`, which is
-        /// now the only thing that can move it.
+        /// **Always includes the banner.** The fingerprint crop and the layout
+        /// editor's "this costs screen context" warning both need the ceiling, not
+        /// the current form — see `KeyboardGeometry.ownUIHeightFraction`. The
+        /// extension asks the host for the live height via
+        /// `totalHeight(for:showsBanner:)`.
         public static func totalHeight() -> CGFloat {
             totalHeight(for: .default)
         }
 
         public static func totalHeight(for layout: KeyboardCustomization) -> CGFloat {
-            bannerHeight + suggestionBarHeight + keyAreaHeight(for: layout)
+            totalHeight(for: layout, showsBanner: true)
+        }
+
+        /// Height the keyboard extension asks the host app for right now.
+        ///
+        /// The banner is omitted while idle (`showsBanner: false`), so ordinary
+        /// typing is `bannerHeight` shorter. Presence still follows the strip
+        /// rather than the capture session alone — a Fix answer and a live reading
+        /// both show it, and the idle instruction does not.
+        public static func totalHeight(
+            for layout: KeyboardCustomization, showsBanner: Bool
+        ) -> CGFloat {
+            (showsBanner ? bannerHeight : 0) + suggestionBarHeight + keyAreaHeight(for: layout)
         }
 
         /// Apple's minimum comfortable target. Anything smaller gets mistapped.

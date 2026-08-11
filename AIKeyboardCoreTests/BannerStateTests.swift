@@ -179,6 +179,63 @@ final class BannerStateTests: XCTestCase {
         XCTAssertEqual(resolve(idleHint: "Screen context is paused"), .hint("Screen context is paused"))
     }
 
+    /// **The idle instruction does not earn a row.** A version that kept the
+    /// banner up for `.hint` would still spend 48 pt teaching the user what the
+    /// action row already says by existing.
+    func testTheIdleHintDoesNotPresentTheBanner() {
+        XCTAssertFalse(resolve().isPresented)
+        XCTAssertTrue(resolve(isWorking: true, runningAction: .fix).isPresented)
+        XCTAssertTrue(resolve(runningAction: .rewrite, options: [reply]).isPresented)
+        XCTAssertTrue(resolve(runningAction: .fix, error: .refused).isPresented)
+        XCTAssertTrue(resolve(isDictating: true).isPresented)
+        XCTAssertTrue(resolve(block: noSession).isPresented)
+        XCTAssertTrue(
+            resolve(
+                dictationIsLive: true,
+                dictationFailure: "No speech"
+            ).isPresented)
+        let context = ScreenContext(
+            appName: "", appIcon: "", sender: "Dani", message: "when?", language: .hebrew)
+        XCTAssertTrue(resolve(screenContext: context).isPresented)
+    }
+
+    /// The action-row highlight names the action the banner is reporting, and a
+    /// live reading lights nothing — it is not something the user started.
+    func testTheActiveActionKeyMatchesWhatTheBannerIsReporting() {
+        XCTAssertEqual(
+            resolve(isWorking: true, runningAction: .reply).activeActionKey, .ai(.reply))
+        XCTAssertEqual(
+            resolve(runningAction: .rewrite, options: [reply]).activeActionKey,
+            .ai(.rewrite))
+        XCTAssertEqual(
+            resolve(runningAction: .fix, error: .refused).activeActionKey,
+            .ai(.fix))
+        XCTAssertEqual(
+            resolve(isWorking: true, runningAction: .tone).activeActionKey,
+            .ai(.tone))
+        XCTAssertEqual(
+            resolve(isDictating: true).activeActionKey, .dictation)
+        XCTAssertEqual(
+            resolve(block: noSession).activeActionKey, .ai(.reply))
+        let noDictationSession = BannerState.Block(
+            action: nil,
+            title: "Dictation is not ready",
+            detail: "Start a session in the app.",
+            remedy: .none)
+        XCTAssertEqual(
+            resolve(block: noDictationSession).activeActionKey, .dictation)
+        XCTAssertEqual(
+            resolve(
+                dictationIsLive: true,
+                dictationFailure: "No speech"
+            ).activeActionKey,
+            .dictation)
+        XCTAssertNil(resolve().activeActionKey)
+        let context = ScreenContext(
+            appName: "", appIcon: "", sender: "Dani", message: "when?", language: .hebrew)
+        XCTAssertNil(resolve(screenContext: context).activeActionKey)
+    }
+
     /// An index left over from an action with more answers must not read past the
     /// end of a shorter one.
     func testTheIndexIsClampedToTheOptionsItHas() {

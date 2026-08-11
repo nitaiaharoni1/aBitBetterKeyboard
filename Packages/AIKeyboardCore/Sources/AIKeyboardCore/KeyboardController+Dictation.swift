@@ -5,13 +5,6 @@ extension KeyboardController {
     // MARK: Dictation
 
     public func startDictation() {
-        // **A dead end the user has to be walked out of by hand, said in the strip.**
-        // Nothing in a keyboard extension can start a recording session or launch
-        // its own app — `UIApplication` is unavailable there and the responder-chain
-        // `openURL` workaround is disallowed — so this names the app, the screen and
-        // the button, and offers no button of its own because there is none to
-        // offer. See `.claude/rules/dictation.md`.
-        //
         // **These three resets are above the guard, not below it, and that is not
         // tidiness.** They used to run unconditionally, before the availability
         // check opened the panel; putting the check first left the no-session tap
@@ -44,12 +37,22 @@ extension KeyboardController {
         dictation.refresh()
 
         guard dictation.availability.isLive else {
+            let remedy = dictationRefusalRemedy
             refuse(
                 .init(
                     action: nil,
                     title: dictationRefusalTitle,
                     detail: dictationRefusalDetail,
-                    remedy: .none))
+                    remedy: remedy))
+            // For `.noSession`: record the handoff intent so the app can pick it
+            // up on cold launch, then immediately ask the host to open the app.
+            // The banner's `Link` also records on tap via the same helper so a
+            // user who waits longer than 30 seconds before tapping it still
+            // lands a fresh request.
+            if case .openApp(let url) = remedy {
+                recordDictationHandoff()
+                onOpenContainingApp?(url)
+            }
             return
         }
 
@@ -68,11 +71,11 @@ extension KeyboardController {
         }
     }
 
-    /// The two states that are not a recording, in the words the deleted panel used.
+    /// The two states that are not a recording, in the words the strip prints.
     private var dictationRefusalTitle: String {
         switch dictation.availability {
-        case .needsFullAccess: return "Dictation needs Full Access"
-        default: return "No dictation session"
+        case .needsFullAccess: return "Needs Full Access"
+        default: return "Dictation isn't running"
         }
     }
 
@@ -80,16 +83,40 @@ extension KeyboardController {
         switch dictation.availability {
         case .needsFullAccess:
             return
-                "Recording happens in the AI Keyboard app and the words come back here, which needs Full Access. Settings › General › Keyboard › Keyboards."
+                "Dictation records in the app.\nTurn on Full Access in Settings › General › Keyboard › Keyboards."
         case .noSession(let reason):
             // The reason only prints when it is news. "Nobody has started one" and
             // "you stopped it" are the ordinary states, and narrating them would
             // make the sentence longer without making it more useful.
-            let why = reason == .notEnded || reason == .stoppedByUser ? "" : reason.explanation + " "
-            return "\(why)Open AI Keyboard, tap Start dictation, then come back."
+            let why =
+                reason == .notEnded || reason == .stoppedByUser ? "" : reason.explanation + "\n"
+            return
+                "\(why)Dictation starts automatically in AI Keyboard — swipe back to continue."
         default:
             return ""
         }
+    }
+
+    /// What the banner trailing chip offers for this refusal.
+    ///
+    /// `.needsFullAccess` cannot be fixed from here — the user has to go to
+    /// Settings, which no extension can open. `.noSession` can be handed off to
+    /// the containing app via the deep link the banner button triggers.
+    private var dictationRefusalRemedy: BannerState.Block.Remedy {
+        switch dictation.availability {
+        case .needsFullAccess: return .none
+        default: return .openApp(SharedStore.dictationStartURL)
+        }
+    }
+
+    /// Writes a fresh timestamped handoff request to the shared store.
+    ///
+    /// Called from the initial no-session tap and from the banner `Link`'s
+    /// simultaneous gesture so a user who waits longer than 30 seconds before
+    /// tapping the fallback button still lands a fresh request for the app to
+    /// consume on cold launch.
+    func recordDictationHandoff() {
+        store.recordDictationHandoff()
     }
 
     public func stopDictation(insert: Bool) {

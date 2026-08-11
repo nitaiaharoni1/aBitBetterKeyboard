@@ -106,16 +106,12 @@ public struct SuggestionBar: View {
             // word is already written in its own script, so the tag repeats what
             // the letters say and costs the room they are read in.
             Text(suggestion.text)
-                .font(.system(size: 17, weight: .light))
+                .font(.system(size: 17, weight: suggestion.isDefault ? .bold : .light))
                 .foregroundStyle(Theme.Keys.label)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .padding(.horizontal, Theme.Space.xxs)
                 .frame(maxWidth: .infinity, minHeight: 36)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
-                        .fill(suggestion.isDefault ? Theme.Keys.letter.opacity(0.9) : .clear)
-                )
                 .contentShape(Rectangle())
         }
         .pressable(scale: 0.94)

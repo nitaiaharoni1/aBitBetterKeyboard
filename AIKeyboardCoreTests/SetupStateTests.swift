@@ -16,10 +16,12 @@ final class SetupStateTests: XCTestCase {
     private func state(
         _ presence: KeyboardPresence?, age: UInt64 = 0,
         microphone: MicrophonePermission = .undetermined,
-        cloudConfigured: Bool = false
+        cloudConfigured: Bool = false,
+        switchAcknowledged: Bool = false
     ) -> SetupState {
         SetupState(
             presence: presence, microphone: microphone, cloudConfigured: cloudConfigured,
+            switchAcknowledged: switchAcknowledged,
             now: start + age, bootIdentity: thisBoot)
     }
 
@@ -220,6 +222,38 @@ final class SetupStateTests: XCTestCase {
         XCTAssertEqual(setup.microphoneAccess, .blocked)
         XCTAssertEqual(setup.requirementCount, 2)
         XCTAssertTrue(setup.isReady)
+    }
+
+    // MARK: The globe switch
+
+    /// The app cannot measure which keyboard is on screen, so this row is the one
+    /// self-reported answer on the card: it ticks when the user confirms and shows
+    /// a question mark until then. It must never render `.blocked` — the app has
+    /// no way to know the user has *not* switched — and never hold the card below
+    /// ready, because it is not a fact the app can check.
+    func testTheGlobeSwitchIsSelfReportedAndNeverBlocksReadiness() {
+        let unconfirmed = state(confirmed())
+        XCTAssertEqual(unconfirmed.keyboardSwitched, .unknown)
+        XCTAssertTrue(unconfirmed.isReady)
+        XCTAssertEqual(unconfirmed.confirmedRequirements, 2)
+
+        let acknowledged = state(confirmed(), switchAcknowledged: true)
+        XCTAssertEqual(acknowledged.keyboardSwitched, .confirmed)
+        XCTAssertEqual(acknowledged.requirementCount, 2)
+        XCTAssertEqual(acknowledged.confirmedRequirements, 2)
+    }
+
+    /// Until the user confirms, the row's job is to name the gesture. A detail
+    /// that just said "not confirmed" would leave the user staring at a question
+    /// mark with no idea what it is asking for.
+    func testTheGlobeSwitchDetailNamesTheGesture() {
+        let detail = state(nil).keyboardSwitchedDetail
+        XCTAssertTrue(
+            detail.localizedCaseInsensitiveContains("globe"),
+            "the unconfirmed state never says what to do: \(detail)")
+        XCTAssertTrue(
+            detail.contains("AI Keyboard"),
+            "and never says which keyboard to pick: \(detail)")
     }
 
     // MARK: The cloud model

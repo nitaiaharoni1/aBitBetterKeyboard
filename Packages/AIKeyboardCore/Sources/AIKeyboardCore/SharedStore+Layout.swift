@@ -38,11 +38,36 @@ extension SharedStore {
             log.error("stored keyboard layout could not be decoded, falling back to the default")
             return .default
         }
-        guard LayoutValidator.isUsable(decoded, showsGlobe: false) else {
+        // A named preset stores its identity, not a permanent snapshot of an old
+        // build. Reload the current definition so fixes to shipped key widths
+        // reach existing installs. Edited layouts clear `preset` and remain
+        // untouched.
+        if let preset = decoded.preset, let current = LayoutPreset.named(preset) {
+            return current.customization
+        }
+        var migrated = decoded
+        let slots =
+            migrated.barLeading + migrated.barTrailing + migrated.bottomRow + migrated.cursorRow
+        if !slots.contains(where: { $0.action == .settings }) {
+            migrated.barLeading = replacingInternalGlobe(in: migrated.barLeading)
+            migrated.barTrailing = replacingInternalGlobe(in: migrated.barTrailing)
+            migrated.bottomRow = replacingInternalGlobe(in: migrated.bottomRow)
+            migrated.cursorRow = replacingInternalGlobe(in: migrated.cursorRow)
+        }
+        guard LayoutValidator.isUsable(migrated, showsGlobe: false) else {
             log.error("stored keyboard layout is not usable, falling back to the default")
             return .default
         }
-        return decoded
+        return migrated
+    }
+
+    private static func replacingInternalGlobe(in slots: [SlotSpec]) -> [SlotSpec] {
+        slots.map { slot in
+            guard slot.action == .globe else { return slot }
+            var migrated = slot
+            migrated.action = .settings
+            return migrated
+        }
     }
 
     func writeLayout(_ layout: KeyboardCustomization) {

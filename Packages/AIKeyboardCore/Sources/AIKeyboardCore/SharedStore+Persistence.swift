@@ -10,10 +10,12 @@ extension SharedStore {
         for key in [
             Key.hasCompletedOnboarding, Key.enabledLanguages, Key.autocorrect,
             Key.autocapitalise, Key.predictions, Key.haptics, Key.keySounds,
+            Key.learnsFromTyping,
             Key.defaultTone, Key.customToneInstruction, Key.dictationSessionMinutes,
             Key.prefersCustomTone, Key.personalDictionary,
             Key.isSubscribed, Key.screenContextAllowed, Key.keyboardLayout,
-            Key.recentEmoji
+            Key.recentEmoji, Key.hasAcknowledgedKeyboardSwitch,
+            Key.dictationHandoffRequest
             // Deliberately not `cloudBackendURL` or `cloudBackendToken`. A UI test
             // run would otherwise wipe the backend whoever is developing this
             // typed in, and it is the one setting here that cannot be recovered by
@@ -22,14 +24,16 @@ extension SharedStore {
             defaults.removeObject(forKey: key)
         }
         hasCompletedOnboarding = false
+        hasAcknowledgedKeyboardSwitch = false
         enabledLanguages = Self.shippedDefaultLanguages
         autocorrect = true
         autocapitalise = true
         predictions = true
+        learnsFromTyping = true
         haptics = true
         keySounds = true
         defaultTone = .clearer
-        dictationSessionMinutes = 15
+        dictationSessionMinutes = 5
         personalDictionary = Self.shippedPersonalDictionary
         recentEmoji = Self.shippedRecentEmoji
         isSubscribed = false
@@ -49,6 +53,9 @@ extension SharedStore {
         if defaults.object(forKey: Key.hasCompletedOnboarding) != nil {
             hasCompletedOnboarding = defaults.bool(forKey: Key.hasCompletedOnboarding)
         }
+        if defaults.object(forKey: Key.hasAcknowledgedKeyboardSwitch) != nil {
+            hasAcknowledgedKeyboardSwitch = defaults.bool(forKey: Key.hasAcknowledgedKeyboardSwitch)
+        }
         if let raw = defaults.array(forKey: Key.enabledLanguages) as? [String] {
             let parsed = raw.compactMap(KeyboardLanguage.init(rawValue:))
             if !parsed.isEmpty { enabledLanguages = parsed }
@@ -61,6 +68,9 @@ extension SharedStore {
         }
         if defaults.object(forKey: Key.predictions) != nil {
             predictions = defaults.bool(forKey: Key.predictions)
+        }
+        if defaults.object(forKey: Key.learnsFromTyping) != nil {
+            learnsFromTyping = defaults.bool(forKey: Key.learnsFromTyping)
         }
         if defaults.object(forKey: Key.haptics) != nil { haptics = defaults.bool(forKey: Key.haptics) }
         if defaults.object(forKey: Key.keySounds) != nil { keySounds = defaults.bool(forKey: Key.keySounds) }

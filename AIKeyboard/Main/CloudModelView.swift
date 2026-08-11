@@ -30,7 +30,7 @@ import SwiftUI
 struct CloudModelView: View {
     var body: some View {
         ZStack {
-            Theme.Surface.background.ignoresSafeArea()
+            AmbientBackground(intensity: 0.5)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Space.lg) {

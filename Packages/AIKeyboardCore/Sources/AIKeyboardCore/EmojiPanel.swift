@@ -74,7 +74,9 @@ public struct EmojiPanel: View {
                     // the category's own id, so `scrollTo("Food")` addressed
                     // nothing and every tab was silently dead.
                     onSelect: { scrollTarget = Self.anchorID(forCategory: $0) },
-                    onDelete: { controller.deleteBackward() }
+                    // `press` rather than `deleteBackward`, for the sound: this is
+                    // a key the user pressed, and only `press` speaks for one.
+                    onDelete: { controller.press(.backspace) }
                 )
             }
         }

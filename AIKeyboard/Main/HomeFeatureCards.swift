@@ -3,9 +3,11 @@ import SwiftUI
 
 // MARK: - HomeFeatureCard
 
-/// Shared shell for the large feature cards on the home screen (Screen Context,
-/// Dictation). Handles the 38pt icon tile (red when active, brand gradient when
-/// idle), title + optional status capsule, detail text, and chevron.
+/// Shared shell for one feature row in the home screen's grouped features card
+/// (Screen Context, Dictation). Handles the 38pt icon tile (red when active,
+/// brand soft gradient when idle, both AI moments), title + optional status
+/// capsule, detail text, and chevron. The grouping card itself lives in
+/// `HomeView`, so rows sit flush against each other with a hairline between.
 private struct HomeFeatureCard<Destination: View>: View {
     let icon: String
     let activeIcon: String
@@ -20,49 +22,49 @@ private struct HomeFeatureCard<Destination: View>: View {
         NavigationLink {
             destination()
         } label: {
-            Card {
-                HStack(spacing: Theme.Space.sm) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .fill(
-                                isActive
-                                    ? AnyShapeStyle(Theme.Semantic.record.opacity(0.14))
-                                    : AnyShapeStyle(Theme.Brand.softGradient)
-                            )
-                            .frame(width: 38, height: 38)
+            HStack(spacing: Theme.Space.sm) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(
+                            isActive
+                                ? AnyShapeStyle(Theme.Semantic.record.opacity(0.14))
+                                : AnyShapeStyle(Theme.Brand.softGradient)
+                        )
+                        .frame(width: 38, height: 38)
 
-                        Image(systemName: isActive ? activeIcon : icon)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(
-                                isActive
-                                    ? AnyShapeStyle(Theme.Semantic.record)
-                                    : AnyShapeStyle(Theme.Brand.gradient))
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 5) {
-                            Text(title)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(Theme.Text.primary)
-
-                            if let badge {
-                                StatusCapsule(text: badge.text, colour: badge.colour)
-                            }
-                        }
-
-                        Text(detail)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.Text.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer(minLength: 0)
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.Text.tertiary)
+                    Image(systemName: isActive ? activeIcon : icon)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(
+                            isActive
+                                ? AnyShapeStyle(Theme.Semantic.record)
+                                : AnyShapeStyle(Theme.Brand.gradient))
                 }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: Theme.Space.xxs) {
+                        Text(title)
+                            .font(Theme.Fonts.headline)
+                            .foregroundStyle(Theme.Text.primary)
+
+                        if let badge {
+                            StatusCapsule(text: badge.text, colour: badge.colour)
+                        }
+                    }
+
+                    Text(detail)
+                        .font(Theme.Fonts.callout)
+                        .foregroundStyle(Theme.Text.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.Text.tertiary)
             }
+            .padding(.vertical, Theme.Space.xs)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(accessibilityID)

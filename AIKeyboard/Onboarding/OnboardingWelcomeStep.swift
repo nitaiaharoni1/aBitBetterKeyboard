@@ -10,19 +10,23 @@ struct WelcomeStep: View {
             subtitle:
                 "Hebrew and English in the same sentence, fixed and rewritten without leaving the app you are in."
         ) {
-            VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                ValuePoint(
+            hero
+                .opacity(appeared ? 1 : 0)
+                .scaleEffect(appeared ? 1 : 0.92)
+
+            VStack(alignment: .leading, spacing: Theme.Space.lg) {
+                InfoRow(
                     icon: "character.cursor.ibeam",
                     title: "Types in both languages at once",
                     detail:
                         "Predictions understand ‏אני אשלח לך את ה-document‏ without switching layouts."
                 )
-                ValuePoint(
+                InfoRow(
                     icon: "sparkles",
                     title: "Fix and rewrite in one tap",
                     detail: "Small edits on the text in front of you, not a chatbot to talk to."
                 )
-                ValuePoint(
+                InfoRow(
                     icon: "eye",
                     title: "Replies that read the room",
                     detail:
@@ -36,7 +40,7 @@ struct WelcomeStep: View {
                 // either language alone, so mid-sentence switching is the thing it
                 // is *worst* at. The line stays out until that number says
                 // otherwise.
-                ValuePoint(
+                InfoRow(
                     icon: "globe",
                     title: "Sixty-four keyboards, one swipe apart",
                     detail:
@@ -45,39 +49,54 @@ struct WelcomeStep: View {
             }
             .opacity(appeared ? 1 : 0)
             .offset(y: appeared ? 0 : 12)
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.45).delay(0.1)) { appeared = true }
-            }
+        }
+        .onAppear {
+            withAnimation(Theme.Motion.quick.delay(0.1)) { appeared = true }
         }
     }
-}
 
-struct ValuePoint: View {
-    let icon: String
-    let title: String
-    let detail: String
+    /// The brand mark over the two scripts the keyboard is for. A picture
+    /// rather than a fifth bullet: the four rows below carry the specifics,
+    /// this carries the reason to read them. It is also the one place the
+    /// brand gradient appears in onboarding — the product-identity moment
+    /// every other step stays flat to protect.
+    private var hero: some View {
+        HStack {
+            Spacer()
+            ZStack {
+                Circle()
+                    .fill(Theme.Brand.softGradient)
+                    .frame(width: 148, height: 148)
 
-    var body: some View {
-        HStack(alignment: .top, spacing: Theme.Space.sm) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(Theme.Brand.gradient)
-                .frame(width: 34, height: 34)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Theme.Brand.softGradient)
-                )
+                Circle()
+                    .fill(Theme.Brand.gradient)
+                    .frame(width: 96, height: 96)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 16, weight: .semibold))
+                // Not `SparkleMark`: that component always draws the brand
+                // gradient, which would be invisible over the same gradient.
+                Image(systemName: "sparkles")
+                    .font(.system(size: 36, weight: .medium))
+                    .foregroundStyle(Theme.Text.onBrand)
+
+                Text("א")
+                    .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(Theme.Text.primary)
-                Text(detail)
-                    .font(.system(size: 14))
-                    .foregroundStyle(Theme.Text.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Theme.Surface.raised))
+                    .overlay(Circle().strokeBorder(Theme.Surface.separator, lineWidth: 1))
+                    .offset(x: -58, y: -34)
+
+                Text("A")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(Theme.Text.primary)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Theme.Surface.raised))
+                    .overlay(Circle().strokeBorder(Theme.Surface.separator, lineWidth: 1))
+                    .offset(x: 58, y: 34)
             }
+            Spacer()
         }
-        .accessibilityElement(children: .combine)
+        .padding(.vertical, Theme.Space.xs)
+        .accessibilityHidden(true)
     }
 }

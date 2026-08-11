@@ -163,7 +163,11 @@ public struct CloudIntelligence: TextIntelligence {
         )
     }
 
-    private func run(
+    /// Internal rather than private since `CloudIntelligence+Prediction` became
+    /// the second caller. Everything a request needs to be correct — the Full
+    /// Access check, the transport, the field ordering — lives in here, so a
+    /// caller reaching around it would be reimplementing all three.
+    func run(
         instructions: String,
         prompt: String,
         fields: [CloudField]

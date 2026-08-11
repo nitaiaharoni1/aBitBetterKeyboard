@@ -19,10 +19,9 @@ struct HomeView: View {
                 AmbientBackground(intensity: 0.7)
 
                 ScrollView {
-                    VStack(spacing: Theme.Space.md) {
-                        HomeScreenContextCard()
-                        HomeDictationCard()
-                        setupCard
+                    VStack(spacing: Theme.Space.lg) {
+                        if !setup.isReady { setupCard }
+                        featureCard
                         playgroundCard
                         if !store.isSubscribed { upgradeCard }
                     }
@@ -30,8 +29,16 @@ struct HomeView: View {
                     .padding(.bottom, Theme.Space.xl)
                 }
             }
-            .navigationTitle("AI Keyboard")
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
+                Text("AI Keyboard")
+                    .font(Theme.Fonts.display)
+                    .foregroundStyle(Theme.Text.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Theme.Space.md)
+                    .padding(.vertical, Theme.Space.xxs)
+                    .background(Theme.Surface.background.opacity(0.96))
+            }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showsPlayground) {
                 PlaygroundView()
             }
@@ -40,9 +47,23 @@ struct HomeView: View {
         // user leaves for Settings, or types on the keyboard in another app —
         // and neither sends a notification, so the answer is re-read every time
         // this screen comes back rather than cached at launch.
-        .onAppear { setup = .current() }
+        .onAppear { setup = .current(store: store) }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { setup = .current() }
+            if phase == .active { setup = .current(store: store) }
+        }
+    }
+
+    // MARK: Features
+
+    /// The two AI features share one card with a hairline between the rows:
+    /// two separate cards read as clutter above the setup checklist.
+    private var featureCard: some View {
+        Card {
+            VStack(spacing: 0) {
+                HomeScreenContextCard()
+                Divider.themed
+                HomeDictationCard()
+            }
         }
     }
 
@@ -52,65 +73,47 @@ struct HomeView: View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
                 HStack(spacing: Theme.Space.xs) {
-                    Text(setup.isReady ? "Ready to type" : "Almost there")
-                        .font(.system(size: 18, weight: .semibold))
+                    Text("Finish setup")
+                        .font(Theme.Fonts.title)
                         .foregroundStyle(Theme.Text.primary)
 
                     Spacer()
 
                     Text("\(setup.confirmedRequirements)/\(setup.requirementCount)")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(setup.isReady ? Theme.Semantic.success : Theme.Text.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
+                        .font(Theme.Fonts.caption.weight(.semibold))
+                        .foregroundStyle(Theme.Text.secondary)
+                        .padding(.horizontal, Theme.Space.xs)
+                        .padding(.vertical, Theme.Space.xxs)
                         .background(
-                            Capsule().fill(
-                                (setup.isReady ? Theme.Semantic.success : Theme.Text.secondary)
-                                    .opacity(0.14)
-                            )
+                            Capsule().fill(Theme.Text.secondary.opacity(0.14))
                         )
                 }
 
-                Divider().overlay(Theme.Surface.separator)
+                Divider.themed
 
-                StatusRow(
-                    title: "Keyboard added",
-                    detail: setup.keyboardAddedDetail,
-                    check: setup.keyboardAdded,
-                    action: openSettings
-                )
-                StatusRow(
-                    title: "Full Access",
-                    detail: setup.fullAccessDetail,
-                    check: setup.fullAccess,
-                    action: openSettings
-                )
-
-                if let explanation = setup.unresolvedExplanation {
-                    Text(explanation)
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.Text.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
+                if setup.keyboardAdded != .confirmed {
+                    StatusRow(
+                        title: "Add AI Keyboard",
+                        detail: setup.keyboardAddedDetail,
+                        check: setup.keyboardAdded
+                    )
                 }
 
-                Divider().overlay(Theme.Surface.separator)
+                if setup.fullAccess != .confirmed {
+                    StatusRow(
+                        title: "Allow Full Access",
+                        detail: "Settings › General › Keyboard › Keyboards › AI Keyboard",
+                        check: setup.fullAccess
+                    )
+                }
 
-                // Under its own heading because it is not one of the two the
-                // badge counts, and a row that looks like a step but is not
-                // counted would make the badge look wrong.
-                SectionHeader(title: "For dictation")
-
-                StatusRow(
-                    title: "Microphone",
-                    detail: setup.microphoneDetail,
-                    check: setup.microphoneAccess,
-                    // Nothing has asked iOS for the microphone yet, and Settings
-                    // shows no switch for a permission that was never requested,
-                    // so an untouched microphone gets no button to press.
-                    action: setup.microphoneAccess == .blocked ? openSettings : nil
-                )
+                PrimaryButton(title: "Open Settings", icon: "gearshape") {
+                    openSettings()
+                }
             }
         }
+        .accessibilityIdentifier("setup-globe-switch")
+        .accessibilityLabel("Switched via the globe key, \(setup.keyboardSwitchedDetail)")
     }
 
     // MARK: Playground
@@ -120,13 +123,13 @@ struct HomeView: View {
             showsPlayground = true
         } label: {
             HStack(spacing: Theme.Space.md) {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text("Try the keyboard")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(Theme.Text.onBrand)
+                        .font(Theme.Fonts.title)
+                        .foregroundStyle(Theme.Text.primary)
                     Text("Type here without leaving the app")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Theme.Text.onBrand.opacity(0.85))
+                        .font(Theme.Fonts.callout)
+                        .foregroundStyle(Theme.Text.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -134,14 +137,18 @@ struct HomeView: View {
 
                 Image(systemName: "arrow.right")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Theme.Text.onBrand)
+                    .foregroundStyle(Theme.Brand.solid)
                     .frame(width: 38, height: 38)
-                    .background(Circle().fill(Color.white.opacity(0.2)))
+                    .background(Circle().fill(Theme.Brand.solid.opacity(0.12)))
             }
             .padding(Theme.Space.md)
             .background(
                 RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                    .fill(Theme.Brand.gradient)
+                    .fill(Theme.Surface.raised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                    .strokeBorder(Theme.Surface.separator, lineWidth: 1)
             )
             .contentShape(Rectangle())
         }
@@ -157,13 +164,13 @@ struct HomeView: View {
         } label: {
             Card {
                 HStack(alignment: .top, spacing: Theme.Space.sm) {
-                    SparkleMark(size: 20)
+                    IconBadge(systemName: "sparkles")
                     VStack(alignment: .leading, spacing: 3) {
                         Text("AI Keyboard Pro")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(Theme.Fonts.headline)
                             .foregroundStyle(Theme.Text.primary)
                         Text("A mock paywall. Nothing in this build is gated, for anyone.")
-                            .font(.system(size: 14))
+                            .font(Theme.Fonts.callout)
                             .foregroundStyle(Theme.Text.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }

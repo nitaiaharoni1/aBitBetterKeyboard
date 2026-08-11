@@ -71,16 +71,30 @@ public struct SetupState: Equatable, Sendable {
     /// rather than read on demand for the reason `now` is.
     public var cloudConfigured: Bool
 
+    /// Whether the user has confirmed, in the app, that they switched to AI
+    /// Keyboard with the globe key.
+    ///
+    /// **Self-reported, unlike everything else in this type.** iOS gives the
+    /// containing app no way to learn which keyboard is on screen in another
+    /// process, so the closest measurable signal is `KeyboardPresence` — the
+    /// keyboard ran at all — and this flag is the user's own answer to the one
+    /// question presence cannot ask. It rides along here so Home and onboarding
+    /// render one list of rows from one value, and it is deliberately *not* one
+    /// of the counted requirements: the two measured steps decide readiness.
+    public var switchAcknowledged: Bool
+
     public init(
         presence: KeyboardPresence? = nil,
         microphone: MicrophonePermission = .undetermined,
         cloudConfigured: Bool = false,
+        switchAcknowledged: Bool = false,
         now: UInt64 = CaptureClock.now(),
         bootIdentity: UInt64 = KeyboardPresence.bootIdentity
     ) {
         self.presence = presence
         self.microphone = microphone
         self.cloudConfigured = cloudConfigured
+        self.switchAcknowledged = switchAcknowledged
         self.now = now
         self.bootIdentity = bootIdentity
     }
@@ -129,6 +143,19 @@ public struct SetupState: Equatable, Sendable {
         keyboardAdded == .confirmed
             ? "Available in every app"
             : "Settings › General › Keyboard › Keyboards › Add New Keyboard"
+    }
+
+    /// The globe-key switch, as a check. `unknown`, never `blocked`: the app has
+    /// no way to know the user has *not* done it, only that they have not said
+    /// they did — and an unticked box is not an accusation.
+    public var keyboardSwitched: SetupCheck {
+        switchAcknowledged ? .confirmed : .unknown
+    }
+
+    public var keyboardSwitchedDetail: String {
+        switchAcknowledged
+            ? "Confirmed — you switched with the globe key"
+            : "Tap the globe key in any app and choose AI Keyboard"
     }
 
     /// **Only claims the cloud when there is one.** This read "On — cloud rewrites

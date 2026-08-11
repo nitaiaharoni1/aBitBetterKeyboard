@@ -4,79 +4,95 @@ extension SuggestionEngine {
 
     // MARK: Prediction of the next word
     //
-    // Next-word-suggestions is the case documented at the top of the main file
-    // as genuinely unavailable: no public on-device API predicts a word from
-    // nothing typed. This table is deliberately small — the handful of openers
-    // a chat keyboard sees constantly — and is disclosed as a table, not
-    // presented as prediction.
+    // No public on-device API predicts a word from nothing typed — that is
+    // QuickType's job and QuickType is `UIKitCore`-private. So this is built out
+    // of three things the keyboard *can* see, asked in order of how much they
+    // know about the person holding it:
+    //
+    //   1. what this user writes after this word,
+    //   2. what people generally write after this word,
+    //   3. the openers a message starts with.
+    //
+    // The third used to be the whole mechanism. A 26-key table answered `i` and
+    // `to` and `אני`, and every other sentence in both languages fell through to
+    // the same three words — which is why the corpus caught the bar showing
+    // `I · The · We` after "Happy" and `אני · מה · תודה` after "בוקר".
 
-    private static let englishNextWord: [String: [String]] = [
-        "i": ["think", "would", "will"],
-        "to": ["know", "see", "make"],
-        "would": ["like", "be", "you"],
-        "like": ["to", "this", "that"],
-        "we": ["should", "can", "need"],
-        "should": ["be", "do", "have"],
-        "can": ["you", "we", "be"],
-        "you": ["can", "want", "know"],
-        "the": ["team", "meeting", "same"],
-        "is": ["not", "the", "a"],
-        "it": ["is", "was", "would"],
-        "for": ["the", "you", "me"],
-        "this": ["is", "one", "week"],
-        "let": ["me", "us", "them"],
-        "thanks": ["for", "a", "so"]
+    /// Openers, for a field with nothing in it at all.
+    ///
+    /// Not predictions and never presented as such: with no previous word there is
+    /// nothing to predict from, and these are the words a message most often
+    /// starts with. Two languages, because a hand-written list for a language
+    /// nobody here writes would be worse than the empty bar the other twelve get.
+    private static let openers: [KeyboardLanguage: [String]] = [
+        .english: ["I", "Thanks", "Hi"],
+        .hebrew: ["אני", "תודה", "היי"]
     ]
 
-    private static let hebrewNextWord: [String: [String]] = [
-        "אני": ["חושב", "רוצה", "אשלח"],
-        "אנחנו": ["צריכים", "נדבר", "יכולים"],
-        "צריך": ["לבדוק", "לשלוח", "להיות"],
-        "רוצה": ["לדבר", "לשאול", "לבדוק"],
-        "יש": ["לי", "לנו", "משהו"],
-        "מה": ["קורה", "השעה", "נשמע"],
-        "את": ["ה", "זה", "כל"],
-        "לא": ["בטוח", "נכון", "יודע"],
-        "תודה": ["רבה", "לך", "על"],
-        "אפשר": ["לבדוק", "לדבר", "מחר"],
-        "בוא": ["נדבר", "נעשה", "נבדוק"]
-    ]
-
-    private static let defaultEnglish = ["I", "The", "We"]
-    private static let defaultHebrew = ["אני", "מה", "תודה"]
-
-    /// The two languages this table was written for. It is a hand-written table,
-    /// not a model, so the honest thing to do for the twelve languages it does
-    /// not cover is to offer nothing rather than to offer English words under a
-    /// Greek keyboard.
-    private static let nextWordTables: [KeyboardLanguage: [String: [String]]] = [
-        .english: englishNextWord,
-        .hebrew: hebrewNextWord
-    ]
-
-    private static let nextWordDefaults: [KeyboardLanguage: [String]] = [
-        .english: defaultEnglish,
-        .hebrew: defaultHebrew
-    ]
-
+    /// Three words to follow what has been typed so far.
+    ///
+    /// - Parameters:
+    ///   - context: everything committed before the cursor.
+    ///   - contextLanguage: the language that text is written in.
+    ///   - personal: what this user's own typing has taught the keyboard. Asked
+    ///     first, and this is the whole point of it: after `אני` the table says
+    ///     `חושב`, but somebody who writes `אני מגיע` nine times a week should be
+    ///     offered `מגיע`.
+    @MainActor
     static func nextWordSuggestions(
         context: String,
-        contextLanguage: KeyboardLanguage
+        contextLanguage: KeyboardLanguage,
+        personal: PersonalLanguageModel
     ) -> [Suggestion] {
-        guard let table = nextWordTables[contextLanguage],
-            let defaults = nextWordDefaults[contextLanguage]
-        else { return [] }
+        // Empty when the sentence ended: a full stop closes the thought, and
+        // predicting `much` after `Thank you so much.` would read across a
+        // boundary the writer just drew. The openers answer instead, which is
+        // right — the next word really is the start of something.
+        let preceding = previousWords(in: context)
+        let last = preceding.last ?? ""
 
-        let words =
-            context
-            .components(separatedBy: CharacterSet.whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-
-        guard let last = words.last?.trimmingCharacters(in: .punctuationCharacters).lowercased(),
-            !last.isEmpty, let hits = table[last]
-        else {
-            return defaults.map { Suggestion(text: $0, language: contextLanguage) }
+        var out: [Candidate] = []
+        if !last.isEmpty {
+            out +=
+                personal.followers(after: last, in: contextLanguage, limit: 3)
+                .enumerated()
+                .map {
+                    Candidate(
+                        text: $0.element, language: contextLanguage, source: .learned,
+                        ordinal: $0.offset)
+                }
+            out +=
+                SeedLanguageModel.followers(after: preceding, in: contextLanguage)
+                .prefix(3)
+                .enumerated()
+                .map {
+                    Candidate(
+                        text: $0.element, language: contextLanguage, source: .seed,
+                        ordinal: $0.offset)
+                }
         }
-        return hits.map { Suggestion(text: $0, language: contextLanguage) }
+        // Only when nothing above answered. An opener after a real word is not a
+        // prediction, it is the bar giving up in a way that looks like an answer —
+        // which is exactly what `I · The · We` after "Happy" was.
+        if out.isEmpty, let words = openers[contextLanguage] {
+            out +=
+                words.enumerated()
+                .map {
+                    Candidate(
+                        text: $0.element, language: contextLanguage, source: .seed,
+                        ordinal: $0.offset)
+                }
+        }
+
+        // Capitalised at the start of a message, because that is where the word is
+        // going and the shift key has already decided the same thing.
+        let atStart = context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return rank(out, limit: 3).map { suggestion in
+            guard atStart else { return suggestion }
+            return Suggestion(
+                text: contextLanguage.uppercased(String(suggestion.text.prefix(1)))
+                    + suggestion.text.dropFirst(),
+                language: suggestion.language)
+        }
     }
 }

@@ -17,7 +17,7 @@ struct LayoutKeyInspectorSection: View {
                 SectionHeader(title: slot.action.title)
                 Spacer()
                 Button("Done") { model.selection = nil }
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(Theme.Fonts.caption.weight(.semibold))
                     .accessibilityIdentifier("inspector-done")
             }
             Card {
@@ -28,17 +28,24 @@ struct LayoutKeyInspectorSection: View {
                     Divider.themed
                     HStack {
                         Button("Move left") { model.move(slot, by: -1) }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Theme.Brand.solid)
                         Spacer()
                         Button("Move right") { model.move(slot, by: 1) }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Theme.Brand.solid)
                         Spacer()
                         Button("Remove", role: .destructive) { model.remove(slot) }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Theme.Semantic.record)
+                            .opacity(verdict.isAllowed ? 1 : 0.4)
                             .disabled(!verdict.isAllowed)
                             .accessibilityIdentifier("inspector-remove")
                     }
-                    .font(.system(size: 14))
+                    .font(Theme.Fonts.callout)
                     if !verdict.isAllowed {
                         Text(verdict.reason)
-                            .font(.system(size: 12))
+                            .font(Theme.Fonts.micro)
                             .foregroundStyle(Theme.Semantic.warning)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -60,7 +67,7 @@ struct LayoutKeyInspectorSection: View {
                     get: { isFill },
                     set: { model.setWidth($0 ? .fill : .units(units), for: slot) })
             )
-            .font(.system(size: 15))
+            .font(Theme.Fonts.body)
             .accessibilityIdentifier("inspector-fill")
             if !isFill {
                 LayoutSlider(
@@ -86,7 +93,7 @@ struct LayoutKeyInspectorSection: View {
                 Text(action.title).tag(action)
             }
         }
-        .font(.system(size: 15))
+        .font(Theme.Fonts.body)
         .accessibilityIdentifier("inspector-action")
     }
 }

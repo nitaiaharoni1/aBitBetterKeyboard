@@ -8,10 +8,10 @@ struct DictionaryView: View {
 
     var body: some View {
         ZStack {
-            Theme.Surface.background.ignoresSafeArea()
+            AmbientBackground(intensity: 0.5)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: Theme.Space.md) {
+                VStack(alignment: .leading, spacing: Theme.Space.lg) {
                     addField
 
                     if store.personalDictionary.isEmpty {
@@ -31,6 +31,7 @@ struct DictionaryView: View {
     private var addField: some View {
         HStack(spacing: Theme.Space.xs) {
             TextField("Add a word or name", text: $newWord)
+                .font(Theme.Fonts.body)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .focused($isAdding)
@@ -40,6 +41,10 @@ struct DictionaryView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Theme.Surface.raised)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Theme.Surface.separator, lineWidth: 1)
                 )
 
             Button(action: add) {
@@ -61,17 +66,17 @@ struct DictionaryView: View {
 
     private var wordList: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            SectionHeader(title: "\(store.personalDictionary.count) words")
+            statHeader
 
             Card(padding: Theme.Space.xs) {
                 VStack(spacing: 0) {
                     ForEach(Array(store.personalDictionary.enumerated()), id: \.offset) { index, word in
                         if index > 0 {
-                            Divider().overlay(Theme.Surface.separator).padding(.leading, Theme.Space.xs)
+                            Divider.themed.padding(.leading, Theme.Space.xs)
                         }
                         HStack {
                             Text(word)
-                                .font(.system(size: 16))
+                                .font(Theme.Fonts.body)
                                 .foregroundStyle(Theme.Text.primary)
                             Spacer()
                             Button {
@@ -92,16 +97,35 @@ struct DictionaryView: View {
         }
     }
 
+    /// The count as the screen's one big number: what the keyboard has been told
+    /// to leave alone, stated plainly rather than sold.
+    private var statHeader: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.xs) {
+            Text("\(store.personalDictionary.count)")
+                .font(Theme.Fonts.display)
+                .foregroundStyle(Theme.Text.primary)
+            Text(
+                store.personalDictionary.count == 1
+                    ? "word autocorrect leaves alone" : "words autocorrect leaves alone"
+            )
+            .font(Theme.Fonts.callout)
+            .foregroundStyle(Theme.Text.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, Theme.Space.xxs)
+        .accessibilityElement(children: .combine)
+    }
+
     private var emptyState: some View {
         VStack(spacing: Theme.Space.xs) {
             Image(systemName: "character.book.closed")
                 .font(.system(size: 34))
                 .foregroundStyle(Theme.Text.tertiary)
             Text("Nothing here yet")
-                .font(.system(size: 16, weight: .medium))
+                .font(Theme.Fonts.headline)
                 .foregroundStyle(Theme.Text.primary)
             Text("Add names, companies and terms autocorrect keeps getting wrong.")
-                .font(.system(size: 14))
+                .font(Theme.Fonts.callout)
                 .foregroundStyle(Theme.Text.secondary)
                 .multilineTextAlignment(.center)
         }

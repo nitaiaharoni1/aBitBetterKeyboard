@@ -31,12 +31,16 @@ public struct KeyboardView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // **One strip, always there, replacing two things that were not.**
+            // **One strip when there is something to say, nothing when idle.**
             // `ScreenContextStrip` occupied a 30pt row only while a capture session
             // was live, and every AI answer arrived in a panel over the keys. The
-            // banner is both: it carries the live reading when there is one, and
-            // the running action and its answer when there is one of those.
-            ActionBanner(controller: controller)
+            // banner is both of those: the live reading, and the running action
+            // and its answer. The idle instruction is omitted — see
+            // `BannerState.isPresented`.
+            if controller.showsActionBanner {
+                ActionBanner(controller: controller)
+                    .transition(.opacity)
+            }
 
             SuggestionBar(controller: controller)
 
@@ -53,6 +57,7 @@ public struct KeyboardView: View {
         .background(Theme.Keys.background)
         .environment(\.layoutDirection, controller.language.layoutDirection)
         .coordinateSpace(name: Self.frameSpace)
+        .animation(Theme.Motion.content, value: controller.showsActionBanner)
         .onAppear { Feedback.prepare() }
     }
 

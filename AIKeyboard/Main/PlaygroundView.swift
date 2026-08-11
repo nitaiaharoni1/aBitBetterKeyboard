@@ -31,6 +31,7 @@ struct PlaygroundView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
+                        .font(Theme.Fonts.body.weight(.semibold))
                 }
             }
         }

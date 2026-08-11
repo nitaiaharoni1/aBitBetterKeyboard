@@ -46,11 +46,18 @@ extension KeyView {
                     onSpaceTouch?(.moved(value.translation.width))
                     return
                 }
-                // Every later change is either a finger sliding across an open
-                // alternates popup or a finger wobbling on an ordinary key. Only
-                // the first is worth reacting to.
-                guard showsAlternates else { return }
-                selectedAlternate = alternateIndex(at: value.location)
+                // Every later change is either a finger sliding across a popup this
+                // key has or a finger wobbling on an ordinary key. Only the first
+                // is worth reacting to.
+                //
+                // `hasAlternates` rather than `showsAlternates`, so a slide that
+                // happens during the hold is not dropped: the popup would
+                // otherwise arm on item 0 while the finger was already pointing at
+                // another, and a finger that has stopped moving sends nothing more
+                // to correct it with. Nothing is drawn from this until the popup
+                // arms — see `alternateItem`.
+                guard hasAlternates else { return }
+                selectedAlternate = hasSlid(value.translation) ? alternateIndex(at: value.location) : 0
             }
             .onEnded { value in
                 if slidesForLanguage {
@@ -62,7 +69,10 @@ extension KeyView {
                     onSpaceTouch?(.ended(value.translation.width))
                     return
                 }
-                let picked = showsAlternates ? alternateIndex(at: value.location) : 0
+                let picked = alternateIndexOnLift(
+                    popupIsVisible: showsAlternates,
+                    translation: value.translation,
+                    location: value.location)
                 endPress()
                 // Index 0 is what the key would have done on its own — the
                 // character it already inserted, or the default tone it has not run
@@ -75,6 +85,40 @@ extension KeyView {
                 onAlternate?(alternateItems[picked])
             }
     }
+
+    /// Whether this touch has travelled far enough to be choosing rather than
+    /// resting.
+    ///
+    /// **Without it the popup reads the raw location and index 0 is unreachable
+    /// from a standing finger**, which contradicts the rule `alternateItems` is
+    /// built on: lifting a finger that has not moved must commit nothing new. The
+    /// popup is centred on the *key*, not on its first item, so the point under a
+    /// finger that never moved is `(alternatesWidth - width) / 2` into the strip —
+    /// dead on the boundary for a two-item popup and the middle of item 4 for
+    /// English's nine-item `a`. Holding a letter a beat too long and lifting
+    /// straight up therefore swapped it for an accent nobody aimed at, and the
+    /// highlight said otherwise the whole time, because it is seeded to 0.
+    ///
+    /// Six points is well above the wobble of a thumb resting on glass and well
+    /// below the 34 an item is wide, so the first item stays reachable and the
+    /// second still takes an ordinary flick to reach.
+    func hasSlid(_ translation: CGSize) -> Bool {
+        hypot(translation.width, translation.height) > Self.slideThreshold
+    }
+
+    /// What a lift commits from the popup. Kept as one pure decision so the
+    /// standing-finger rule is testable without trying to synthesize a SwiftUI
+    /// gesture in a host-less unit test.
+    func alternateIndexOnLift(
+        popupIsVisible: Bool,
+        translation: CGSize,
+        location: CGPoint
+    ) -> Int {
+        guard popupIsVisible, hasSlid(translation) else { return 0 }
+        return alternateIndex(at: location)
+    }
+
+    static let slideThreshold: CGFloat = 6
 
     /// Everything a finger leaving this key has to undo, on every path it can
     /// leave by. Idempotent, because a normal lift arrives here twice: once from
@@ -100,24 +144,24 @@ extension KeyView {
     /// Holding a key with alternates opens them, the way it does on the system
     /// keyboard. Nothing happens for a key that has none, which is most of them.
     private func startAlternatesIfNeeded() {
-        // `alternateItems` rather than `spec.alternates`, because the one-tap
-        // rewrite key's registers do not live on the spec — they come from a
-        // setting in the containing app. For a letter the two say the same thing:
-        // the list is the character plus its alternates, so "more than one" is
-        // exactly "has alternates".
-        guard onAlternate != nil, alternateItems.count > 1 else { return }
+        // `hasAlternates` reads `alternateItems` rather than `spec.alternates`,
+        // because the one-tap rewrite key's registers do not live on the spec —
+        // they come from a setting in the containing app. For a letter the two say
+        // the same thing: the list is the character plus its alternates, so "more
+        // than one" is exactly "has alternates".
+        guard hasAlternates else { return }
+        // Here rather than at the end of the wait below, so a finger that slides
+        // before the popup arms keeps what it slid to. `@State` outlives the
+        // press, so without a reset somewhere the next press on this key would
+        // arm on whatever the last one chose.
+        selectedAlternate = 0
         alternatesTask?.cancel()
         alternatesTask = Task { @MainActor in
-            // Letters keep the longer hold: their callout is already up, so the
-            // wait is filled. The punctuation key has no callout (the strip *is*
-            // the feedback), so a shorter threshold is what stops the hold from
-            // feeling dead before the marks appear. Still not zero — opening on
-            // finger-down would flash the strip on every deliberate tap.
-            let delay: Duration =
-                showsCharacterCallout ? .milliseconds(450) : .milliseconds(250)
-            try? await Task.sleep(for: delay)
+            // Never zero: opening on finger-down flashes the popup on every
+            // deliberate tap. `alternatesDelay` carries why the wait is not one
+            // number.
+            try? await Task.sleep(for: Self.alternatesDelay)
             guard !Task.isCancelled else { return }
-            selectedAlternate = 0
             Feedback.modifierPress()
             withAnimation(Theme.Motion.quick) { showsAlternates = true }
         }

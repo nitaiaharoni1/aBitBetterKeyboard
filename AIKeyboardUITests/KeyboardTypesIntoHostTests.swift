@@ -191,6 +191,54 @@ final class KeyboardTypesIntoHostTests: KeyboardExtensionTestCase {
         )
     }
 
+    /// The banner lives above a fixed-height suggestion bar and key area, so the
+    /// extension host must grow when it appears. The in-app playground cannot
+    /// prove that wiring: only `KeyboardViewController` owns the height
+    /// constraint. Refuse Fix on an empty real field, require the real extension's
+    /// banner to be fully on screen and hittable, then dismiss it.
+    ///
+    /// Height check: `app.keyboards.firstMatch` is the UIKit keyboard window the
+    /// extension occupies. The banner is 72 pt; we assert growth of at least 60 pt
+    /// (generous threshold for simulator timing and coordinate-space rounding).
+    func testARefusalGrowsTheRealExtensionToFitTheBanner() throws {
+        _ = try standExtensionOverARealTextField()
+
+        let fix = app.descendants(matching: .any).matching(identifier: "key-ai-fix").firstMatch
+        guard fix.waitForExistence(timeout: 8) else {
+            throw XCTSkip("The current layout has no Fix key")
+        }
+
+        // Capture the keyboard height while idle (banner absent).
+        let keyboard = app.keyboards.firstMatch
+        let beforeHeight = keyboard.exists ? keyboard.frame.height : 0
+
+        fix.tap()
+
+        let banner = app.descendants(matching: .any).matching(identifier: "banner-blocked").firstMatch
+        XCTAssertTrue(
+            banner.waitForExistence(timeout: 5) && banner.isHittable,
+            "the refusal banner was clipped because the extension kept its idle height")
+
+        // The banner adds 72 pt; require at least 60 pt of growth so the
+        // assertion still passes under sub-point simulator rounding.
+        let afterHeight = keyboard.frame.height
+        XCTAssertGreaterThan(
+            afterHeight - beforeHeight, 60,
+            """
+            Extension grew \(afterHeight - beforeHeight) pt after the banner appeared; \
+            expected > 60 pt (banner is 72 pt). The height-constraint wiring in \
+            KeyboardViewController may not be reaching the host.
+            """)
+
+        let dismiss = app.descendants(matching: .any)
+            .matching(identifier: "banner-blocked-dismiss").firstMatch
+        XCTAssertTrue(dismiss.waitForExistence(timeout: 3) && dismiss.isHittable)
+        dismiss.tap()
+        XCTAssertTrue(
+            waitUntil { !banner.exists },
+            "dismissing the refusal left the dynamic banner row on screen")
+    }
+
     // MARK: Steps
 
     /// Everything between a fresh simulator and a keyboard extension running in

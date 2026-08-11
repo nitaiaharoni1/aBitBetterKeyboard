@@ -10,6 +10,7 @@ public enum KeyCap: Equatable, Sendable {
     /// Switches to another plane. The label is what the key shows now, not where it goes.
     case plane(KeyboardPlane, label: String)
     case globe
+    case settings
     case space
     case ret
     case dictation
@@ -57,6 +58,7 @@ public enum KeyCap: Equatable, Sendable {
         case .backspace: return "Delete"
         case .plane(_, let label): return label
         case .globe: return "Next keyboard"
+        case .settings: return "Settings"
         case .space: return "Space"
         case .ret: return "Return"
         case .dictation: return "Dictate"
@@ -123,6 +125,7 @@ public struct KeySpec: Identifiable, Equatable, Sendable {
         case .backspace: return "backspace"
         case .plane(_, let label): return "plane-\(label)"
         case .globe: return "globe"
+        case .settings: return "settings"
         case .space: return "space"
         case .ret: return "return"
         case .dictation: return "dictation"

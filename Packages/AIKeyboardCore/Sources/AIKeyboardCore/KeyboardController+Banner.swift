@@ -5,6 +5,43 @@ extension KeyboardController {
 
     // MARK: Banner state
 
+    /// What the strip above the suggestion bar is saying right now.
+    ///
+    /// One place rather than every view re-running `BannerState.resolve` with the
+    /// same twelve arguments — and the height the extension asks the host for
+    /// reads `isPresented` off the same value the strip draws from.
+    public var bannerState: BannerState {
+        BannerState.resolve(
+            isDictating: isDictating,
+            dictationIsLive: dictationAvailability.isLive,
+            dictationTranscript: dictationTranscript,
+            dictationFailure: dictationFailure,
+            isWorking: isWorking,
+            runningAction: runningAction,
+            error: aiError,
+            block: block,
+            options: bannerOptions,
+            index: bannerIndex,
+            screenContext: screenContext.context,
+            idleHint: screenContextHint ?? BannerState.defaultHint)
+    }
+
+    /// Whether the action strip is on screen. False for the idle instruction.
+    public var showsActionBanner: Bool { bannerState.isPresented }
+
+    /// Whether a key in the action row (or an edge copy of one) should read as
+    /// the thing currently happening.
+    public func isActionKeyActive(_ cap: KeyCap) -> Bool {
+        if case .emoji = cap { return overlay.isEmoji }
+        switch bannerState.activeActionKey {
+        case .ai(.reply): return cap == .aiReply
+        case .ai(.fix): return cap == .aiFix
+        case .ai(.rewrite), .ai(.tone): return cap == .quickTone
+        case .dictation: return cap == .dictation
+        case nil: return false
+        }
+    }
+
     /// Clears every published field the banner reads for an AI answer.
     func clearBannerState() {
         variants = []
@@ -49,8 +86,8 @@ extension KeyboardController {
         refuse(
             .init(
                 action: action,
-                title: "Nothing to \(action.title.lowercased()) yet",
-                detail: "Type something first, then tap \(action.title).",
+                title: "Nothing to \(action.title.lowercased())",
+                detail: "Type something, then tap \(action.title).",
                 remedy: .none))
     }
 

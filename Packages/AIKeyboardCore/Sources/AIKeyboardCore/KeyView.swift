@@ -26,6 +26,14 @@ public struct KeyView: View {
     /// is controller state, and a `KeySpec` is a value that cannot read any.
     /// False on every other key, where it is not read at all.
     let isEmojiOpen: Bool
+    /// Whether a wide action key should include its text caption.
+    let showsActionCaption: Bool
+    /// Whether action glyphs and captions should match the standard key label color.
+    let usesNeutralActionTint: Bool
+    /// Whether this key is the action currently on screen in the banner (or the
+    /// open emoji grid). Controls paint a soft brand fill so the row says which
+    /// of the five is live without the user having to read the strip.
+    let isActionActive: Bool
     let onPress: (KeyCap) -> Void
     let onRepeat: (() -> Void)?
     let onAlternate: ((String) -> Void)?
@@ -59,6 +67,9 @@ public struct KeyView: View {
         enabledLanguages: [KeyboardLanguage] = [],
         toneAlternates: [String] = [],
         isEmojiOpen: Bool = false,
+        showsActionCaption: Bool = true,
+        usesNeutralActionTint: Bool = false,
+        isActionActive: Bool = false,
         onPress: @escaping (KeyCap) -> Void,
         onRepeat: (() -> Void)? = nil,
         onAlternate: ((String) -> Void)? = nil,
@@ -73,6 +84,9 @@ public struct KeyView: View {
         self.enabledLanguages = enabledLanguages
         self.toneAlternates = toneAlternates
         self.isEmojiOpen = isEmojiOpen
+        self.showsActionCaption = showsActionCaption
+        self.usesNeutralActionTint = usesNeutralActionTint
+        self.isActionActive = isActionActive
         self.onPress = onPress
         self.onRepeat = onRepeat
         self.onAlternate = onAlternate
@@ -124,16 +138,19 @@ public struct KeyView: View {
                 ? SpaceSwipe.slideHint(languageCount: enabledLanguages.count) : ""
         )
         .accessibilityAddTraits(.isKeyboardKey)
-        // **A long press and a slide is unusable under VoiceOver, so the registers
-        // get a non-gesture route.** The same rule the layout editor is built on:
-        // every edit there has a button as well as a drag. Without this the only
-        // way to change tone with VoiceOver on would be to add the AI-actions key
-        // in the editor first, which is a setting nobody should need to find in
-        // order to reach a feature the keyboard already has.
+        // **A long press and a slide is unusable under VoiceOver, so everything
+        // behind one gets a non-gesture route.** The same rule the layout editor
+        // is built on: every edit there has a button as well as a drag.
+        //
+        // This was the registers alone until the letters had anything to offer
+        // that could not be typed another way. It is now every key with a popup,
+        // because a Hebrew letter's geresh and gershayim and Catalan's interpunt
+        // live *only* here — there is no plane carrying them — so a VoiceOver
+        // user could not write צ׳יפס, צה״ל or col·legi at all.
         .accessibilityActions {
-            if spec.cap == .quickTone {
-                ForEach(alternateItems.dropFirst(), id: \.self) { tone in
-                    Button("Rewrite as \(tone)") { onAlternate?(tone) }
+            if hasAlternates {
+                ForEach(alternateItems.dropFirst(), id: \.self) { item in
+                    Button(alternateActionLabel(item)) { commitAlternate(item) }
                 }
             }
         }

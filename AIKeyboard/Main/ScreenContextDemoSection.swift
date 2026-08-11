@@ -17,7 +17,7 @@ struct ScreenContextDemoSection: View {
                     Text(
                         "See it with a sample conversation. Nothing is captured, nothing is sent, and the message is one we wrote."
                     )
-                    .font(.system(size: 13))
+                    .font(Theme.Fonts.callout)
                     .foregroundStyle(Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -38,7 +38,7 @@ struct ScreenContextDemoSection: View {
                         Text(
                             "Not while screen context is running: the strip is showing your real screen, and a made-up message on top of it would be the one thing this feature must never do. Stop the broadcast from the red indicator in the status bar first."
                         )
-                        .font(.system(size: 13))
+                        .font(Theme.Fonts.caption)
                         .foregroundStyle(Theme.Text.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                     }

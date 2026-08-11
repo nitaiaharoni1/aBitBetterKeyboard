@@ -15,15 +15,19 @@ import XCTest
 final class CandidateCommitTests: XCTestCase {
 
     private var autocorrect = true
+    private var predictions = true
 
     override func setUp() {
         super.setUp()
         autocorrect = SharedStore.shared.autocorrect
+        predictions = SharedStore.shared.predictions
         SharedStore.shared.autocorrect = true
+        SharedStore.shared.predictions = true
     }
 
     override func tearDown() {
         SharedStore.shared.autocorrect = autocorrect
+        SharedStore.shared.predictions = predictions
         super.tearDown()
     }
 
@@ -108,5 +112,86 @@ final class CandidateCommitTests: XCTestCase {
         check(
             before: "hello wor", selecting: "ld mo", after: "re", candidate: "word",
             bySpace: "hello wor re", byTap: "hello worword re")
+    }
+
+    /// Space must leave the typed word alone when Autocorrect is off in Settings.
+    /// A bold candidate sitting in the bar is not permission to replace — that is
+    /// exactly what the toggle is for.
+    ///
+    /// **Writes only into the suite, behind the published copy's back.** Setting
+    /// `autocorrect = false` updates both readers, so a revert to
+    /// `store.autocorrect` would still pass. The app's process looks like this to
+    /// a keyboard already on screen: defaults say off, `@Published` is still on.
+    /// See `SharedStore.storedAutocorrect`.
+    func testSpaceDoesNotAutocorrectWhenTheSettingIsOff() {
+        SharedStore.shared.userDefaults.set(false, forKey: SharedStore.Key.autocorrect)
+        XCTAssertTrue(
+            SharedStore.shared.autocorrect,
+            "the published copy must stay stale, or this proves nothing")
+        XCTAssertFalse(SharedStore.shared.storedAutocorrect)
+
+        let target = CursorTextTarget(before: "schedul")
+        let controller = KeyboardController(target: target)
+        controller.suggestions = [
+            Suggestion(text: "schedul", language: .english),
+            Suggestion(text: "schedule", language: .english, isDefault: true)
+        ]
+        controller.press(.space)
+        XCTAssertEqual(
+            target.document, "schedul ",
+            "space committed the correction while Autocorrect was off")
+    }
+
+    /// When Autocorrect is off, the bold slot has to be the typed word — otherwise
+    /// the bar advertises a correction space is no longer allowed to commit.
+    ///
+    /// Driving `refreshSuggestions` is load-bearing: the space-bar test above
+    /// plants `isDefault` by hand and would still pass if this branch were deleted.
+    /// Proving the engine would have bolded `schedule` first is what makes the
+    /// second half reject a build that dropped the remapping.
+    func testTheBoldSlotIsTheTypedWordWhenAutocorrectIsOff() {
+        SharedStore.shared.autocorrect = true
+
+        let controller = KeyboardController(
+            target: CursorTextTarget(before: "sched"), language: .english)
+        controller.refreshSuggestions()
+        XCTAssertEqual(
+            controller.suggestions.first(where: \.isDefault)?.text.lowercased(), "schedule",
+            "the word has to be genuinely at risk, or turning the setting off proves nothing")
+
+        SharedStore.shared.userDefaults.set(false, forKey: SharedStore.Key.autocorrect)
+        XCTAssertTrue(SharedStore.shared.autocorrect)
+        controller.refreshSuggestions()
+
+        XCTAssertEqual(
+            controller.suggestions.first(where: \.isDefault)?.text, "sched",
+            "the bar bolded \(controller.suggestions.first(where: \.isDefault)?.text ?? "nothing")")
+        XCTAssertTrue(
+            controller.suggestions.contains { $0.text.lowercased() == "schedule" },
+            "the correction still has to be offered for a tap: \(controller.suggestions.map(\.text))")
+    }
+
+    /// The Predictions switch lives in the app and this controller can already
+    /// be alive in the keyboard extension. Write only to defaults so the
+    /// published copy stays stale: a revert to `store.predictions` would keep
+    /// returning the shipped empty-prefix suggestions and fail this assertion.
+    func testSuggestionRefreshSeesPredictionsTurnedOffInTheOtherProcess() {
+        let controller = KeyboardController(
+            target: CursorTextTarget(before: ""), language: .english)
+        controller.refreshSuggestions()
+        XCTAssertFalse(
+            controller.suggestions.isEmpty,
+            "the fixture needs suggestions before the setting changes")
+
+        SharedStore.shared.userDefaults.set(false, forKey: SharedStore.Key.predictions)
+        XCTAssertTrue(
+            SharedStore.shared.predictions,
+            "the published copy must stay stale, or this proves nothing")
+        XCTAssertFalse(SharedStore.shared.storedPredictions)
+
+        controller.refreshSuggestions()
+        XCTAssertTrue(
+            controller.suggestions.isEmpty,
+            "the keyboard kept showing predictions after the app turned them off")
     }
 }

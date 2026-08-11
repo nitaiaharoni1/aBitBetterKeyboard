@@ -104,11 +104,21 @@ final class SuggestionEngineTests: XCTestCase {
         XCTAssertTrue(results.contains { $0.text == "for" })
     }
 
+    /// An empty field with no context has nothing to predict *from*, so these are
+    /// openers rather than predictions and are named that way in
+    /// `SuggestionEngine+NextWord`.
+    ///
+    /// **They used to be the answer to far more than this.** `I · The · We` was
+    /// what every English sentence fell through to whenever the 26-key table had
+    /// no row for the last word, which the typing corpus caught the bar doing
+    /// after "Happy" and after "Have a great". Now they appear only here, with
+    /// nothing typed at all, and the middle slot is the likeliest one because that
+    /// is the slot the space bar and the system keyboard both treat as the default.
     func testNothingTypedAndNoContextOffersTheDefaults() {
         let results = SuggestionEngine.suggestions(
             prefix: "", context: "", languages: [.english])
 
-        XCTAssertEqual(results.map(\.text), ["I", "The", "We"])
+        XCTAssertEqual(results.map(\.text), ["Thanks", "I", "Hi"])
     }
 
     // MARK: Default candidate

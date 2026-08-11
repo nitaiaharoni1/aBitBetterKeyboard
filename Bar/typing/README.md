@@ -1,6 +1,35 @@
-# Typing: the corpus and the stock-keyboard reference
+# Typing: the corpus, the harness and the stock-keyboard reference
 
-Two things live here, and they answer two different questions.
+Three things live here, and they answer three different questions.
+
+`harness/` is **the invigilator**: it runs the real `SuggestionEngine` over all 90
+entries and grades the answers.
+
+```bash
+Bar/typing/harness/run.sh            # writes engine_outputs.json
+Bar/typing/harness/score.py          # grades it
+Bar/typing/harness/score.py before.json after.json   # diffs two runs
+```
+
+It needs a booted `iPhone 17 Pro` simulator and takes a couple of seconds. It
+compiles for the **simulator, not macOS**, because `UITextChecker` is UIKit and
+macOS spell-checks with `NSSpellChecker` — a different dictionary and a different
+ranking, so a macOS score would not be a score of the shipping engine. It passes
+an **empty in-memory `PersonalLanguageModel`**, so a run cannot inherit whatever
+the machine it runs on has been typing, and the shipped personal dictionary,
+because scoring with an empty one measures a keyboard nobody has.
+
+`score.py` reports three things and keeps them apart. **commit** is whether the
+bold slot — what the space bar inserts — is the right word, which for an
+`intended` entry is the only number a user would recognise. **offered** is whether
+the right word appeared in any of the three slots, counted separately because it
+separates "the ranker is wrong" from "the candidate was never generated".
+**intact** is `mustNotCorrect`: the bold slot still holds exactly what was typed.
+Misses against an **open** `acceptable` list are printed but never counted as
+failures, because that list is a sample and never a whitelist.
+
+The score at the time of writing is **73/76 judged**, up from 47/76 before the
+engine was made context-aware.
 
 `corpus.json` is **the exam**: 90 frozen moments mid-typing, each one a context, a
 word in progress, and a note saying what it is probing. It never changes once a

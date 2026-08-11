@@ -30,38 +30,35 @@ struct ScreenContextPrompt: Equatable {
         // Access is granted. Starting a broadcast from here would run a capture
         // this keyboard could never read.
         guard canReachChannel else {
-            title = "Screen context needs Full Access"
+            title = "Needs Full Access"
             detail =
-                "This keyboard cannot reach AI Keyboard's shared storage, so it could not read a screen even while one is being captured. Turn on Full Access for AI Keyboard in Settings, under General › Keyboard › Keyboards."
+                "Turn on Full Access for AI Keyboard in Settings › General › Keyboard › Keyboards."
             offersPicker = false
             return
         }
         // The same two strings the strip prints, off the same reason.
         if let ended, !ended.canRestart {
-            title = "Screen context can't run yet"
-            detail = "\(ended.explanation) \(ended.recovery)"
+            title = "Can't run yet"
+            detail = "\(ended.explanation)\n\(ended.recovery)"
             offersPicker = false
             return
         }
         // The same wall as the one above, reached before the broadcast instead of
         // one second after it.
         guard cloudConfigured else {
-            title = "Screen context can't run yet"
+            title = "Cloud model not ready"
             detail =
-                "Reading a screen needs the cloud model, and it is not finished being set up. \(BackendTransport.setUpRecovery)"
+                "Reply needs the cloud model.\n\(BackendTransport.setUpRecovery)"
             offersPicker = false
             return
         }
         title = "Screen context is off"
-        // **Rewritten for a two-line strip, and the last clause is the load-bearing
-        // one.** This used to be a paragraph in a panel that had room for a second
-        // paragraph underneath saying what to do if the picker does nothing — and
-        // that caveat is not decoration: the picker asks Control Center to present
-        // its own recording view over a keyboard extension, and whether that works
-        // is unmeasured on a device. See `BroadcastPickerButton`. The banner has two
-        // lines at 11pt, so the fallback had to fit inside them or be lost.
+        // **Short, and the last clause is load-bearing.** The picker asks Control
+        // Center to present over a keyboard extension, and whether that works is
+        // unmeasured on a device — see `BroadcastPickerButton`. If the system UI
+        // never appears, the app is the fallback.
         detail =
-            "Tap to pick AI Keyboard, then Start Broadcast. If nothing opens, start it in the app."
+            "Pick AI Keyboard, then Start Broadcast.\nIf nothing opens, start it in the app."
         offersPicker = true
     }
 }

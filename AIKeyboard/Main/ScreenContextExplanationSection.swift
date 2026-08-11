@@ -36,10 +36,10 @@ struct ScreenContextExplanationSection: View {
                         number: 3,
                         title: "Only text reaches the keyboard",
                         detail:
-                            "What comes back is the sender, the message and its language. The picture is never saved — not on disk, not in the shared container, not in a backup. That text is handed over in a file the keyboard deletes as soon as the broadcast it came from has stopped."
+                            "What comes back is the sender, the message and its language. The picture is never saved: not on disk, not in the shared container, not in a backup. That text is handed over in a file the keyboard deletes as soon as the broadcast it came from has stopped."
                     )
 
-                    Divider().overlay(Theme.Surface.separator)
+                    Divider.themed
 
                     // All three steps are built now. What is still missing is a
                     // measurement, not code, and the honest thing is to say which
@@ -48,7 +48,7 @@ struct ScreenContextExplanationSection: View {
                     Text(
                         "All three steps are built, and none of them has run on a phone yet: a broadcast cannot start in the simulator, so no frame has ever reached the capture process here. Reply may not work on your device, and if it does not, the reason it gives you is the real one."
                     )
-                    .font(.system(size: 12))
+                    .font(Theme.Fonts.caption)
                     .foregroundStyle(Theme.Text.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
                 }

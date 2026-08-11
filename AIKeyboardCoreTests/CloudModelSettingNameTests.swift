@@ -3,20 +3,16 @@ import XCTest
 @testable import AIKeyboardCore
 @testable import AIKeyboardShared
 
-/// One key, named once, and every dead end pointing at that name.
+/// One recovery sentence, used wherever a missing cloud model dead-ends.
 ///
-/// `cloudBackendURL` is read by three processes and, before this, was written by
-/// one field titled "Where the screen is read". So a Hebrew rewrite failed with
-/// "no cloud model is set up" and named nowhere, and the screen-context refusal
-/// named a screen that had nothing to do with rewriting. These assert the property
-/// that stops that recurring: the sentences are built from one constant.
+/// `cloudBackendURL` is read by three processes. Before attestation, failures
+/// pointed at a field titled "Where the screen is read" or said nothing useful.
+/// These assert the property that stops that recurring: every dead end names the
+/// same recovery — open the app and let it reconnect.
 final class CloudModelSettingNameTests: XCTestCase {
 
-    /// The four failures that dead-end on the missing backend all name the same
-    /// row. Each of these used to stop at "no cloud model is set up", or point at
-    /// Screen Context, which is where a user goes to record their screen and not
-    /// where they go when Hebrew Fix fails.
-    func testEveryDeadEndNamesWhereTheCloudModelIsSetUp() {
+    /// The four failures that dead-end on the cloud all say the same next step.
+    func testEveryDeadEndNamesTheSameRecovery() {
         let messages: [(String, String)] = [
             ("unsupportedLanguage", AIEngineError.unsupportedLanguage(.hebrew).message),
             ("cloudNotConfigured", AIEngineError.cloudNotConfigured.message),
@@ -25,17 +21,17 @@ final class CloudModelSettingNameTests: XCTestCase {
         ]
         for (name, message) in messages {
             XCTAssertTrue(
-                message.contains(BackendTransport.settingsPath),
+                message.contains(BackendTransport.setUpRecovery),
                 "\(name) reports a missing cloud model and names nowhere to go: \(message)")
         }
     }
 
-    /// The path has to be a path — a screen the app draws, reachable by the words
-    /// in it. `CloudModelView` is the row; this is the half a unit test can hold,
-    /// and it is what fails if somebody renames the row without renaming this.
+    /// The settings path still names a real row for the Debug URL field; the
+    /// shipping recovery no longer points there, because attestation filled the
+    /// token and there is nothing left for the user to type.
     func testTheSettingsPathNamesTheSectionAndTheRow() {
         XCTAssertEqual(BackendTransport.settingsPath, "Settings › AI › Cloud model")
-        XCTAssertTrue(BackendTransport.setUpRecovery.contains(BackendTransport.settingsPath))
+        XCTAssertEqual(BackendTransport.setUpRecovery, "Open AI Keyboard once to reconnect.")
     }
 
     /// The screen-context refusal no longer claims to be about screen reading

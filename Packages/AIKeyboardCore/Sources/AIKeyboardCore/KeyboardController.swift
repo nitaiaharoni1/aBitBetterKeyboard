@@ -122,7 +122,7 @@ public final class KeyboardController: ObservableObject {
 
     /// Set by the host controller. False in the app preview, where there is no
     /// keyboard to switch to.
-    public var showsGlobeKey = true
+    public var showsGlobeKey = false
 
     /// Called when the globe key is tapped inside the real extension.
     public var onAdvanceToNextKeyboard: (() -> Void)?
@@ -133,6 +133,15 @@ public final class KeyboardController: ObservableObject {
     /// `UIInputViewController.dismissKeyboard()` can, and the package does not
     /// have one. Nil in the app preview, where there is nothing to dismiss.
     public var onDismissKeyboard: (() -> Void)?
+
+    /// Called automatically on the first no-session dictation tap so the host
+    /// can attempt to bring the containing app to the foreground.
+    ///
+    /// Nil in the in-app playground. Wired by `KeyboardViewController` using
+    /// `extensionContext?.open(_:)` with a responder-chain fallback. The banner
+    /// also shows a `Link` as a secondary user-tapped path; both record a
+    /// timestamped handoff request the app consumes on launch.
+    public var onOpenContainingApp: ((URL) -> Void)?
 
     /// The shape of the keyboard right now.
     ///
@@ -182,17 +191,42 @@ public final class KeyboardController: ObservableObject {
     /// no host to ask.
     var supplementaryWords: [String] = []
 
+    /// The async half of the suggestion bar.
+    ///
+    /// Optional because most callers do not want one: `AIKeyboardCoreTests` and
+    /// the app's playground both drive a real controller, and neither should be
+    /// making model calls on a typing pause. `nil` means the bar is purely local,
+    /// which is a complete, shipping behaviour rather than a degraded one — see
+    /// `PredictiveRefiner` for what the second tier is and is not allowed to
+    /// change.
+    var refiner: PredictiveRefiner?
+
+    /// What this user's typing has taught the keyboard.
+    ///
+    /// **`.shared` only for the real keyboard, and a throwaway for everybody
+    /// else.** The app's onboarding playground and every unit test drive a real
+    /// `KeyboardController` and press real space bars, and for a while all of them
+    /// wrote into the persisted store: the test suite alone had taught it `Handi`
+    /// ten times and `Nitai` nine, which is past `protectThreshold`, so
+    /// `PersonalDictionaryTests` stopped being able to show that the personal
+    /// dictionary does anything — the words it was checking were being defended by
+    /// a store the tests had filled themselves. Scripted demo words are not
+    /// somebody's vocabulary either.
+    let personal: PersonalLanguageModel
+
     public init(
         target: TextTarget?,
         store: SharedStore = .shared,
         language: KeyboardLanguage = .english,
         engine: RoutedIntelligence? = nil,
-        dictation: DictationSession = .shared
+        dictation: DictationSession = .shared,
+        isSystemKeyboard: Bool = false
     ) {
         self.target = target
         self.store = store
         self.language = language
         self.dictation = dictation
+        self.personal = isSystemKeyboard ? .shared : PersonalLanguageModel(url: nil)
         // This build ships pointing at a deployed backend
         // (`BackendTransport.bundledDefaultURL`), so the cloud half is normally
         // present and Hebrew has somewhere to run. It was nil for the life of
@@ -211,6 +245,15 @@ public final class KeyboardController: ObservableObject {
             ?? RoutedIntelligence.standard(
                 cloud: BackendTransport.configured().map { CloudIntelligence(transport: $0) }
             )
+
+        // Built after `engine`, and out of the same transport, so the keyboard has
+        // exactly one opinion about where the cloud is.
+        if isSystemKeyboard {
+            let cloud = BackendTransport.configured().map { CloudIntelligence(transport: $0) }
+            refiner = PredictiveRefiner.standard(cloud: cloud) { [weak self] words, askedAbout in
+                self?.applyRefinement(words, for: askedAbout)
+            }
+        }
 
         let session = ScreenContextSession.shared
         screenContext = session.state
@@ -301,7 +344,6 @@ extension KeyboardController {
             target: MockTextTarget(text: text),
             language: language
         )
-        controller.showsGlobeKey = true
         return controller
     }
 }

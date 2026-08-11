@@ -25,5 +25,21 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<!--
+	  The deep link that lets a keyboard extension hand off to this app so the
+	  user can start a dictation session. Registered here so the keyboard can
+	  record the intent and the app picks it up on launch.
+	-->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>aikeyboard</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>com.nitai.aikeyboard</string>
+		</dict>
+	</array>
 </dict>
 </plist>

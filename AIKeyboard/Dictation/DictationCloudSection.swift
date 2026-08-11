@@ -9,18 +9,22 @@ import SwiftUI
 /// uses, and links directly to the fix.
 struct DictationCloudSection: View {
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                SectionHeader(title: "Needs a cloud model")
-                Text(
-                    "Speech is transcribed in the cloud. Apple's on-device speech has no Hebrew at all, so there is no on-device path for the languages this keyboard is for. \(BackendTransport.setUpRecovery)"
-                )
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.Text.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            SectionHeader(title: "Needs a cloud model")
 
-                NavigationLink("Set up the cloud model") { CloudModelView() }
-                    .font(.system(size: 14, weight: .semibold))
+            Card {
+                VStack(alignment: .leading, spacing: Theme.Space.sm) {
+                    Text(
+                        "Speech is transcribed in the cloud. Apple's on-device speech has no Hebrew at all, so there is no on-device path for the languages this keyboard is for. \(BackendTransport.setUpRecovery)"
+                    )
+                    .font(Theme.Fonts.callout)
+                    .foregroundStyle(Theme.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    // The same row Settings and Screen Context point at, so the
+                    // fix keeps one name everywhere it is offered.
+                    CloudModelRow()
+                }
             }
         }
     }

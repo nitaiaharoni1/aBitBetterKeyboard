@@ -37,7 +37,7 @@ struct ScreenContextStarterSection: View {
                     }
 
                     Text("Only iOS can start this. No app can press that button for you, including this one.")
-                        .font(.system(size: 12))
+                        .font(Theme.Fonts.caption)
                         .foregroundStyle(Theme.Text.tertiary)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)

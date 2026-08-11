@@ -53,7 +53,21 @@ extension KeyboardLayout {
 
         // Apple's `Spanish`, shared by the three languages of Spain it also
         // serves. Catalan's ç and the accented vowels are long presses.
-        .catalan: LetterLayout(["qwertyuiop", "asdfghjklñ", "zxcvbnm"], alternates: latin()),
+        //
+        // **`l` carries the punt volat, and it is the one thing in this file that
+        // is not a letter.** `l·l` is a distinct sound from `ll` in Catalan and
+        // spelling it `ll` is an error, not a shortcut — `col·legi`, `paral·lel`,
+        // `il·lusió`. The interpunt is on Apple's own Spanish layout and on none
+        // of the three planes this keyboard draws, so before this it could not be
+        // typed at all. The alternate is `l·` rather than a bare `·` for the same
+        // reason Hebrew's is `צ׳` rather than `׳`: picking it replaces the letter
+        // the key already inserted, so the mark has to arrive with its letter.
+        //
+        // Merged as an array because `latin(_:)` concatenates strings and splits
+        // per `Character`, which would turn `l·` into `l` and `·`.
+        .catalan: LetterLayout(
+            ["qwertyuiop", "asdfghjklñ", "zxcvbnm"],
+            alternates: latin().merging(["l": ["ł", "l·"]]) { _, explicit in explicit }),
 
         // The Nordic layouts: å at the end of the top row, and the other two
         // vowels in the order that country writes them.

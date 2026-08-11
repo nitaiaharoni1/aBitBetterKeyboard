@@ -133,7 +133,7 @@ extension ActionBanner {
                         : ""))
 
         case .failed(_, let title, let detail):
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Theme.Keys.label)
@@ -144,10 +144,10 @@ extension ActionBanner {
             .accessibilityLabel("\(title). \(detail)")
 
         case .blocked(let block):
-            // The same two-line shape `.failed` and `.dictationFailed` already use.
+            // The same multi-line shape `.failed` and `.dictationFailed` already use.
             // A refusal is the same kind of thing they are — a sentence about
             // something that did not happen — so it earns no new vocabulary.
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(block.title)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Theme.Keys.label)
@@ -174,7 +174,7 @@ extension ActionBanner {
             }
 
         case .dictationFailed(let reason):
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Nothing to insert")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Theme.Keys.label)
@@ -191,8 +191,15 @@ extension ActionBanner {
         Text(text)
             .font(.system(size: 11))
             .foregroundStyle(Theme.Keys.secondaryLabel)
-            .lineLimit(2)
+            // **Three lines, and the strip is 72 pt so they fit.** Two lines in a
+            // 48–56 pt strip is what put an ellipsis on "Reading a screen needs
+            // the cloud model…" — a refusal the user has to act on, truncated
+            // before the recovery. Scale a hair before truncating; past three
+            // lines the honest mitigation is still the accessibility label.
+            .lineLimit(3)
+            .minimumScaleFactor(0.85)
             .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 

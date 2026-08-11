@@ -10,17 +10,17 @@ struct LanguageMixingSection: View {
 
             Card {
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                    HStack(spacing: Theme.Space.xs) {
-                        SparkleMark(size: 15)
+                    HStack(spacing: Theme.Space.sm) {
+                        IconBadge(systemName: "arrow.left.arrow.right")
                         Text("Code switching is always on")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(Theme.Fonts.body.weight(.semibold))
                             .foregroundStyle(Theme.Text.primary)
                     }
 
                     Text(
                         "Predictions look at the whole sentence, not the current layout. Type a Latin word inside a Hebrew sentence and the suggestions follow you."
                     )
-                    .font(.system(size: 14))
+                    .font(Theme.Fonts.callout)
                     .foregroundStyle(Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -33,7 +33,7 @@ struct LanguageMixingSection: View {
     private var exampleBubble: some View {
         VStack(alignment: .trailing, spacing: 6) {
             Text("אני אשלח לך את ה-document מחר")
-                .font(.system(size: 15))
+                .font(Theme.Fonts.body)
                 .foregroundStyle(Theme.Text.primary)
                 .environment(\.layoutDirection, .rightToLeft)
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -42,7 +42,7 @@ struct LanguageMixingSection: View {
                 ForEach(["deadline", "document", "demo"], id: \.self) { word in
                     HStack(spacing: 3) {
                         Text(word)
-                            .font(.system(size: 12))
+                            .font(Theme.Fonts.micro)
                             .foregroundStyle(Theme.Text.primary)
                         LanguageTag(.english)
                     }

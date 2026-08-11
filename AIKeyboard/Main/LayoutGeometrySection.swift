@@ -32,7 +32,7 @@ struct LayoutGeometrySection: View {
                             get: { model.draft.showsNumberRow },
                             set: { model.setNumberRow(enabled: $0) })
                     )
-                    .font(.system(size: 16))
+                    .font(Theme.Fonts.body)
                     .accessibilityIdentifier("layout-number-row")
                     Divider.themed
                     Toggle(
@@ -41,12 +41,12 @@ struct LayoutGeometrySection: View {
                             get: { !model.draft.cursorRow.isEmpty },
                             set: { model.setExtraRow(enabled: $0) })
                     )
-                    .font(.system(size: 16))
+                    .font(Theme.Fonts.body)
                     .accessibilityIdentifier("layout-extra-row")
                     Divider.themed
                     VStack(alignment: .leading, spacing: 4) {
                         Text("One-handed")
-                            .font(.system(size: 15))
+                            .font(Theme.Fonts.body)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Picker(
                             "One-handed",

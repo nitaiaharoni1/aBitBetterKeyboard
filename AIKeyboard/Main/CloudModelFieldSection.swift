@@ -41,23 +41,23 @@ struct CloudModelFieldSection: View {
                     // bearer — a shipping install has nothing left to paste in.
                     #if DEBUG
                     Text(
-                        "AI Keyboard comes pointing at our server, already filled in below. It needs the access token before it will answer — paste yours in, or replace both with your own server."
+                        "AI Keyboard comes pointing at our server, already filled in below. It needs the access token before it will answer: paste yours in, or replace both with your own server."
                     )
-                    .font(.system(size: 13))
+                    .font(Theme.Fonts.caption)
                     .foregroundStyle(Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     #else
                     Text(
                         "AI Keyboard comes pointing at our server, already filled in below, and connects to it on its own. Replace the address to point it at a server of your own instead."
                     )
-                    .font(.system(size: 13))
+                    .font(Theme.Fonts.caption)
                     .foregroundStyle(Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     #endif
 
                     TextField("https://example.com", text: $url)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 15).monospaced())
+                        .font(Theme.Fonts.body.monospaced())
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
@@ -94,7 +94,7 @@ struct CloudModelFieldSection: View {
                     #if DEBUG
                     SecureField(tokenPrompt, text: $token)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 15).monospaced())
+                        .font(Theme.Fonts.body.monospaced())
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .submitLabel(.done)
@@ -110,7 +110,7 @@ struct CloudModelFieldSection: View {
                     #endif
 
                     Text(status)
-                        .font(.system(size: 12))
+                        .font(Theme.Fonts.caption)
                         .foregroundStyle(isUsable ? Theme.Semantic.success : Theme.Text.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -122,7 +122,7 @@ struct CloudModelFieldSection: View {
                     Text(
                         "The token is kept in AI Keyboard's shared settings, which are included in your device backup. Use one you can revoke."
                     )
-                    .font(.system(size: 11))
+                    .font(Theme.Fonts.micro)
                     .foregroundStyle(Theme.Text.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
                     #endif
@@ -176,12 +176,12 @@ struct CloudModelFieldSection: View {
         // keyboard that is in fact still sending. Saving an empty field is how you
         // get the built-in server back after typing over it.
         if typedURL.isEmpty {
-            return "Empty — tap Save to go back to the server AI Keyboard ships with."
+            return "Empty. Tap Save to go back to the server AI Keyboard ships with."
         }
         guard isUsable else {
             return "That is not a web address. It has to begin with http:// or https://."
         }
-        guard store.cloudBackendURL == typedURL else { return "Not saved yet — tap Save." }
+        guard store.cloudBackendURL == typedURL else { return "Not saved yet. Tap Save." }
         // **"Saved and in use" was a lie for the one state a fresh install is
         // actually in.** The address ships filled in, so it saves and matches
         // immediately, and this line would have said the cloud was working while
@@ -190,7 +190,7 @@ struct CloudModelFieldSection: View {
         #if DEBUG
         return store.hasCloudModel
             ? "Saved and in use."
-            : "Saved, but there is no access token — AI actions will be refused until you paste one in."
+            : "Saved, but there is no access token: AI actions will be refused until you paste one in."
         #else
         // Nothing here for a shipping install to paste in: `AppAttestation`
         // fills the bearer at launch, so the only honest report is whether

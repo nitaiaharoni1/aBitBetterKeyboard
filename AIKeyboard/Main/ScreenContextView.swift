@@ -37,6 +37,7 @@ struct ScreenContextView: View {
                 }
                 .padding(.horizontal, Theme.Space.md)
                 .padding(.bottom, Theme.Space.xl)
+                .animation(Theme.Motion.quick, value: session.source)
             }
         }
         .navigationTitle("Screen Context")
@@ -73,7 +74,7 @@ struct ScreenContextView: View {
                     Text(
                         "Reading a screen needs a server to send it to, and it is the same one the keyboard's AI actions use. Until it is set, screen context will not start."
                     )
-                    .font(.system(size: 13))
+                    .font(Theme.Fonts.callout)
                     .foregroundStyle(Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 

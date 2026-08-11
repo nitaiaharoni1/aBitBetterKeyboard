@@ -35,7 +35,7 @@ struct ScreenContextLimitsSection: View {
                 .frame(width: 14, height: 18)
 
             Text(text)
-                .font(.system(size: 13))
+                .font(Theme.Fonts.callout)
                 .foregroundStyle(Theme.Text.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

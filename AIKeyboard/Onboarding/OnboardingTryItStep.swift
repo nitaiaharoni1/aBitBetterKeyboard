@@ -21,7 +21,7 @@ struct TryItStep: View {
         VStack(alignment: .leading, spacing: Theme.Space.md) {
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 Text("Try it here first")
-                    .font(.system(size: 30, weight: .bold))
+                    .font(Theme.Fonts.display)
                     .foregroundStyle(Theme.Text.primary)
 
                 // Describes the screen; it does not instruct. The instruction is
@@ -30,7 +30,7 @@ struct TryItStep: View {
                 // has done something with it. Telling somebody to "type a
                 // sentence" above a sentence is the defect this replaced.
                 Text(subtitle)
-                    .font(.system(size: 16))
+                    .font(Theme.Fonts.body)
                     .foregroundStyle(Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

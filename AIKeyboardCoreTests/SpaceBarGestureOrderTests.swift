@@ -2,7 +2,7 @@ import XCTest
 
 @testable import AIKeyboardCore
 
-/// Globe-key and gesture-order tests extracted from `SpaceBarLanguageSwitchTests`.
+/// Gesture-order tests extracted from `SpaceBarLanguageSwitchTests`.
 @MainActor
 final class SpaceBarGestureOrderTests: XCTestCase {
 
@@ -28,9 +28,12 @@ final class SpaceBarGestureOrderTests: XCTestCase {
         controller.spaceBarTouch(.ended(points))
     }
 
-    // MARK: The globe, which the swipe is an addition to and not a replacement for
+    // MARK: Globe key
 
-    func testTheGlobeStillHandsOverWhenOnlyOneLanguageIsEnabled() {
+    /// One tap on the globe, one language enabled — the keyboard has nowhere of
+    /// its own to go, so it hands the user over to iOS without changing the
+    /// language or typing anything.
+    func testGlobeWithOneLanguageHandsOver() {
         SharedStore.shared.enabledLanguages = [.english]
         let controller = KeyboardController(target: MockTextTarget(), language: .english)
         var handedOver = false
@@ -38,29 +41,39 @@ final class SpaceBarGestureOrderTests: XCTestCase {
 
         controller.press(.globe)
 
-        XCTAssertTrue(handedOver)
-        XCTAssertEqual(controller.language, .english)
+        XCTAssertTrue(handedOver, "globe did not call onAdvanceToNextKeyboard with one language")
+        XCTAssertEqual(
+            controller.language, .english,
+            "globe changed the language instead of handing over")
     }
 
-    func testTheGlobeStillCyclesTheEnabledLanguages() {
-        SharedStore.shared.enabledLanguages = [.english, .hebrew, .russian]
+    /// Multiple languages enabled — the globe cycles one step, the same step a
+    /// slide makes, and never calls `onAdvanceToNextKeyboard`.
+    func testGlobeWithMultipleLanguagesCycles() {
+        let controller = KeyboardController(target: MockTextTarget(), language: .english)
+        var handedOver = false
+        controller.onAdvanceToNextKeyboard = { handedOver = true }
+
+        controller.press(.globe)
+
+        XCTAssertFalse(handedOver, "globe handed over instead of cycling with two languages")
+        XCTAssertEqual(controller.language, .hebrew, "globe did not advance to the next language")
+    }
+
+    /// After the globe lands the space bar names the destination, the same way
+    /// a completed swipe does — the only confirmation a user who pressed the
+    /// globe key gets that the layout changed.
+    func testGlobeNamesDestinationOnSpaceBar() {
         let controller = KeyboardController(target: MockTextTarget(), language: .english)
 
         controller.press(.globe)
-        XCTAssertEqual(controller.language, .hebrew)
-        controller.press(.globe)
-        XCTAssertEqual(controller.language, .russian)
-        controller.press(.globe)
-        XCTAssertEqual(controller.language, .english)
-    }
 
-    func testTheGlobeAlsoNamesWhereItWent() {
-        let controller = KeyboardController(target: MockTextTarget(), language: .english)
-
-        controller.press(.globe)
-
-        XCTAssertEqual(controller.languageSwitchIndication?.language, .hebrew)
-        XCTAssertEqual(controller.languageSwitchIndication?.isPending, false)
+        XCTAssertEqual(
+            controller.languageSwitchIndication?.language, .hebrew,
+            "globe tap did not name the destination on the space bar")
+        XCTAssertEqual(
+            controller.languageSwitchIndication?.isPending, false,
+            "the space bar still shows a pending indication after the globe already landed")
     }
 
     // MARK: Orders a gesture recogniser is free to deliver

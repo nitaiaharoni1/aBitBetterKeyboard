@@ -139,6 +139,11 @@ struct LayoutView: View {
                     keyFrames = Self.mapFrames(frames, to: editableSlots)
                 }
                 .overlay { selectionOverlay }
+            Text("Tap a key to edit it. Hold and drag to move it.")
+                .font(Theme.Fonts.caption)
+                .foregroundStyle(Theme.Text.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Theme.Space.xs)
             Divider().overlay(Theme.Surface.separator)
         }
         .background(Theme.Keys.background)
@@ -179,7 +184,7 @@ struct LayoutView: View {
                                 RoundedRectangle(
                                     cornerRadius: Theme.Radius.key, style: .continuous
                                 )
-                                .strokeBorder(Theme.Brand.gradient, lineWidth: 2)
+                                .strokeBorder(Theme.Brand.solid, lineWidth: 2)
                             }
                         }
                         .opacity(dragging?.id == slot.id ? 0.3 : 1)

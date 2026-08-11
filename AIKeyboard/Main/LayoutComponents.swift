@@ -16,12 +16,11 @@ struct LayoutSlider: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text(title).font(.system(size: 15))
+                Text(title).font(Theme.Fonts.body)
                 Spacer()
                 Text("\(Int(value))\(unit)")
-                    .font(.system(size: 13, design: .monospaced))
+                    .font(Theme.Fonts.caption.monospaced())
                     .foregroundStyle(Theme.Text.secondary)
-                    .monospacedDigit()
             }
             Slider(
                 value: Binding(get: { Double(value) }, set: { onChange(CGFloat($0)) }),
@@ -47,7 +46,7 @@ struct SlotGlyphView: View {
                 .foregroundStyle(Theme.Text.secondary)
         } else {
             Text(action.title.prefix(3))
-                .font(.system(size: 11, weight: .semibold))
+                .font(Theme.Fonts.micro)
                 .foregroundStyle(Theme.Text.secondary)
         }
     }

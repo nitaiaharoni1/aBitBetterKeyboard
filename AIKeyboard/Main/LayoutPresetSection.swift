@@ -19,13 +19,14 @@ struct LayoutPresetSection: View {
             if model.draft.preset == nil, let base = LayoutPreset.named(model.draft.basedOn) {
                 HStack {
                     Text("Custom, from \(base.name)")
-                        .font(.system(size: 13))
+                        .font(Theme.Fonts.caption)
                         .foregroundStyle(Theme.Text.secondary)
                     Spacer()
                     Button("Reset") { model.reset() }
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(Theme.Fonts.caption.weight(.semibold))
                         .accessibilityIdentifier("layout-reset")
                 }
+                .padding(.horizontal, Theme.Space.xxs)
             }
         }
     }
@@ -35,14 +36,14 @@ struct LayoutPresetSection: View {
         return Button {
             model.apply(preset: preset)
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 LayoutThumbnail(layout: preset.customization)
                     .frame(width: 96, height: 58)
                 Text(preset.name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(Theme.Fonts.caption.weight(.semibold))
                     .foregroundStyle(Theme.Text.primary)
                 Text(preset.summary)
-                    .font(.system(size: 11))
+                    .font(Theme.Fonts.micro)
                     .foregroundStyle(Theme.Text.secondary)
                     .lineLimit(2, reservesSpace: true)
                     .multilineTextAlignment(.leading)
@@ -56,9 +57,8 @@ struct LayoutPresetSection: View {
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                     .strokeBorder(
-                        isSelected
-                            ? AnyShapeStyle(Theme.Brand.gradient) : AnyShapeStyle(Color.clear),
-                        lineWidth: 2)
+                        isSelected ? Theme.Brand.solid : Theme.Surface.separator,
+                        lineWidth: isSelected ? 2 : 1)
             )
         }
         .buttonStyle(.plain)

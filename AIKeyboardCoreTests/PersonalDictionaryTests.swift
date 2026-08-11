@@ -224,11 +224,17 @@ final class PersonalDictionaryTests: XCTestCase {
     /// prefix, and the whole prefix includes the comma. Measured before this fix:
     /// `recieve,` committed as `receive `, `helo,` as `help `, `sched,` as `she'd `.
     /// See `KeyboardController.restoringTrailingMarks`.
+    ///
+    /// **`helo,` reads `hello, ` now, and the change is the point of
+    /// `SeedLanguageModel`.** `help` was what `UITextChecker.guesses` ranked first
+    /// with no frequency model behind it; `hello` is what the person typing meant.
+    /// What this test is *for* is unaffected either way — the comma survives the
+    /// correction, whichever word the correction lands on.
     func testAnOrdinaryCorrectionKeepsTheMarkThatEndedTheSentence() {
         SharedStore.shared.personalDictionary = []
 
         XCTAssertEqual(committed("recieve,", in: .english), "receive, ")
-        XCTAssertEqual(committed("helo,", in: .english), "help, ")
+        XCTAssertEqual(committed("helo,", in: .english), "hello, ")
         XCTAssertEqual(committed("sched,", in: .english), "she'd, ")
     }
 

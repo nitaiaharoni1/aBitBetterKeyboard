@@ -7,6 +7,8 @@ struct LanguagesStep: View {
 
     var body: some View {
         StepLayout(
+            icon: "character.bubble",
+            eyebrow: "Your languages",
             title: "Which languages do you type in?",
             subtitle: "Keeping the list short is what makes prediction fast. You can change this later."
         ) {
@@ -26,7 +28,7 @@ struct LanguagesStep: View {
             // Full Access is confirmed, when it is no longer true of this phone.
             if setup.fullAccess != .confirmed {
                 Text(SetupState.languagesNeedFullAccess)
-                    .font(.system(size: 13))
+                    .font(Theme.Fonts.caption)
                     .foregroundStyle(Theme.Text.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -45,15 +47,24 @@ struct LanguageToggleRow: View {
             toggle()
         } label: {
             HStack(spacing: Theme.Space.sm) {
-                Text(language.flag)
-                    .font(.system(size: 26))
+                // The token the globe key and the space bar carry, in place of
+                // the old flag emoji: no emoji in this UI, and the user meets
+                // the mark here that the keyboard later labels the language with.
+                Text(language.shortName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.Brand.solid)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Theme.Brand.solid.opacity(0.12))
+                    )
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(language.nativeName)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(Theme.Fonts.headline)
                         .foregroundStyle(Theme.Text.primary)
                     Text(language.displayName)
-                        .font(.system(size: 13))
+                        .font(Theme.Fonts.caption)
                         .foregroundStyle(Theme.Text.secondary)
                 }
 
@@ -71,8 +82,8 @@ struct LanguageToggleRow: View {
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                     .strokeBorder(
-                        isOn ? Theme.Brand.solid.opacity(0.5) : Theme.Surface.separator,
-                        lineWidth: 1.5)
+                        isOn ? Theme.Brand.solid : Theme.Surface.separator,
+                        lineWidth: 1)
             )
             .contentShape(Rectangle())
         }

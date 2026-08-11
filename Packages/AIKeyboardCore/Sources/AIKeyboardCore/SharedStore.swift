@@ -75,6 +75,7 @@ public final class SharedStore: ObservableObject {
         static let predictions = "predictions"
         static let haptics = "haptics"
         static let keySounds = "keySounds"
+        static let learnsFromTyping = "learnsFromTyping"
         static let defaultTone = "defaultTone"
         /// The two `BackendTransport.configured` reads. It declares them inline in
         /// `AIKeyboardShared`, which cannot see this enum, so they are spelled
@@ -92,6 +93,10 @@ public final class SharedStore: ObservableObject {
         static let dictationSessionMinutes = "dictationSessionMinutes"
         static let keyboardLayout = "keyboardLayout"
         static let recentEmoji = "recentEmoji"
+        static let hasAcknowledgedKeyboardSwitch = "hasAcknowledgedKeyboardSwitch"
+        /// A Unix timestamp written by the keyboard when it wants the app to start
+        /// dictation. The app consumes it exactly once and refuses stale requests.
+        static let dictationHandoffRequest = "dictationHandoffRequest"
     }
 
     /// Keys this store used to write and no longer reads.
@@ -136,6 +141,14 @@ public final class SharedStore: ObservableObject {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Key.hasCompletedOnboarding) }
     }
 
+    /// Whether the user has ever confirmed, in the app, that they switched to AI
+    /// Keyboard with the globe key. The keyboard cannot tell the app it is
+    /// running — `KeyboardPresence` is the closest honest signal — and this is
+    /// the user-side confirmation that the handoff happened.
+    @Published public var hasAcknowledgedKeyboardSwitch: Bool = false {
+        didSet { defaults.set(hasAcknowledgedKeyboardSwitch, forKey: Key.hasAcknowledgedKeyboardSwitch) }
+    }
+
     // MARK: Languages
 
     /// What a keyboard with no stored list draws — which, until Full Access is
@@ -169,21 +182,84 @@ public final class SharedStore: ObservableObject {
     // MARK: Typing
 
     @Published public var autocorrect = true { didSet { defaults.set(autocorrect, forKey: Key.autocorrect) } }
+
+    /// Whether space may replace the typed word with the default suggestion.
+    ///
+    /// **The keyboard has to use this one, for the reason `storedPersonalDictionary`
+    /// exists.** The toggle lives in the app and the space bar lives in the
+    /// keyboard extension; those are two processes, and `load()` fills the
+    /// `@Published` copy above once, when whichever process asked was launched. A
+    /// keyboard already on screen when the user turned autocorrect off would
+    /// otherwise keep committing the correction — which looks exactly like the
+    /// setting not working.
+    public var storedAutocorrect: Bool {
+        if defaults.object(forKey: Key.autocorrect) != nil {
+            return defaults.bool(forKey: Key.autocorrect)
+        }
+        return autocorrect
+    }
+
     @Published public var autocapitalise = true {
         didSet { defaults.set(autocapitalise, forKey: Key.autocapitalise) }
     }
     @Published public var predictions = true { didSet { defaults.set(predictions, forKey: Key.predictions) } }
-    @Published public var haptics = true {
-        didSet {
-            defaults.set(haptics, forKey: Key.haptics)
-            Task { @MainActor in Feedback.hapticsEnabled = haptics }
-        }
+
+    /// Whether the keyboard may remember the words this person types.
+    ///
+    /// On by default, and that is a deliberate call rather than an oversight: with
+    /// it off the suggestion bar is the same for everybody and never learns a name,
+    /// which is most of what makes a keyboard feel like it knows you. What makes
+    /// the default defensible is the shape of what is kept — `PersonalLanguageModel`
+    /// stores word counts and word-pair counts and nothing longer, never leaves the
+    /// device, and never records in a credential field. The Settings row says so in
+    /// those words, and the button next to it empties the store.
+    @Published public var learnsFromTyping = true {
+        didSet { defaults.set(learnsFromTyping, forKey: Key.learnsFromTyping) }
     }
-    @Published public var keySounds = true {
-        didSet {
-            defaults.set(keySounds, forKey: Key.keySounds)
-            Task { @MainActor in Feedback.soundEnabled = keySounds }
+
+    /// Same cross-process rule as `storedAutocorrect`: the toggle is in the app and
+    /// every word it gates is committed in the keyboard extension, so reading the
+    /// `@Published` copy alone keeps learning after the user switched it off.
+    public var storedLearnsFromTyping: Bool {
+        if defaults.object(forKey: Key.learnsFromTyping) != nil {
+            return defaults.bool(forKey: Key.learnsFromTyping)
         }
+        return learnsFromTyping
+    }
+
+    /// Whether the suggestion bar is shown at all.
+    ///
+    /// Same cross-process rule as `storedAutocorrect`: the toggle is in the app
+    /// and the bar is drawn by the keyboard, so a read of the `@Published` copy
+    /// alone keeps offering candidates after the user turned them off.
+    public var storedPredictions: Bool {
+        if defaults.object(forKey: Key.predictions) != nil {
+            return defaults.bool(forKey: Key.predictions)
+        }
+        return predictions
+    }
+
+    @Published public var haptics = true { didSet { defaults.set(haptics, forKey: Key.haptics) } }
+    @Published public var keySounds = true { didSet { defaults.set(keySounds, forKey: Key.keySounds) } }
+
+    /// The two feedback switches, as `Feedback` reads them at the press.
+    ///
+    /// **Same rule as `storedAutocorrect`, and this pair was the worse instance
+    /// of it.** Both switches are in the app; every press they gate happens in
+    /// the keyboard extension. `Feedback` used to hold plain `Bool`s filled once
+    /// from `KeyboardViewController.viewDidLoad`, and the `didSet`s here used to
+    /// push new values into them — which works in the app's own process and does
+    /// nothing at all for an extension instance iOS is keeping alive. So a user
+    /// who turned the sound off, came back to the same host app and got the same
+    /// keyboard instance kept hearing it, which reads as the toggle not working.
+    /// Going through `defaults` at the press cannot go stale.
+    public var storedHaptics: Bool {
+        if defaults.object(forKey: Key.haptics) != nil { return defaults.bool(forKey: Key.haptics) }
+        return haptics
+    }
+    public var storedKeySounds: Bool {
+        if defaults.object(forKey: Key.keySounds) != nil { return defaults.bool(forKey: Key.keySounds) }
+        return keySounds
     }
 
     // MARK: AI
@@ -202,11 +278,72 @@ public final class SharedStore: ObservableObject {
     /// reason, offers 5, 15, 60 and never; this offers the first three and no
     /// never, because "never" is the one choice that cannot be undone by
     /// forgetting.
-    @Published public var dictationSessionMinutes = 15 {
+    ///
+    /// **Default is 5 minutes, not 15.** Most dictation sessions are short: the
+    /// keyboard handoff sends the user back to AI Keyboard, they tap Start, and
+    /// they are back in their app within seconds. A 15-minute open microphone is
+    /// more than most users will ever use and more than most should leave running.
+    /// 5 is the choice that covers the session without leaving the microphone
+    /// open for a lunch break.
+    @Published public var dictationSessionMinutes = 5 {
         didSet { defaults.set(dictationSessionMinutes, forKey: Key.dictationSessionMinutes) }
     }
 
     public static let dictationSessionChoices = [5, 15, 60]
+
+    // MARK: Dictation handoff
+
+    /// The deep link the keyboard writes to the shared store and the app opens on
+    /// launch. Stable so the keyboard can record it before the app is running.
+    public static let dictationStartURL = URL(string: "aikeyboard://dictation/start")!
+
+    /// Opens the containing app directly on its Settings tab.
+    public static let settingsURL = URL(string: "aikeyboard://settings")!
+
+    /// Records a timestamped intent for the app to start a dictation session.
+    ///
+    /// Called by the keyboard before it asks the system to foreground the app.
+    /// The timestamp lets the app discard stale requests — a handoff written
+    /// during a previous session that somehow was not consumed.
+    public func recordDictationHandoff() {
+        recordDictationHandoff(at: Date())
+    }
+
+    /// Consumes a pending handoff request if one exists and is still fresh.
+    ///
+    /// Returns `true` exactly once per `recordDictationHandoff()` call, and only
+    /// within 30 seconds of it. The key is removed on every call, so a stale
+    /// request does not linger and a second call in the same app launch returns
+    /// `false`. 30 seconds is generous for a warm foreground switch and short
+    /// enough that a request from a previous session cannot trigger an
+    /// auto-start hours later.
+    ///
+    /// Future timestamps (clock skew, tampered store) are also rejected: a
+    /// negative age means the timestamp was written after now, which should not
+    /// happen and must not trigger an auto-start.
+    public func consumeDictationHandoff() -> Bool {
+        consumeDictationHandoff(at: Date())
+    }
+
+    // MARK: Internal date seams (used by tests via @testable import)
+
+    /// Records a handoff at the given date. The public overload uses `Date()`
+    /// so shipping code never passes an explicit date.
+    func recordDictationHandoff(at date: Date) {
+        defaults.set(date.timeIntervalSince1970, forKey: Key.dictationHandoffRequest)
+    }
+
+    /// Consumes a handoff relative to the given date. The public overload uses
+    /// `Date()`. Accepts the same freshness window as the public overload so
+    /// tests can drive both sides of the 30-second boundary.
+    func consumeDictationHandoff(at now: Date) -> Bool {
+        guard let ts = defaults.object(forKey: Key.dictationHandoffRequest) as? Double else {
+            return false
+        }
+        defaults.removeObject(forKey: Key.dictationHandoffRequest)
+        let age = now.timeIntervalSince1970 - ts
+        return age >= 0 && age < 30
+    }
 
     // MARK: Personal dictionary
 

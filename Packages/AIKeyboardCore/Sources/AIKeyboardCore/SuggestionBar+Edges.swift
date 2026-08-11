@@ -74,7 +74,7 @@ extension SuggestionBar {
                 edgeButton(
                     systemImage: action.glyph ?? "questionmark",
                     label: action.title,
-                    isActive: false
+                    isActive: controller.isActionKeyActive(cap)
                 ) {
                     controller.press(cap)
                 }

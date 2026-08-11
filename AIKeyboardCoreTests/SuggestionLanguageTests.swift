@@ -79,10 +79,14 @@ final class SuggestionLanguageTests: XCTestCase {
                 .isEmpty)
         XCTAssertTrue(
             SuggestionEngine.suggestions(prefix: "", context: "", languages: [.russian]).isEmpty)
-        // …and the two that do have one are unchanged.
+        // …and the two that do have one still answer. The words changed when the
+        // table became a bigram model — see
+        // `SuggestionEngineTests.testNothingTypedAndNoContextOffersTheDefaults` —
+        // but which languages get an answer at all did not, which is what this
+        // test is about.
         XCTAssertEqual(
             SuggestionEngine.suggestions(prefix: "", context: "", languages: [.english])
-                .map(\.text), ["I", "The", "We"])
+                .map(\.text), ["Thanks", "I", "Hi"])
     }
 
     /// The contraction table is English. `dont` is an ordinary French word and

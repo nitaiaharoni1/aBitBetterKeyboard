@@ -59,6 +59,11 @@ extension KeyView {
                 .font(Theme.Glyph.font(18))
                 .foregroundStyle(Theme.Keys.label)
 
+        case .settings:
+            Image(systemName: "gearshape")
+                .font(Theme.Glyph.font(18))
+                .foregroundStyle(Theme.Keys.label)
+
         case .space:
             spaceLabel
 
@@ -76,7 +81,11 @@ extension KeyView {
             // Outline, not `mic.fill`. A solid microphone reads as *recording* —
             // it is the shape the banner uses for exactly that — and this key is
             // the one that has not started yet.
-            actionLabel(icon: "mic", title: "Dictate", tint: Theme.Brand.solid)
+            actionLabel(
+                icon: "mic",
+                title: "Dictate",
+                tint: Theme.Brand.solid,
+                showsCaption: showsActionCaption)
 
         case .emoji:
             // **One key, two jobs, and the cap is what says which.** With the grid
@@ -96,7 +105,11 @@ extension KeyView {
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
             } else {
-                actionLabel(icon: "face.smiling", title: "Emoji", tint: Theme.Keys.label)
+                actionLabel(
+                    icon: "face.smiling",
+                    title: "Emoji",
+                    tint: Theme.Keys.label,
+                    showsCaption: showsActionCaption)
             }
 
         case .quickTone:
@@ -147,20 +160,22 @@ extension KeyView {
     /// An action drawn as a key: its glyph, and its name under it when there is
     /// room.
     ///
-    /// **All five keys of the action row go through this, and the first version
-    /// only sent two.** Reply and Fix were captioned and emoji, Rewrite and
-    /// dictation were left as bare glyphs, so the row read as two labelled buttons
-    /// beside three unexplained symbols — and the worst of the three was Rewrite,
-    /// whose `arrow.triangle.2.circlepath` is a refresh glyph to anyone who has not
-    /// been told otherwise. No test could see it: the accessibility label comes
-    /// from `KeyCap.accessibilityLabel` and was correct throughout, so every
-    /// assertion passed against a row nobody could read. It took a screenshot.
+    /// Reply, Fix and Rewrite keep captions in the shipped action row. Emoji and
+    /// Dictate deliberately use their familiar glyphs alone there, but regain
+    /// captions when moved to another wide row.
     ///
-    /// The tint is per key rather than fixed, because `Theme.Brand` is reserved for
-    /// the AI moments and the emoji key opens a grid of pictures.
+    /// Custom placements keep each action's own tint. In the shipped action row,
+    /// every glyph and caption uses the same neutral label color as the other keys.
     @ViewBuilder
-    func actionLabel(icon: String, title: String, tint: Color) -> some View {
-        if width >= Self.captionMinimumWidth {
+    func actionLabel(
+        icon: String,
+        title: String,
+        tint: Color,
+        showsCaption: Bool = true
+    ) -> some View {
+        let resolvedTint = usesNeutralActionTint ? Theme.Keys.label : tint
+
+        if showsCaption, width >= Self.captionMinimumWidth {
             VStack(spacing: 1) {
                 Image(systemName: icon)
                     .font(Theme.Glyph.medium(15))
@@ -169,12 +184,12 @@ extension KeyView {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            .foregroundStyle(tint)
+            .foregroundStyle(resolvedTint)
             .padding(.horizontal, Theme.Space.xxs)
         } else {
             Image(systemName: icon)
                 .font(Theme.Glyph.medium(16))
-                .foregroundStyle(tint)
+                .foregroundStyle(resolvedTint)
         }
     }
 }

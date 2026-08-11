@@ -1,11 +1,14 @@
 import UIKit
 import SwiftUI
 import Combine
+import os
 import AIKeyboardCore
 
 /// Thin host. Everything visible lives in `AIKeyboardCore` so the companion app
 /// can render the same keyboard during onboarding.
 final class KeyboardViewController: UIInputViewController {
+
+    private let handoffLogger = Logger(subsystem: "com.nitai.aikeyboard", category: "handoff")
 
     private var controller: KeyboardController!
     /// Held here as well as by the controller. Belt and braces on the bug that
@@ -16,6 +19,9 @@ final class KeyboardViewController: UIInputViewController {
     private var textTarget: ProxyTextTarget!
     private var heightConstraint: NSLayoutConstraint?
     private var cancellables = Set<AnyCancellable>()
+    /// Last banner presence we sized the host for. `objectWillChange` fires on
+    /// every keystroke; this is what keeps those from touching the constraint.
+    private var lastShowsActionBanner: Bool?
     /// Latched only once the shared container has actually taken the record, so a
     /// keyboard that starts without Full Access and is granted it mid-process
     /// still gets to leave one. See `recordPresence()`.
@@ -27,11 +33,6 @@ final class KeyboardViewController: UIInputViewController {
         let store = SharedStore.shared
         store.load()
 
-        Feedback.hapticsEnabled = store.haptics
-        // Key clicks need Full Access. Without it the call is a silent no-op, so
-        // there is nothing to guard against here beyond the user's own setting.
-        Feedback.soundEnabled = store.keySounds
-
         // Resolved per call, so a host swapping the focused field cannot leave us
         // typing into the old one. `weak` rather than `unowned`: `KeyView`'s
         // key-repeat task is cancelled from `DragGesture.onEnded`, so a gesture
@@ -42,9 +43,21 @@ final class KeyboardViewController: UIInputViewController {
         controller = KeyboardController(
             target: textTarget,
             store: store,
-            language: store.enabledLanguages.first ?? .english
+            language: store.enabledLanguages.first ?? .english,
+            // **The one caller that says this is the real keyboard**, and the two
+            // things it turns on are both things only a real keyboard should do:
+            // ask a model for a better suggestion on a typing pause, and remember
+            // the words the person typed. The app's playground and all 57 test
+            // constructions leave it off, so neither spends a model call on a
+            // screenshot run nor writes scripted demo words into somebody's
+            // vocabulary — which the test suite did, teaching the store `Handi` ten
+            // times before `KeyboardController.personal` existed.
+            isSystemKeyboard: true
         )
         controller.showsGlobeKey = needsInputModeSwitchKey
+        // Construction uses the in-app default (no iOS handoff key). Reapply
+        // after this real host supplies the device's answer.
+        controller.reloadCustomization()
         controller.onAdvanceToNextKeyboard = { [weak self] in
             self?.advanceToNextInputMode()
         }
@@ -56,14 +69,45 @@ final class KeyboardViewController: UIInputViewController {
         controller.onDismissKeyboard = { [weak self] in
             self?.dismissKeyboard()
         }
+        // `UIApplication` is unavailable in extensions, so the package cannot
+        // open a URL itself. The host handles it here with two best-effort
+        // paths; see `openContainingApp(_:)` for the caveats on each.
+        controller.onOpenContainingApp = { [weak self] url in
+            self?.openContainingApp(url)
+        }
 
-        install(KeyboardView(controller: controller))
+        // Inject a custom URL opener so `Link` elements inside the keyboard
+        // (e.g. the "Open AI Keyboard" chip) route through `openContainingApp`
+        // rather than through SwiftUI's default, which silently fails inside an
+        // extension because `UIApplication.shared` is unavailable there.
+        install(
+            KeyboardView(controller: controller)
+                .environment(
+                    \.openURL,
+                    OpenURLAction { [weak self] url in
+                        self?.openContainingApp(url)
+                        return .handled
+                    })
+        )
 
-        // The context strip appears and disappears with the capture session, so
-        // the height we ask the host app for has to follow it.
-        controller.$screenContext
+        // The action banner appears for a live reading, a model call, a refusal
+        // or a recording, and is gone while idle — so the height we ask the host
+        // for has to follow `showsActionBanner`. `objectWillChange` fires before
+        // the property lands; defer one turn so the read sees the new state.
+        // Presence is compared only after that turn: every keystroke publishes,
+        // and the constraint must not move unless the strip actually appeared or
+        // left.
+        controller.objectWillChange
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.updateKeyboardHeight() }
+            .sink { [weak self] _ in
+                DispatchQueue.main.async {
+                    guard let self, let controller = self.controller else { return }
+                    let shows = controller.showsActionBanner
+                    guard shows != self.lastShowsActionBanner else { return }
+                    self.lastShowsActionBanner = shows
+                    self.updateKeyboardHeight()
+                }
+            }
             .store(in: &cancellables)
 
         // The layout is edited in the companion app, which is another process, so
@@ -212,6 +256,15 @@ final class KeyboardViewController: UIInputViewController {
         // Withdraws the utterance and stops the poll. A no-op unless dictation
         // was actually up; see `KeyboardController.stopDictation`.
         controller?.stopDictation(insert: false)
+        // An answer that arrives after the keyboard has gone would land in whatever
+        // document comes next, which is a different person's message.
+        controller?.cancelRefinement()
+        // The only moment it is certain there is a keyboard to save from.
+        // `PersonalLanguageModel` writes every twenty-fifth word on its own, so
+        // this bounds the loss to the tail rather than being the whole mechanism —
+        // iOS tears a keyboard extension down without warning and there is no
+        // callback that reliably fires when it does.
+        PersonalLanguageModel.shared.save()
     }
 
     /// The host app decides how tall the keyboard is only if we tell it. The
@@ -219,11 +272,13 @@ final class KeyboardViewController: UIInputViewController {
     /// during rotation.
     private func updateKeyboardHeight() {
         guard let controller else { return }
-        // The banner is a constant row that is always counted, so the only thing
-        // that moves this number now is the layout. See `Theme.Metrics.bannerHeight`
-        // for why a strip that appears and disappears was worse than one that is
-        // always there.
-        let height = Theme.Metrics.totalHeight(for: controller.customization)
+        // Banner presence plus the layout. The fingerprint crop still uses the
+        // tallest form — see `ownUIHeightFraction()` — so a mid-read resize
+        // cannot move the band even though the host height follows the strip.
+        let showsBanner = controller.showsActionBanner
+        lastShowsActionBanner = showsBanner
+        let height = Theme.Metrics.totalHeight(
+            for: controller.customization, showsBanner: showsBanner)
 
         guard let heightConstraint else {
             let constraint = view.heightAnchor.constraint(equalToConstant: height)
@@ -234,6 +289,77 @@ final class KeyboardViewController: UIInputViewController {
         }
         guard heightConstraint.constant != height else { return }
         heightConstraint.constant = height
+    }
+
+    /// Opens the containing app at the given URL on behalf of the keyboard.
+    ///
+    /// Both paths here are best-effort. `NSExtensionContext.open(_:)` is
+    /// documented for specific extension points (Today, Action, Share) and is
+    /// **not** documented for keyboard extensions — it may work, may report
+    /// failure without opening, or may be silently ignored depending on the OS
+    /// version and hosting configuration. The responder-chain `UIApplication`
+    /// path is **explicitly unsupported**: it relies on walking UIKit internals
+    /// that Apple does not document for extensions and may stop working without
+    /// notice. Both are isolated here, in the extension host; the package never
+    /// calls either.
+    ///
+    /// `UIApplication.shared` is not used — it is unavailable in extensions.
+    private func openContainingApp(_ url: URL) {
+        guard let ctx = extensionContext else {
+            handoffLogger.info(
+                "extensionContext nil — attempting responder-chain fallback for \(url.scheme ?? "unknown", privacy: .public)"
+            )
+            openViaResponderChain(url)
+            return
+        }
+        ctx.open(url) { [weak self] success in
+            if success {
+                self?.handoffLogger.info(
+                    "extensionContext.open succeeded for \(url.scheme ?? "unknown", privacy: .public)"
+                )
+            } else {
+                self?.handoffLogger.warning(
+                    "extensionContext.open failed — attempting responder-chain fallback for \(url.scheme ?? "unknown", privacy: .public)"
+                )
+                // The completion may arrive on any thread; UIKit responder traversal
+                // and UIApplication.open(_:) must run on main.
+                DispatchQueue.main.async { self?.openViaResponderChain(url) }
+            }
+        }
+    }
+
+    /// Walks the UIKit responder chain looking for a `UIApplication` instance
+    /// and asks it to open the URL. **Unsupported and best-effort** — see the
+    /// caller's doc comment. `UIApplication.shared` cannot be used here because
+    /// it is unavailable in extensions; this is the only way to reach an
+    /// instance without it.
+    ///
+    /// All UIKit responder traversal and `UIApplication.open` must run on main.
+    private func openViaResponderChain(_ url: URL) {
+        var responder: UIResponder? = view
+        while let r = responder {
+            if let app = r as? UIApplication {
+                handoffLogger.info(
+                    "UIApplication found in responder chain — opening \(url.scheme ?? "unknown", privacy: .public)"
+                )
+                app.open(url, options: [:]) { [weak self] success in
+                    if success {
+                        self?.handoffLogger.info(
+                            "UIApplication.open succeeded for \(url.scheme ?? "unknown", privacy: .public)"
+                        )
+                    } else {
+                        self?.handoffLogger.warning(
+                            "UIApplication.open failed for \(url.scheme ?? "unknown", privacy: .public)"
+                        )
+                    }
+                }
+                return
+            }
+            responder = r.next
+        }
+        handoffLogger.warning(
+            "no UIApplication found in responder chain for \(url.scheme ?? "unknown", privacy: .public)"
+        )
     }
 
     /// Guarded for the same reason `updateKeyboardHeight()` is, and the two are
