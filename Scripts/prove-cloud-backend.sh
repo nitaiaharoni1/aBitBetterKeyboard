@@ -147,16 +147,41 @@ trap 'rm -rf "$BUILD"' EXIT
 # does not compile without it. That is also why this needs the macOS 26 SDK to
 # build — but not Apple Intelligence to run, which is the difference between this
 # script and `Bar/ai-text/harness/run-real.sh`.
-for source in Models.swift LanguageDetector.swift TextIntelligence.swift AIPrompts.swift \
-    OutputGuard.swift EditScope.swift FoundationModelsEngine.swift CloudIntelligence.swift; do
-    cp "$CORE/$source" "$BUILD/"
+# **Copied by family — base file plus every `Name+Part.swift` beside it — where
+# this used to name single files.** Three of them had since been split:
+# `AIPrompts.swift` into six (`+Fix`, `+Rewrite`, `+Tone`, `+Reply`,
+# `+Continuation`), `Models.swift` into three (`+AI`, `+ScreenContext`),
+# `EditScope.swift` into two (`+Alignment`), and `BackendTransport.send` into a
+# file whose name does not begin with `CloudTransport` at all. So check 4 stopped
+# compiling, and nothing else in this repo touches the live service — between the
+# first of those splits and 2026-08-12 the product's only end-to-end cloud check
+# proved nothing, and said so only to whoever ran it by hand. A family glob
+# cannot go stale that way, and the `matched` guard fails loudly if a family is
+# renamed out from under it rather than compiling a subset.
+copy_family() {
+    local dir="$1" family="$2" matched=0 file
+    for file in "$dir/$family".swift "$dir/$family"+*.swift; do
+        [ -f "$file" ] || continue
+        cp "$file" "$BUILD/"
+        matched=1
+    done
+    [ "$matched" = 1 ] || note_failure "no source for $family in $dir — this list is stale"
+}
+
+for family in Models LanguageDetector TextIntelligence TextPrediction AIPrompts OutputGuard \
+    EditScope FoundationModelsEngine CloudIntelligence; do
+    copy_family "$CORE" "$family"
 done
 # Both targets ship a `LanguageDetector.swift`, one half each, and they land in
 # the same directory here. Same rename as `Bar/ai-text/harness/run-real.sh`.
 cp "$SHARED/LanguageDetector.swift" "$BUILD/SharedLanguageDetector.swift"
-for source in KeyboardLanguage.swift AIOutput.swift CloudTransport.swift SharedContainer.swift \
-    ScreenContextEndReason.swift; do
-    cp "$SHARED/$source" "$BUILD/"
+# `BackendTransport` is its own family with no base file: `CloudTransport.swift`
+# declares the type and `BackendTransport+Send.swift` is where `send` lives, so
+# naming only the first compiles a transport that does not conform to the
+# protocol it is passed as.
+for family in KeyboardLanguage LanguageCatalogue LanguageCatalogueExtended AIOutput \
+    CloudTransport BackendTransport SessionTokenExpiry SharedContainer ScreenContextEndReason; do
+    copy_family "$SHARED" "$family"
 done
 
 # Hebrew on purpose. English would pass against a backend that had lost its
