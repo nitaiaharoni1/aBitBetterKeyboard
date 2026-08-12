@@ -8,10 +8,10 @@
       "k": 2,
       "words": 2000,
       "approxKB": 43,
-      "commitRate": 0.7782,
+      "commitRate": 0.7788,
       "offeredRate": 0.7868,
       "oovRate": 0.2132,
-      "meanCollision": 1.17
+      "meanCollision": 1.12
     },
     {
       "label": "en k=2 (14 keys)",
@@ -19,10 +19,10 @@
       "k": 2,
       "words": 5000,
       "approxKB": 107,
-      "commitRate": 0.8649,
+      "commitRate": 0.8655,
       "offeredRate": 0.8746,
       "oovRate": 0.1254,
-      "meanCollision": 1.22
+      "meanCollision": 1.17
     },
     {
       "label": "en k=2 (14 keys)",
@@ -30,10 +30,10 @@
       "k": 2,
       "words": 10000,
       "approxKB": 215,
-      "commitRate": 0.9099,
+      "commitRate": 0.9094,
       "offeredRate": 0.9225,
       "oovRate": 0.0775,
-      "meanCollision": 1.32
+      "meanCollision": 1.31
     },
     {
       "label": "en k=2 (14 keys)",
@@ -41,10 +41,10 @@
       "k": 2,
       "words": 20000,
       "approxKB": 430,
-      "commitRate": 0.9373,
+      "commitRate": 0.9339,
       "offeredRate": 0.9498,
       "oovRate": 0.0502,
-      "meanCollision": 1.52
+      "meanCollision": 1.53
     },
     {
       "label": "en k=2 (14 keys)",
@@ -52,10 +52,10 @@
       "k": 2,
       "words": 50000,
       "approxKB": 1074,
-      "commitRate": 0.955,
-      "offeredRate": 0.9692,
+      "commitRate": 0.9527,
+      "offeredRate": 0.9698,
       "oovRate": 0.0302,
-      "meanCollision": 1.99
+      "meanCollision": 1.88
     },
     {
       "label": "en k=2 (14 keys)",
@@ -63,10 +63,10 @@
       "k": 2,
       "words": 100000,
       "approxKB": 2148,
-      "commitRate": 0.9612,
-      "offeredRate": 0.9761,
+      "commitRate": 0.959,
+      "offeredRate": 0.9766,
       "oovRate": 0.0234,
-      "meanCollision": 2.61
+      "meanCollision": 2.44
     },
     {
       "label": "en k=2 (14 keys)",
@@ -74,10 +74,10 @@
       "k": 2,
       "words": 200000,
       "approxKB": 4297,
-      "commitRate": 0.9647,
-      "offeredRate": 0.9806,
+      "commitRate": 0.9635,
+      "offeredRate": 0.9812,
       "oovRate": 0.0188,
-      "meanCollision": 3.09
+      "meanCollision": 2.91
     },
     {
       "label": "en k=3 / L1 (8 keys)",
@@ -85,10 +85,10 @@
       "k": 3,
       "words": 2000,
       "approxKB": 43,
-      "commitRate": 0.7252,
-      "offeredRate": 0.7862,
+      "commitRate": 0.7514,
+      "offeredRate": 0.7851,
       "oovRate": 0.2132,
-      "meanCollision": 1.42
+      "meanCollision": 1.46
     },
     {
       "label": "en k=3 / L1 (8 keys)",
@@ -96,8 +96,8 @@
       "k": 3,
       "words": 5000,
       "approxKB": 107,
-      "commitRate": 0.805,
-      "offeredRate": 0.874,
+      "commitRate": 0.8301,
+      "offeredRate": 0.8729,
       "oovRate": 0.1254,
       "meanCollision": 1.68
     },
@@ -107,10 +107,10 @@
       "k": 3,
       "words": 10000,
       "approxKB": 215,
-      "commitRate": 0.8518,
-      "offeredRate": 0.9219,
+      "commitRate": 0.8729,
+      "offeredRate": 0.919,
       "oovRate": 0.0775,
-      "meanCollision": 2.06
+      "meanCollision": 2.11
     },
     {
       "label": "en k=3 / L1 (8 keys)",
@@ -118,10 +118,10 @@
       "k": 3,
       "words": 20000,
       "approxKB": 430,
-      "commitRate": 0.8757,
-      "offeredRate": 0.9487,
+      "commitRate": 0.8945,
+      "offeredRate": 0.9464,
       "oovRate": 0.0502,
-      "meanCollision": 2.87
+      "meanCollision": 2.94
     },
     {
       "label": "en k=3 / L1 (8 keys)",
@@ -129,10 +129,10 @@
       "k": 3,
       "words": 50000,
       "approxKB": 1074,
-      "commitRate": 0.8917,
-      "offeredRate": 0.9675,
+      "commitRate": 0.9094,
+      "offeredRate": 0.9629,
       "oovRate": 0.0302,
-      "meanCollision": 4.45
+      "meanCollision": 4.96
     },
     {
       "label": "en k=3 / L1 (8 keys)",
@@ -140,10 +140,10 @@
       "k": 3,
       "words": 100000,
       "approxKB": 2148,
-      "commitRate": 0.8968,
-      "offeredRate": 0.9732,
+      "commitRate": 0.9145,
+      "offeredRate": 0.9686,
       "oovRate": 0.0234,
-      "meanCollision": 6.56
+      "meanCollision": 8.48
     },
     {
       "label": "en k=3 / L1 (8 keys)",
@@ -151,10 +151,10 @@
       "k": 3,
       "words": 200000,
       "approxKB": 4297,
-      "commitRate": 0.8991,
-      "offeredRate": 0.9778,
+      "commitRate": 0.9168,
+      "offeredRate": 0.9715,
       "oovRate": 0.0188,
-      "meanCollision": 8.9
+      "meanCollision": 12.23
     },
     {
       "label": "he k=2 separated (14 keys)",
@@ -162,10 +162,10 @@
       "k": 2,
       "words": 2000,
       "approxKB": 51,
-      "commitRate": 0.6601,
+      "commitRate": 0.652,
       "offeredRate": 0.6732,
       "oovRate": 0.3268,
-      "meanCollision": 1.15
+      "meanCollision": 1.17
     },
     {
       "label": "he k=2 separated (14 keys)",
@@ -173,10 +173,10 @@
       "k": 2,
       "words": 5000,
       "approxKB": 127,
-      "commitRate": 0.7434,
+      "commitRate": 0.731,
       "offeredRate": 0.761,
       "oovRate": 0.239,
-      "meanCollision": 1.22
+      "meanCollision": 1.26
     },
     {
       "label": "he k=2 separated (14 keys)",
@@ -184,10 +184,10 @@
       "k": 2,
       "words": 10000,
       "approxKB": 254,
-      "commitRate": 0.8114,
+      "commitRate": 0.7968,
       "offeredRate": 0.8333,
       "oovRate": 0.1667,
-      "meanCollision": 1.31
+      "meanCollision": 1.44
     },
     {
       "label": "he k=2 separated (14 keys)",
@@ -195,10 +195,10 @@
       "k": 2,
       "words": 20000,
       "approxKB": 508,
-      "commitRate": 0.8618,
+      "commitRate": 0.8436,
       "offeredRate": 0.8889,
       "oovRate": 0.1111,
-      "meanCollision": 1.52
+      "meanCollision": 1.58
     },
     {
       "label": "he k=2 separated (14 keys)",
@@ -206,10 +206,10 @@
       "k": 2,
       "words": 50000,
       "approxKB": 1270,
-      "commitRate": 0.9072,
+      "commitRate": 0.8904,
       "offeredRate": 0.9415,
       "oovRate": 0.0585,
-      "meanCollision": 1.88
+      "meanCollision": 1.96
     },
     {
       "label": "he k=2 separated (14 keys)",
@@ -217,10 +217,10 @@
       "k": 2,
       "words": 100000,
       "approxKB": 2539,
-      "commitRate": 0.9247,
+      "commitRate": 0.9079,
       "offeredRate": 0.9605,
       "oovRate": 0.0395,
-      "meanCollision": 2.17
+      "meanCollision": 2.33
     },
     {
       "label": "he k=2 separated (14 keys)",
@@ -228,10 +228,10 @@
       "k": 2,
       "words": 200000,
       "approxKB": 5078,
-      "commitRate": 0.9335,
-      "offeredRate": 0.97,
+      "commitRate": 0.9159,
+      "offeredRate": 0.9693,
       "oovRate": 0.03,
-      "meanCollision": 2.67
+      "meanCollision": 2.83
     },
     {
       "label": "he k=3 / L1 separated (9 keys)",
@@ -239,10 +239,10 @@
       "k": 3,
       "words": 2000,
       "approxKB": 51,
-      "commitRate": 0.6272,
-      "offeredRate": 0.6732,
+      "commitRate": 0.6067,
+      "offeredRate": 0.6667,
       "oovRate": 0.3268,
-      "meanCollision": 1.53
+      "meanCollision": 1.75
     },
     {
       "label": "he k=3 / L1 separated (9 keys)",
@@ -250,10 +250,10 @@
       "k": 3,
       "words": 5000,
       "approxKB": 127,
-      "commitRate": 0.7003,
-      "offeredRate": 0.7602,
+      "commitRate": 0.6711,
+      "offeredRate": 0.7515,
       "oovRate": 0.239,
-      "meanCollision": 1.77
+      "meanCollision": 2.21
     },
     {
       "label": "he k=3 / L1 separated (9 keys)",
@@ -261,10 +261,10 @@
       "k": 3,
       "words": 10000,
       "approxKB": 254,
-      "commitRate": 0.7551,
-      "offeredRate": 0.8311,
+      "commitRate": 0.7222,
+      "offeredRate": 0.8202,
       "oovRate": 0.1667,
-      "meanCollision": 2.18
+      "meanCollision": 2.83
     },
     {
       "label": "he k=3 / L1 separated (9 keys)",
@@ -272,10 +272,10 @@
       "k": 3,
       "words": 20000,
       "approxKB": 508,
-      "commitRate": 0.7997,
-      "offeredRate": 0.8845,
+      "commitRate": 0.7632,
+      "offeredRate": 0.8699,
       "oovRate": 0.1111,
-      "meanCollision": 2.75
+      "meanCollision": 3.43
     },
     {
       "label": "he k=3 / L1 separated (9 keys)",
@@ -283,10 +283,10 @@
       "k": 3,
       "words": 50000,
       "approxKB": 1270,
-      "commitRate": 0.8414,
-      "offeredRate": 0.9342,
+      "commitRate": 0.7968,
+      "offeredRate": 0.9152,
       "oovRate": 0.0585,
-      "meanCollision": 3.83
+      "meanCollision": 4.83
     },
     {
       "label": "he k=3 / L1 separated (9 keys)",
@@ -294,10 +294,10 @@
       "k": 3,
       "words": 100000,
       "approxKB": 2539,
-      "commitRate": 0.8545,
-      "offeredRate": 0.9525,
+      "commitRate": 0.8092,
+      "offeredRate": 0.932,
       "oovRate": 0.0395,
-      "meanCollision": 4.89
+      "meanCollision": 6.35
     },
     {
       "label": "he k=3 / L1 separated (9 keys)",
@@ -305,10 +305,10 @@
       "k": 3,
       "words": 200000,
       "approxKB": 5078,
-      "commitRate": 0.8596,
-      "offeredRate": 0.9591,
+      "commitRate": 0.8136,
+      "offeredRate": 0.9386,
       "oovRate": 0.03,
-      "meanCollision": 6.42
+      "meanCollision": 8.54
     }
   ]
 }

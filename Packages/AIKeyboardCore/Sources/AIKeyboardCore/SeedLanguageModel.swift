@@ -209,6 +209,29 @@ enum SeedLanguageModel {
         return true
     }
 
+    /// Same length, one adjacent swap, after folding Hebrew final forms.
+    ///
+    /// **The neighbour rule's commit half, not its offer half.** A substitution
+    /// of the same length (`מכונ` / `נכון`) is a word still being typed. A
+    /// transposition (`teh` / `the`, `תדוה` / `תודה`) is two keys swapped and is
+    /// the slip space should still correct.
+    static func isTransposition(_ word: String, of other: String) -> Bool {
+        let lhs = Array(shapeFolded(fold(word)))
+        let rhs = Array(shapeFolded(fold(other)))
+        guard lhs.count == rhs.count, lhs.count >= 2 else { return false }
+        var mismatch = -1
+        for index in lhs.indices where lhs[index] != rhs[index] {
+            if mismatch >= 0 {
+                guard mismatch == index - 1, lhs[index] == rhs[mismatch],
+                    lhs[mismatch] == rhs[index]
+                else { return false }
+                return lhs[(index + 1)...].elementsEqual(rhs[(index + 1)...])
+            }
+            mismatch = index
+        }
+        return false
+    }
+
     // MARK: Loading
 
     private static let logger = Logger(

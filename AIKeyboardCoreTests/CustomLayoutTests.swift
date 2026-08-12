@@ -182,7 +182,7 @@ final class CustomLayoutTests: XCTestCase {
 
     func testEveryPresetValidatesClean() {
         for preset in LayoutPreset.all {
-            let errors = LayoutValidator.issues(in: preset.customization, showsGlobe: true)
+            let errors = LayoutValidator.issues(in: preset.customization)
                 .filter { $0.severity == .error }
             XCTAssertEqual(errors, [], "\(preset.id): \(errors.map(\.message))")
         }
@@ -366,7 +366,7 @@ final class CustomLayoutTests: XCTestCase {
             LayoutValidator.screenContextHeightLimit,
             "the shipped keyboard now costs screen context on every read")
         XCTAssertFalse(
-            LayoutValidator.issues(in: .default, showsGlobe: true)
+            LayoutValidator.issues(in: .default)
                 .contains { $0.kind == .costsScreenContext },
             "the default layout warns about itself")
     }

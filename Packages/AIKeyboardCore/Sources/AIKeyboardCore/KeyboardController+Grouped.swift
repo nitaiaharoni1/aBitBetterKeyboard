@@ -55,6 +55,7 @@ public final class GroupedInput {
 
     private(set) var strokes: [Stroke] = []
     private var decoder: GroupedDecoder?
+    private var capCache: (language: KeyboardLanguage, level: GroupedKeys.Level, caps: Set<String>)?
 
     /// Whether shift was down when the word started. Read once rather than per
     /// keystroke, because a one-shot shift is consumed by the first press and
@@ -92,6 +93,23 @@ public final class GroupedInput {
         }
         let built = GroupedDecoder(language: language, level: level, personal: personal)
         decoder = built
+        return built
+    }
+
+    /// The caps this keyboard draws as grouped letter keys, at this language and
+    /// level.
+    ///
+    /// **Cached beside the decoder and for the same reason**: it is asked at every
+    /// keystroke, and answering it means planning the whole layout.
+    func caps(language: KeyboardLanguage, level: GroupedKeys.Level) -> Set<String> {
+        if let cached = capCache, cached.language == language, cached.level == level {
+            return cached.caps
+        }
+        let base = KeyboardLayout.letterLayouts[language]
+        let built = Set(
+            base.map { GroupedKeys.layout($0, language: language, level: level).rows.flatMap { $0 } }
+                ?? [])
+        capCache = (language, level, built)
         return built
     }
 
@@ -200,14 +218,25 @@ extension KeyboardController {
             // alphabet back on screen.
             !overlay.isEmoji
         else { return .off }
-        return SharedStore.shared.storedGroupedLevel
+        return SharedStore.shared.storedGroupedLevel.capped(for: language)
     }
 
     var isGroupedTyping: Bool { groupingLevel != .off }
 
-    /// A cap that carries more than one letter, at the level in force.
+    /// Whether this cap is one of the grouped letter keys this keyboard is
+    /// currently drawing.
+    ///
+    /// **Membership, not shape, and the difference is a shipped defect.** This
+    /// asked whether the cap carried more than one letter, and `SlotAction.text`
+    /// compiles to `.character(".com")` — so with grouping on, the `.com` key in a
+    /// customised bottom row was fed to the *decoder* as a keystroke instead of
+    /// typing anything, and so were `,` `?` `!` `@` on any layout that had moved
+    /// them. The letter count is still asked first because it is the cheap half
+    /// and because a one-letter group is an ordinary key.
     func isGroupedCap(_ value: String) -> Bool {
-        isGroupedTyping && GroupedKeys.letters(inCap: value).count > 1
+        let level = groupingLevel
+        guard level != .off, GroupedKeys.letters(inCap: value).count > 1 else { return false }
+        return grouped.caps(language: language, level: level).contains(value)
     }
 
     /// One grouped key press: record it, decode, and put the best guess in the

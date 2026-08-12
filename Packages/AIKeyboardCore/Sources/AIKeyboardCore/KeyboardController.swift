@@ -304,6 +304,21 @@ public final class KeyboardController: ObservableObject {
     var dictationObservers = Set<AnyCancellable>()
     var lastSpaceTapAt: Date?
     var spaceTouch = SpaceSwipe.Touch()
+
+    /// A word somebody is deleting from is a word they are correcting on
+    /// purpose, and the space bar must not overrule them. See `isCorrectingWordByHand`.
+    var deletedWordPrefix: String?
+
+    /// The last word written into the learned store, folded. Stops Return,
+    /// a full stop, and the keyboard going away from counting the same open
+    /// word three times; cleared once a terminator has moved on to the next
+    /// word, so a repeated `hello hello` still counts twice.
+    var lastLearnedFolded: String?
+
+    /// The word still being typed, updated on every document read. A chat Send
+    /// that empties the field never presses space, so `learnWordJustCommitted`
+    /// would see nothing; this is what that send still has to count.
+    var openWord: String = ""
     private var cancellables = Set<AnyCancellable>()
 
     /// Names and shortcuts from `UILexicon`, read once by `KeyboardViewController`
@@ -447,12 +462,18 @@ public final class KeyboardController: ObservableObject {
 
     /// Takes a layout, repairing what only this process knows.
     ///
-    /// **The globe is put back here and nowhere else.** Whether the key is
-    /// required is `needsInputModeSwitchKey`, which is a property of the *device*
-    /// and unknown to the store: a layout saved on a phone with one keyboard
-    /// installed is missing nothing, and becomes a trap the day a second one is
-    /// added. `SharedStore.decodeLayout` therefore validates with
-    /// `showsGlobe: false`, and this is where the device's own answer is applied.
+    /// **The globe is put back here and nowhere else, and "nowhere else" now
+    /// includes the validator.** Whether the key is required is
+    /// `needsInputModeSwitchKey`, a property of the *device* and unknown to the
+    /// store: a layout saved on a phone with one keyboard installed is missing
+    /// nothing, and becomes a trap the day a second one is added. No preset places
+    /// the key — they all carry `.settings` in that slot — so this repair is the
+    /// ordinary path rather than a rescue, and it runs *before* the check below,
+    /// which is why `LayoutValidator` was never the thing standing between a user
+    /// and a keyboard they could not switch away from. It carried a `missingGlobe`
+    /// error anyway, and the only surface that ever saw it was the layout editor,
+    /// where it blocked Done on the shipped default for anybody with two keyboards
+    /// installed. That rule is deleted; this is the whole mechanism.
     ///
     /// A layout that is still unusable after the repair falls all the way back to
     /// the default, because a keyboard that cannot draw itself is not a state the
@@ -461,12 +482,12 @@ public final class KeyboardController: ObservableObject {
         var repaired = layout
         let hasGlobe = (repaired.bottomRow + repaired.cursorRow).contains { $0.action == .globe }
         if showsGlobeKey, !hasGlobe {
-            // Second from the start, which is where it stands in every preset:
-            // beside the plane key and away from the space bar.
+            // Second from the start: beside the plane key and away from the space
+            // bar, which is where it stood before `.settings` took that slot.
             let index = min(1, repaired.bottomRow.count)
             repaired.bottomRow.insert(SlotSpec(action: .globe, width: .units(1.0)), at: index)
         }
-        guard LayoutValidator.isUsable(repaired, showsGlobe: showsGlobeKey) else {
+        guard LayoutValidator.isUsable(repaired) else {
             customization = .default
             return
         }

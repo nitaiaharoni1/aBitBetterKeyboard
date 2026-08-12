@@ -164,10 +164,13 @@ public final class PersonalLanguageModel {
     ///     passes the answer rather than this asking, because the two things it
     ///     depends on — the user's setting and the focused field — both live in
     ///     `KeyboardController` and neither belongs in a store.
+    /// - Returns: whether a count was actually written. Callers that debounce
+    ///   repeats must not treat a refused write as a successful one.
+    @discardableResult
     func record(
         word: String, previous: String?, language: KeyboardLanguage, permitted: Bool
-    ) {
-        guard permitted else { return }
+    ) -> Bool {
+        guard permitted else { return false }
         adoptClearIfNeeded()
         let folded = SeedLanguageModel.fold(word)
         // Two letters is the floor. Single characters carry no signal and every
@@ -175,7 +178,7 @@ public final class PersonalLanguageModel {
         // symbol in it is a code, a price or an address and is exactly the kind of
         // thing this must not keep.
         guard folded.count >= 2, folded.allSatisfy({ $0.isLetter || $0 == "'" || $0 == "-" })
-        else { return }
+        else { return false }
 
         store.unigrams[language.languageTag, default: [:]][folded, default: 0] += 1
         if let previous {
@@ -189,6 +192,7 @@ public final class PersonalLanguageModel {
         prune()
         pendingWrites += 1
         if pendingWrites >= Self.flushInterval { save() }
+        return true
     }
 
     /// Halve everything and drop what is left at one.

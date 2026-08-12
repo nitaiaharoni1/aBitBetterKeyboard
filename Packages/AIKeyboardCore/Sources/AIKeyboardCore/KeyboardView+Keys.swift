@@ -115,7 +115,15 @@ extension KeyboardView {
         // the Z axis and they all paint on top of each other.
         VStack(spacing: rowSpacing) {
             ForEach(rows) { row in
-                rowView(row, availableWidth: availableWidth, unit: unit, height: height)
+                rowView(
+                    row, availableWidth: availableWidth, unit: unit,
+                    // **A double-height row swallows the spacing it replaced, so
+                    // grouping cannot change the keyboard's height.** The band is
+                    // two key-heights *plus* the one row gap that used to sit
+                    // between the two rows it merged; take that gap away and the
+                    // whole keyboard comes up short by it.
+                    height: height * CGFloat(row.heightUnits)
+                        + rowSpacing * CGFloat(row.heightUnits - 1))
             }
         }
     }

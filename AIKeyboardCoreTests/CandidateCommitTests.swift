@@ -16,18 +16,22 @@ final class CandidateCommitTests: XCTestCase {
 
     private var autocorrect = true
     private var predictions = true
+    private var autocapitalise = true
 
     override func setUp() {
         super.setUp()
         autocorrect = SharedStore.shared.autocorrect
         predictions = SharedStore.shared.predictions
+        autocapitalise = SharedStore.shared.autocapitalise
         SharedStore.shared.autocorrect = true
         SharedStore.shared.predictions = true
+        SharedStore.shared.autocapitalise = true
     }
 
     override func tearDown() {
         SharedStore.shared.autocorrect = autocorrect
         SharedStore.shared.predictions = predictions
+        SharedStore.shared.autocapitalise = autocapitalise
         super.tearDown()
     }
 
@@ -193,5 +197,114 @@ final class CandidateCommitTests: XCTestCase {
         XCTAssertTrue(
             controller.suggestions.isEmpty,
             "the keyboard kept showing predictions after the app turned them off")
+    }
+
+    // MARK: A word the user is repairing by hand
+
+    /// **The delete key undoing itself.** Backspacing the `ם` off `שלומם` leaves
+    /// `שלומ`, which is not a word — `hebrewFinalFormCorrection` turns it into
+    /// `שלום` and space committed that, so pressing delete to change the word
+    /// changed it straight back.
+    ///
+    /// The control half is the same four letters reached by *typing*, which still
+    /// corrects. Without it this would pass against a build that had switched
+    /// autocorrect off altogether, which is not what the reprieve is.
+    func testSpaceDoesNotCorrectAWordTheUserJustBackspacedInto() {
+        let typed = CursorTextTarget(before: "שלומ")
+        let control = KeyboardController(target: typed, language: .hebrew)
+        control.refreshSuggestions()
+        control.press(.space)
+        XCTAssertEqual(
+            typed.document, "שלום ",
+            "the correction has to be live, or the repaired case proves nothing")
+
+        let repaired = CursorTextTarget(before: "שלומם")
+        let controller = KeyboardController(target: repaired, language: .hebrew)
+        controller.press(.backspace)
+        controller.press(.space)
+        XCTAssertEqual(
+            repaired.document, "שלומ ",
+            "space corrected a word the delete key had just changed")
+    }
+
+    /// The bar has to say so too, or it advertises a swap that will not happen.
+    ///
+    /// Both halves stand on the same five letters, one reached by typing and one
+    /// by deleting a sixth, so the only difference between them is the backspace.
+    /// The correction stays in the list: a deliberate tap still commits it.
+    func testTheBoldSlotIsTheTypedWordAfterABackspace() {
+        let atRisk = KeyboardController(
+            target: CursorTextTarget(before: "sched"), language: .english)
+        atRisk.refreshSuggestions()
+        XCTAssertEqual(
+            atRisk.suggestions.first(where: \.isDefault)?.text.lowercased(), "schedule",
+            "the word has to be genuinely at risk, or the backspace proves nothing")
+
+        let controller = KeyboardController(
+            target: CursorTextTarget(before: "schedu"), language: .english)
+        controller.press(.backspace)
+        XCTAssertEqual(
+            controller.suggestions.first(where: \.isDefault)?.text, "sched",
+            "the bar bolded \(controller.suggestions.first(where: \.isDefault)?.text ?? "nothing")")
+        XCTAssertTrue(
+            controller.suggestions.contains { $0.text.lowercased() == "schedule" },
+            "the correction is still a tap away: \(controller.suggestions.map(\.text))")
+    }
+
+    /// **The reprieve is one word long, and the next word is deliberately the same
+    /// five letters.** `isCorrectingWordByHand` matches on the prefix the delete
+    /// left behind, so a word retyped identically after the repaired one is the
+    /// case a snapshot that never expired would still be suppressing.
+    func testTheNextWordIsCorrectedNormally() {
+        let target = CursorTextTarget(before: "schedu")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.shift = .off
+        controller.press(.backspace)
+        controller.press(.space)
+        XCTAssertEqual(target.document, "sched ", "the repaired word was not left alone")
+
+        for character in "sched" { controller.press(.character(String(character))) }
+        controller.press(.space)
+        XCTAssertEqual(
+            target.document, "sched schedule ",
+            "the reprieve outlived the word it was for")
+    }
+
+    /// Return capitalises the next word from UserDefaults, not from the copy
+    /// `load()` filled at launch. Same trap as `storedAutocorrect`.
+    func testReturnSeesAutocapitaliseTurnedOffInTheOtherProcess() {
+        SharedStore.shared.userDefaults.set(false, forKey: SharedStore.Key.autocapitalise)
+        XCTAssertTrue(
+            SharedStore.shared.autocapitalise,
+            "the published copy must stay stale, or this proves nothing")
+        XCTAssertFalse(SharedStore.shared.storedAutocapitalise)
+
+        let controller = KeyboardController(
+            target: CursorTextTarget(before: "hi"), language: .english)
+        controller.shift = .off
+        controller.press(.ret)
+        XCTAssertEqual(
+            controller.shift, .off,
+            "Return still turned shift on after Auto-capitalise was switched off")
+    }
+
+    /// A tap in the host field moves the caret without a key. `selectionDidChange`
+    /// is what calls `refreshSuggestions` for that; without it the bar keeps
+    /// scoring the word the caret just left.
+    func testAHostCaretMoveRefreshesTheBar() {
+        let target = CursorTextTarget(before: "hello schedu")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.press(.backspace)
+        let stale = controller.suggestions.map(\.text)
+        XCTAssertFalse(stale.isEmpty, "the bar has to have been scoring sched")
+
+        target.placeCaret(before: "hel", after: "lo sched")
+        XCTAssertEqual(
+            controller.suggestions.map(\.text), stale,
+            "the bar moved on its own, so this does not prove the callback")
+        controller.refreshSuggestions()
+        XCTAssertTrue(
+            controller.suggestions.contains { $0.text.lowercased() == "hello" || $0.text == "hel" },
+            "the bar is still scoring the word the caret left: \(controller.suggestions.map(\.text))")
     }
 }

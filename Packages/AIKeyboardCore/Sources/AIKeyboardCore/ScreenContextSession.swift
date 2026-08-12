@@ -85,6 +85,11 @@ public final class ScreenContextSession: ObservableObject {
     /// last session failing says nothing about this one.
     @Published public internal(set) var lastReadWentUnanswered = false
 
+    /// Reply has raised `intent.readNow` and is waiting for the frame. A rotation
+    /// that rewrites `ownUIHeightFraction` in this window changes the fingerprint
+    /// band and the freshness gate retires the reading as a conversation switch.
+    public internal(set) var isAwaitingRead = false
+
     /// How long after the last heartbeat an ending is still worth showing.
     ///
     /// **A guess, and it is here for a case the freshness gate cannot see.** A

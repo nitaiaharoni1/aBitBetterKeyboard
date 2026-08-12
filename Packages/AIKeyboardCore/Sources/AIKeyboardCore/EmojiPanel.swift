@@ -181,6 +181,12 @@ public struct EmojiPanel: View {
     /// nothing alike is noise. See `EmojiCategoryRow`.
     static let ruleTint = Theme.Keys.secondaryLabel.opacity(0.18)
 
+    /// The touch answer for a capless `KeyStyleButton` — the category tabs. Same
+    /// idiom as `ruleTint` a shade up, and it lives here rather than on the
+    /// button because **Swift has no static stored properties on a generic
+    /// type** and `KeyStyleButton` is generic over its label.
+    static let pressWash = Theme.Keys.secondaryLabel.opacity(0.22)
+
     // MARK: Sections
 
     struct Cell: Identifiable, Equatable {
@@ -285,9 +291,17 @@ struct EmojiScrollOffsetKey: PreferenceKey {
 /// **Spacing cannot fix it**: matching the key rows above (3pt inset, 6pt gaps)
 /// leaves each tab 28.3pt, a 19pt glyph inside a shadowed card, which is more
 /// crowded and not less. So the chrome goes instead. A tab is a bare glyph on the
-/// panel, and the row's only fill is the selected one — which is also the point,
-/// because a tinted card standing among nine white cards was the weakest possible
-/// way to say the one thing this row exists to say.
+/// panel and gets 34pt to itself, and the row's only fill is the selected one —
+/// which is also the point, because a tinted card standing among nine white cards
+/// was the weakest possible way to say the one thing this row exists to say.
+///
+/// **The selected tab is a filled brand pill, and the wash it replaced is a trap
+/// worth naming.** Tinting a card 14% works because the card is doing the work;
+/// take the cards away and the tint is alone, and a `Brand.solid` glyph on a 14%
+/// `Brand.solid` wash measures 2.3:1 in orange — under the 3:1 floor, and *below*
+/// the 5.18:1 the nine unselected tabs get for free. The highlight was the least
+/// legible thing in the row it was highlighting. `Brand.action` under
+/// `Text.onBrand` is 3.64:1 at worst and 5.35 at best across the four palettes.
 ///
 /// **Delete keeps its cap, and that is now the whole of "this one is
 /// different".** Every other control here scrolls the grid; this one edits the
@@ -360,11 +374,11 @@ struct EmojiCategoryRow: View {
         let isSelected = selected == id
         return KeyStyleButton(
             width: nil, height: height, isSelected: isSelected,
-            // Capless: see the note on the row. The selected tab's glyph goes
-            // brand with its fill; the rest are quiet secondary graphite
-            // straight on the panel.
+            // Capless: see the note on the row. The selected tab is the row's one
+            // filled pill and takes white on it; the rest are quiet secondary
+            // graphite straight on the panel.
             drawsCap: false,
-            glyphColor: isSelected ? Theme.Brand.solid : Theme.Keys.secondaryLabel,
+            glyphColor: isSelected ? Theme.Text.onBrand : Theme.Keys.secondaryLabel,
             action: { onSelect(id) }
         ) {
             Image(systemName: icon)
@@ -375,16 +389,21 @@ struct EmojiCategoryRow: View {
     }
 }
 
-/// A button that looks and presses like a key.
+/// A button that presses like a key, and wears a cap only if it is one.
 ///
 /// The keyboard's own controls — `123`, delete, shift — are drawn by `KeyView`,
-/// which is built around a `KeySpec` and a `KeyCap`. A category tab is neither,
-/// so this carries the same rules rather than inventing a second look: a resting
-/// cap like every key now wears (`restingCap` — warm white card for the tabs,
-/// soft graphite for delete), the letter-white cap and the graphite glyph under
-/// a finger, `Theme.Radius.key` corners, and the same keycap depth — contact line
-/// and ambient lift, settled a point on press — drawn from
-/// `KeyView`'s own recipe (`capKind`), so the panel and the keys cannot drift.
+/// which is built around a `KeySpec` and a `KeyCap`. The emoji panel's controls
+/// are neither, so this carries the same rules rather than inventing a second
+/// look: `Theme.Radius.key` corners, the graphite glyph under a finger, and the
+/// keycap depth — contact line and ambient lift, settled a point on press —
+/// drawn from `KeyView`'s own recipe (`capKind`), so the panel and the keys
+/// cannot drift.
+///
+/// **Two callers, and they want opposite halves of it.** The panel's delete is a
+/// key and takes all of it, on the soft graphite cap the real delete key wears.
+/// A category tab is a shortcut, not a key, and takes `drawsCap: false` — corners
+/// and press behaviour without the cap, because ten caps in that row read as one
+/// slab of chrome. See `EmojiCategoryRow`.
 struct KeyStyleButton<Label: View>: View {
 
     /// Nil spreads the button across the space left over, which is how the tabs
@@ -399,17 +418,17 @@ struct KeyStyleButton<Label: View>: View {
     /// Whether this is drawn as a keycap at all — a fill at rest, and the contact
     /// line and ambient lift under it. False for the category tabs, which are
     /// glyphs on the panel: see `EmojiCategoryRow` for the arithmetic that
-    /// decided it. A capless button still answers a finger, with the warm white
-    /// card appearing under it for as long as the touch is down, so the tap is
-    /// confirmed without the button carrying that weight at rest.
+    /// decided it. A capless button still answers a finger, with `pressWash`
+    /// under it for as long as the touch is down, so the tap is confirmed
+    /// without the button carrying that weight at rest.
     var drawsCap = true
     /// The cap worn at rest. Ignored when `drawsCap` is false.
     var restingCap: Color = Theme.Keys.card
-    /// Which keycap recipe the depth comes from: the tabs' warm white cards are
-    /// `.letter`, delete's soft graphite is `.soft`.
+    /// Which keycap recipe the depth comes from — delete's soft graphite is
+    /// `.soft`. Ignored when `drawsCap` is false, which is the only other caller.
     var capKind: KeyView.CapKind = .letter
-    /// The glyph's colour at rest. Under a finger the cap goes light and the
-    /// glyph flips to `Theme.Keys.label`, exactly as `KeyView`'s do.
+    /// The glyph's colour at rest. Under a finger the fill goes to the pressed
+    /// state and the glyph flips to `Theme.Keys.label`, exactly as `KeyView`'s do.
     var glyphColor: Color = Theme.Keys.label
     let action: () -> Void
     @ViewBuilder let label: () -> Label
@@ -437,7 +456,11 @@ struct KeyStyleButton<Label: View>: View {
                     radius: isPressed ? 3 : 7, x: 0, y: isPressed ? 2 : 4
                 )
             label()
-                .foregroundStyle(isPressed ? Theme.Keys.label : glyphColor)
+                // `&& !isSelected`: the flip exists because a pressed cap goes
+                // pale and a graphite glyph is what stays legible on it. The
+                // selected tab does not go pale — it keeps its brand fill through
+                // the press — so flipping there would put graphite on orange.
+                .foregroundStyle(isPressed && !isSelected ? Theme.Keys.label : glyphColor)
         }
         .frame(width: width, height: height)
         .frame(maxWidth: width == nil ? .infinity : nil)
@@ -479,12 +502,33 @@ struct KeyStyleButton<Label: View>: View {
     }
 
     private var fill: Color {
-        // A capless button has nothing to lighten, so the press is a card
-        // *appearing* rather than a cap going pale — `functionPressed` is
-        // 0xFFFEFA against a 0xF4F3EF panel, a difference small enough on a phone
-        // in daylight to read as no answer at all.
-        if isPressed { return drawsCap ? Theme.Keys.functionPressed : Theme.Keys.card }
-        if isSelected { return Theme.Brand.solid.opacity(0.14) }
+        // **Selected is a filled brand cap, whole — the 14% wash it replaced was
+        // measured at 2.3:1 under its own glyph.** The wash worked while the tabs
+        // were cards, because the *card* carried the signal and the tint only
+        // coloured it. With the cards gone it had to carry the signal alone and
+        // could not: a `Brand.solid` glyph on a 14% `Brand.solid` wash is 2.3:1 in
+        // orange, 2.58 in pink, 2.59 in blue — under the 3:1 floor, and below the
+        // 5.18:1 of the nine *unselected* tabs beside it. The one tab that has to
+        // stand out was the hardest to see in the row. `Brand.action` under
+        // `Text.onBrand` is 3.64 / 5.35 / 5.17, and 13.34 light and 4.80 dark in
+        // monochrome. This is the same mistake `KeyView.capKind` already records
+        // making — "a 14% brand wash over whatever cap the key already had ...
+        // read as a slightly pink key" — and the same fix.
+        //
+        // It is tested before the press, so re-tapping the category you are
+        // already in does not strobe the pill away under the finger.
+        if isSelected { return Theme.Brand.action }
+        // **A capless press has to be a wash, and both of the named colours that
+        // look right are traps.** A cap answers a finger by going pale, which
+        // needs a cap to go pale *from*; a bare glyph has only the panel under it.
+        // `Theme.Keys.functionPressed` is 0xFFFEFA on a 0xF4F3EF panel, eleven
+        // units, invisible on a phone in daylight — and `Theme.Keys.card` is
+        // *the same colour* in light mode (both 0xFFFEFA), so reaching for it
+        // changes nothing where the problem is and costs contrast in the dark,
+        // where 0x2E3435 on 0x242829 is closer than the 0x54595B it replaced.
+        // Only a wash off the label tint moves the right way in both: it darkens
+        // the light panel and lightens the dark one, because the label does.
+        if isPressed { return drawsCap ? Theme.Keys.functionPressed : EmojiPanel.pressWash }
         return drawsCap ? restingCap : .clear
     }
 }

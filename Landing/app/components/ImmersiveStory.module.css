@@ -19,6 +19,10 @@
   transform-origin: left center;
 }
 
+[dir="rtl"] .progressFill {
+  transform-origin: right center;
+}
+
 .scene {
   margin-top: 34px;
 }
@@ -253,7 +257,7 @@
 .sentTag {
   position: absolute;
   top: -11px;
-  right: 10px;
+  inset-inline-end: 10px;
   padding: 3px 9px;
   border-radius: 999px;
   background: var(--orange-action);
@@ -266,11 +270,15 @@
 .doodle {
   position: absolute;
   top: 74px;
-  left: 34px;
+  inset-inline-start: 34px;
   width: 110px;
   height: 120px;
   overflow: visible;
   pointer-events: none;
+}
+
+[dir="rtl"] .doodle {
+  transform: scaleX(-1);
 }
 
 .doodlePath {
@@ -539,8 +547,38 @@
   font-size: 11.5px;
 }
 
-.micKey {
+.actions {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.action {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--graphite);
+  font-size: 9.5px;
+  font-weight: 650;
+  box-shadow:
+    0 2px 0 rgba(44, 48, 49, 0.16),
+    inset 0 1px 0 #ffffff;
+}
+
+.actionLive,
+.actionMic {
+  background: var(--orange-action);
+  color: var(--white);
+  box-shadow:
+    0 2px 0 rgba(185, 80, 35, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .micDot {
@@ -570,6 +608,10 @@
   overflow: hidden;
   border-radius: 2px;
   background: var(--line);
+}
+
+.root.pinned .head :global(.section-subtitle) {
+  display: none;
 }
 
 .root.pinned .scene {
@@ -613,8 +655,8 @@
   min-width: 0;
 }
 
-.root.pinned [data-el="msg-in"],
 .root.pinned [data-el="context-chip"],
+.root.pinned [data-el="composer"],
 .root.pinned [data-el="draft"],
 .root.pinned [data-el="refined"],
 .root.pinned [data-el="dictated"],
@@ -635,6 +677,10 @@
 
   .root.pinned .key {
     height: 32px;
+  }
+
+  .root.pinned .action {
+    height: 34px;
   }
 
   .root.pinned .barSlot {

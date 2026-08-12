@@ -79,6 +79,20 @@ public enum KeyWidth: Equatable, Sendable {
     case unit(CGFloat)
     /// Splits whatever is left over in the row between all keys marked flexible.
     case flexible
+    /// Takes this many parts of whatever the row has left, split between every
+    /// key marked this way in proportion to its number.
+    ///
+    /// **A key that swallowed several keys has to swallow the gaps between them
+    /// too, and `.unit` cannot express that.** A unit is a key width and knows
+    /// nothing about the spacing beside it, so a grouped key declared `.unit(2)`
+    /// came out two keys wide *minus* the gutter it covered — five of them left
+    /// 27pt of the row unused and the band drew visibly narrower than the row
+    /// under it, on a feature whose entire purpose is width. A share is the same
+    /// proportion expressed as "of what is actually there", so the gutters land
+    /// inside the keys that replaced them. `.flexible` is the same idea with
+    /// every claimant equal, which is wrong here: a two-column key and a
+    /// one-column key are not the same width.
+    case share(CGFloat)
     /// A fixed width in points, the same on every plane and in all sixty-four
     /// languages. Shift, delete and the plane switch that brackets the third row.
     /// See `KeyboardLayout.widths(for:totalWidth:unitWidth:spacing:)`.
@@ -99,12 +113,44 @@ public struct KeySpec: Identifiable, Equatable, Sendable {
     /// Hindi layout puts half the consonants behind shift. Empty for most keys.
     public let alternates: [String]
 
+    /// The letters a grouped cap carries, in the order the keyboard draws them.
+    /// `nil` on every ordinary key.
+    ///
+    /// **Only the layout can say this, and both the drawing and the speaking need
+    /// it.** `KeyCap` is a value: it holds the string `qw\nas` and cannot tell
+    /// that from a `.com` snippet key, which is also a `.character` cap with
+    /// several characters in it — and the two want opposite treatment. A snippet
+    /// is a word: read it as one, draw it as one. A grouped cap is a picture of
+    /// four keys: spell it to a screen reader, and draw its letters **one at a
+    /// time**, or the Unicode bidi algorithm reverses every Hebrew cap. `קר` is an
+    /// RTL run, so as a single string it draws ר to the left of ק while the
+    /// keyboard underneath has ק on the left — the same mirroring that shipped six
+    /// right-to-left layouts backwards once already, and one a row-order test
+    /// cannot see because the row is right and the *cap* is reversed.
+    public let groupedLetters: [String]?
+
+    /// What a screen reader should call this key: the letters, spelled.
+    public var spokenLabel: String? {
+        guard let letters = groupedLetters, letters.count > 1 else { return nil }
+        return letters.joined(separator: " ")
+    }
+
+    /// The lines a grouped cap is drawn on, letters kept separate. Empty on an
+    /// ordinary key.
+    public var groupedLines: [[String]] {
+        guard groupedLetters != nil, case .character(let value) = cap else { return [] }
+        return value.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.map(String.init) }
+    }
+
     public init(
-        _ cap: KeyCap, width: KeyWidth = .unit(1), id: String? = nil, alternates: [String] = []
+        _ cap: KeyCap, width: KeyWidth = .unit(1), id: String? = nil, alternates: [String] = [],
+        groupedLetters: [String]? = nil
     ) {
         self.cap = cap
         self.width = width
         self.alternates = alternates
+        self.groupedLetters = groupedLetters
         self.id = id ?? KeySpec.identifier(for: cap)
     }
 
@@ -120,7 +166,12 @@ public struct KeySpec: Identifiable, Equatable, Sendable {
 
     private static func identifier(for cap: KeyCap) -> String {
         switch cap {
-        case .character(let value): return "char-\(value)"
+        // A grouped cap carries a line break between the rows it merged, and an
+        // accessibility identifier with a newline in it is one a UI test cannot
+        // type. `letters(inCap:)` drops the same character for the same reason:
+        // it is layout, not content.
+        case .character(let value):
+            return "char-\(value.replacingOccurrences(of: "\n", with: "-"))"
         case .shift: return "shift"
         case .backspace: return "backspace"
         case .plane(_, let label): return "plane-\(label)"
@@ -149,9 +200,21 @@ public struct KeyRow: Identifiable, Sendable {
     /// Extra inset on both sides, in units, for rows with fewer keys than the top row.
     public let sideInsetUnits: CGFloat
 
-    public init(id: Int, keys: [KeySpec], sideInsetUnits: CGFloat = 0) {
+    /// How many key-heights tall this row is drawn, including the row spacing it
+    /// swallows. One for every row that shipped first.
+    ///
+    /// **Two only for the grouped band**, which merges the two letter rows that
+    /// stand clear of shift and delete into one row of double-height keys. It is
+    /// a height *multiplier* rather than a point value so a row cannot invent
+    /// space: two units is exactly the two rows it replaced plus the spacing that
+    /// used to sit between them, which is why grouping does not change the
+    /// keyboard's height. See `GroupedKeys.Row`.
+    public let heightUnits: Int
+
+    public init(id: Int, keys: [KeySpec], sideInsetUnits: CGFloat = 0, heightUnits: Int = 1) {
         self.id = id
         self.keys = keys
         self.sideInsetUnits = sideInsetUnits
+        self.heightUnits = max(1, heightUnits)
     }
 }

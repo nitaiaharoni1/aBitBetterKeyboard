@@ -21,11 +21,6 @@ import XCTest
 /// nothing and answers `[]` to everything — which reads as a broken decoder rather
 /// than a broken test. `testTheRowsFormAndTheLanguageFormAgree` is what holds the
 /// two forms together, since the rest of the file trusts the explicit one.
-///
-/// **`testDevanagariMayNotBeGrouped` fails against the code as it stands**, and it
-/// is meant to: `GroupedKeys.supports` asks whether each *key* is one `Character`
-/// when the question it has to answer is whether a *joined group* splits back into
-/// the keys it came from. See the comment on that test.
 final class GroupedKeysTests: XCTestCase {
 
     /// The rows this feature transforms, read from the shipped layout rather than
@@ -82,6 +77,9 @@ final class GroupedKeysTests: XCTestCase {
     /// three keys as `qwer|tyu|iop`, so nothing that counts keys can tell the two
     /// apart — and they are different keyboards: `r` moves off the first key onto
     /// the second, which changes the code of every word that contains it.
+    ///
+    /// The rule outlived the row-at-a-time layout: the band splits *columns* by it,
+    /// and the row that keeps shift and delete still splits its letters by it.
     func testTheExtraLetterGoesToTheLeadingGroups() throws {
         let top = try letterRows(.english)[0]
 
@@ -89,27 +87,60 @@ final class GroupedKeysTests: XCTestCase {
             GroupedKeys.split(top, level: .l1).map { $0.joined() }, ["qwer", "tyu", "iop"])
     }
 
-    /// Order and adjacency are the whole promise here: the letters stay where a
-    /// thumb already knows them and only the boundaries move. Hebrew is in this loop
-    /// because its rows are stored **left to right on screen**, so a split that read
-    /// them as logical order and reversed them would be the defect that shipped all
-    /// six right-to-left keyboards mirrored.
+    /// Order is the whole promise here: the letters stay where a thumb already
+    /// knows them and only the boundaries move. Hebrew is in this loop because its
+    /// rows are stored **left to right on screen**, so a split that read them as
+    /// logical order and reversed them would be the defect that shipped all six
+    /// right-to-left keyboards mirrored.
+    ///
+    /// **Asserted per source row rather than per drawn row**, because banding
+    /// merges two source rows into one drawn one: `[qwas]` is `q` and `w` over `a`
+    /// and `s`, so the flattened keys of that row are not `qwertyuiop`. Reading one
+    /// source row's letters back out of the keys in order is the claim that
+    /// survives banding, and it is the one that matters — it is what says a thumb
+    /// still finds its letters where it left them. It rejects a reversal, a
+    /// duplicate and a dropped letter exactly as the flat form did.
     func testEveryLetterSurvivesInOrderAtEveryLevel() throws {
         for (language, avoid) in [(KeyboardLanguage.english, noAvoid), (.hebrew, GroupedKeys.hebrewClitics)] {
             let rows = try letterRows(language)
             for level in GroupedKeys.Level.allCases {
-                let grouped = GroupedKeys.groups(for: rows, keepingApart: avoid, level: level)
-                XCTAssertEqual(
-                    grouped.count, rows.count,
-                    "\(language.rawValue) at \(level.rawValue) per key lost or merged a row")
+                let keys = GroupedKeys.groups(for: rows, keepingApart: avoid, level: level)
+                    .flatMap { $0 }
                 for (index, row) in rows.enumerated() {
+                    let seen = keys.flatMap { $0 }.filter(Set(row).contains)
                     XCTAssertEqual(
-                        grouped[index].flatMap { $0 }, row,
+                        seen, row,
                         "\(language.rawValue) row \(index) at \(level.rawValue) per key is not the row it was given"
                     )
                 }
+                XCTAssertEqual(
+                    keys.flatMap { $0 }.count, rows.flatMap { $0 }.count,
+                    "\(language.rawValue) at \(level.rawValue) per key lost or duplicated a letter")
             }
         }
+    }
+
+    /// **The letter underneath is on the same key, and that is the whole of what
+    /// this feature changed.** Against the row-at-a-time version — which grouped
+    /// `qwer|tyu|iop` and left `a` two rows away in its own key — every key count
+    /// in this file is identical and every other assertion still passes, so this is
+    /// the one that rejects it.
+    ///
+    /// The second half is what stops it being vacuous: a build that put the whole
+    /// keyboard on one key would satisfy the first line.
+    func testAKeyCarriesTheLettersAboveAndBelowEachOther() throws {
+        let rows = try letterRows(.english)
+        let keys = GroupedKeys.groups(for: rows, keepingApart: noAvoid, level: .pairs)
+            .flatMap { $0 }
+
+        XCTAssertEqual(keys.first, ["q", "a"])
+        XCTAssertTrue(keys.contains(["o", "l"]))
+        // The row that keeps shift and delete groups sideways, because a pinned
+        // key cannot stand in a double-height row without being one.
+        XCTAssertTrue(keys.contains(["z", "x"]))
+        XCTAssertFalse(
+            keys.contains { $0.count > 2 },
+            "two letters per key means two, not a band that swallowed a whole row")
     }
 
     /// The table in `Bar/grouped/README.md`, which is the keyboard
@@ -137,15 +168,17 @@ final class GroupedKeysTests: XCTestCase {
 
     /// The English groups exactly as the harness produced them, written out rather
     /// than derived — a derivation would only be the implementation a second time.
+    /// Two drawn rows, not three: the band first, then the row that keeps shift and
+    /// delete. Letters inside a banded cap read top row first.
     func testTheEnglishGroupsAreTheOnesThatWereMeasured() throws {
         let expected: [GroupedKeys.Level: [[String]]] = [
             .pairs: [
-                ["qw", "er", "ty", "ui", "op"], ["as", "df", "gh", "jk", "l"],
+                ["qa", "ws", "ed", "rf", "tg", "yh", "uj", "ik", "ol", "p"],
                 ["zx", "cv", "bn", "m"]
             ],
-            .l1: [["qwer", "tyu", "iop"], ["asd", "fgh", "jkl"], ["zxcv", "bnm"]],
-            .l2: [["qwer", "tyu", "iop"], ["asdfg", "hjkl"], ["zxcv", "bnm"]],
-            .l3: [["qwert", "yuiop"], ["asdfg", "hjkl"], ["zxcvbnm"]]
+            .l1: [["qwas", "erdf", "tygh", "uijk", "ol", "p"], ["zxcv", "bnm"]],
+            .l2: [["qwas", "erdf", "tygh", "uijk", "opl"], ["zxcv", "bnm"]],
+            .l3: [["qweasd", "rtyfgh", "uijk", "opl"], ["zxcvbnm"]]
         ]
 
         let rows = try letterRows(.english)
@@ -155,6 +188,68 @@ final class GroupedKeysTests: XCTestCase {
                 grouped.map { row in row.map { $0.joined() } }, groups,
                 "english at \(level.rawValue) letters per key")
         }
+    }
+
+    /// **The keyboard is the height it was, and the band is why.** Two rows merged
+    /// into one drawn row that is two key-heights tall, so the letter area still
+    /// adds up to three. A band declared one unit tall halves the keys it merged;
+    /// a band declared three grows the keyboard past the 368pt screen-context
+    /// cliff, which is the failure nothing on screen would report.
+    func testTheBandIsTwoRowsTallAndTheKeyboardIsNot() throws {
+        for language in [KeyboardLanguage.english, .hebrew] {
+            let ungrouped = KeyboardLayout.rows(for: language, plane: .letters)
+            XCTAssertEqual(ungrouped.map(\.heightUnits), [1, 1, 1])
+
+            for level in [GroupedKeys.Level.pairs, .l1, .l2, .l3] {
+                let rows = KeyboardLayout.rows(for: language, plane: .letters, grouping: level)
+                XCTAssertEqual(
+                    rows.map(\.heightUnits), [2, 1],
+                    "\(language.rawValue) at \(level.rawValue) letters per key")
+                XCTAssertEqual(
+                    rows.reduce(0) { $0 + $1.heightUnits },
+                    ungrouped.reduce(0) { $0 + $1.heightUnits },
+                    "grouping changed the height of the \(language.rawValue) keyboard")
+            }
+        }
+    }
+
+    /// **A grouped key is as wide as the keys it swallowed**, which is what makes
+    /// the floor of ten columns free rather than something the feature has to
+    /// dodge. The version that left every key `.unit(1)` draws a band of five keys
+    /// occupying half the width of the row under it.
+    func testAGroupedKeyIsAsWideAsTheKeysItSwallowed() throws {
+        let rows = KeyboardLayout.rows(for: .english, plane: .letters, grouping: .l2)
+        let band = try XCTUnwrap(rows.first)
+
+        XCTAssertEqual(
+            band.keys.map(\.width),
+            [.share(2), .share(2), .share(2), .share(2), .share(2)],
+            "[qw/as] stands over two of the ungrouped keyboard's columns")
+        // Ten columns of letters, which is what the two rows it replaced spanned.
+        XCTAssertEqual(KeyboardLayout.columns(for: .english, plane: .letters, grouping: .l2), 10)
+
+        // The row that keeps shift and delete is measured in letters rather than
+        // columns, and the three of them still add up to the same ten.
+        let bottom = rows[1]
+        XCTAssertEqual(bottom.keys.map(\.width), [.pinned, .share(4), .share(3), .pinned])
+
+        // **A grouped row fills the width, and `.unit` is what stopped it.** Five
+        // two-unit keys are two units short of the row they replaced, because a
+        // unit is a key and the four gutters between them are not — so the band
+        // drew 27pt narrower than the keys under it. Asserted against the
+        // ungrouped row rather than a number, so a different phone moves both.
+        let width: CGFloat = 402 - Theme.Metrics.sideInset * 2
+        func drawn(_ row: KeyRow, columns: Int) -> CGFloat {
+            let unit = KeyboardLayout.unitWidth(
+                totalWidth: 402, spacing: Theme.Metrics.keySpacing,
+                sideInset: Theme.Metrics.sideInset, columns: columns)
+            let widths = KeyboardLayout.widths(
+                for: row, totalWidth: width, unitWidth: unit,
+                spacing: Theme.Metrics.keySpacing)
+            return widths.reduce(0, +) + Theme.Metrics.keySpacing * CGFloat(widths.count - 1)
+        }
+        let ungrouped = KeyboardLayout.rows(for: .english, plane: .letters)[0]
+        XCTAssertEqual(drawn(band, columns: 10), drawn(ungrouped, columns: 10), accuracy: 0.5)
     }
 
     // MARK: - Hebrew's clitics
@@ -240,10 +335,11 @@ final class GroupedKeysTests: XCTestCase {
 
             let grouped = GroupedKeys.groups(
                 for: rows, keepingApart: GroupedKeys.hebrewClitics, level: level)
+            // Drawn row 1, not source row 2: the top two rows band into one.
             XCTAssertEqual(
-                grouped[2], GroupedKeys.split(bottom, level: level),
+                grouped[1], GroupedKeys.split(bottom, level: level),
                 "the unsatisfiable row must fall back to the plain split at \(level.rawValue) per key")
-            XCTAssertEqual(grouped[2].flatMap { $0 }, bottom, "the fallback dropped letters")
+            XCTAssertEqual(grouped[1].flatMap { $0 }, bottom, "the fallback dropped letters")
         }
     }
 
@@ -283,7 +379,7 @@ final class GroupedKeysTests: XCTestCase {
         let grouped = GroupedKeys.groups(
             for: rows, keepingApart: GroupedKeys.hebrewClitics, level: .pairs)
 
-        XCTAssertEqual(grouped[2].map(\.count), [1, 2, 2, 2, 2])
+        XCTAssertEqual(grouped[1].map(\.count), [1, 2, 2, 2, 2])
     }
 
     // MARK: - The escape hatch
@@ -297,9 +393,24 @@ final class GroupedKeysTests: XCTestCase {
     func testAGroupedCapOffersItsOwnLettersOnALongPress() throws {
         let grouped = GroupedKeys.layout(try letterLayout(.english), language: .english, level: .l1)
 
-        XCTAssertEqual(grouped.rows[0], ["qwer", "tyu", "iop"])
-        XCTAssertEqual(grouped.alternates["qwer"], ["q", "w", "e", "r"])
+        // The cap carries the line break between the two rows it merged, and the
+        // popup lists the letters top row first.
+        XCTAssertEqual(grouped.rows[0], ["qw\nas", "er\ndf", "ty\ngh", "ui\njk", "o\nl", "p"])
+        XCTAssertEqual(grouped.alternates["qw\nas"], ["q", "w", "a", "s"])
         XCTAssertEqual(grouped.alternates["bnm"], ["b", "n", "m"])
+    }
+
+    /// **The line break in a cap is layout, never a letter.** `letters(inCap:)` is
+    /// the only route from a cap back to what it types, so a version that kept the
+    /// newline types one — and the decoder codes a keystroke nothing is on.
+    func testTheLineBreakInACapIsNotALetter() throws {
+        let grouped = GroupedKeys.layout(try letterLayout(.english), language: .english, level: .l2)
+        let cap = try XCTUnwrap(grouped.rows[0].first)
+
+        XCTAssertTrue(cap.contains("\n"), "a banded cap has to be drawn on two lines")
+        XCTAssertEqual(GroupedKeys.letters(inCap: cap), ["q", "w", "a", "s"])
+        // And it never reaches an accessibility identifier, which a UI test types.
+        XCTAssertEqual(KeySpec(.character(cap)).id, "char-qw-as")
     }
 
     /// The same claim said over every letter of both languages at every level: after
@@ -333,14 +444,18 @@ final class GroupedKeysTests: XCTestCase {
         let base = try letterLayout(.english)
         let grouped = GroupedKeys.layout(base, language: .english, level: .pairs)
 
-        XCTAssertEqual(grouped.rows[1], ["as", "df", "gh", "jk", "l"])
-        XCTAssertEqual(grouped.alternates["l"], base.alternates["l"])
-        XCTAssertEqual(grouped.alternates["l"], ["ł"])
-
-        // `m` is alone on its key too and has no accents to keep, so it gets none
-        // rather than being offered itself.
-        XCTAssertEqual(grouped.rows[2], ["zx", "cv", "bn", "m"])
+        // Ten columns over nine leaves `p` with nothing under it, and seven letters
+        // over four keys leaves `m` alone. Both are ordinary keys: they type their
+        // letter, and their popup is whatever accents that letter has — none, here,
+        // which is not the same answer as `["p"]`. The version that hands every cap
+        // its own letters gives a one-item popup offering the key you are holding.
+        XCTAssertEqual(grouped.rows[0].last, "p")
+        XCTAssertEqual(grouped.alternates["p"], [String]())
+        XCTAssertEqual(grouped.rows[1], ["zx", "cv", "bn", "m"])
         XCTAssertEqual(grouped.alternates["m"], [String]())
+        // `l` is no longer alone — it shares `[o/l]` — so the accent it has to keep
+        // is asserted where a singleton with one still exists, in Hebrew below.
+        XCTAssertEqual(base.alternates["l"], ["ł"])
     }
 
     /// The same case in Hebrew, where the alternates are marks rather than accents.
@@ -352,7 +467,7 @@ final class GroupedKeysTests: XCTestCase {
         let zayin = try letterRows(.hebrew)[2][0]
         let grouped = GroupedKeys.layout(base, language: .hebrew, level: .pairs)
 
-        XCTAssertEqual(grouped.rows[2].first, zayin)
+        XCTAssertEqual(grouped.rows[1].first, zayin)
         XCTAssertEqual(grouped.alternates[zayin], [zayin + "\u{05F3}", zayin + "\u{05F4}"])
     }
 
@@ -378,22 +493,58 @@ final class GroupedKeysTests: XCTestCase {
         XCTAssertTrue(GroupedKeys.supports(.hebrew))
     }
 
-    /// **This test fails against the code as it stands, and the failure is the
-    /// finding.**
+    /// **The invariant `supports(_:)` exists to guarantee, said over every language
+    /// it lets through, at every level.** A cap is the only route back to "which
+    /// letters is this key", so a layout this feature accepts has to split its caps
+    /// into exactly the letters they were built from — across a band as well as
+    /// along a row, since a band joins a letter to the one *underneath* it and no
+    /// per-row check can see that pair.
     ///
-    /// `supports(_:)` asks whether each *key* is a single `Character`. Every
+    /// Written as a sweep rather than a list of language names, because a list goes
+    /// stale the next time a layout is added and this cannot: a new language either
+    /// satisfies the invariant or is refused by the same rule.
+    func testEveryGroupableLanguageSplitsItsCapsBackIntoItsLetters() {
+        var groupable: [KeyboardLanguage] = []
+        for language in KeyboardLanguage.allCases where GroupedKeys.supports(language) {
+            groupable.append(language)
+            guard let base = KeyboardLayout.letterLayouts[language] else {
+                XCTFail("\(language.rawValue) is groupable and has no layout")
+                continue
+            }
+            for level in GroupedKeys.Level.allCases {
+                for row in GroupedKeys.plan(for: base.rows, language: language, level: level) {
+                    for group in row.groups {
+                        XCTAssertEqual(
+                            GroupedKeys.letters(inCap: group.cap), group.letters,
+                            "\(language.rawValue) at \(level.rawValue) fused a cap")
+                    }
+                }
+            }
+        }
+
+        // Not an empty sweep agreeing with itself.
+        XCTAssertTrue(groupable.contains(.english))
+        XCTAssertTrue(groupable.contains(.hebrew))
+        XCTAssertFalse(groupable.contains(.hindi))
+    }
+
+    /// **This test used to fail on purpose, and the fix it prescribed is now in
+    /// `supports(_:)`.**
+    ///
+    /// The old rule asked whether each *key* was a single `Character`. Every
     /// Devanagari key is — `ौ` is one combining mark, one scalar, one grapheme — so
-    /// it answers `true` and InScript gets grouped. The question it needed to ask is
-    /// whether a *joined group* splits back into the keys it was built from, and that
-    /// is where Devanagari fails: a run of combining marks with no base is one
-    /// grapheme cluster, so the three keys `ौ` `ै` `ा` join into a cap that
+    /// it answered `true` and InScript got grouped. The question it had to ask is
+    /// whether *joined* letters split back into the letters they were built from,
+    /// and that is where Devanagari fails: a run of combining marks with no base is
+    /// one grapheme cluster, so the three keys `ौ` `ै` `ा` join into a cap that
     /// `letters(inCap:)` splits into **one** letter that no key ever carried. The
     /// long press then offers a fused mark instead of the three letters, which is
     /// exactly the escape hatch failing in the one way that traps the user.
     ///
-    /// The evidence is asserted first so the failure below is not a matter of taste.
-    /// The fix is to ask the real question — `row.joined().map(String.init) == row`
-    /// per row — rather than to ask about a key in isolation.
+    /// The evidence is asserted first, so the refusal below is a consequence rather
+    /// than a matter of taste. Banding made the old rule worse rather than better —
+    /// a band joins a letter to the one *underneath* it, so a per-row check would
+    /// not have been enough either.
     func testDevanagariMayNotBeGrouped() throws {
         let top = try letterRows(.hindi)[0]
         let cap = top.prefix(3).joined()
@@ -403,10 +554,14 @@ final class GroupedKeysTests: XCTestCase {
         XCTAssertEqual(GroupedKeys.letters(inCap: cap).count, 1)
         XCTAssertNotEqual(GroupedKeys.letters(inCap: cap), Array(top.prefix(3)))
 
+        // And the rule that catches it, said over one key rather than a whole row:
+        // doubling a base character gives two, doubling a combining mark gives one.
+        XCTAssertEqual((top[0] + top[0]).count, 1)
+        XCTAssertEqual(("q" + "q").count, 2)
+
         XCTAssertFalse(
             GroupedKeys.supports(.hindi),
-            "supports() checks that each key is one Character; every Devanagari key is, and the fusion happens when a group is joined"
-        )
+            "a layout whose letters fuse when joined must never see this feature")
 
         // The consequence, and the reason the refusal is not fussiness.
         let base = try letterLayout(.hindi)
@@ -417,10 +572,14 @@ final class GroupedKeysTests: XCTestCase {
 
     // MARK: - The keystroke code
 
-    /// Keys are numbered across the whole keyboard rather than per row: `a` opens the
-    /// second row and must not share a code with `q`, which opens the first. A
-    /// per-row numbering compiles, draws identically, and silently makes those two
-    /// letters the same keystroke.
+    /// Keys are numbered across the whole keyboard rather than per drawn row: the
+    /// band's six keys are 0…5 and the row under it carries on at 6. A per-row
+    /// numbering compiles, draws identically, and silently makes `q` and `z` the
+    /// same keystroke.
+    ///
+    /// `a` under `q` sharing key 0 is the feature rather than the bug the earlier
+    /// version of this test guarded — which is why the pair that must *not* share
+    /// is asserted as well.
     func testLettersAreNumberedAcrossTheWholeKeyboard() throws {
         let letterKeys = GroupedDecoder.letterToKey(
             rows: try letterRows(.english), keepingApart: noAvoid, level: .l1)
@@ -428,9 +587,10 @@ final class GroupedKeysTests: XCTestCase {
         XCTAssertEqual(letterKeys.count, 26)
         XCTAssertEqual(Set(letterKeys.values).count, 8)
         XCTAssertEqual(letterKeys["q"], 0)
-        XCTAssertEqual(letterKeys["r"], 0)
-        XCTAssertEqual(letterKeys["t"], 1)
-        XCTAssertEqual(letterKeys["a"], 3)
+        XCTAssertEqual(letterKeys["a"], 0)
+        XCTAssertEqual(letterKeys["r"], 1)
+        XCTAssertEqual(letterKeys["t"], 2)
+        XCTAssertEqual(letterKeys["z"], 6)
         XCTAssertEqual(letterKeys["m"], 7)
     }
 
@@ -472,10 +632,10 @@ final class GroupedKeysTests: XCTestCase {
             GroupedDecoder.code(for: "t", map: letterKeys))
         // The Private Use Area, not 0x100: at 0x100 key 1 would be U+0101, which is
         // ā, so a character passing through could collide with a key index.
-        XCTAssertEqual(GroupedDecoder.code(for: "qt", map: letterKeys), "\u{E000}\u{E001}")
-        // t, h, e are keys 1, 4, 0 — the code the Python harness answers for `the`.
+        XCTAssertEqual(GroupedDecoder.code(for: "qt", map: letterKeys), "\u{E000}\u{E002}")
+        // t, h, e are keys 2, 2, 1 — the code the Python harness answers for `the`.
         XCTAssertEqual(
-            GroupedDecoder.code(for: "the", map: letterKeys), "\u{E001}\u{E004}\u{E000}")
+            GroupedDecoder.code(for: "the", map: letterKeys), "\u{E002}\u{E002}\u{E001}")
     }
 
     /// **A mark passes through and a foreign letter does not.** The apostrophe lives
@@ -488,9 +648,9 @@ final class GroupedKeysTests: XCTestCase {
         let letterKeys = GroupedDecoder.letterToKey(
             rows: try letterRows(.english), keepingApart: noAvoid, level: .l1)
 
-        // d, o, n, t are keys 3, 2, 7, 1; the apostrophe is itself.
+        // d, o, n, t are keys 1, 4, 7, 2; the apostrophe is itself.
         XCTAssertEqual(
-            GroupedDecoder.code(for: "don't", map: letterKeys), "\u{E003}\u{E002}\u{E007}'\u{E001}")
+            GroupedDecoder.code(for: "don't", map: letterKeys), "\u{E001}\u{E004}\u{E007}'\u{E002}")
         XCTAssertNil(GroupedDecoder.code(for: "ā", map: letterKeys))
         XCTAssertNil(GroupedDecoder.code(for: "שלום", map: letterKeys))
     }
@@ -538,16 +698,16 @@ final class GroupedKeysTests: XCTestCase {
         XCTAssertEqual(decoder.source, .bundled)
     }
 
-    /// **Commonest first, and code order is deliberately not the answer.** Four words
-    /// begin on key 2 — `of`, `in`, `is`, `it` — and their codes sort `it, is, of,
-    /// in`, so a decoder that returns the first three it meets in its index answers
-    /// `it, is, of`: three real words, none of them the commonest, for a keyboard
-    /// whose whole claim is that the ranking recovers what the keys threw away.
+    /// **Commonest first, and code order is deliberately not the answer.** Three
+    /// words begin on key 3 — `in`, `is`, `it` — and their codes sort `is, it, in`,
+    /// so a decoder that returns what it meets walking its index answers `is, it,
+    /// in`: three real words in the wrong order, for a keyboard whose whole claim is
+    /// that the ranking recovers what the keys threw away.
     func testCandidatesComeBackCommonestFirstRatherThanInCodeOrder() throws {
         let decoder = referenceDecoder()
         let code = try XCTUnwrap(GroupedDecoder.code(for: "i", map: try referenceKeys()))
 
-        XCTAssertEqual(decoder.candidates(startingWith: code), ["of", "in", "is"])
+        XCTAssertEqual(decoder.candidates(startingWith: code), ["in", "is", "it"])
     }
 
     /// Nothing typed is not a prefix of everything. An empty code has to answer
@@ -598,7 +758,7 @@ final class GroupedKeysTests: XCTestCase {
     func testTheFallbackIsTheFirstLetterOfEachCap() throws {
         let grouped = GroupedKeys.layout(try letterLayout(.english), language: .english, level: .l1)
 
-        XCTAssertEqual(GroupedDecoder.literal(for: grouped.rows[0]), "qti")
+        XCTAssertEqual(GroupedDecoder.literal(for: grouped.rows[0]), "qetuop")
         // With grouping off every cap is one letter, so the fallback is exactly what
         // was keyed.
         XCTAssertEqual(GroupedDecoder.literal(for: ["h", "i"]), "hi")
@@ -707,7 +867,86 @@ final class GroupedKeysTests: XCTestCase {
         XCTAssertEqual(KeyboardLayout.columns(for: .english, plane: .letters), 10)
         // And asking for grouping explicitly still works, so this is not just a
         // test that the feature is off.
-        XCTAssertEqual(KeyboardLayout.columns(for: .english, plane: .letters, grouping: .l1), 5)
+        XCTAssertEqual(KeyboardLayout.columns(for: .english, plane: .letters, grouping: .l1), 10)
+    }
+
+    /// Hebrew L2 commits the wrong word about three times in ten. The dial is
+    /// shared, so English keeps the stop and Hebrew is clamped at L1.
+    ///
+    /// `@MainActor` because a `KeyboardController` is: the second half of this
+    /// asks the controller what it would actually draw, which is the half that
+    /// rejects a `capped(for:)` that is correct and wired to nothing.
+    @MainActor
+    func testHebrewIsCappedAtThreeLettersPerKey() {
+        XCTAssertEqual(GroupedKeys.Level.l2.capped(for: .english), .l2)
+        XCTAssertEqual(GroupedKeys.Level.l3.capped(for: .english), .l3)
+        XCTAssertEqual(GroupedKeys.Level.l2.capped(for: .hebrew), .l1)
+        XCTAssertEqual(GroupedKeys.Level.l3.capped(for: .hebrew), .l1)
+        XCTAssertEqual(GroupedKeys.Level.l1.capped(for: .hebrew), .l1)
+        XCTAssertEqual(GroupedKeys.Level.pairs.capped(for: .hebrew), .pairs)
+
+        SharedStore.shared.groupedLevel = .l2
+        defer { SharedStore.shared.groupedLevel = .off }
+        let hebrew = KeyboardController(target: MockTextTarget(), language: .hebrew)
+        XCTAssertEqual(hebrew.groupingLevel, .l1)
+        let english = KeyboardController(target: MockTextTarget(), language: .english)
+        XCTAssertEqual(english.groupingLevel, .l2)
+    }
+
+    // MARK: Which caps are grouped ones
+
+    /// **A cap carrying several characters is not necessarily a grouped key, and
+    /// reading it as one was a shipped defect.** `SlotAction.text` compiles to
+    /// `.character(".com")`, and the shipped catalogue also offers `,` `?` `!` `@` —
+    /// so the version that asked "does this cap hold more than one letter" fed the
+    /// `.com` key to the decoder as a keystroke, on any customised layout carrying
+    /// it, the moment grouping was switched on. Membership in the layout the
+    /// keyboard is actually drawing is the question with an answer.
+    ///
+    /// The first two assertions are what stop this passing against a build that
+    /// answers `false` to everything, which would switch the whole feature off.
+    func testASnippetKeyIsNotAGroupedKey() {
+        let input = GroupedInput()
+        let caps = input.caps(language: .english, level: .l2)
+
+        XCTAssertTrue(caps.contains("qw\nas"))
+        XCTAssertTrue(caps.contains("zxcv"))
+        XCTAssertFalse(caps.contains(".com"))
+        XCTAssertFalse(caps.contains(","))
+        // `zxcv` is four letters of the keyboard in order and still not a grouped
+        // key at every level, so the set has to be per level rather than a union.
+        XCTAssertFalse(input.caps(language: .english, level: .pairs).contains("zxcv"))
+        XCTAssertTrue(input.caps(language: .english, level: .pairs).contains("zx"))
+    }
+
+    /// The cache is keyed by language *and* level, and answering from a stale one
+    /// is the same defect the decoder cache exists to avoid. English at L2 and
+    /// Hebrew at L2 share nothing, so a cache that ignored the language would fail
+    /// the second call.
+    func testTheCapCacheAnswersPerLanguageAndLevel() {
+        let input = GroupedInput()
+
+        XCTAssertTrue(input.caps(language: .english, level: .l2).contains("qw\nas"))
+        XCTAssertFalse(input.caps(language: .hebrew, level: .l2).contains("qw\nas"))
+        XCTAssertTrue(input.caps(language: .english, level: .l2).contains("qw\nas"))
+        XCTAssertFalse(input.caps(language: .english, level: .l3).contains("qw\nas"))
+    }
+
+    /// **VoiceOver has to be told this is four letters, and `KeyCap` cannot tell
+    /// it.** A cap is a value holding a string: `qw\nas` and `.com` are both
+    /// `.character` with several characters in them, and one has to be spelled
+    /// while the other has to be read as a word. The layout that built the key is
+    /// the only thing that knows which, so it says so.
+    func testAGroupedKeyIsReadOutAsItsLetters() throws {
+        let rows = KeyboardLayout.rows(for: .english, plane: .letters, grouping: .l2)
+        let first = try XCTUnwrap(rows.first?.keys.first)
+
+        XCTAssertEqual(first.spokenLabel, "q w a s")
+        // An ordinary key says nothing extra, so its cap keeps answering for it.
+        let ungrouped = try XCTUnwrap(
+            KeyboardLayout.rows(for: .english, plane: .letters).first?.keys.first)
+        XCTAssertNil(ungrouped.spokenLabel)
+        XCTAssertEqual(ungrouped.cap.accessibilityLabel, "q")
     }
 
     // MARK: Which fields may be grouped

@@ -1,7 +1,7 @@
-# AI Keyboard — mock UI
+# AI Keyboard
 
-A running SwiftUI mock of the keyboard described in `plan.md`: a Hebrew/English
-iOS keyboard with AI text actions, dictation, and screen-context replies.
+A Hebrew/English iOS keyboard with AI text actions, dictation, and screen-context
+replies.
 
 **The AI is real; the input to it is still partly faked.** Text actions, screen
 reading and dictation call real models and are scored against frozen corpora in
@@ -58,8 +58,10 @@ xcrun swift-format --in-place --recursive \
 - English QWERTY and Hebrew layouts with system-matched metrics (42pt keys,
   6/12pt gaps), press callouts, accelerating delete, shift/caps, numbers and
   symbols planes
-- Hebrew is 8/10/9 keys, has no shift key, and mirrors delete to the leading
-  edge — because Hebrew has no case and reads right to left
+- Hebrew is 8/10/9 keys and has no shift key. Delete sits on a strictly shortest
+  top row (Hebrew is currently the only one); otherwise it stays on the bottom.
+  Every key row is pinned left-to-right, matching Apple's physical key order
+  rather than mirroring for right-to-left
 - Suggestion bar with three fixed slots edge to edge; the AI actions live in a
   row under the keys, and both of the bar's ends ship empty
 - Code-switching predictions: Latin words typed inside a Hebrew sentence get
@@ -105,8 +107,9 @@ the correction is confident: a missing apostrophe at any length, or four-plus
 letters that are not already a word. The first version of this turned `I` into
 `idea`, which is exactly how autocorrect earns its reputation.
 
-**AI actions are small and reversible, never a chat box.** Fix and Rewrite show
-you the before and after and let you decline. Nothing is applied silently.
+**AI actions are small and reversible, never a chat box.** Fix and Rewrite write
+into the field, with one keystroke of undo in the suggestion bar. Nothing is
+applied silently.
 
 **Reply explains itself when it cannot run.** Tapping it
 without a capture session says what screen context is and, when a broadcast
@@ -127,7 +130,7 @@ something to say in that state was behind a button that would not open.
 grey, so the keyboard reads as native rather than as a web page glued to the
 bottom of the screen.
 
-## Constraints the mock takes seriously
+## Constraints this keyboard takes seriously
 
 These shape the UI, so they are modelled rather than glossed over.
 

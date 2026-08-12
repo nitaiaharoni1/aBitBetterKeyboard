@@ -196,7 +196,11 @@ final class CustomLayoutCompilerTests: XCTestCase {
             for: .english, plane: .letters, showsGlobe: true, customization: .default)[3]
         XCTAssertEqual(
             row.keys.map(\.addressableID),
-            ["plane-123", "globe", "space", KeyboardLayout.punctuationKeyID, "return"])
+            // `.settings` stands where the globe used to. Nothing compiles a globe
+            // into a custom row — `KeyboardController.apply(_:)` inserts one into
+            // the layout beforehand when the device needs it, which is why this row
+            // has none even at `showsGlobe: true`.
+            ["plane-123", "settings", "space", KeyboardLayout.punctuationKeyID, "return"])
     }
 
     /// A key that was never compiled from a slot has no suffix to strip.

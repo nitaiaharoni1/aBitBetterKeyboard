@@ -47,12 +47,26 @@ struct SettingsTypingSection: View {
             }
             if store.groupedLevel != .off {
                 let measured = store.groupedLevel.measuredAccuracy
+                let hebrewCapped = store.groupedLevel.rawValue > GroupedKeys.Level.hebrewCeiling.rawValue
                 Text(
-                    "Measured: the right word is chosen \(measured.english)% of the time in English, "
-                        + "\(measured.hebrew)% in Hebrew. Hold a key to pick one letter exactly."
+                    hebrewCapped
+                        ? "Measured: English \(measured.english)%. Hebrew stays at three letters "
+                            + "(\(GroupedKeys.Level.hebrewCeiling.measuredAccuracy.hebrew)%), because four "
+                            + "commits the wrong word about three times in ten. Hold a key to pick one letter."
+                        : "Measured: the right word is chosen \(measured.english)% of the time in English, "
+                            + "\(measured.hebrew)% in Hebrew. Hold a key to pick one letter exactly."
                 )
                 .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Text.secondary)
+                if !GroupedKeys.hasBundledLexicon(for: .english)
+                    || !GroupedKeys.hasBundledLexicon(for: .hebrew)
+                {
+                    Text(
+                        "This build has no full word list, so grouping only knows a few hundred common words."
+                    )
+                    .font(Theme.Fonts.caption)
+                    .foregroundStyle(Theme.Text.secondary)
+                }
             }
         }
     }

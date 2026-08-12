@@ -74,16 +74,26 @@ def main() -> None:
     check("HE L2 keys", Layout(he, 4).keys, 7)
     check("HE L3 keys", Layout(he, 5).keys, 6)
 
+    # A key is a column slice of the banded top two rows, so the top-row letters
+    # come first inside each cap and the third row groups sideways alone. Written
+    # out rather than derived: a derivation is only the implementation twice.
     check(
         "EN L3 groups",
         Layout(en, 5).groups,
-        ["qwert", "yuiop", "asdfg", "hjkl", "zxcvbnm"],
+        ["qweasd", "rtyfgh", "uijk", "opl", "zxcvbnm"],
     )
 
     # --- the Hebrew clitic collisions, as measured ---------------------------
-    check("HE L1 collisions", Layout(he, 3).collisions(HEBREW_CLITICS), ["שדגכ", "הנמ"])
-    check("HE L2 collisions", Layout(he, 4).collisions(HEBREW_CLITICS), ["שדגכ", "זסבהנ"])
-    check("HE L3 collisions", Layout(he, 5).collisions(HEBREW_CLITICS), ["שדגכע", "זסבהנ"])
+    # Banding moved these: the band's own columns hold no two clitics — ו sits
+    # over ע, and ש, כ and ל are each in a column of their own — so what is left
+    # to collide is `זסבהנמצתץ`, the row that keeps delete and groups sideways.
+    check("HE L1 collisions", Layout(he, 3).collisions(HEBREW_CLITICS), ["הנמ"])
+    check("HE L2 collisions", Layout(he, 4).collisions(HEBREW_CLITICS), ["זסבהנ"])
+    check(
+        "HE L3 collisions",
+        Layout(he, 5).collisions(HEBREW_CLITICS),
+        ["טוןכעי", "זסבהנ"],
+    )
 
     # --- separating them -----------------------------------------------------
     for k in (3, 4, 5):
@@ -91,8 +101,14 @@ def main() -> None:
         if not layout.infeasible:
             check(f"separated k={k} has no collision", layout.collisions(HEBREW_CLITICS), [])
             check(f"separated k={k} keeps the key count", layout.keys, Layout(he, k).keys)
-        for row, split in zip(he, layout.groups_by_row):
-            check(f"separated k={k} preserves {row!r}", "".join(split), row)
+        # **Order is asserted per source row, not per drawn row**, because a
+        # banded key holds letters from two of them: `[קרשד]` is ק and ר over ש
+        # and ד. Reading one row's letters back out of the keys in order is the
+        # claim that survives banding, and it is the one that matters — it is
+        # what says a thumb still finds its letters where it left them.
+        for row in he:
+            seen = "".join(c for g in layout.groups for c in g if c in row)
+            check(f"separated k={k} preserves {row!r}", seen, row)
 
     # infeasibility must be reported, never silently papered over
     check(
@@ -110,7 +126,13 @@ def main() -> None:
 
     # --- coding --------------------------------------------------------------
     layout = Layout(en, 3)
-    check("same group, same key", layout.code("qw"), layout.code("we"))
+    check("same group, same key", layout.code("qw"), layout.code("as"))
+    # **The letter underneath is on the same key, and that is the whole of what
+    # banding changed.** Against the row-at-a-time build `q` and `a` are two
+    # keystrokes, every key count is identical, and every other assertion in this
+    # file still passes.
+    check("the letter underneath shares the key", layout.code("q"), layout.code("a"))
+    check("different group, different key", layout.code("q") == layout.code("e"), False)
     check("different group, different key", layout.code("q") == layout.code("t"), False)
     check("an apostrophe passes through", layout.code("don't")[3], "'")
     check("Hebrew is untypable on the Latin layout", layout.code("שלום"), None)

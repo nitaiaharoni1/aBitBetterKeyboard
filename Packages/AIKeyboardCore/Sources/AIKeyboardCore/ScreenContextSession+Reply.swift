@@ -76,6 +76,9 @@ extension ScreenContextSession {
                 "The keyboard cannot reach screen context. It needs Full Access.")
         }
 
+        isAwaitingRead = true
+        defer { isAwaitingRead = false }
+
         // `try`, not `try?`. Swallowing the cancellation here left nothing pacing
         // this loop but the deadline: a cancelled Reply became ~16,000 polls per
         // second, each one a file read, a JSON decode and a SwiftUI invalidation

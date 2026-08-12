@@ -9,7 +9,7 @@ extension KeyboardController {
     /// says which language is on and which the slide reaches. See
     /// `SpaceSwipe.codeStrip`.
     public var enabledLanguages: [KeyboardLanguage] {
-        store.enabledLanguages.isEmpty ? [.english, .hebrew] : store.enabledLanguages
+        store.storedEnabledLanguages
     }
 
     /// The globe key. One step per tap — the same step a slide makes, so the two

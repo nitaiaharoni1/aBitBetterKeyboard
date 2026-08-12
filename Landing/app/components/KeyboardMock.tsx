@@ -1,108 +1,107 @@
+import type { Copy, Locale } from "../copy";
+import { EmojiIcon, MicIcon } from "./Icons";
 import styles from "./KeyboardMock.module.css";
 
-const topRow = ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"];
-const middleRow = ["A", "S", "D", "F", "G", "H", "J", "K", "L"];
-const bottomRow = ["Z", "X", "C", "V", "B", "N", "M"];
+const latin = {
+  top: ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+  mid: ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+  bot: ["Z", "X", "C", "V", "B", "N", "M"],
+};
 
-export default function KeyboardMock() {
+const hebrew = {
+  top: ["ק", "ר", "א", "ט", "ו", "ן", "ם", "פ"],
+  mid: ["ש", "ד", "ג", "כ", "ע", "י", "ח", "ל", "ך", "ף"],
+  bot: ["ז", "ס", "ב", "ה", "נ", "מ", "צ", "ת", "ץ"],
+};
+
+export default function KeyboardMock({
+  locale,
+  t,
+}: {
+  locale: Locale;
+  t: Copy;
+}) {
+  const rows = locale === "he" ? hebrew : latin;
+  const hebrewLayout = locale === "he";
+
   return (
     <div className={styles.stage} aria-hidden="true">
-      <svg
-        className={styles.doodleArrow}
-        viewBox="0 0 100 90"
-        fill="none"
+      <div
+        className={styles.scene}
+        dir={hebrewLayout ? "rtl" : "ltr"}
       >
-        <path
-          d="M8 8 C30 50 55 70 82 74"
-          stroke="#ee7442"
-          strokeWidth="4.5"
-          strokeLinecap="round"
-          pathLength={100}
-        />
-        <path
-          d="M62 60 C70 66 78 72 84 78 C76 78 66 80 58 82"
-          stroke="#ee7442"
-          strokeWidth="4.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          pathLength={100}
-        />
-      </svg>
-      <div className={styles.keyboard}>
+        <p className={styles.msgIn}>
+          <span className={styles.msgName}>{t.sceneFrom}</span>
+          {t.sceneIn}
+        </p>
+        <p className={styles.msgOut}>{t.sceneOut}</p>
+      </div>
+      <div className={styles.keyboard} dir="ltr">
         <div className={styles.bar}>
-          <span className={styles.ai}>✦</span>
-          <span>I</span>
-          <span>The</span>
-          <span>We</span>
-          <span className={styles.barIcon}>◉</span>
+          {t.suggestions.map((word) => (
+            <span key={word}>{word}</span>
+          ))}
         </div>
-        <div className={styles.row}>
-          {topRow.map((letter) => (
+        <div className={`${styles.row} ${hebrewLayout ? styles.count8 : styles.count10}`}>
+          {rows.top.map((letter) => (
+            <span key={letter} className={styles.key}>
+              {letter}
+            </span>
+          ))}
+          {hebrewLayout ? (
+            <span className={`${styles.key} ${styles.soft} ${styles.wide}`}>
+              ⌫
+            </span>
+          ) : null}
+        </div>
+        <div className={`${styles.row} ${hebrewLayout ? styles.count10 : styles.count9}`}>
+          {rows.mid.map((letter) => (
             <span key={letter} className={styles.key}>
               {letter}
             </span>
           ))}
         </div>
-        <div className={`${styles.row} ${styles.middleRow}`}>
-          {middleRow.map((letter) => (
+        <div className={`${styles.row} ${hebrewLayout ? styles.count9 : styles.count7}`}>
+          {hebrewLayout ? null : (
+            <span className={`${styles.key} ${styles.dark} ${styles.wide}`}>
+              ⇧
+            </span>
+          )}
+          {rows.bot.map((letter) => (
             <span key={letter} className={styles.key}>
               {letter}
             </span>
           ))}
-        </div>
-        <div className={styles.row}>
-          <span className={`${styles.key} ${styles.dark} ${styles.wide}`}>
-            ⇧
-          </span>
-          {bottomRow.map((letter) => (
-            <span key={letter} className={styles.key}>
-              {letter}
+          {hebrewLayout ? null : (
+            <span className={`${styles.key} ${styles.soft} ${styles.wide}`}>
+              ⌫
             </span>
-          ))}
-          <span className={`${styles.key} ${styles.soft} ${styles.wide}`}>
-            ⌫
-          </span>
+          )}
         </div>
         <div className={styles.row}>
           <span className={`${styles.key} ${styles.dark} ${styles.wide}`}>
             123
           </span>
-          <span className={`${styles.key} ${styles.soft} ${styles.wide}`}>
-            ☺
-          </span>
-          <span className={`${styles.key} ${styles.space}`}>English</span>
+          <span className={`${styles.key} ${styles.space}`}>{t.space}</span>
           <span className={`${styles.key} ${styles.orange} ${styles.wide}`}>
             ↵
           </span>
         </div>
+        <div className={styles.actions}>
+          <span className={styles.action}>
+            <EmojiIcon />
+          </span>
+          <span className={`${styles.action} ${styles.actionLive}`}>
+            {t.actions[0]}
+          </span>
+          <span className={styles.action}>{t.actions[1]}</span>
+          <span className={styles.action}>{t.actions[2]}</span>
+          <span className={`${styles.action} ${styles.actionMic}`}>
+            <MicIcon />
+            <span>{t.dictate}</span>
+          </span>
+        </div>
       </div>
-      <svg
-        className={styles.doodleStar}
-        viewBox="0 0 40 40"
-        fill="none"
-      >
-        <path
-          d="M20 4 C20.8 14 21 26 20 36"
-          stroke="#ee7442"
-          strokeWidth="4"
-          strokeLinecap="round"
-          pathLength={100}
-        />
-        <path
-          d="M6 13 C15 16.5 25 17 34 15"
-          stroke="#ee7442"
-          strokeWidth="4"
-          strokeLinecap="round"
-          pathLength={100}
-        />
-        <path
-          d="M10 29 C16.5 22 24 15 31 8"
-          stroke="#ee7442"
-          strokeWidth="4"
-          strokeLinecap="round"
-          pathLength={100}
-        />
-      </svg>
     </div>
   );
 }

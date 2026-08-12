@@ -202,6 +202,18 @@ public final class SharedStore: ObservableObject {
         didSet { defaults.set(enabledLanguages.map(\.rawValue), forKey: Key.enabledLanguages) }
     }
 
+    /// The language list as the keyboard must read it: from UserDefaults at the
+    /// moment of use, not from the `@Published` copy `load()` filled at launch.
+    /// Same trap as `storedAutocorrect`. The space bar prints these codes, so a
+    /// stale copy is a swipe that names a language the user turned off.
+    public var storedEnabledLanguages: [KeyboardLanguage] {
+        if let raw = defaults.array(forKey: Key.enabledLanguages) as? [String] {
+            let parsed = raw.compactMap(KeyboardLanguage.init(rawValue:))
+            if !parsed.isEmpty { return parsed }
+        }
+        return enabledLanguages.isEmpty ? Self.shippedDefaultLanguages : enabledLanguages
+    }
+
     /// Appends or removes `language` from `enabledLanguages`.
     ///
     /// Returns `false` without mutating if the toggle would leave the list empty
@@ -242,6 +254,16 @@ public final class SharedStore: ObservableObject {
     @Published public var autocapitalise = true {
         didSet { defaults.set(autocapitalise, forKey: Key.autocapitalise) }
     }
+
+    /// Same cross-process rule as `storedAutocorrect`: the toggle is in the app
+    /// and Return / double-space capitalise in the keyboard extension.
+    public var storedAutocapitalise: Bool {
+        if defaults.object(forKey: Key.autocapitalise) != nil {
+            return defaults.bool(forKey: Key.autocapitalise)
+        }
+        return autocapitalise
+    }
+
     @Published public var predictions = true { didSet { defaults.set(predictions, forKey: Key.predictions) } }
 
     /// Whether the keyboard may remember the words this person types.

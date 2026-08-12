@@ -65,8 +65,16 @@ extension KeyboardController {
             insertSpace()
         case .ret:
             Feedback.keyPress()
+            // Before the newline: `previousWords` reads only the last line, so
+            // learning after `\n` would see an empty line and skip the word
+            // Return just finished. Chat Send is often this key.
+            learnWordJustCommitted()
             target?.insertText("\n")
-            shift = store.autocapitalise ? .on : .off
+            lastLearnedFolded = nil
+            // The line is finished, so any word on it was finished with it — the
+            // same close-out `insertSpace` does. See `isCorrectingWordByHand`.
+            deletedWordPrefix = nil
+            shift = store.storedAutocapitalise ? .on : .off
             refreshSuggestions()
         case .dictation:
             // **The only haptic on this path.** `startDictation` used to fire a
@@ -116,14 +124,19 @@ extension KeyboardController {
         // count of units from where the caret is standing, so a caret that has
         // moved since would take the wrong ones — see `revertAIEdit`, whose guard
         // catches the case the host moves it and this catches the case we do.
+        //
+        // They end a hand repair for the same reason: it is a claim about the
+        // word under the caret, and the caret is what just moved.
         case .cursorLeft:
             Feedback.keyPress()
             clearRevertibleEdit()
+            deletedWordPrefix = nil
             target?.adjustTextPosition(byCharacterOffset: -1)
             refreshSuggestions()
         case .cursorRight:
             Feedback.keyPress()
             clearRevertibleEdit()
+            deletedWordPrefix = nil
             target?.adjustTextPosition(byCharacterOffset: 1)
             refreshSuggestions()
         case .hideKeyboard:
@@ -160,10 +173,38 @@ extension KeyboardController {
         // that answer was written into, and putting the old text back would take
         // the new characters with it.
         clearRevertibleEdit()
+        // **A cap never types a line break.** The only newline any cap carries is
+        // the one a banded grouped cap uses to say where its second row of letters
+        // starts, and `.ret` is the key that inserts a line. Reachable only in the
+        // narrow window where the keyboard is still drawn grouped and the dial has
+        // already gone off — the user switched it in the containing app, or tapped
+        // into a password field — where the alternative is a line break appearing
+        // in somebody's message.
         let output = shift.isUppercase ? language.uppercased(value) : value
-        target?.insertText(output)
+        // A full stop, a comma, emoji, `.com` — anything that is not a letter
+        // inside a word — finishes the word the same way space does. Learn first:
+        // once the mark is in the field, `learnWordJustCommitted` will refuse so
+        // a later space does not count the same word twice. Apostrophe, hyphen
+        // and Hebrew geresh stay inside the word.
+        if Self.finishesWord(output) { learnWordJustCommitted() }
+        target?.insertText(output.replacingOccurrences(of: "\n", with: ""))
         if shift == .on { shift = .off }
         refreshSuggestions()
+    }
+
+    /// Marks that close a token, not the ones that live inside one.
+    static func finishesWord(_ value: String) -> Bool {
+        if value.count == 1, let character = value.first {
+            if staysInsideWord(character) { return false }
+            return !character.isLetter
+        }
+        // Snippets such as `.com` finish the word in front of them.
+        return value.contains { !staysInsideWord($0) && !$0.isLetter }
+    }
+
+    /// Apostrophe, hyphen, maqaf, geresh, gershayim, Catalan interpunt, ZWNJ.
+    private static func staysInsideWord(_ character: Character) -> Bool {
+        "'’-\u{05BE}\u{05F3}\u{05F4}\u{00B7}\u{200C}".contains(character)
     }
 
     func insertSpace() {
@@ -185,7 +226,7 @@ extension KeyboardController {
             target?.deleteBackward()
             target?.insertText(". ")
             lastSpaceTapAt = nil
-            shift = store.autocapitalise ? .on : .off
+            shift = store.storedAutocapitalise ? .on : .off
             refreshSuggestions()
             return
         }
@@ -197,7 +238,15 @@ extension KeyboardController {
         // Not over a selection: there the space replaces what is selected, the
         // way it does on the system keyboard, and the partial word in front of
         // the selection is not what the user is typing over.
+        // And never over a word the user is repairing by hand — see
+        // `isCorrectingWordByHand`. `refreshSuggestions` has already put the bold
+        // slot back on the literal keystrokes for that case, so this clause is the
+        // second lock on the same door, exactly as `storedAutocorrect` is checked
+        // both here and there: slot zero being the literal is a fact about
+        // `SuggestionEngine`, and the space bar should not be the thing that breaks
+        // if it ever stops being one.
         if store.storedAutocorrect,
+            !isCorrectingWordByHand,
             selection == nil,
             let candidate = suggestions.first(where: \.isDefault),
             !currentWordPrefix.isEmpty,
@@ -210,6 +259,10 @@ extension KeyboardController {
         // in the field rather than the keystrokes that were replaced.
         learnWordJustCommitted()
         target?.insertText(" ")
+        lastLearnedFolded = nil
+        // The repair is over: this word is committed and the next one is nobody's
+        // correction yet.
+        deletedWordPrefix = nil
         refreshSuggestions()
     }
 
@@ -225,7 +278,48 @@ extension KeyboardController {
         // press then decodes against a code that no longer matches the field.
         if deleteGroupedStroke() { return }
         target?.deleteBackward()
+        // **Read after the delete, because the word that matters is the one now
+        // standing in the field.** This is the whole record of "the user is
+        // repairing this word by hand"; everything it switches off is in
+        // `isCorrectingWordByHand`.
+        deletedWordPrefix = currentWordPrefix
         refreshSuggestions()
+    }
+
+    /// Whether the word under the cursor is one the user has backspaced into.
+    ///
+    /// **A word somebody is deleting from is a word they are correcting on
+    /// purpose, and the space bar must not overrule them.** Deleting the `ן` off
+    /// `מאמין` leaves `מאמי`, which no dictionary knows, so `shouldAutocorrect`
+    /// takes it as a typo and space put a different word in the field — the user
+    /// pressed delete to *change* the word and the keyboard changed it back, which
+    /// is the single most infuriating thing an autocorrect does. Every candidate is
+    /// still offered in the bar and a deliberate tap still commits one; only the
+    /// automatic replacement is off, and only for this word.
+    ///
+    /// **Held as the prefix rather than a flag, so it expires by itself.** The
+    /// caret can move without this keyboard hearing about it — a tap elsewhere in
+    /// the host's field goes through no key at all — and a flag would then suppress
+    /// autocorrect on a word nobody has touched. The snapshot only matches while
+    /// the word in the field still starts with what the delete left behind, which
+    /// is true of typing on from the repair and false of any other word. It is the
+    /// same claim-checked-rather-than-trusted shape as `GroupedInput.lastWritten`.
+    ///
+    /// **It is still cleared outright wherever a word is finished on purpose** —
+    /// space, a tapped candidate, return, and either cursor key — because the
+    /// residual case the prefix test cannot see is the *same* word typed again
+    /// straight afterwards, and a short repaired prefix is a prefix of plenty of
+    /// other words.
+    ///
+    /// **The accents popup counts, and that is deliberate rather than incidental.**
+    /// It picks an alternate by calling `deleteBackward()` and retyping (see
+    /// `KeyboardView.alternateHandler`), so it lands here — and it should: `צ׳יפס`,
+    /// `col·legi` and `café` are exactly the words no dictionary holds and
+    /// autocorrect destroys, and a character reached through a long press is as
+    /// hand-placed as one reached by deleting the wrong one.
+    var isCorrectingWordByHand: Bool {
+        guard let edited = deletedWordPrefix, !edited.isEmpty else { return false }
+        return currentWordPrefix.hasPrefix(edited)
     }
 
     public func toggleShift() {
@@ -245,6 +339,7 @@ extension KeyboardController {
         // Picked from the grid rather than pressed as a `KeyCap`, so this is the
         // one insertion `press(_:)` never speaks for. It still put text in.
         Feedback.keyClick(.tock)
+        learnWordJustCommitted()
         target?.insertText(emoji)
         recentEmoji.removeAll { $0 == emoji }
         recentEmoji.insert(emoji, at: 0)

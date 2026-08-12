@@ -88,6 +88,15 @@ final class CursorTextTarget: TextTarget {
             after = moved + after
         }
     }
+
+    /// Puts the caret between `before` and `after` without going through a key.
+    /// That is what a tap in the host field does, and `selectionDidChange` is
+    /// how the keyboard hears about it.
+    func placeCaret(before newBefore: String, after newAfter: String = "") {
+        before = newBefore
+        after = newAfter
+        selected = nil
+    }
 }
 
 /// The same protocol, over a real `UITextView`.

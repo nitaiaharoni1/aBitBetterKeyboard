@@ -96,6 +96,36 @@ final class ContextAwareSuggestionTests: XCTestCase {
             "got \(results.map(\.text)) — a neighbour crowded out the word being typed")
     }
 
+    /// **A same-length substitution is a word still being typed.** `מכונ` on the
+    /// way to `מכונית` is one substitution from `נכון`, and the seed knows the
+    /// neighbour and not the car. Space committing `נכון` is the delete-key
+    /// undoing itself in another shape. A transposition still corrects: that is
+    /// `teh` → `the` below, and `תדוה` is offered even when Apple's checker will
+    /// not commit it.
+    func testASameLengthSubstitutionDoesNotTakeTheBoldSlot() {
+        XCTAssertFalse(SeedLanguageModel.isTransposition("נכון", of: "מכונ"))
+        XCTAssertTrue(SeedLanguageModel.isTransposition("the", of: "teh"))
+        XCTAssertTrue(SeedLanguageModel.isTransposition("תודה", of: "תדוה"))
+
+        let inProgress = SuggestionEngine.suggestions(
+            prefix: "מכונ", context: "", languages: [.hebrew], personal: emptyPersonal())
+        XCTAssertNotEqual(
+            inProgress.first(where: \.isDefault)?.text, "נכון",
+            "space would replace a word in progress: \(inProgress.map(\.text))")
+
+        let threeLetters = SuggestionEngine.suggestions(
+            prefix: "מצט", context: "", languages: [.hebrew], personal: emptyPersonal())
+        XCTAssertNotEqual(
+            threeLetters.first(where: \.isDefault)?.text, "מצב",
+            "space would replace מצט with מצב: \(threeLetters.map(\.text))")
+
+        let english = SuggestionEngine.suggestions(
+            prefix: "teh", context: "I ", languages: [.english], personal: emptyPersonal())
+        XCTAssertEqual(
+            english.first(where: \.isDefault)?.text, "the",
+            "a transposition still has to correct: \(english.map(\.text))")
+    }
+
     /// **A mark after the word used to switch this whole rule off.** `neighbours`
     /// refuses a candidate shorter than what it is given, so a comma counted as a
     /// letter and put every real neighbour under the floor. In English there is a
@@ -258,6 +288,106 @@ final class ContextAwareSuggestionTests: XCTestCase {
         personal.record(word: "0527", previous: nil, language: .english, permitted: true)
         personal.record(word: "a", previous: nil, language: .english, permitted: true)
         XCTAssertEqual(personal.learnedWordCount, 0)
+    }
+
+    /// Typing a word and finishing it has to count, not only tapping a candidate.
+    /// A tap always inserts a space, so that path was the only one that used to
+    /// reach the store; Return, a full stop, and going away with the word still
+    /// under the cursor are how a chat message actually ends.
+    func testATypedWordIsLearnedWhenItIsFinishedNotOnlyWhenACandidateIsTapped() {
+        let saved = SharedStore.shared.autocorrect
+        SharedStore.shared.autocorrect = false
+        defer { SharedStore.shared.autocorrect = saved }
+
+        func typeHello(_ controller: KeyboardController) {
+            controller.shift = .off
+            for character in "hello" { controller.press(.character(String(character))) }
+        }
+
+        let spaced = KeyboardController(target: CursorTextTarget(before: ""), language: .english)
+        typeHello(spaced)
+        XCTAssertEqual(
+            spaced.personal.count(of: "hello", in: .english), 0,
+            "learned a prefix before the word was finished")
+        spaced.press(.space)
+        XCTAssertEqual(
+            spaced.personal.count(of: "hello", in: .english), 1,
+            "space after typing did not record: the store only counted candidate taps")
+
+        let returned = KeyboardController(target: CursorTextTarget(before: ""), language: .english)
+        typeHello(returned)
+        returned.press(.ret)
+        XCTAssertEqual(
+            returned.personal.count(of: "hello", in: .english), 1,
+            "Return did not record the word it finished")
+
+        let stopped = KeyboardController(target: CursorTextTarget(before: ""), language: .english)
+        typeHello(stopped)
+        stopped.press(.character("."))
+        XCTAssertEqual(
+            stopped.personal.count(of: "hello", in: .english), 1,
+            "a full stop did not record")
+        stopped.press(.space)
+        XCTAssertEqual(
+            stopped.personal.count(of: "hello", in: .english), 1,
+            "space after a full stop counted the same word twice")
+
+        let apostrophe = KeyboardController(
+            target: CursorTextTarget(before: ""), language: .english)
+        apostrophe.shift = .off
+        for character in "don" { apostrophe.press(.character(String(character))) }
+        apostrophe.press(.character("'"))
+        XCTAssertEqual(
+            apostrophe.personal.count(of: "don", in: .english), 0,
+            "an apostrophe is inside the word and must not finish it")
+
+        let sent = KeyboardController(target: CursorTextTarget(before: ""), language: .english)
+        typeHello(sent)
+        sent.learnWordJustCommitted()
+        XCTAssertEqual(
+            sent.personal.count(of: "hello", in: .english), 1,
+            "a send without a trailing space did not record")
+        sent.learnWordJustCommitted()
+        XCTAssertEqual(
+            sent.personal.count(of: "hello", in: .english), 1,
+            "the keyboard going away twice counted the same open word twice")
+
+        let tapped = KeyboardController(
+            target: CursorTextTarget(before: "hel"), language: .english)
+        tapped.apply(Suggestion(text: "hello", language: .english))
+        XCTAssertEqual(
+            tapped.personal.count(of: "hello", in: .english), 1,
+            "a candidate tap stopped recording")
+
+        let sentField = CursorTextTarget(before: "")
+        let hostSent = KeyboardController(target: sentField, language: .english)
+        typeHello(hostSent)
+        XCTAssertEqual(hostSent.personal.count(of: "hello", in: .english), 0)
+        // The host emptied the field, the way a chat Send does. No space, no
+        // Return, no `viewWillDisappear` — `textDidChange` is the only news.
+        sentField.placeCaret(before: "", after: "")
+        hostSent.refreshSuggestions()
+        XCTAssertEqual(
+            hostSent.personal.count(of: "hello", in: .english), 1,
+            "a send that cleared the field did not record the last word")
+
+        let erased = KeyboardController(
+            target: CursorTextTarget(before: ""), language: .english)
+        erased.shift = .off
+        for character in "hi" { erased.press(.character(String(character))) }
+        erased.press(.backspace)
+        erased.press(.backspace)
+        XCTAssertEqual(
+            erased.personal.count(of: "hi", in: .english), 0,
+            "deleting a word counted it as committed")
+
+        let emoji = KeyboardController(
+            target: CursorTextTarget(before: ""), language: .english)
+        typeHello(emoji)
+        emoji.insertEmoji("😊")
+        XCTAssertEqual(
+            emoji.personal.count(of: "hello", in: .english), 1,
+            "an emoji after a word did not finish it")
     }
 
     // MARK: Ranking

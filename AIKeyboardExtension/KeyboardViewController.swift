@@ -174,6 +174,15 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        // **Re-read the suite before measuring, and both before the keyboard is
+        // on screen.** Settings live in the companion app; iOS keeps this process
+        // alive in the background. The space bar and Return already read
+        // UserDefaults through `stored*`; `load()` is what puts a language list
+        // or an auto-capitalise toggle the user just flipped into the published
+        // copies the rest of the chrome draws from — and what
+        // `reloadCustomization` below then draws. Reading only the layout left
+        // those two on the launch-time copy.
+        SharedStore.shared.load()
         // **Re-read before measuring, and both before the keyboard is on screen.**
         // The layout is edited in the companion app, and iOS keeps this process
         // alive in the background, so the first appearance after an edit is the
@@ -251,6 +260,11 @@ final class KeyboardViewController: UIInputViewController {
         super.viewWillTransition(to: size, with: coordinator)
         coordinator.animate(alongsideTransition: nil) { [weak self] _ in
             guard let self else { return }
+            // A band that moves while Reply is waiting for a frame retires that
+            // reading as a conversation switch. Hold the crop until the read
+            // lands; the next appearance or the next rotation after that
+            // republishes the real height.
+            guard !ScreenContextSession.shared.isAwaitingRead else { return }
             ScreenContextSession.shared.updateOwnUIHeightFraction(ownUIHeightFraction())
         }
     }
@@ -299,6 +313,11 @@ final class KeyboardViewController: UIInputViewController {
         // An answer that arrives after the keyboard has gone would land in whatever
         // document comes next, which is a different person's message.
         controller?.cancelRefinement()
+        // A Send button that never presses space or Return still finishes the
+        // word under the cursor. Learning here, before the save, is what makes
+        // a one-word message count; a trailing space already learned it and
+        // this is a no-op.
+        controller?.learnWordJustCommitted()
         // The only moment it is certain there is a keyboard to save from.
         // `PersonalLanguageModel` writes every twenty-fifth word on its own, so
         // this bounds the loss to the tail rather than being the whole mechanism —
@@ -409,6 +428,20 @@ final class KeyboardViewController: UIInputViewController {
     /// unwrapped nil is a crash on the first keystroke.
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
+        guard let controller else { return }
+        controller.refreshSuggestions()
+    }
+
+    /// A tap in the host field moves the caret without changing any characters,
+    /// so `textDidChange` never runs. `UIInputViewController` is a
+    /// `UITextInputDelegate`, and this is the callback that tap fires.
+    ///
+    /// **Refresh only.** Clearing `revertibleEdit` here would delete the undo on
+    /// the same turn as the insert that created it, because this keyboard's own
+    /// insertions move the caret too. `deletedWordPrefix` expires by itself when
+    /// the word under the caret no longer starts with it.
+    override func selectionDidChange(_ textInput: UITextInput?) {
+        super.selectionDidChange(textInput)
         guard let controller else { return }
         controller.refreshSuggestions()
     }

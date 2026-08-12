@@ -20,15 +20,17 @@ extension KeyboardController {
         let results = SuggestionEngine.suggestions(
             prefix: prefix,
             context: context,
-            languages: [language] + store.enabledLanguages.filter { $0 != language },
+            languages: [language] + store.storedEnabledLanguages.filter { $0 != language },
             supplementary: store.storedPersonalDictionary + supplementaryWords,
             personal: personal
         )
-        // When autocorrect is off, space must leave the typed word alone — so the
-        // bold "default" slot has to be that word, not a correction the space bar
-        // is no longer allowed to commit. Next-word suggestions (empty prefix) are
-        // never auto-committed anyway; leave their middle bold alone.
-        if !store.storedAutocorrect, !prefix.isEmpty {
+        // When the space bar is not allowed to commit a correction, the bold
+        // "default" slot has to be the typed word rather than the correction, or
+        // the bar advertises a swap that will not happen. Two reasons it is not
+        // allowed: the setting is off, or the user is backspacing through this
+        // particular word (`isCorrectingWordByHand`). Next-word suggestions (empty
+        // prefix) are never auto-committed anyway; leave their middle bold alone.
+        if !prefix.isEmpty, !store.storedAutocorrect || isCorrectingWordByHand {
             suggestions = SuggestionEngine.markDefault(results, at: 0)
         } else {
             suggestions = results
@@ -59,6 +61,30 @@ extension KeyboardController {
     public func refreshDocumentState() {
         documentHasText = hasTextToWorkWith
         if revertibleEdit != nil, !documentHasText { revertibleEdit = nil }
+        adoptOpenWord()
+    }
+
+    /// Keep the word under the cursor, and commit it if the host just emptied
+    /// the field. Chat Send is that empty: it never presses space, `textDidChange`
+    /// is the news, and without this the last word of the message is lost.
+    ///
+    /// A delete that erases the whole word is the other empty, and must not
+    /// count: `deletedWordPrefix` is `""` then, not nil.
+    func adoptOpenWord() {
+        let raw = currentWordPrefix
+        let word = SuggestionEngine.wordCore(raw)
+        if word.isEmpty {
+            if !openWord.isEmpty, deletedWordPrefix == nil {
+                recordCommittedWord(openWord)
+            }
+            openWord = ""
+            return
+        }
+        if Self.wordAlreadyTerminated(raw, core: word) {
+            openWord = ""
+            return
+        }
+        openWord = word
     }
 
     /// Start the async tier's clock. Every keystroke restarts it, so it only ever
@@ -179,38 +205,85 @@ extension KeyboardController {
         // and `press(_:)` is where every other one gets its click.
         Feedback.keyClick(.tock)
         replaceCurrentWord(with: suggestion.text)
-        learnWordJustCommitted()
+        // The candidate may already carry a mark (`hello,`). The space-bar path
+        // skips a word that is already terminated so `hello.` + space does not
+        // count twice; a tap is the first time this word is committed.
+        recordCommittedWord(SuggestionEngine.wordCore(suggestion.text))
         target?.insertText(" ")
+        lastLearnedFolded = nil
+        // Committed on purpose, so the hand repair this word may have been under is
+        // over — the same line `insertSpace` ends on, for the same reason.
+        deletedWordPrefix = nil
         refreshSuggestions()
         reportInteraction(.suggestion)
     }
 
-    /// Remember the word the user has just finished, and the pair it makes with
-    /// the one before it.
+    /// Remember the word still under the cursor, and the pair it makes with the
+    /// one before it.
     ///
-    /// **Called after the word is settled, never at the keystroke.** A word being
-    /// typed is not a word yet — learning `addres` on the way to `address` would
-    /// teach the store every prefix of everything, and prefixes are exactly what
-    /// the store is later asked about. Both callers are moments the user has
-    /// finished a word on purpose: pressing space, or tapping a candidate.
+    /// **The word under the cursor, not the last token of the document.** A
+    /// trailing space means this word was already learned when that space was
+    /// pressed. Reading `previousWords` instead re-taught `hello` every time the
+    /// keyboard went away after `hello `, and never taught the last word of a
+    /// message that was sent without a trailing space — which is how a chat
+    /// Send button finishes a word, and how Return does. Tapping a candidate
+    /// always inserts a space, so that path was the only one that reliably
+    /// counted. Callers that insert a terminator (space, Return, a full stop)
+    /// learn *before* the terminator lands, so the word is still under the
+    /// cursor.
     ///
-    /// Three things can stop it, and each is somebody's explicit decision rather
-    /// than a heuristic: the setting is off, the field is a credential field, or
-    /// the App Group is out of reach because Full Access was never granted — in
-    /// which case `PersonalLanguageModel` has nowhere to persist and quietly keeps
-    /// its counts for as long as this keyboard instance lives.
-    func learnWordJustCommitted() {
+    /// A mark already after the word means it was finished when the mark was
+    /// typed. Space after `hello.` must not count the same word twice.
+    ///
+    /// Three things can still stop a write, and each is somebody's explicit
+    /// decision rather than a heuristic: the setting is off, the field is a
+    /// credential field, or the App Group is out of reach because Full Access
+    /// was never granted — in which case `PersonalLanguageModel` has nowhere to
+    /// persist and quietly keeps its counts for as long as this keyboard
+    /// instance lives.
+    public func learnWordJustCommitted() {
+        let raw = currentWordPrefix
+        let word = SuggestionEngine.wordCore(raw)
+        if word.isEmpty {
+            if !openWord.isEmpty, deletedWordPrefix == nil {
+                recordCommittedWord(openWord)
+            }
+            return
+        }
+        if Self.wordAlreadyTerminated(raw, core: word) { return }
+        recordCommittedWord(word)
+    }
+
+    /// A mark after the core means the word was finished when the mark was typed.
+    static func wordAlreadyTerminated(_ raw: String, core word: String) -> Bool {
+        guard let core = raw.range(of: word, options: .backwards),
+            core.upperBound < raw.endIndex
+        else { return false }
+        return raw[core.upperBound...].allSatisfy(\.isPunctuation)
+    }
+
+    /// The write itself. `learnWordJustCommitted` decides *whether* this word is
+    /// still open; `apply` already knows it is committing.
+    func recordCommittedWord(_ word: String) {
+        guard !word.isEmpty else { return }
+        let folded = SeedLanguageModel.fold(word)
+        guard folded != lastLearnedFolded else { return }
         let words = SuggestionEngine.previousWords(in: contextBefore)
-        guard let word = words.last else { return }
-        personal.record(
+        let previous: String?
+        if words.last.map({ SeedLanguageModel.fold($0) == folded }) == true {
+            previous = words.count >= 2 ? words[words.count - 2] : nil
+        } else {
+            previous = words.last
+        }
+        let wrote = personal.record(
             word: word,
-            previous: words.count >= 2 ? words[words.count - 2] : nil,
+            previous: previous,
             // The word's own script, not the layout's. Somebody typing a Hebrew
             // sentence has the Hebrew layout up, and the English words inside it
             // belong in the English counters or `לעבודה` and `sprint` end up in one
             // list where neither can be looked up.
             language: SuggestionEngine.dominantLanguage(
-                in: word, among: [language] + store.enabledLanguages.filter { $0 != language })
+                in: word, among: [language] + store.storedEnabledLanguages.filter { $0 != language })
                 ?? language,
             // The same question `SecureField` answers for a screen read, asked
             // again here because "may I keep this word" and "may I send this
@@ -219,5 +292,9 @@ extension KeyboardController {
                 && SecureField.permitsRead(
                     secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
         )
+        if wrote {
+            lastLearnedFolded = folded
+            openWord = ""
+        }
     }
 }

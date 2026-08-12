@@ -93,4 +93,22 @@ extension KeyView {
         }
         return min(base, width * 0.78)
     }
+
+    /// The same for a grouped cap, which carries several letters on one or two
+    /// lines.
+    ///
+    /// **Bounded by the widest line and by the number of lines, not by the key's
+    /// width alone.** A banded key is wider *and* taller than an ordinary one, so
+    /// `characterFontSize`'s width rule alone would size the letters off the
+    /// bottom of a two-line cap. The tracking between letters is paid for out of
+    /// the same budget, which is what the 0.72 is: eight tenths of the key, less
+    /// the gaps.
+    func groupedFontSize(_ value: String) -> CGFloat {
+        let lines = value.split(separator: "\n", omittingEmptySubsequences: false)
+        let widest = CGFloat(max(1, lines.map(\.count).max() ?? 1))
+        return min(
+            characterFontSize,
+            width * 0.72 / widest,
+            height * 0.56 / CGFloat(max(1, lines.count)))
+    }
 }

@@ -10,7 +10,6 @@ public struct LayoutIssue: Equatable, Identifiable, Sendable {
         case missingSpace
         case missingReturn
         case missingPlaneSwitch
-        case missingGlobe
         case duplicateSpace
         case rowTooWide
         case geometryOutOfRange
@@ -83,7 +82,7 @@ public enum LayoutValidator {
     }
 
     public static func issues(
-        in layout: KeyboardCustomization, showsGlobe: Bool
+        in layout: KeyboardCustomization
     ) -> [LayoutIssue] {
         var found: [LayoutIssue] = []
         let custom = layout.bottomRow + layout.cursorRow
@@ -118,11 +117,16 @@ public enum LayoutValidator {
                     kind: .missingPlaneSwitch, severity: .error,
                     message: "Add the 123 key. Without it the numbers are unreachable."))
         }
-        if showsGlobe, !actions.contains(.globe) {
-            found.append(
-                LayoutIssue(kind: .missingGlobe, severity: .error, message: globeRefusal))
-        }
-
+        // **There is deliberately no globe rule here, and there was one.** The key
+        // is not the user's to supply: `KeyboardController.apply(_:)` inserts it
+        // whenever `needsInputModeSwitchKey` says the device needs one, *before* it
+        // validates — so the rule could never fire on the path it was written for,
+        // and the only place it ever did fire was the editor, where it blocked Done
+        // on the layout this app ships. Every preset now carries `.settings` in the
+        // slot the globe used to occupy (see `KeyboardCustomization.default`), so
+        // that refusal was shown to every user with two keyboards installed the
+        // first time they opened the editor. A rail that stops the user doing
+        // something the code then does for them is not a rail.
         if actions.filter({ $0 == .space }).count > 1 {
             found.append(
                 LayoutIssue(
@@ -207,8 +211,8 @@ public enum LayoutValidator {
     }
 
     /// Whether Done is allowed.
-    public static func isUsable(_ layout: KeyboardCustomization, showsGlobe: Bool) -> Bool {
-        !issues(in: layout, showsGlobe: showsGlobe).contains { $0.severity == .error }
+    public static func isUsable(_ layout: KeyboardCustomization) -> Bool {
+        !issues(in: layout).contains { $0.severity == .error }
     }
 
     /// Whether one key may be taken out, and what to say if not.
@@ -218,7 +222,7 @@ public enum LayoutValidator {
     /// asking the same question the whole validator asks, so the button and the
     /// rails can never disagree about what is required.
     public static func canRemove(
-        _ slot: SlotSpec, from layout: KeyboardCustomization, showsGlobe: Bool
+        _ slot: SlotSpec, from layout: KeyboardCustomization
     ) -> RemovalVerdict {
         var without = layout
         without.bottomRow.removeAll { $0.id == slot.id }
@@ -226,13 +230,13 @@ public enum LayoutValidator {
         without.barLeading.removeAll { $0.id == slot.id }
         without.barTrailing.removeAll { $0.id == slot.id }
 
-        let newErrors = issues(in: without, showsGlobe: showsGlobe)
+        let newErrors = issues(in: without)
             .filter { $0.severity == .error }
         // Only errors this removal *introduces* count. A layout that is already
         // broken must not refuse every further edit, which would be a corner the
         // user cannot get out of.
         let existing = Set(
-            issues(in: layout, showsGlobe: showsGlobe)
+            issues(in: layout)
                 .filter { $0.severity == .error }.map(\.id))
         guard let blocker = newErrors.first(where: { !existing.contains($0.id) }) else {
             return RemovalVerdict(isAllowed: true, reason: "")
@@ -245,14 +249,6 @@ public enum LayoutValidator {
         /// Empty when allowed. Shown under the disabled Remove button otherwise.
         public let reason: String
     }
-
-    /// **This is iOS's requirement, not a preference of ours.** `showsGlobe` is
-    /// `UIInputViewController.needsInputModeSwitchKey`, which is the system saying
-    /// the user has another keyboard installed and must be able to reach it. A
-    /// layout without the key on such a device strands them in whatever app they
-    /// are in.
-    static let globeRefusal =
-        "iOS requires the next-keyboard key on this device, so it cannot be removed."
 
     /// The units a row occupies before the `fill` keys take what is left. A `fill`
     /// key still needs somewhere to stand, so it counts as one.

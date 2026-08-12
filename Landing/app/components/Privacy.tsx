@@ -1,29 +1,21 @@
+import type { Copy } from "../copy";
 import styles from "./Privacy.module.css";
 
-const points = [
-  {
-    title: "On-device first",
-    body: "Suggestions and dictation run on your iPhone whenever possible.",
-  },
-  {
-    title: "Cloud, only when you ask",
-    body: "Heavier AI actions call the cloud only when you tap them.",
-  },
-  {
-    title: "Never sold",
-    body: "Your keystrokes and messages are never used for advertising.",
-  },
-];
+export default function Privacy({ t }: { t: Copy }) {
+  const points = [
+    { title: t.privacyOnDevice, body: t.privacyOnDeviceBody },
+    { title: t.privacyCloud, body: t.privacyCloudBody },
+    { title: t.privacySold, body: t.privacySoldBody },
+  ];
 
-export default function Privacy() {
   return (
     <section
+      id="privacy"
       className={`wrap ${styles.section}`}
       aria-labelledby="privacy-title"
     >
-      <p className="eyebrow">Privacy</p>
       <h2 id="privacy-title" className="section-title">
-        Your words stay yours.
+        {t.privacyTitle}
       </h2>
       <ul className={styles.list}>
         {points.map((point) => (

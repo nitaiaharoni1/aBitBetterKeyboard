@@ -28,6 +28,8 @@ extension KeyView {
                 }
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+            } else if !spec.groupedLines.isEmpty {
+                groupedLabel(spec.groupedLines, size: groupedFontSize(value))
             } else {
                 Text(shift.isUppercase ? language.uppercased(value) : value)
                     .font(.system(size: characterFontSize, weight: .light))
@@ -166,6 +168,38 @@ extension KeyView {
         }
     }
 
+    /// A grouped cap: its letters in the shape they had on the keyboard it
+    /// replaced, the top row's on the top line and the ones that were underneath
+    /// underneath.
+    ///
+    /// **One `Text` per letter, and that is not a detail.** Drawn as a single
+    /// string, `קר` is one right-to-left run: the bidi algorithm puts ר to the
+    /// *left* of ק while the keys underneath have ק on the left, so every Hebrew
+    /// cap would draw mirrored — the defect that shipped six right-to-left layouts
+    /// backwards once already, in a place no row-order test can see, because the
+    /// row would be right and only the cap reversed. Separate views also mean the
+    /// gaps between letters are laid out rather than kerned, so the last letter of
+    /// a line cannot be tracked off the edge of its own key.
+    @ViewBuilder
+    func groupedLabel(_ lines: [[String]], size: CGFloat) -> some View {
+        VStack(spacing: size * 0.12) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                HStack(spacing: size * 0.34) {
+                    ForEach(Array(line.enumerated()), id: \.offset) { _, letter in
+                        Text(shift.isUppercase ? language.uppercased(letter) : letter)
+                    }
+                }
+            }
+        }
+        .font(.system(size: size, weight: .light))
+        .foregroundStyle(Theme.Keys.label)
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
+        // The letters are a picture of the keyboard, so they run in the order the
+        // keyboard does whatever the script does. Same pin every key row carries.
+        .environment(\.layoutDirection, .leftToRight)
+    }
+
     // MARK: Action label
 
     /// An action drawn as a key: its glyph, and its name under it when there is
@@ -177,21 +211,24 @@ extension KeyView {
     ///
     /// The tint `actionLabel` resolves, against the cap the key is wearing.
     ///
-    /// On the dark caps — emoji and dictation — the glyph is the warm-white
-    /// `labelOnFunction` at rest, because a brand tint on soft graphite is
-    /// neither readable nor the neutral control that key is. On the light AI
-    /// caps, custom placements keep each action's own brand tint while the
-    /// shipped action row uses the same neutral label colour as the other keys.
-    /// Under a finger every cap goes light and the glyph goes graphite, exactly
-    /// as `KeyView.labelColor` has it.
+    /// On the dark caps — emoji at rest — the glyph is the warm-white
+    /// `labelOnFunction`, because a brand tint on soft graphite is neither
+    /// readable nor the neutral control that key is. On the light AI caps,
+    /// custom placements keep each action's own brand tint while the shipped
+    /// action row uses the same neutral label colour as the other keys. Under a
+    /// finger every cap goes light and the glyph goes graphite, exactly as
+    /// `KeyView.labelColor` has it.
     ///
     /// A function rather than an `if` inside the `@ViewBuilder` below: a branch
     /// statement in a builder body is parsed as view content, not as flow.
-    /// White on the filled brand cap a running action wears, and that is the whole
-    /// of what "active" looks like now — see `KeyView.capKind`.
+    /// White on every filled brand or record cap, keyed off `capKind` rather
+    /// than `isActionActive`. The microphone wears that cap at rest (orange)
+    /// and while recording (red), so a brand-tinted glyph would be orange on
+    /// orange — the same fill/glyph disagreement `KeyView.capKind` exists to
+    /// prevent.
     func actionTint(_ tint: Color) -> Color {
         if isPressed { return Theme.Keys.label }
-        if isActionActive { return Theme.Text.onBrand }
+        if capKind == .action || capKind == .record { return Theme.Text.onBrand }
         if restsOnDarkCap { return Theme.Keys.labelOnFunction }
         let resting = usesNeutralActionTint ? Theme.Keys.label : tint
         return resting.opacity(isDisabled ? KeyView.disabledLabelOpacity : 1)

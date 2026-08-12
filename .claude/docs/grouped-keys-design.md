@@ -1,8 +1,15 @@
 # Grouped keys: one big button for several letters
 
-A keyboard mode where each key carries three to five adjacent letters instead of
-one, and a local decoder works out which word was meant. The keys get three to
-five times wider; the number of taps does not change.
+A keyboard mode where each key carries two to six *neighbouring* letters instead
+of one, and a local decoder works out which word was meant. The keys get two to
+six times the area; the number of taps does not change.
+
+**A key is a block of the keyboard it replaces.** The two letter rows that stand
+clear of shift and delete merge into one band of double-height keys, and a key is
+a column slice of that band: `q w` over `a s` is one key, drawn on two lines, two
+key-heights tall. The third row keeps shift and delete, so it stays one row deep
+and groups sideways. The keyboard's total height does not change, because the
+band is two rows tall because it *is* two rows.
 
 Status: **Phase A measured; Phase B built and compiling, not yet shippable.** The
 harness is `Bar/grouped/` and its findings are in `Bar/grouped/README.md`. The
@@ -16,18 +23,22 @@ dial in Settings ▸ Typing.
 > and partly unstated licences, so the generated files are gitignored and must
 > not ship. Without them `GroupedDecoder` reports `.seedOnly` and falls back to a
 > few hundred seed words, which decodes the common core and almost nothing else.
-> Nothing else is blocking; the feature is off by default and the code path is
-> inert until somebody turns the dial.
+> Settings says so when the files are missing. Hebrew is a second, smaller gate:
+> L2 commits the wrong word about three times in ten, so
+> `GroupedKeys.Level.hebrewCeiling` clamps Hebrew at L1 while English keeps the
+> stop the user picked. The feature is off by default and the code path is inert
+> until somebody turns the dial.
 
-> **What Phase A returned, in five lines.** Separating Hebrew's clitics is worth
-> +4.9 points at 14 keys and costs no extra keys; **L1 is the last stop where it
-> is fully satisfiable**, L2 keeps half of it, L3 none. Hebrew caps lower than
-> English at every level and the gap widens sharply under compression (3.0 points
-> at 14 keys, 17.5 at three). k=2 — not currently a dial stop — costs only 1.6
-> points against an ungrouped English keyboard. L3 Hebrew commits the wrong word
-> about three times in ten. Every rate carries a **1.7-point** spread, so two
-> conditions closer than that are not distinguishable; read the README before
-> quoting any of them.
+> **What the harness returned, in six lines.** Separating Hebrew's clitics is
+> worth +7.0 points at 14 keys and costs no extra keys; **L1 is the last stop
+> where it is fully satisfiable**, and below that one pair is stuck. Hebrew caps
+> lower than English at every level and the gap widens sharply under compression
+> (4.8 points at 14 keys, 22.9 at four). k=2 — not currently a dial stop — costs
+> only 1.6 points against an ungrouped English keyboard. Hebrew L2 commits the
+> wrong word nearly three times in ten. **Banding gained English 1.8 to 4.4 points
+> and cost Hebrew 1.8 to 7.9**, and neither side of that is the reason to do it —
+> the harness cannot see target size at all. Every rate carries a **2-point**
+> spread; read the README before quoting any of them.
 
 ## What the win actually is, and what it is not
 
@@ -35,10 +46,17 @@ dial in Settings ▸ Typing.
 built on "type less" describes a different feature and this one will not deliver
 it.
 
-**It is target size.** A 393pt screen gives ten columns of ~35pt keys today. The
-top row becomes three keys at L1 and two at L3, so those keys land around 125pt
-and 190pt. Fitts's law does the rest: less aiming, fewer mistypes, and it pays
-off one-handed, walking, eyes-off, and for anyone whose hands are not steady.
+**It is target size, in both axes.** A 393pt screen gives ten columns of ~35pt
+keys today, and the letter area is three rows of ~40pt. A banded key at L2 is two
+columns wide and two rows tall: about 78 × 86pt, four times the area and roughly
+square. Fitts's law does the rest: less aiming, fewer mistypes, and it pays off
+one-handed, walking, eyes-off, and for anyone whose hands are not steady.
+
+**Grouping sideways alone was half of this and the wrong half.** A row-at-a-time
+key is wider and no taller — a sliver — and a thumb misses in both axes. It also
+put `q` and `a` two keys apart when they are a few millimetres apart on the glass,
+so the key a sloppy tap landed nearest was not the key that carried the letter
+meant. The band is what fixes both.
 
 **And it is permission.** iOS already decodes near-misses probabilistically
 behind twenty-six drawn keys. Drawing the groups is what tells the user that
@@ -60,67 +78,101 @@ with three decoders:
 T9, at eight keys and dictionary-only, uniquely resolved 95% of a 9,025-word
 dictionary.
 
-**The finding that shapes this design: the letter-to-key mapping barely
+**The finding that shaped this design: the letter-to-key mapping barely
 matters.** That study compared QWERTY-shaped grouping, frequency-balanced
 grouping, and a deliberately adversarial worst case, and the spread was under
 0.5 percentage points. So grouping by physical adjacency — which is what keeps a
 QWERTY typist's muscle memory intact — is close to free.
 
-**That result is English-only and does not transfer to Hebrew unexamined.** See
-below.
+**That result is English-only and it did not transfer to Hebrew.** Measured here,
+changing the mapping from row runs to 2D blocks moved English by +1.8 to +4.4 and
+Hebrew by −1.8 to −7.9 — five to sixteen times the spread that study reported. The
+reason is in the rows: English's second row is where its rare letters live, so a
+band key is a common letter with ballast under it, while both of Hebrew's top rows
+are dense with its commonest letters. Do not carry an English mapping result into
+Hebrew again.
 
 ## The dial
 
-Three stops, measured from the shipped row strings in `LetterLayouts`. A row of
-_n_ letters splits into `round(n/k)` keys, letters distributed as evenly as
-possible, never merging across rows.
+Three stops, measured from the shipped row strings in `LetterLayouts`. The top
+two rows are stacked into a band of _n_ columns, where _n_ is the longer of the
+two and the shorter is aligned under it from the left; the band splits into
+`round(total letters / k)` **columns groups**, and the remaining row splits into
+the same number of letter groups it always did. Nothing merges across the band
+boundary, so shift and delete keep a row of ordinary height to stand in.
 
-**Two details of that rule are load-bearing and produce different layouts if got
-wrong.** The rounding is **half-up** (`int(n/k + 0.5)`), not Python's built-in
-`round`, which is banker's rounding and would send a row of 10 at k=4 to two keys
-instead of three. And where the division is uneven the **leading** groups take
-the extra letter, so `qwertyuiop` at k=3 is `[qwer][tyu][iop]` and not
-`[qwe][rty][uiop]`. The minimum is one key per row, so a row can never vanish.
+**Four details of that rule are load-bearing and each produces a different
+keyboard if got wrong.** The rounding is **half-up** (`int(n/k + 0.5)`), not
+Python's built-in `round`, which is banker's rounding and would send 19 letters at
+k=4 to four keys instead of five. Where the division is uneven the **leading**
+groups take the extra, so ten columns in three is 4|3|3 and not 3|3|4. The
+band asks `keyCount` **once for both its rows together**, which is what keeps the
+key count at every stop equal to the row-at-a-time layout's. And the shorter row
+is aligned **left**, which keeps `q w` over `a s` and `o p` over `l`; aligning
+right moves every letter of the lower row one column across for no gain. The
+minimum is one key per row, so a row can never vanish.
 
-### English — `qwertyuiop` / `asdfghjkl` / `zxcvbnm`
+### English — `qwertyuiop` over `asdfghjkl`, then `zxcvbnm`
 
-| Level | Letters/key | Keys | Groups |
-|---|---|---|---|
-| L1 | 3 | 8 | `[qwer][tyu][iop]` `[asd][fgh][jkl]` `[zxcv][bnm]` |
-| L2 | 4 | 7 | `[qwer][tyu][iop]` `[asdfg][hjkl]` `[zxcv][bnm]` |
-| L3 | 5 | 5 | `[qwert][yuiop]` `[asdfg][hjkl]` `[zxcvbnm]` |
+The band is the first two, ten columns wide with nothing under `p`.
 
-### Hebrew — `קראטוןםפ` / `שדגכעיחלךף` / `זסבהנמצתץ`
+| Level | Letters/key | Keys | Band | Third row |
+|---|---|---|---|---|
+| pairs | 2 | 14 | `[q/a][w/s][e/d][r/f][t/g][y/h][u/j][i/k][o/l][p]` | `[zx][cv][bn][m]` |
+| L1 | 3 | 8 | `[qw/as][er/df][ty/gh][ui/jk][o/l][p]` | `[zxcv][bnm]` |
+| L2 | 4 | 7 | `[qw/as][er/df][ty/gh][ui/jk][op/l]` | `[zxcv][bnm]` |
+| L3 | 5 | 5 | `[qwe/asd][rty/fgh][ui/jk][op/l]` | `[zxcvbnm]` |
 
-| Level | Letters/key | Keys | Groups |
-|---|---|---|---|
-| L1 | 3 | 9 | `[קרא][טון][םפ]` `[שדגכ][עיח][לךף]` `[זסב][הנמ][צתץ]` |
-| L2 | 4 | 7 | `[קראט][וןםפ]` `[שדגכ][עיח][לךף]` `[זסבהנ][מצתץ]` |
-| L3 | 5 | 6 | `[קראט][וןםפ]` `[שדגכע][יחלךף]` `[זסבהנ][מצתץ]` |
+### Hebrew — `קראטוןםפ` over `שדגכעיחלךף`, then `זסבהנמצתץ`
 
-**Known weakness in these stops, now confirmed.** English L1 and L2 differ by one
-key out of eight. Rows are only 7–10 letters long, so k=3 and k=4 cannot produce
-visibly different key sizes. Measured, they are 3.6 points apart (90.5% against
-86.9%) — a real accuracy difference that will not read as two different
-keyboards. The sweep covers k=2 through 7, and **k=2 is the stop this table is
-missing**: 14 keys, 96.5% English and 93.5% Hebrew, 1.6 points off an ungrouped
-keyboard.
+Eight letters over ten, so `ך` and `ף` have nothing above them.
+
+| Level | Letters/key | Keys | Band | Third row |
+|---|---|---|---|---|
+| pairs | 2 | 14 | `[ק/ש][ר/ד][א/ג][ט/כ][ו/ע][ן/י][ם/ח][פ/ל][/ךף]` | `[ז][סב][הנ][מצ][תץ]` |
+| L1 | 3 | 9 | `[קר/שד][אט/גכ][ו/ע][ןם/יח][פ/לך][/ף]` | `[זסב][הנ][מצתץ]` |
+| L2 | 4 | 7 | `[קר/שד][אט/גכ][ון/עי][םפ/חל][/ךף]` | `[זסבהנ][מצתץ]` |
+| L3 | 5 | 6 | `[קר/שד][אט/גכ][ונם/עיח][פ/לךף]` | `[זסבהנ][מצתץ]` |
+
+**The number on the dial is a target, not a promise, and banding is why.** A band
+key takes whole columns, so it holds an even number of letters wherever both rows
+reach. At three per key the band comes out in twos and fours around a mean of
+3.17. What is exact is the **key count** at every stop, which is unchanged from
+the row-at-a-time layout in both languages — because `keyCount` is asked once for
+the band's two rows together rather than once each.
+
+**Known weakness in these stops, and banding made it worse.** English L1 and L2
+differ by one key out of eight, and now by **1.0 point** (92.3% against 91.3%)
+where they used to differ by 3.6. Two stops that differ by neither look nor
+accuracy are one stop. The sweep covers k=2 through 7, and **k=2 is the stop this
+table is missing**: 14 keys, 96.5% English and 91.7% Hebrew, 1.6 points off an
+ungrouped English keyboard.
 
 ## The Hebrew problem, measured
 
 Hebrew glues seven single-letter clitics to the front of words — ה ב ל מ ו ש כ —
 so `לעבודה` is one token and the prefix is doing the work English spends a
-separate function word on. Adjacency grouping puts pairs of them on one key:
+separate function word on. Plain grouping puts pairs of them on one key:
 
-| Level | Colliding groups | Cost |
+| Level | Colliding group | Cost |
 |---|---|---|
-| L1 | `[שדגכ]`, `[הנמ]` | ה+מ: "the X" and "from X" are one keystroke |
-| L2 | `[שדגכ]`, `[זסבהנ]` | ב+ה: "in X" and "the X" are one keystroke |
-| L3 | `[שדגכע]`, `[זסבהנ]` | same |
+| pairs | `[בה]` | ב+ה: "in X" and "the X" are one keystroke |
+| L1 | `[הנמ]` | ה+מ: "the X" and "from X" are one keystroke |
+| L2, L3 | `[זסבהנ]` | ב+ה again |
 
-At every stop, ה collides with another very common prefix. Every Hebrew sentence
-hits this. English has no equivalent because English does not glue its function
-words onto nouns.
+At every stop ה collides with another very common prefix, and every Hebrew
+sentence hits it. English has no equivalent because English does not glue its
+function words onto nouns.
+
+**Banding made this constraint easier to satisfy, which was not a given.** A
+column of the band is atomic: both its letters are on one key and no partition can
+pull them apart, so a column holding two clitics would be a collision nothing
+could fix. Hebrew's band — `קראטוןםפ` over `שדגכעיחלךף` — has none, because ו sits
+over ע and ש, כ and ל are each in a column of their own. The **other** pairing of
+its rows does have one (כ over ה), which is one of the two reasons the top two
+rows are the ones that band; the other is that it measured 5.5 points better at
+L1. All that is left to satisfy is `זסבהנמצתץ`, which holds three clitics and
+splits sideways exactly as it did before.
 
 **Second hypothesis: right conclusion, wrong reason.** The guess was that Hebrew
 would cap at a lower dial setting than English despite having fewer letters (22
@@ -144,8 +196,12 @@ collides with the rule that committed text must not change under the user.
 it already has the undo button. Revisit only if the measured local ceiling turns
 out to be unusable.
 
-**Anything that adds a row.** Grouping changes the letter rows in place, so the
-368pt screen-context height cliff is untouched. Keep it that way.
+**Anything that adds a row, or any height at all.** The band is two key-heights
+tall *plus the row gap it swallowed*, so the letter area still adds up to exactly
+the three rows it replaced and the 368pt screen-context height cliff is untouched.
+`KeyRow.heightUnits` is a multiplier rather than a point value precisely so a row
+cannot invent space. Keep it that way, and see
+`GroupedKeysTests.testTheBandIsTwoRowsTallAndTheKeyboardIsNot`.
 
 ## The two escape hatches
 
@@ -266,7 +322,7 @@ reuses:
 
 | Piece | Reuses |
 |---|---|
-| Grouped letter rows | `KeyboardLayout.rows(for:plane:showsGlobe:customization:)` compiles them into the same `KeySpec`/`KeyRow` everything else already renders |
+| Grouped letter rows | `KeyboardLayout.rows(for:plane:showsGlobe:customization:)` compiles them into the same `KeySpec`/`KeyRow` everything else already renders. Three things had to be added and only three: `KeyRow.heightUnits`, `KeyWidth.share` so a merged key collects the gutters it covered, and a `KeyView` label that draws a grouped cap one letter at a time — as a single string, bidi mirrors every Hebrew cap |
 | Decoder candidates | A new `SuggestionEngine.Source` tier, scored by the existing `score(_:)` alongside checker, seed, learned and personal |
 | Hebrew | `HebrewMorphology.splits`, `SeedLanguageModel.shapeFolded` |
 | Precise entry | `KeyView` alternates popup |
@@ -288,21 +344,20 @@ Numbers from `Bar/grouped/results.json`, `validity.json` and `lexsize.json`. All
 carry a ±2 point spread.
 
 1. **Where does each language's usable ceiling sit?** English holds up well to
-   five keys (81.1% commit) and falls apart at three (59.5%). Hebrew is already
-   at 71.3% by six keys and 42.0% at three. Both are comfortable at 14 keys —
-   96.5% and 93.5%.
-2. **Does clitic separation justify breaking adjacency in Hebrew?** Yes at the
-   gentle end, and it does not even cost adjacency in practice: the boundaries
-   move but the order does not, so muscle memory survives. Worth +4.9 points at
-   14 keys and +2.3 at nine, for zero extra keys. **L1 is the last stop where it
-   is fully satisfiable** — a row holding three clitics gets two keys at k≥4, so
-   one must take two. It degrades rather than snapping: L2 still splits one pair
-   of the two and keeps +1.4, inside the spread; from L3 nothing is recoverable.
-   That ceiling is harder than the accuracy curve, because no ranking fixes it.
-3. **Same dial stops for both languages?** No. Hebrew's usable range is strictly
-   narrower and the gap widens under compression, from 3.0 points at 14 keys to
-   17.5 at three. A shared dial either caps English early or hands Hebrew a stop
-   that commits the wrong word three times in ten.
+   five keys (82.7% commit) and falls apart at four (74.1%). Hebrew is already at
+   67.9% by six keys and 51.2% at four. Both are comfortable at 14 keys — 96.5%
+   and 91.7%.
+2. **Does clitic separation justify breaking adjacency in Hebrew?** Yes, and it
+   does not even cost adjacency in practice: the boundaries move but the order
+   does not, so muscle memory survives. Worth +7.0 points at 14 keys and +6.8 at
+   nine, for zero extra keys. **L1 is the last stop where it is fully
+   satisfiable** — the row that keeps delete holds three clitics and gets two keys
+   at k≥4, so one must take two. That ceiling is harder than the accuracy curve,
+   because no ranking fixes it.
+3. **Same dial stops for both languages?** No, and banding widened the case. The
+   gap runs from 4.8 points at 14 keys to 22.9 at four, and Hebrew's usable range
+   now stops at L1 rather than L2. A shared dial either caps English early or
+   hands Hebrew a stop that commits the wrong word three times in ten.
 4. **How large a lexicon?** 50,000 English words and 100,000 Hebrew ones sit
    within the spread of a 200,000-word list. As raw JSON that is roughly 1.0 MB
    and 2.5 MB; a packed trie should be several times smaller, and measuring one
@@ -317,12 +372,12 @@ plan and its outcome sit together; the numbers are README Findings #5 and #4.
 
 5. **Taking the five final forms off the Hebrew keyboard buys nothing.** 27
    glyphs become 22 and the result lands on the same accuracy-per-key curve as
-   ordinary grouping — 8 keys at 80.5% against 81.1% for the midpoint of the
-   9-key and 7-key adjacent results, well inside the spread. No free lunch, so no
+   ordinary grouping — 8 keys at 76.1% against 73.4% for the midpoint of the
+   9-key and 7-key adjacent results, inside the spread. No free lunch, so no
    reason to take letters off a keyboard people can read.
 6. **Expanding the lexicon with glued clitic forms is a wash.** It cuts OOV by a
-   third, 3.0% to 2.1%, and gives most of it back in new collisions: −1.0 point
-   at L1 either way, −0.1 and +0.3 at 14 keys. Nothing clears the spread in
+   third, 3.0% to 2.1%, and gives most of it back in new collisions: −1.3 points
+   at L1 either way, −0.5 and +0.3 at 14 keys. Nothing clears the spread in
    either direction. Not an argument against `HebrewMorphology`, which
    *completes* a word in progress — a different question from decoding a
    finished one.
@@ -344,4 +399,7 @@ the measurable driver is morphological richness, and no larger corpus fixes it.
   open defect in the suggestion bar (2 of 35 Hebrew keystroke moments). Grouping
   makes every keystroke ambiguous, so this gets worse before it gets better.
 - **Bundle size inside a memory-capped keyboard extension.**
-- **The dial may not have three distinguishable stops** at k=3/4/5. Sweep first.
+- **The dial does not have three distinguishable stops.** L1 and L2 are one key
+  and 1.0 point apart in English — banding narrowed that from 3.6 — and Hebrew's
+  usable range now ends at L1. The honest shape is probably k=2 / k=3 / k=4 with
+  Hebrew capped, not the three that shipped.

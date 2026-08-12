@@ -30,52 +30,61 @@ def key_count(row_length: int, k: int) -> int:
     banker's rounding and 3 under half-up, which is the difference between a row
     of ten letters becoming two keys or three. Minimum one, so a row can never
     vanish.
+
+    **A band asks it once, for both its rows together**, which is what keeps the
+    key count at every dial stop exactly the one this harness measured before
+    banding existed: English's 19 banded letters at three per key give six keys
+    where the two rows separately gave three and three.
     """
     return max(1, int(row_length / k + 0.5))
 
 
-def split_row(row: str, k: int) -> list[str]:
-    """Contiguous groups of roughly k letters, **leading groups taking the
-    extra** — so `qwertyuiop` at k=3 is `qwer|tyu|iop`, not `qwe|rty|uiop`."""
-    n = key_count(len(row), k)
-    base, extra = divmod(len(row), n)
+def split(items: list, n: int) -> list[list]:
+    """Contiguous groups of roughly equal size, **leading groups taking the
+    extra** — so ten items in three groups is 4|3|3, not 3|3|4."""
+    n = max(1, n)
+    base, extra = divmod(len(items), n)
     out, at = [], 0
     for index in range(n):
         size = base + (1 if index < extra else 0)
-        out.append(row[at : at + size])
+        out.append(items[at : at + size])
         at += size
     return out
 
 
-def split_row_avoiding(row: str, k: int, avoid: set[str]) -> list[str] | None:
-    """Same key count as `split_row`, but no group may hold two letters of
-    `avoid`. Boundaries move; adjacency and order are preserved.
+def split_avoiding(items: list, n: int, weight) -> list[list] | None:
+    """Same group count as `split`, but no group may hold two items that
+    `weight` scores. Boundaries move; adjacency and order are preserved.
 
     Returns `None` when no such split exists at that key count, which is itself
     a result: it means separating those letters costs an extra key.
 
     Exact rather than greedy — an exhaustive walk over contiguous partitions,
-    which is free on rows of ten letters and avoids a greedy rule quietly
+    which is free on rows of ten items and avoids a greedy rule quietly
     producing a lopsided row and calling it the cost of the constraint. Ties
     break toward the most even split, measured as squared deviation from the
     ideal size.
-    """
-    n = key_count(len(row), k)
-    ideal = len(row) / n
-    best: tuple[float, list[str]] | None = None
 
-    def walk(at: int, left: int, parts: list[str], cost: float) -> None:
+    `weight` is a count rather than a flag because a *column* of a band can carry
+    two of the letters being kept apart, in which case nothing can separate them
+    and this correctly reports that.
+    """
+    n = max(1, n)
+    ideal = len(items) / n
+    best: tuple[float, list[list]] | None = None
+
+    def walk(at: int, left: int, parts: list[list], cost: float) -> None:
         nonlocal best
         if best is not None and cost >= best[0]:
             return
         if left == 0:
-            if at == len(row):
-                best = (cost, list(parts))
+            if at == len(items):
+                best = (cost, [list(p) for p in parts])
             return
-        # Leave at least one letter for each remaining part.
-        for size in range(1, len(row) - at - (left - 1) + 1):
-            piece = row[at : at + size]
-            if sum(1 for c in piece if c in avoid) > 1:
+        # Leave at least one item for each remaining part.
+        for size in range(1, len(items) - at - (left - 1) + 1):
+            piece = items[at : at + size]
+            if sum(weight(item) for item in piece) > 1:
                 continue
             parts.append(piece)
             walk(at + size, left - 1, parts, cost + (size - ideal) ** 2)
@@ -83,6 +92,54 @@ def split_row_avoiding(row: str, k: int, avoid: set[str]) -> list[str] | None:
 
     walk(0, n, [], 0.0)
     return best[1] if best else None
+
+
+def split_row(row: str, k: int) -> list[str]:
+    """One row's letters in contiguous groups of roughly k."""
+    return ["".join(part) for part in split(list(row), key_count(len(row), k))]
+
+
+def split_row_avoiding(row: str, k: int, avoid: set[str]) -> list[str] | None:
+    """The same key count, with no group holding two letters of `avoid`."""
+    parts = split_avoiding(
+        list(row), key_count(len(row), k), lambda c: 1 if c in avoid else 0
+    )
+    return None if parts is None else ["".join(part) for part in parts]
+
+
+def band(top: str, bottom: str, k: int, avoid: set[str]) -> tuple[list[str], bool]:
+    """Two rows merged into one row of double-height keys.
+
+    A key is a **column slice** of the two rows: `qw` over `as` is one key,
+    because those four letters are what a thumb aiming at that patch of glass can
+    hit. The shorter row is left-aligned under the longer one, which keeps
+    today's pairs — `qw` over `as`, `op` over `l`.
+
+    Returns the groups (letters in reading order, top row first) and whether the
+    `avoid` constraint had to be given up.
+    """
+    width = max(len(top), len(bottom))
+    columns = [
+        (top[i] if i < len(top) else "", bottom[i] if i < len(bottom) else "")
+        for i in range(width)
+    ]
+    # Never more keys than columns: at two letters per key a band of 19 letters
+    # wants ten keys and has exactly ten columns to put them in.
+    n = min(width, key_count(len(top) + len(bottom), k))
+
+    parts = None
+    infeasible = False
+    if avoid:
+        parts = split_avoiding(
+            columns, n, lambda col: sum(1 for c in col if c and c in avoid)
+        )
+        infeasible = parts is None
+    if parts is None:
+        parts = split(columns, n)
+    groups = [
+        "".join(c for c, _ in part) + "".join(c for _, c in part) for part in parts
+    ]
+    return groups, infeasible
 
 
 # --- a whole layout ----------------------------------------------------------
@@ -107,15 +164,27 @@ class Layout:
         self.groups_by_row: list[list[str]] = []
         self.infeasible = False
 
-        for row in rows:
+        # **The top two rows band and the last one does not**, because the last
+        # one is where shift and delete stand on the keyboard. `groups_by_row` is
+        # therefore rows *as drawn*, which is two of them and not three.
+        drawn: list[str] = []
+        if len(rows) >= 3 and k > 1:
+            groups, infeasible = band(rows[0], rows[1], k, avoid or set())
+            self.groups_by_row.append(groups)
+            self.infeasible = self.infeasible or infeasible
+            drawn = rows[2:]
+        else:
+            drawn = rows
+
+        for row in drawn:
             if avoid:
-                split = split_row_avoiding(row, k, avoid)
-                if split is None:
+                parts = split_row_avoiding(row, k, avoid)
+                if parts is None:
                     self.infeasible = True
-                    split = split_row(row, k)
+                    parts = split_row(row, k)
             else:
-                split = split_row(row, k)
-            self.groups_by_row.append(split)
+                parts = split_row(row, k)
+            self.groups_by_row.append(parts)
 
         self.groups = [g for row in self.groups_by_row for g in row]
         self.letter_to_key = {

@@ -1,19 +1,20 @@
+import type { Copy } from "../copy";
 import styles from "./Footer.module.css";
 
-export default function Footer() {
+export default function Footer({ t }: { t: Copy }) {
   return (
     <footer className={styles.footer}>
       <div className={`wrap ${styles.inner}`}>
-        <span className={styles.wordmark}>AIKeyboard</span>
+        <span className={styles.wordmark}>{t.wordmark}</span>
         <nav className={styles.links} aria-label="Footer">
-          <a className={styles.link} href="#">
-            App Store
+          <a className={styles.link} href="#download">
+            {t.footerStore}
           </a>
-          <a className={styles.link} href="#">
-            Privacy
+          <a className={styles.link} href="/privacy">
+            {t.footerPrivacy}
           </a>
         </nav>
-        <p className={styles.copy}>© 2026 AIKeyboard</p>
+        <p className={styles.copy}>{t.footerCopy}</p>
       </div>
     </footer>
   );

@@ -47,23 +47,19 @@ public final class LayoutEditorModel: ObservableObject {
 
     @Published public var selection: SlotSpec?
 
-    /// Whether iOS requires the next-keyboard key on this device.
-    public let showsGlobe: Bool
-
     private var history: [KeyboardCustomization] = []
 
-    public init(layout: KeyboardCustomization, showsGlobe: Bool) {
+    public init(layout: KeyboardCustomization) {
         self.draft = layout
-        self.showsGlobe = showsGlobe
     }
 
     // MARK: Reading
 
     public var issues: [LayoutIssue] {
-        LayoutValidator.issues(in: draft, showsGlobe: showsGlobe)
+        LayoutValidator.issues(in: draft)
     }
 
-    public var isUsable: Bool { LayoutValidator.isUsable(draft, showsGlobe: showsGlobe) }
+    public var isUsable: Bool { LayoutValidator.isUsable(draft) }
 
     public var canUndo: Bool { !history.isEmpty }
 
@@ -96,7 +92,7 @@ public final class LayoutEditorModel: ObservableObject {
     }
 
     public func canRemove(_ slot: SlotSpec) -> LayoutValidator.RemovalVerdict {
-        LayoutValidator.canRemove(slot, from: draft, showsGlobe: showsGlobe)
+        LayoutValidator.canRemove(slot, from: draft)
     }
 
     // MARK: Editing

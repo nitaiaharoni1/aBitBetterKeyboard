@@ -578,10 +578,18 @@ final class DictationKeyboardTests: XCTestCase {
         XCTAssertFalse(
             try XCTUnwrap(recorder.request()).wantsRecording(),
             "the recorder was asked to record for a session no process is holding")
-        XCTAssertEqual(
-            controller.block?.detail,
-            "The dictation session timed out. Open AI Keyboard, tap Start dictation, then come back.",
-            "the refusal has to name the ending, which it can only do from a fresh read")
+        // **The reason by symbol, not by copy, and only the half this test is
+        // about.** It pinned the whole sentence and went red the day the second
+        // half was rewritten — a copy edit is not this defect. What the stale
+        // `.ready` build gets wrong is the *reason*: with no fresh read there is
+        // nothing to explain the ending with, so `dictationRefusalDetail` prints
+        // the ordinary "no session" sentence and this prefix is absent. The
+        // remedy sentence after it is asserted where it belongs, on the refusal
+        // test at the top of this file.
+        XCTAssertTrue(
+            controller.block?.detail.hasPrefix(DictationEndReason.expired.explanation) ?? false,
+            "the refusal has to name the ending, which it can only do from a fresh read: "
+                + (controller.block?.detail ?? "nothing was said"))
     }
 
     /// **The same stale `.ready`, where the user actually saw it.**

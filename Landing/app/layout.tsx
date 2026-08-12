@@ -4,7 +4,19 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "AIKeyboard: A keyboard that writes with you",
   description:
-    "An iOS keyboard with AI text actions, voice dictation, and smart replies that understand what is on your screen, in the language you are writing.",
+    "An iOS keyboard with reply, rewrite, and dictation in the app you are already in. Hebrew and English, on the keys.",
+  openGraph: {
+    title: "AIKeyboard: A keyboard that writes with you",
+    description:
+      "Reply, rewrite, and dictate in the app you are already in. Hebrew and English.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "AIKeyboard: A keyboard that writes with you",
+    description:
+      "Reply, rewrite, and dictate in the app you are already in. Hebrew and English.",
+  },
 };
 
 export const viewport: Viewport = {

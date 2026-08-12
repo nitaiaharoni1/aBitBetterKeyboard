@@ -46,33 +46,54 @@ public enum KeyboardLayout {
         grouping level: GroupedKeys.Level = .off
     ) -> Int {
         guard plane == .letters, let base = letterLayouts[language] else { return 10 }
-        let layout = GroupedKeys.layout(base, language: language, level: level)
-        let needed = layout.rows.indices.map { index in
-            layout.rows[index].count + Int(stretchUnits(of: layout, row: index))
+        let planned = GroupedKeys.plan(for: base.rows, language: language, level: grouped(level, language))
+        let needed = planned.indices.map { index in
+            planned[index].span
+                + Int(stretchUnits(of: planned, row: index, hasCase: base.hasCase))
         }
-        // **The floor of ten is what makes grouped keys big, by not applying to
-        // them.** It exists so nine-key Greek keeps English's key size instead of
-        // growing, which is right for a layout that merely has fewer letters. A
-        // grouped layout has fewer *keys* on purpose: the entire feature is target
-        // size, and holding it to ten columns would draw three narrow keys
-        // centred in a ten-column grid — the same number of taps as before, none
-        // of the width, which is the one outcome with no reason to exist.
-        guard level == .off else { return max(1, needed.max() ?? 1) }
+        // **The floor of ten applies to grouped layouts too, and it is free there
+        // because a grouped key is measured in the positions it swallowed.** A
+        // four-letter key spans two of the ungrouped keyboard's columns and is
+        // declared `.share(2)`, so the band adds up to the same ten columns the
+        // rows it replaced did — the keys are wide because each one takes several
+        // columns' worth of the row, not because the grid shrank. The earlier
+        // row-at-a-time version had to skip the floor, since its keys were one
+        // unit each however many letters they carried, and holding *those* to ten
+        // columns drew three narrow keys centred in a ten-column grid.
         return max(10, needed.max() ?? 10)
     }
 
+    /// The level actually in force: a language whose letters cannot survive being
+    /// joined into a cap never sees this feature. See `GroupedKeys.supports`.
+    private static func grouped(
+        _ level: GroupedKeys.Level, _ language: KeyboardLanguage
+    )
+        -> GroupedKeys.Level
+    {
+        // Short-circuited while the dial is off, because this sits on the path of
+        // every layout call in all sixty-four languages and `supports` walks the
+        // rows to answer.
+        guard level != .off else { return .off }
+        return GroupedKeys.supports(language) ? level : .off
+    }
+
     /// How much of a row is taken by the function keys standing in it.
-    private static func stretchUnits(of layout: LetterLayout, row index: Int) -> CGFloat {
-        var units: CGFloat = index == deleteRow(of: layout) ? functionKeyUnits : 0
-        if index == 2, layout.hasCase { units += functionKeyUnits }
+    private static func stretchUnits(
+        of rows: [GroupedKeys.Row], row index: Int, hasCase: Bool
+    ) -> CGFloat {
+        var units: CGFloat = index == deleteRow(of: rows) ? functionKeyUnits : 0
+        // The last letter row, which is row 2 on every ungrouped layout and row 1
+        // once the top two have banded.
+        if index == rows.count - 1, hasCase { units += functionKeyUnits }
         return units
     }
 
-    private static func deleteRow(of layout: LetterLayout) -> Int {
-        guard layout.rows.count == 3 else { return 2 }
-        return layout.rows[0].count < layout.rows[1].count
-            && layout.rows[0].count < layout.rows[2].count
-            ? 0 : 2
+    /// Delete closes a strictly shortest top row; otherwise it stays on the
+    /// bottom row. Measured in units rather than keys, so a grouped row is
+    /// compared by the width it occupies rather than by how few keys it got.
+    private static func deleteRow(of rows: [GroupedKeys.Row]) -> Int {
+        guard rows.count == 3 else { return max(0, rows.count - 1) }
+        return rows[0].span < rows[1].span && rows[0].span < rows[2].span ? 0 : 2
     }
 
     // MARK: Letter layout model
@@ -185,11 +206,13 @@ public enum KeyboardLayout {
         guard let base = letterLayouts[language] else {
             return letters(for: .english, grouping: level)
         }
-        // Grouped keys are an ordinary `LetterLayout` whose caps happen to carry
-        // several letters each, so everything below this line — the width solver,
-        // the delete-row rule, the side insets — is untouched by the feature.
-        // `.off` returns `base` unchanged, so this is a no-op for every user who
-        // has not turned it on.
+        // Grouped keys are an ordinary row of keys whose caps happen to carry
+        // several letters each and whose row happens to be two key-heights tall,
+        // so everything below this line — the width solver, the delete-row rule,
+        // the side insets — is untouched by the feature. `.off` plans one group
+        // per letter, one row per row and one unit per key, so this is not a
+        // second code path for every user who has not turned it on: it is the
+        // same one.
         //
         // **The level is passed in and never read from `SharedStore` here.** This
         // function used to read the singleton, which made the whole layout engine
@@ -200,16 +223,44 @@ public enum KeyboardLayout {
         // vocabulary. Defaulting to `.off` means every existing caller and every
         // test keeps today's keyboard; only the view, which knows what the user
         // chose, asks for anything else.
-        let layout = GroupedKeys.layout(base, language: language, level: level)
+        let level = grouped(level, language)
+        let planned = GroupedKeys.plan(for: base.rows, language: language, level: level)
+        let alternates = GroupedKeys.alternates(for: planned, base: base)
         let columns = CGFloat(columns(for: language, plane: .letters, grouping: level))
-        let deleteRow = deleteRow(of: layout)
+        let deleteRow = deleteRow(of: planned)
 
         // Delete closes a strictly shortest top row; otherwise it stays on the
-        // bottom row. Hebrew is currently the only layout with that shape.
-        return layout.rows.indices.map { index in
+        // bottom row. Hebrew is currently the only layout with that shape, and
+        // only while its rows are ungrouped: banding merges its short top row
+        // into the wide one below, at which point delete moves to the bottom the
+        // way every other language's does.
+        return planned.indices.map { index in
             var keys: [KeySpec] = []
-            if index == 2, layout.hasCase { keys.append(KeySpec(.shift, width: .pinned)) }
-            keys += chars(layout.rows[index], alternates: layout.alternates)
+            if index == planned.count - 1, base.hasCase {
+                keys.append(KeySpec(.shift, width: .pinned))
+            }
+            keys += planned[index].groups.map { group in
+                // **The span is the width, and that is the whole of how a grouped
+                // key gets big.** A key that swallowed two of the ungrouped
+                // keyboard's positions is two units wide, so a banded row adds up
+                // to exactly the ten columns its two rows used to.
+                let letters = group.letters
+                return KeySpec(
+                    .character(group.cap),
+                    // `.share` while grouped, `.unit(1)` while not — and the second
+                    // half is what keeps this one code path from moving a keyboard
+                    // that nobody grouped. A share is only different from a unit
+                    // when a key stands over more than one column: it collects the
+                    // gutters between the keys it replaced, which `.unit` cannot,
+                    // because a unit is a key width and knows nothing about the
+                    // spacing beside it.
+                    width: level == .off ? .unit(1) : .share(CGFloat(group.span)),
+                    alternates: alternates[group.cap] ?? [],
+                    // Only when there is more than one, so an ordinary key stays
+                    // an ordinary key: this is what makes the cap draw letter by
+                    // letter and read out spelled, and both are wrong for a `.com`.
+                    groupedLetters: letters.count > 1 ? letters : nil)
+            }
             if index == deleteRow { keys.append(KeySpec(.backspace, width: .pinned)) }
             return KeyRow(
                 id: index,
@@ -219,7 +270,8 @@ public enum KeyboardLayout {
                 // Arabic's delete inland while Hebrew's sat on the edge.
                 sideInsetUnits: index == deleteRow
                     ? 0
-                    : max(0, (columns - CGFloat(layout.rows[index].count)) / 2))
+                    : max(0, (columns - CGFloat(planned[index].span)) / 2),
+                heightUnits: planned[index].heightUnits)
         }
     }
 

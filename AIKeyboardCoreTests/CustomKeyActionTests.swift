@@ -129,8 +129,14 @@ final class CustomKeyActionTests: XCTestCase {
         XCTAssertFalse(controller.customization.bottomRow.contains { $0.action == .globe })
     }
 
+    /// **`showsGlobeKey = false`, because no preset carries a globe any more.**
+    /// With it left true, `apply` correctly inserts one and this test fails for the
+    /// repair rather than for the thing it is about, which is that a layout needing
+    /// no repair is not otherwise touched. The two tests above are where the
+    /// insertion itself is asserted, in both directions.
     func testAUsableLayoutIsAppliedUnchanged() {
         let (controller, _) = controller()
+        controller.showsGlobeKey = false
         let roomy = LayoutPreset.named("roomy")!.customization
         controller.apply(roomy)
         XCTAssertEqual(controller.customization, roomy)

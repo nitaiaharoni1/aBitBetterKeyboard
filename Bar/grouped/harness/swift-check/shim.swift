@@ -46,4 +46,7 @@ enum SeedLanguageModel {
 
 enum GroupedLexiconResource {
     static func words(for language: KeyboardLanguage) -> [String] { [] }
+    /// Nothing is bundled here, which is the truthful answer: this harness reads
+    /// its lexicon from `data/`, and the generated resource is gitignored.
+    static func isBundled(_ language: KeyboardLanguage) -> Bool { false }
 }

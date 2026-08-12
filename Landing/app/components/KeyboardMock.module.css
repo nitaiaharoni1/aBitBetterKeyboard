@@ -2,67 +2,70 @@
   position: relative;
   width: 100%;
   margin: 0;
-  padding: clamp(14px, 2.4vw, 24px);
+  padding: clamp(16px, 2.4vw, 22px);
   border: 1px solid var(--line);
   border-radius: 28px;
   background: var(--white);
 }
 
-.doodleArrow {
-  position: absolute;
-  top: -34px;
-  left: -60px;
-  width: 92px;
-  pointer-events: none;
-  transform: rotate(8deg);
+.scene {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 4px 16px;
 }
 
-.doodleStar {
-  position: absolute;
-  right: -8px;
-  bottom: -14px;
-  width: 44px;
-  pointer-events: none;
+.msgIn,
+.msgOut {
+  margin: 0;
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.msgIn {
+  align-self: flex-start;
+  background: var(--canvas);
+}
+
+.msgName {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--orange-deep);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.msgOut {
+  align-self: flex-end;
+  border: 1px solid var(--orange-soft);
+  background: #fff8f4;
 }
 
 .keyboard {
-  padding: 13px 9px 10px;
+  padding: 10px 8px 8px;
   border-radius: 22px;
   background: #e9e8e3;
-  box-shadow: 0 30px 60px rgba(44, 48, 49, 0.16);
+  box-shadow: 0 24px 48px rgba(44, 48, 49, 0.14);
 }
 
 .bar {
   display: grid;
-  grid-template-columns: 41px 1fr 1fr 1fr 41px;
+  grid-template-columns: 1fr 1fr 1fr;
   align-items: center;
-  height: 50px;
-  gap: 4px;
-  font-size: 12px;
+  height: 36px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .bar > span {
+  overflow: hidden;
   text-align: center;
-}
-
-.ai {
-  display: grid;
-  place-items: center;
-  justify-self: center;
-  width: 35px;
-  height: 35px;
-  border-radius: 11px;
-  background: var(--orange-action);
-  color: var(--white);
-  font-size: 16px;
-  box-shadow:
-    0 6px 14px rgba(238, 116, 66, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-
-.barIcon {
-  color: var(--soft-graphite);
-  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .row {
@@ -72,35 +75,30 @@
   margin-bottom: 6px;
 }
 
-.row:last-child {
-  margin-bottom: 0;
-}
-
 .key {
   display: grid;
   place-items: center;
-  width: calc((100% - 45px) / 10);
-  height: 48px;
+  flex: 1;
+  height: 42px;
   border-radius: 8px;
   background: var(--white);
   color: var(--graphite);
-  font-size: 18px;
+  font-size: 17px;
   box-shadow:
     0 2px 0 rgba(44, 48, 49, 0.16),
-    0 8px 16px rgba(44, 48, 49, 0.06),
     inset 0 1px 0 #ffffff;
 }
 
-.middleRow .key {
-  width: calc((100% - 40px) / 9);
-}
+.count10 .key { flex: 1; }
+.count9 .key { flex: 1; }
+.count8 .key { flex: 1; }
+.count7 .key { flex: 1; }
 
 .soft {
   background: var(--soft-graphite);
   color: var(--white);
   box-shadow:
     0 2px 0 rgba(44, 48, 49, 0.4),
-    0 8px 16px rgba(44, 48, 49, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
@@ -109,7 +107,6 @@
   color: var(--white);
   box-shadow:
     0 2px 0 rgba(20, 22, 22, 0.5),
-    0 8px 16px rgba(44, 48, 49, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
@@ -118,48 +115,75 @@
   color: var(--white);
   box-shadow:
     0 2px 0 rgba(185, 80, 35, 0.55),
-    0 8px 18px rgba(238, 116, 66, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .wide {
-  width: 13%;
-  font-size: 15px;
+  flex: 1.5;
+  font-size: 14px;
 }
 
 .space {
-  width: 46%;
+  flex: 4.6;
   color: var(--soft-graphite);
   font-size: 13px;
 }
 
-@media (max-width: 900px) {
-  .doodleArrow {
-    display: none;
-  }
+.actions {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--graphite);
+  font-size: 10px;
+  font-weight: 650;
+  box-shadow:
+    0 2px 0 rgba(44, 48, 49, 0.16),
+    inset 0 1px 0 #ffffff;
+}
+
+.actionLive,
+.actionMic {
+  background: var(--orange-action);
+  color: var(--white);
+  box-shadow:
+    0 2px 0 rgba(185, 80, 35, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.actionMic span {
+  font-size: 9px;
 }
 
 @media (max-width: 640px) {
   .keyboard {
-    padding: 10px 6px 8px;
+    padding: 8px 5px 6px;
     border-radius: 18px;
   }
 
   .key {
-    height: 44px;
-    border-radius: 7px;
-    font-size: 15px;
+    height: 38px;
+    font-size: 14px;
   }
 
-  .bar {
-    height: 44px;
+  .action {
+    height: 40px;
+    font-size: 9px;
   }
 
-  .wide {
+  .msgIn,
+  .msgOut {
     font-size: 13px;
-  }
-
-  .space {
-    font-size: 12px;
   }
 }

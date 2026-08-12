@@ -230,6 +230,25 @@ final class SuggestionLayoutRoutingTests: XCTestCase {
         )
     }
 
+    /// The globe and the space-bar strip read UserDefaults, not the copy `load()`
+    /// filled at launch. Writing only into the suite is the state the defect
+    /// lives in: the app turned English off and the keyboard's published list
+    /// still has it first.
+    func testTheSpaceBarSeesLanguagesTurnedOffInTheOtherProcess() {
+        SharedStore.shared.userDefaults.set(
+            [KeyboardLanguage.hebrew.rawValue], forKey: SharedStore.Key.enabledLanguages)
+        XCTAssertEqual(
+            SharedStore.shared.enabledLanguages, [.english, .hebrew, .french],
+            "the published copy must stay stale, or this proves nothing")
+        XCTAssertEqual(SharedStore.shared.storedEnabledLanguages, [.hebrew])
+
+        let controller = KeyboardController(
+            target: MockTextTarget(), language: .hebrew)
+        XCTAssertEqual(
+            controller.enabledLanguages, [.hebrew],
+            "the space bar still offered \(controller.enabledLanguages)")
+    }
+
     /// The other half, and the reason the first is not vacuous: with English as
     /// the layout, from the same store and the same word, the contraction is
     /// exactly what should be offered.

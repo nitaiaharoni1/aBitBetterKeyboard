@@ -55,6 +55,7 @@ extension ScreenContextSession {
     /// measured there describes nothing the capture process should act on.
     public func updateOwnUIHeightFraction(_ fraction: Double) {
         guard role.claimsKeyboardVisible else { return }
+        guard !isAwaitingRead else { return }
         channel?.updateOwnUIHeightFraction(fraction)
     }
 

@@ -9,7 +9,7 @@ import XCTest
 final class LayoutEditorTests: XCTestCase {
 
     private func editor(_ layout: KeyboardCustomization = .default) -> LayoutEditorModel {
-        LayoutEditorModel(layout: layout, showsGlobe: true)
+        LayoutEditorModel(layout: layout)
     }
 
     // MARK: Moving
@@ -73,11 +73,18 @@ final class LayoutEditorTests: XCTestCase {
 
     // MARK: Removing
 
-    func testRemovingTheGlobeIsRefused() {
+    /// **Return, not the globe.** This reached for `.globe` in the shipped
+    /// default and force-unwrapped it; no preset has placed that key since the slot
+    /// went to `.settings`, so the unwrap was nil and it *crashed the test runner*
+    /// rather than failing. The globe is also no longer something the editor
+    /// refuses — `KeyboardController.apply(_:)` puts it back when the device needs
+    /// one, so the validator has no opinion left. Return is an essential that is
+    /// really in the row and really refused.
+    func testRemovingAnEssentialIsRefused() {
         let model = editor()
-        let globe = model.draft.bottomRow.first { $0.action == .globe }!
-        model.remove(globe)
-        XCTAssertTrue(model.draft.bottomRow.contains(globe))
+        let ret = model.draft.bottomRow.first { $0.action == .ret }!
+        model.remove(ret)
+        XCTAssertTrue(model.draft.bottomRow.contains(ret))
     }
 
     func testRemovingAnOrdinaryKeyWorks() {

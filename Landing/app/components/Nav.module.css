@@ -33,3 +33,28 @@
 .cta:hover {
   background: var(--orange-deep);
 }
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.locale {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+  color: var(--graphite);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.locale:hover {
+  border-color: #c6c7c0;
+}

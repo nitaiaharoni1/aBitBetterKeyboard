@@ -11,7 +11,7 @@
   --muted: #626766;
   --line: #dedfda;
   --font-stack: -apple-system, BlinkMacSystemFont, "SF Pro Display",
-    "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    "SF Pro Text", "SF Hebrew", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 
 *,
@@ -53,15 +53,6 @@ a {
   margin-inline: auto;
 }
 
-.eyebrow {
-  margin: 0 0 12px;
-  color: var(--orange-deep);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
 .section-title {
   margin: 0;
   max-width: 580px;
@@ -69,6 +60,8 @@ a {
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: -0.03em;
+  text-wrap: balance;
+  scroll-margin-top: 88px;
 }
 
 .section-subtitle {
@@ -129,4 +122,38 @@ a {
     animation: none !important;
     transition: none !important;
   }
+}
+
+.privacy-page {
+  padding: 48px 0 96px;
+  max-width: 42rem;
+}
+
+.privacy-page h1 {
+  margin: 24px 0 12px;
+  font-size: clamp(32px, 5vw, 44px);
+  letter-spacing: -0.03em;
+}
+
+.privacy-page h2 {
+  margin: 32px 0 8px;
+  font-size: 20px;
+}
+
+.privacy-page p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.privacy-page a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+#download,
+#features,
+#story,
+#privacy,
+#main {
+  scroll-margin-top: 24px;
 }

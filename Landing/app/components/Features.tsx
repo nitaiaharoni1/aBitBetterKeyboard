@@ -1,3 +1,4 @@
+import type { Copy } from "../copy";
 import styles from "./Features.module.css";
 
 const stripIcons = {
@@ -20,27 +21,15 @@ const stripIcons = {
 
 type StripIcon = keyof typeof stripIcons;
 
-const supporting: { icon: StripIcon; title: string; body: string }[] = [
-  {
-    icon: "check",
-    title: "Grammar on the spot",
-    body: "Spelling and grammar fixed in place, in the language you are writing.",
-  },
-  {
-    icon: "bookmark",
-    title: "Personal dictionary",
-    body: "Names, slang, and terms you teach it once, suggested forever.",
-  },
-  {
-    icon: "layout",
-    title: "Custom layouts",
-    body: "Arrange the keys the way your hands expect them.",
-  },
-];
-
 const waveHeights = [6, 11, 8, 14, 9, 16, 11, 7, 13, 9, 12, 6];
 
-export default function Features() {
+export default function Features({ t }: { t: Copy }) {
+  const supporting: { icon: StripIcon; title: string; body: string }[] = [
+    { icon: "check", title: t.grammarTitle, body: t.grammarBody },
+    { icon: "bookmark", title: t.dictionaryTitle, body: t.dictionaryBody },
+    { icon: "layout", title: t.layoutsTitle, body: t.layoutsBody },
+  ];
+
   return (
     <section
       id="features"
@@ -48,49 +37,33 @@ export default function Features() {
       aria-labelledby="features-title"
     >
       <div className={styles.header}>
-        <p className="eyebrow">Features</p>
         <h2 id="features-title" className="section-title">
-          The AI core, built into the keys.
+          {t.featuresTitle}
         </h2>
-        <p className="section-subtitle">
-          Three tools do the heavy lifting. The rest quietly keeps your typing
-          clean.
-        </p>
+        <p className="section-subtitle">{t.featuresSub}</p>
       </div>
       <div className={styles.core}>
         <article className={styles.mainCard}>
           <div className={styles.chatMock} aria-hidden="true">
-            <p className={styles.chatIn}>Want to grab dinner Thursday night?</p>
-            <p className={styles.chatChip}>
-              <span className={styles.chatSpark}>✦</span> Screen Context read
-              the invitation
-            </p>
-            <p className={styles.chatOut}>
-              Thursday at 7 works perfectly. See you then!
-            </p>
+            <p className={styles.chatIn}>{t.sceneIn}</p>
+            <p className={styles.chatChip}>{t.screenChip}</p>
+            <p className={styles.chatOut}>{t.sceneOut}</p>
           </div>
-          <h3 className={styles.cardTitle}>Screen Context</h3>
-          <p className={styles.cardBody}>
-            When you ask, the keyboard reads the conversation on your screen
-            and drafts a reply that fits the moment, instead of starting from
-            zero.
-          </p>
+          <h3 className={styles.cardTitle}>{t.screenTitle}</h3>
+          <p className={styles.cardBody}>{t.screenBody}</p>
         </article>
         <article className={styles.sideCard}>
           <div className={styles.toneMock} aria-hidden="true">
-            <span className={styles.toneWord}>Casual</span>
+            <span className={styles.toneWord}>{t.casual}</span>
             <span className={styles.toneTrack}>
               <span className={styles.toneKnob} />
             </span>
             <span className={`${styles.toneWord} ${styles.toneOn}`}>
-              Professional
+              {t.professional}
             </span>
           </div>
-          <h3 className={styles.cardTitle}>Rewrite</h3>
-          <p className={styles.cardBody}>
-            Reword any sentence, or shift its tone from casual to professional
-            in one tap.
-          </p>
+          <h3 className={styles.cardTitle}>{t.rewriteTitle}</h3>
+          <p className={styles.cardBody}>{t.rewriteBody}</p>
         </article>
         <article className={styles.sideCard}>
           <div className={styles.waveMock} aria-hidden="true">
@@ -98,11 +71,8 @@ export default function Features() {
               <span key={i} className={styles.waveBar} style={{ height: h }} />
             ))}
           </div>
-          <h3 className={styles.cardTitle}>Dictation</h3>
-          <p className={styles.cardBody}>
-            Speak naturally. It types, punctuates, and hears when you are
-            done.
-          </p>
+          <h3 className={styles.cardTitle}>{t.dictateTitle}</h3>
+          <p className={styles.cardBody}>{t.dictateBody}</p>
         </article>
       </div>
       <ul className={styles.strip}>

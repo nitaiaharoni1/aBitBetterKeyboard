@@ -83,9 +83,10 @@ final class LayoutStoreTests: XCTestCase {
     }
 
     /// **A layout missing the globe decodes fine, and that is deliberate.**
-    /// Whether the key is required belongs to the device, not to the store, so the
-    /// store validates with `showsGlobe: false` and
-    /// `KeyboardController.apply(_:)` puts it back where the answer is known.
+    /// Whether the key is required belongs to the device, not to the store, and
+    /// `KeyboardController.apply(_:)` puts it back where that answer is known. The
+    /// store used to say so by validating with `showsGlobe: false`; the validator
+    /// has no globe rule left to opt out of, so there is nothing to pass.
     func testAGlobelessLayoutSurvivesTheStore() throws {
         var without = KeyboardCustomization.default
         without.preset = nil

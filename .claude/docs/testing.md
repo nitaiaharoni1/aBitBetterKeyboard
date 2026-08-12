@@ -33,6 +33,21 @@ phantom failure in this project so far has been contention.
 and may report `Executed 0 tests … passed` while the exit code is 65. Trust the exit
 code, never the summary line.
 
+**A `!` on nil in a *unit* test does the same thing, and the totals lie rather than
+go missing.** `XCTAssert` failures are recorded; a force-unwrap of nil is a
+`fatalError`, so it takes the whole `xctest` process down. The harness prints
+`Restarting after unexpected exit, crash, or test timeout; summary will include
+totals from previous launches`, relaunches, and then reports one stitched
+`Executed N tests, with M failures` line that reads like a complete run. It is not
+one — anything the crashed launch had not reached is simply absent from the count,
+and the crash itself is not in the failure list. **Grep for `Fatal error` and
+`Restarting after` before you believe any summary**, and never trust a failure
+count you have not checked that way. It has happened three times here and always
+the same way: a test reaching into `KeyboardCustomization.default` for a key that
+had quietly left the shipped layout — `.dictation` when it moved to the action row,
+then `.globe` when `.settings` took its slot. Prefer `try XCTUnwrap` over `!` in a
+fixture, so the test fails and the bundle carries on.
+
 ## Running Tests
 
 ```bash

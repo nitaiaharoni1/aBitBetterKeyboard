@@ -215,6 +215,10 @@ public struct KeyView: View {
     /// that stops a live microphone. Its four appearances are visual (a red cap, a
     /// filled glyph, a caption, a countdown) and were, until this, entirely silent.
     func label(for cap: KeyCap) -> String {
+        // A grouped letter key is the other one: it is `.character("qw\nas")`, and
+        // only the layout that built it knows that is four letters rather than a
+        // snippet. See `KeySpec.spokenLabel`.
+        if let spoken = spec.spokenLabel { return spoken }
         guard cap == .dictation else { return cap.accessibilityLabel }
         return dictationState.accessibilityLabel
     }

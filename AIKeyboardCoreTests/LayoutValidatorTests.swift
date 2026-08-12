@@ -10,20 +10,20 @@ import XCTest
 final class LayoutValidatorTests: XCTestCase {
 
     private func errors(
-        _ layout: KeyboardCustomization, showsGlobe: Bool = true
+        _ layout: KeyboardCustomization
     ) -> [LayoutIssue] {
-        LayoutValidator.issues(in: layout, showsGlobe: showsGlobe).filter { $0.severity == .error }
+        LayoutValidator.issues(in: layout).filter { $0.severity == .error }
     }
 
     private func kinds(
-        _ layout: KeyboardCustomization, showsGlobe: Bool = true
+        _ layout: KeyboardCustomization
     ) -> Set<LayoutIssue.Kind> {
-        Set(errors(layout, showsGlobe: showsGlobe).map(\.kind))
+        Set(errors(layout).map(\.kind))
     }
 
     func testTheDefaultLayoutIsClean() {
-        XCTAssertEqual(LayoutValidator.issues(in: .default, showsGlobe: true), [])
-        XCTAssertEqual(LayoutValidator.issues(in: .default, showsGlobe: false), [])
+        XCTAssertEqual(LayoutValidator.issues(in: .default), [])
+        XCTAssertEqual(LayoutValidator.issues(in: .default), [])
     }
 
     // MARK: The essentials
@@ -54,13 +54,6 @@ final class LayoutValidatorTests: XCTestCase {
         var layout = KeyboardCustomization.default
         layout.bottomRow.removeAll { $0.action == .backspace }
         XCTAssertEqual(errors(layout), [])
-    }
-
-    func testGlobeCannotBeRemovedWhenIOSRequiresIt() {
-        var layout = KeyboardCustomization.default
-        layout.bottomRow.removeAll { $0.action == .globe }
-        XCTAssertTrue(kinds(layout, showsGlobe: true).contains(.missingGlobe))
-        XCTAssertFalse(kinds(layout, showsGlobe: false).contains(.missingGlobe))
     }
 
     /// An essential moved to the cursor row is still present. The rails are about
@@ -179,7 +172,7 @@ final class LayoutValidatorTests: XCTestCase {
     /// the user has not touched yet.
     func testTheShippedLayoutDoesNotCostScreenContext() {
         XCTAssertFalse(
-            LayoutValidator.issues(in: .default, showsGlobe: true)
+            LayoutValidator.issues(in: .default)
                 .contains { $0.kind == .costsScreenContext })
     }
 
@@ -193,12 +186,12 @@ final class LayoutValidatorTests: XCTestCase {
         layout.showsNumberRow = true
         layout.geometry.keyHeight = LayoutGeometry.keyHeightRange.upperBound
 
-        let issues = LayoutValidator.issues(in: layout, showsGlobe: true)
+        let issues = LayoutValidator.issues(in: layout)
         XCTAssertTrue(
             issues.contains { $0.kind == .costsScreenContext && $0.severity == .warning },
             "a keyboard past the fingerprint cliff has to say so where the choice is made")
         XCTAssertTrue(
-            LayoutValidator.isUsable(layout, showsGlobe: true),
+            LayoutValidator.isUsable(layout),
             "it costs screen context and nothing else, so it must not block Done")
     }
 
@@ -214,9 +207,9 @@ final class LayoutValidatorTests: XCTestCase {
     func testALongSnippetWarnsRatherThanBlocks() {
         var layout = KeyboardCustomization.default
         layout.bottomRow.append(SlotSpec(action: .text(String(repeating: "a", count: 40))))
-        let issues = LayoutValidator.issues(in: layout, showsGlobe: true)
+        let issues = LayoutValidator.issues(in: layout)
         XCTAssertTrue(issues.contains { $0.kind == .snippetTooLong && $0.severity == .warning })
-        XCTAssertTrue(LayoutValidator.isUsable(layout, showsGlobe: true))
+        XCTAssertTrue(LayoutValidator.isUsable(layout))
     }
 
     /// **A row of more than twelve keys is an error, not a warning**, and it is
@@ -228,7 +221,7 @@ final class LayoutValidatorTests: XCTestCase {
         var layout = KeyboardCustomization.default
         layout.cursorRow = (0..<14).map { _ in SlotSpec(action: .text("x"), width: .fill) }
         XCTAssertTrue(kinds(layout).contains(.rowTooWide))
-        XCTAssertFalse(LayoutValidator.isUsable(layout, showsGlobe: true))
+        XCTAssertFalse(LayoutValidator.isUsable(layout))
     }
 
     /// A repeat *within* one row. Dictation would not do here any more: it ships
@@ -237,9 +230,9 @@ final class LayoutValidatorTests: XCTestCase {
     func testADuplicateActionWarnsRatherThanBlocks() {
         var layout = KeyboardCustomization.default
         layout.bottomRow.append(SlotSpec(action: .punctuation))
-        let issues = LayoutValidator.issues(in: layout, showsGlobe: true)
+        let issues = LayoutValidator.issues(in: layout)
         XCTAssertTrue(issues.contains { $0.kind == .duplicateAction && $0.severity == .warning })
-        XCTAssertTrue(LayoutValidator.isUsable(layout, showsGlobe: true))
+        XCTAssertTrue(LayoutValidator.isUsable(layout))
     }
 
     /// Every message is shown to the user, so an empty one is a blank line in the
@@ -248,26 +241,33 @@ final class LayoutValidatorTests: XCTestCase {
         var layout = KeyboardCustomization.default
         layout.bottomRow = []
         layout.geometry.keyHeight = 99
-        let issues = LayoutValidator.issues(in: layout, showsGlobe: true)
+        let issues = LayoutValidator.issues(in: layout)
         XCTAssertFalse(issues.isEmpty)
         XCTAssertFalse(issues.contains { $0.message.isEmpty })
     }
 
     // MARK: Removal
 
+    /// **Return, not the globe, and the swap is the point.** Both of these used
+    /// to reach for `.globe` in the shipped default and force-unwrap it. No preset
+    /// has placed that key since the slot went to `.settings`, so the unwrap was
+    /// nil — and a nil unwrap in a test *crashes the runner* rather than failing
+    /// it, which takes the rest of the bundle down with it and stitches the summary
+    /// together across relaunches. The same trap is recorded three tests below,
+    /// where dictation left the bottom row. Ask about a key that is genuinely
+    /// essential and genuinely there.
     func testCanRemoveAnswersTheSameQuestionTheEditorAsks() {
-        let globe = KeyboardCustomization.default.bottomRow.first { $0.action == .globe }!
-        XCTAssertFalse(
-            LayoutValidator.canRemove(globe, from: .default, showsGlobe: true).isAllowed)
-        XCTAssertTrue(
-            LayoutValidator.canRemove(globe, from: .default, showsGlobe: false).isAllowed)
+        let ret = KeyboardCustomization.default.bottomRow.first { $0.action == .ret }!
+        XCTAssertFalse(LayoutValidator.canRemove(ret, from: .default).isAllowed)
     }
 
     func testTheRefusalNamesItsReason() {
-        let globe = KeyboardCustomization.default.bottomRow.first { $0.action == .globe }!
-        let verdict = LayoutValidator.canRemove(globe, from: .default, showsGlobe: true)
+        let ret = KeyboardCustomization.default.bottomRow.first { $0.action == .ret }!
+        let verdict = LayoutValidator.canRemove(ret, from: .default)
         XCTAssertFalse(verdict.reason.isEmpty)
-        XCTAssertTrue(verdict.reason.contains("iOS"))
+        XCTAssertTrue(
+            verdict.reason.contains("return"),
+            "the refusal has to name the key it is about: \(verdict.reason)")
     }
 
     /// **Punctuation, not dictation.** Dictation moved to the action row, so a
@@ -276,7 +276,7 @@ final class LayoutValidatorTests: XCTestCase {
     /// bottom-row one the validator does not treat as essential.
     func testAnOrdinaryKeyCanBeRemoved() {
         let ordinary = KeyboardCustomization.default.bottomRow.first { $0.action == .punctuation }!
-        let verdict = LayoutValidator.canRemove(ordinary, from: .default, showsGlobe: true)
+        let verdict = LayoutValidator.canRemove(ordinary, from: .default)
         XCTAssertTrue(verdict.isAllowed)
         XCTAssertTrue(verdict.reason.isEmpty)
     }
@@ -288,7 +288,7 @@ final class LayoutValidatorTests: XCTestCase {
         var broken = KeyboardCustomization.default
         broken.bottomRow.removeAll { $0.action == .ret }
         let ordinary = broken.bottomRow.first { $0.action == .punctuation }!
-        XCTAssertFalse(LayoutValidator.isUsable(broken, showsGlobe: true))
-        XCTAssertTrue(LayoutValidator.canRemove(ordinary, from: broken, showsGlobe: true).isAllowed)
+        XCTAssertFalse(LayoutValidator.isUsable(broken))
+        XCTAssertTrue(LayoutValidator.canRemove(ordinary, from: broken).isAllowed)
     }
 }

@@ -554,12 +554,24 @@ extension SuggestionEngine {
         // `teh,` was four characters against a three-letter `the` and the rule
         // that fixes the commonest English typo stopped firing the moment a comma
         // followed it.
-        if !known,
-            SeedLanguageModel.neighbours(of: word, in: typedLanguage, limit: 3)
+        let neighbourMatch =
+            !known
+            && SeedLanguageModel.neighbours(of: word, in: typedLanguage, limit: 3)
                 .contains(where: { SeedLanguageModel.fold($0) == winner })
-        {
-            return true
-        }
+        // **Same-length substitutions are a word still being typed.** `מכונ` on
+        // the way to `מכונית` is one substitution from `נכון`, four letters
+        // against four, and the seed knows the neighbour and not the word — so
+        // the neighbour took the bold slot. A transposition (`teh`/`the`,
+        // `תדוה`/`תודה`) is two keys swapped and is the slip this rule is for.
+        // `helo` → `hello` is longer, so it still returns true below. Asking
+        // "does the typed word have completions" does not draw this line:
+        // `helo` has them and should still correct.
+        let typedFolded = SeedLanguageModel.fold(word)
+        let sameLengthSubstitution =
+            neighbourMatch && typedFolded.count == winner.count
+            && !SeedLanguageModel.isTransposition(winner, of: word)
+
+        if neighbourMatch, !sameLengthSubstitution { return true }
 
         // **Four letters, not three, and the three-letter typos are covered
         // above.** Lowering this to three did fix `teh` → `the`, and it also let a
@@ -569,8 +581,10 @@ extension SuggestionEngine {
         // matters is not length but *kind* — a same-length neighbour is a slip and
         // a longer completion is a guess about a word still being typed — and the
         // neighbour rule above draws it, so `teh` still corrects with this back at
-        // four.
-        return word.count >= 4 && !known
+        // four. The same-length *substitution* half is excluded here too, or the
+        // four-letter gate would commit `נכון` for `מכונ` the moment the neighbour
+        // clause stopped doing it.
+        return word.count >= 4 && !known && !sameLengthSubstitution
     }
 
     /// The word inside what was typed, with the marks that sit at its edges

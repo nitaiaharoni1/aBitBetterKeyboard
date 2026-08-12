@@ -2,6 +2,10 @@
   padding-top: clamp(72px, 10vw, 104px);
 }
 
+.header {
+  max-width: 580px;
+}
+
 .core {
   display: grid;
   grid-template-columns: 3fr 2fr;

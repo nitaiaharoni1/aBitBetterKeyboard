@@ -62,24 +62,36 @@ extension KeyboardLayout {
         let fixedTotal = row.keys.reduce(CGFloat(0)) { partial, key in
             switch key.width {
             case .unit(let multiple): return partial + unit * multiple
-            case .flexible, .pinned: return partial
+            case .share, .flexible, .pinned: return partial
             }
         }
 
+        // **Shares take the room the gutters would have wasted**, which is what
+        // makes a grouped key exactly as wide as the keys it merged plus the gaps
+        // between them. Resolved before `.flexible` so the two can coexist without
+        // either having to know about the other; no shipped row uses both.
+        let shareWeights = row.keys.reduce(CGFloat(0)) { partial, key in
+            if case .share(let weight) = key.width { return partial + max(0, weight) }
+            return partial
+        }
+        let shareRoom = shareWeights > 0 ? max(0, room - fixedTotal) : 0
+        let widthPerShare = shareWeights > 0 ? shareRoom / shareWeights : 0
+
         let flexibleCount = row.keys.filter { $0.width == .flexible }.count
         let flexibleWidth =
-            flexibleCount > 0 ? max(0, room - fixedTotal) / CGFloat(flexibleCount) : 0
+            flexibleCount > 0 ? max(0, room - fixedTotal - shareRoom) / CGFloat(flexibleCount) : 0
 
-        // A row with a flexible key has already absorbed the difference into it,
-        // so this only bites on rows of fixed keys: the three letter rows and the
-        // punctuation row of the numbers and symbols planes.
-        let unpinnedTotal = fixedTotal + flexibleWidth * CGFloat(flexibleCount)
+        // A row with a flexible or shared key has already absorbed the difference
+        // into it, so this only bites on rows of fixed keys: the three letter rows
+        // and the punctuation row of the numbers and symbols planes.
+        let unpinnedTotal = fixedTotal + flexibleWidth * CGFloat(flexibleCount) + shareRoom
         let scale = unpinnedTotal > room && unpinnedTotal > 0 ? room / unpinnedTotal : 1
 
         return row.keys.map { key in
             switch key.width {
             case .pinned: return pinned
             case .unit(let multiple): return unit * multiple * scale
+            case .share(let weight): return widthPerShare * max(0, weight) * scale
             case .flexible: return flexibleWidth * scale
             }
         }

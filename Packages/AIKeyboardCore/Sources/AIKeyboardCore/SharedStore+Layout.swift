@@ -27,10 +27,13 @@ extension SharedStore {
     /// itself, and that is not a state the user can get out of from inside the
     /// keyboard — they are in somebody else's app with no keys.
     ///
-    /// `showsGlobe: false` here on purpose. Whether the globe is required is a
-    /// property of the *device*, and the store does not know it. A layout missing
-    /// the globe is repaired where that answer is known, in
-    /// `KeyboardController.apply(_:)`.
+    /// **The globe is nobody's business here, and the validator no longer has an
+    /// opinion about it either.** Whether the key is required is a property of the
+    /// *device*, which the store cannot know; a layout missing it is repaired where
+    /// that answer is known, in `KeyboardController.apply(_:)`. `replacingInternalGlobe`
+    /// below is the other half of the same story: the shipped rows carry `.settings`
+    /// in the slot the globe used to occupy, so a layout stored by an older build is
+    /// migrated across rather than left holding a key the presets no longer place.
     public static func decodeLayout(from defaults: UserDefaults) -> KeyboardCustomization {
         guard let data = defaults.data(forKey: Key.keyboardLayout) else { return .default }
         guard let decoded = try? JSONDecoder().decode(KeyboardCustomization.self, from: data)
@@ -54,7 +57,7 @@ extension SharedStore {
             migrated.bottomRow = replacingInternalGlobe(in: migrated.bottomRow)
             migrated.cursorRow = replacingInternalGlobe(in: migrated.cursorRow)
         }
-        guard LayoutValidator.isUsable(migrated, showsGlobe: false) else {
+        guard LayoutValidator.isUsable(migrated) else {
             log.error("stored keyboard layout is not usable, falling back to the default")
             return .default
         }

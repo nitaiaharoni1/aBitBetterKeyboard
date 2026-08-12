@@ -33,7 +33,7 @@ struct LayoutView: View {
     /// the Settings screen — and tapping Done writes to the store, which
     /// re-renders Settings, which builds another one. The app hung hard enough
     /// that four UI tests timed out without leaving a crash report.
-    @StateObject private var model = LayoutEditorModel(layout: .default, showsGlobe: true)
+    @StateObject private var model = LayoutEditorModel(layout: .default)
     @StateObject private var canvas = KeyboardController(
         target: MockTextTarget(), language: .english)
 
