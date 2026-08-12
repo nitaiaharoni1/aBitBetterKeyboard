@@ -7,6 +7,15 @@ import XCTest
 ///
 /// D6 puts Rewrite one tap away in the suggestion row, which is what makes these
 /// reachable: before it, every one of them needed the user to open a panel first.
+///
+/// **The span is the whole field now, and it used to be the sentence.** Every
+/// expectation below that names a sentence was rewritten when
+/// `KeyboardController.aiTargetText` widened — see its doc comment for the defect,
+/// which is `testAnEarlierSentenceIsPartOfTheSpan`. What these tests are actually
+/// about did not change and is the reason they were kept rather than replaced: the
+/// arithmetic that steps over a tail and deletes backwards has to count UTF-16
+/// units the way the host does, and an emoji, a flag, a ZWJ sequence, a decomposed
+/// accent and Hebrew niqqud each break a different wrong way of counting.
 @MainActor
 final class TextReplacementTests: XCTestCase {
 
@@ -24,23 +33,23 @@ final class TextReplacementTests: XCTestCase {
         before: String,
         after: String = "",
         replacement: String,
-        sentence: String? = nil,
+        field: String? = nil,
         expected: String,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
         let mock = CursorTextTarget(before: before, after: after)
         let mockController = KeyboardController(target: mock)
-        if let sentence {
-            XCTAssertEqual(mockController.aiTargetText, sentence, file: file, line: line)
+        if let field {
+            XCTAssertEqual(mockController.aiTargetText, field, file: file, line: line)
         }
         apply(replacement, to: mockController)
         XCTAssertEqual(mock.document, expected, "against the model", file: file, line: line)
 
         let live = LiveTextViewTarget(before: before, after: after)
         let liveController = KeyboardController(target: live)
-        if let sentence {
-            XCTAssertEqual(liveController.aiTargetText, sentence, file: file, line: line)
+        if let field {
+            XCTAssertEqual(liveController.aiTargetText, field, file: file, line: line)
         }
         apply(replacement, to: liveController)
         XCTAssertEqual(live.document, expected, "against a real UITextView", file: file, line: line)
@@ -48,40 +57,40 @@ final class TextReplacementTests: XCTestCase {
 
     // MARK: A character is not a character
 
-    /// **An emoji in front of the caret used to eat the sentence before it.** The
-    /// step over the tail counted grapheme clusters and the host counts UTF-16, so
-    /// the cursor stopped one unit short of the end while the backspace loop ran
-    /// the full length: `Hi. hey 😊 six` came back as `Hi.Replacementx`.
-    func testAnEmojiInTheTailDoesNotEatTheSentenceBefore() {
+    /// **An emoji in front of the caret used to eat the text before it.** The step
+    /// over the tail counted grapheme clusters and the host counts UTF-16, so the
+    /// cursor stopped one unit short of the end while the backspace loop ran the
+    /// full length: the field came back as `Hi.Replacementx`.
+    func testAnEmojiInTheTailDoesNotEatTheTextBeforeIt() {
         check(
             before: "Hi. hey ", after: "😊 six", replacement: "Replacement",
-            sentence: "hey 😊 six", expected: "Hi. Replacement")
+            field: "Hi. hey 😊 six", expected: "Replacement")
     }
 
     /// A flag is one grapheme and four UTF-16 units — the widest gap of the lot.
     func testAFlagInTheTail() {
         check(
             before: "Hi. from ", after: "🇮🇱 today", replacement: "From Israel today.",
-            sentence: "from 🇮🇱 today", expected: "Hi. From Israel today.")
+            field: "Hi. from 🇮🇱 today", expected: "From Israel today.")
     }
 
     /// A ZWJ sequence is one grapheme and five UTF-16 units.
     func testAZeroWidthJoinerSequenceInTheTail() {
         check(
             before: "Hi. ask ", after: "👩‍💻 later", replacement: "I'll ask her later.",
-            sentence: "ask 👩‍💻 later", expected: "Hi. I'll ask her later.")
+            field: "Hi. ask 👩‍💻 later", expected: "I'll ask her later.")
     }
 
     /// **A decomposed accent, which is the one that reaches ordinary users.**
     /// French, Spanish and Portuguese are three of the fourteen layouts, and text
     /// pasted from the web or typed on a Mac arrives in NFD often enough: `à` as
-    /// `a` + U+0300 is one grapheme and two UTF-16 units. The broken build returns
-    /// `Bonjour.On se voit à 18hx`.
+    /// `a` + U+0300 is one grapheme and two UTF-16 units. The broken build strands
+    /// a character off the end of the answer.
     func testADecomposedAccentInTheTail() {
         check(
             before: "Bonjour. on se ", after: "voit a\u{0300} six",
             replacement: "On se voit à 18h",
-            sentence: "on se voit a\u{0300} six", expected: "Bonjour. On se voit à 18h")
+            field: "Bonjour. on se voit a\u{0300} six", expected: "On se voit à 18h")
     }
 
     /// **Hebrew niqqud and an emoji in the same deleted span, because either one
@@ -94,32 +103,36 @@ final class TextReplacementTests: XCTestCase {
     func testHebrewNiqqudAndAnEmojiInOneDeletedSpan() {
         check(
             before: "הי. נדבר ", after: "בשָׁעה 🎉 שתים", replacement: "נדבר בשתיים",
-            expected: "הי. נדבר בשתיים")
+            field: "הי. נדבר בשָׁעה 🎉 שתים", expected: "נדבר בשתיים")
     }
 
-    // MARK: The gap in front of the sentence
+    // MARK: The gap in front of the field
 
-    /// **A cursor sitting immediately after a full stop.** The head is then empty,
-    /// so the sentence's first real character is in the tail and the space that
-    /// separates the two sentences was inside the delete span while staying
-    /// outside the string sent to the model: `Hi.See you at 6.`.
-    func testTheSeparatorAfterAnEarlierSentenceSurvives() {
+    /// **A cursor at the very start, with the field's first real character behind
+    /// it.** The head is empty, so leading whitespace is the only thing that can
+    /// tell "the start of the field" from "the gap before the first word" — and it
+    /// belongs to the user, not to the answer. `editDeleteSpanAfterCursor`'s
+    /// `editSpanBeforeCursor == 0` branch is the whole of this case, and the
+    /// widened scope left it as the only way in.
+    func testWhitespaceInFrontOfTheFieldIsNotPartOfTheSpan() {
         check(
-            before: "Hi.", after: " see you at six", replacement: "See you at 6.",
-            sentence: "see you at six", expected: "Hi. See you at 6.")
+            before: "", after: "  see you at six", replacement: "See you at 6.",
+            field: "see you at six", expected: "  See you at 6.")
     }
 
-    func testTheSeparatorSurvivesInHebrewToo() {
+    /// A cursor sitting immediately after a full stop, which used to make that stop
+    /// the boundary of the edit and now does not: the sentence in front of the
+    /// cursor is part of the same message and is replaced with it.
+    func testTextBeforeAnEarlierFullStopIsReplacedToo() {
         check(
-            before: "היי.", after: " נדבר בשש", replacement: "נדבר בשש",
-            sentence: "נדבר בשש", expected: "היי. נדבר בשש")
+            before: "Hi.", after: " see you at six", replacement: "Hi, see you at 6.",
+            field: "Hi. see you at six", expected: "Hi, see you at 6.")
     }
 
-    /// Two spaces are two spaces: neither is part of the sentence after them.
-    func testADoubleSeparatorIsLeftAlone() {
+    func testTheWholeFieldIsReplacedInHebrewToo() {
         check(
-            before: "Hi.", after: "  see you at six", replacement: "See you at 6.",
-            sentence: "see you at six", expected: "Hi.  See you at 6.")
+            before: "היי.", after: " נדבר בשש", replacement: "היי, נדבר בשש",
+            field: "היי. נדבר בשש", expected: "היי, נדבר בשש")
     }
 
     // MARK: A windowed context
@@ -133,11 +146,12 @@ final class TextReplacementTests: XCTestCase {
     /// destroyed and the rest of the sentence still there.
     ///
     /// What the window does *not* do is change the contract: the keyboard replaces
-    /// the sentence it can see, exactly, and nothing outside it. The expectation
-    /// is built from `aiTargetText` rather than typed out, because the visible
-    /// sentence is shorter than the real one here — that is the honest consequence
-    /// of a host that hands over a window, and the assertion would otherwise be
-    /// asserting the window size rather than the behaviour.
+    /// the field it can see, exactly, and nothing outside it. The expectation is
+    /// built from `aiTargetText` rather than typed out, because the visible field
+    /// is shorter than the real one here — that is the honest consequence of a host
+    /// that hands over a window, and the assertion would otherwise be asserting the
+    /// window size rather than the behaviour. It is also the answer to "why not
+    /// just read the whole document": there is no API that does.
     private func checkWindowed(
         document: String, window: Int, replacement: String,
         file: StaticString = #filePath, line: UInt = #line
@@ -148,17 +162,17 @@ final class TextReplacementTests: XCTestCase {
         let visible = controller.aiTargetText
         XCTAssertFalse(visible.isEmpty, file: file, line: line)
         XCTAssertTrue(
-            document.hasSuffix(visible), "the visible sentence has to be the end of the document",
+            document.hasSuffix(visible), "the visible field has to be the end of the document",
             file: file, line: line)
         apply(replacement, to: controller)
 
         XCTAssertEqual(
             target.document, String(document.dropLast(visible.count)) + replacement,
-            "the loop deleted something other than exactly the sentence it could see",
+            "the loop deleted something other than exactly the text it could see",
             file: file, line: line)
     }
 
-    func testAWindowedContextDeletesExactlyTheSentenceItCanSee() {
+    func testAWindowedContextDeletesExactlyTheTextItCanSee() {
         checkWindowed(
             document: "Hi. see you at six tomorrow", window: 20, replacement: "Running late.")
     }
@@ -199,33 +213,40 @@ final class TextReplacementTests: XCTestCase {
         XCTAssertEqual(live.document, "hello everyone world")
     }
 
-    /// **Trailing whitespace is a span, not one space.** `currentSentence` drops
-    /// one trailing space and then trims what is left, so `original.count + 1` was
-    /// short by however many more there were, and the sentence's first character
-    /// was stranded ahead of the replacement: "sSee you at 6.".
+    /// **Trailing whitespace is a span, not one space.** `wholeField` trims what it
+    /// hands the model, so a length taken from *that* string was short by however
+    /// many spaces there were, and the field's first character was stranded ahead
+    /// of the replacement: "sSee you at 6.". The span is measured off the document,
+    /// which is why it is right here.
     func testTwoTrailingSpacesDoNotStrandTheFirstCharacter() {
         check(
             before: "see you at six  ", replacement: "See you at 6.",
-            sentence: "see you at six", expected: "See you at 6.")
+            field: "see you at six", expected: "See you at 6.")
     }
 
-    /// **The sentence carries on past the cursor.** With the caret mid-sentence
-    /// the model was handed the head alone and the tail was left dangling off the
-    /// end of the answer: "Could you send me the deck? send me the deck".
-    func testACursorInTheMiddleOfASentenceReplacesAllOfIt() {
+    /// **The field carries on past the cursor.** With the caret mid-message the
+    /// model was handed the head alone and the tail was left dangling off the end
+    /// of the answer: "Could you send me the deck? send me the deck".
+    func testACursorInTheMiddleOfTheFieldReplacesAllOfIt() {
         check(
             before: "hey can you", after: " send me the deck",
             replacement: "Could you send me the deck?",
-            sentence: "hey can you send me the deck", expected: "Could you send me the deck?")
+            field: "hey can you send me the deck", expected: "Could you send me the deck?")
     }
 
-    /// The sentence before it is not part of the span, and neither is the space
-    /// that separates them. This is the case the old count got right, and it has
-    /// to stay right.
-    func testAnEarlierSentenceIsUntouched() {
+    /// **The defect the widened scope exists for, in the words it was reported
+    /// in.** Fix `hi mamiwhat?` to `hi mami what?`, type `up`, and Fix again: with
+    /// the sentence as the scope the second run is handed the single word `up`,
+    /// because the question mark the *first* Fix inserted is a sentence boundary.
+    /// So the model is asked to correct a word with nothing around it and there is
+    /// no answer it could give that reaches `hi mami whats up?`.
+    ///
+    /// This asserts what the second run is *handed*, which is the half that was
+    /// broken; what it comes back with is the model's business.
+    func testAnEarlierSentenceIsPartOfTheSpan() {
         check(
-            before: "Hi. see you at six ", replacement: "See you at 6.",
-            sentence: "see you at six", expected: "Hi. See you at 6.")
+            before: "hi mami what? up", replacement: "hi mami whats up?",
+            field: "hi mami what? up", expected: "hi mami whats up?")
     }
 
     /// The plainest case of all, and the only one the suite used to cover.

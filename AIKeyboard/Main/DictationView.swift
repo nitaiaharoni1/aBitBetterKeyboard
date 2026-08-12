@@ -169,6 +169,7 @@ struct DictationView: View {
         switch service.phase {
         case .idle: return "Waiting for the keyboard's microphone button"
         case .listening: return "Listening"
+        case .paused: return "Paused from the keyboard"
         case .transcribing: return "Transcribing"
         }
     }

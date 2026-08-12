@@ -66,6 +66,50 @@ public enum AIAction: String, CaseIterable, Identifiable, Hashable, Sendable {
     }
 }
 
+// MARK: - An edit that can be taken back
+
+/// A Fix or Rewrite that was written straight into the field, and the text it
+/// replaced.
+///
+/// **Fix and Rewrite apply themselves now, so undo is not a nicety.** They used
+/// to put an answer in the banner behind a Use button, which made accepting the
+/// change the user's own act; applying it on arrival is faster and reads better —
+/// the correction appears in the sentence rather than beside it — but it also
+/// means the keyboard has changed somebody's message without being asked twice.
+/// `UITextDocumentProxy` has no undo of any kind, so the only way back is to have
+/// kept what was there.
+///
+/// `applied` is held as well as `previous` because the revert has to delete
+/// exactly what was inserted: the field may be a different length by then only if
+/// the user typed, and typing is what clears this.
+public struct AIEdit: Equatable, Sendable {
+    public let action: AIAction
+    /// What the span the action replaced held before it ran. Read at the moment
+    /// of the replacement rather than at the moment the call started, so it is
+    /// what was *actually* taken out even if the field moved while the model was
+    /// thinking.
+    public let previous: String
+    /// What the action put there.
+    public let applied: String
+
+    /// **Whether the action replaced a selection rather than the whole field, and
+    /// this is not bookkeeping.** The two undo differently and getting it wrong
+    /// destroys the user's message: a Fix over the selected word `wrold` in
+    /// `hello there wrold friend` replaces five characters, and a revert that put
+    /// `previous` back the way a whole-field edit does would leave the field
+    /// holding the single word `wrold`. See `KeyboardController.revertAIEdit`.
+    public let replacedSelection: Bool
+
+    public init(
+        action: AIAction, previous: String, applied: String, replacedSelection: Bool = false
+    ) {
+        self.action = action
+        self.previous = previous
+        self.applied = applied
+        self.replacedSelection = replacedSelection
+    }
+}
+
 // MARK: - Tone
 
 public enum ToneStyle: String, CaseIterable, Identifiable, Codable, Sendable {

@@ -41,16 +41,13 @@ extension ActionBanner {
                 }
             }
 
-        case .dictating(_, let isListening):
-            // Same × as every other way out of the strip. While recording it still
-            // inserts what was heard — that is what Stop did; the label is what
-            // says so to VoiceOver.
-            dismissButton(
-                identifier: "banner-stop",
-                label: isListening ? "Stop" : "Cancel"
-            ) {
-                controller.stopDictation(insert: isListening)
-            }
+        case .dictating(_, _, let isPaused):
+            // **No × here any more.** Finishing a recording moved to the
+            // microphone key (`KeyboardController.toggleDictation()`), which
+            // frees this slot for pause/resume — the recording is running in
+            // another process for as long as the user likes, so there needs to
+            // be a way to stop *listening* without stopping the session.
+            pauseResumeButton(isPaused: isPaused)
 
         case .dictationFailed:
             // `stopDictation(insert: false)` rather than `clearBanner`: the reason
@@ -82,6 +79,33 @@ extension ActionBanner {
         .pressable()
         .accessibilityLabel(label)
         .accessibilityIdentifier(identifier)
+    }
+
+    /// The recording's own trailing control: pause while listening, resume
+    /// while paused. Same 32×32 geometry as `dismissButton`, because it sits
+    /// in the same slot and a size change here would shift the strip's
+    /// trailing edge for every other state.
+    ///
+    /// **`record.circle` for resume, not `mic.fill`.** `mic.fill` is already
+    /// what the microphone key wears — reusing it here would read as "open a
+    /// second microphone" rather than "keep going with this one" — and a
+    /// filled red circle is the shape a paused recording already resumes to
+    /// elsewhere on iOS (Voice Memos' own pause button is a plain red dot).
+    func pauseResumeButton(isPaused: Bool) -> some View {
+        Button(action: { isPaused ? controller.resumeDictation() : controller.pauseDictation() }) {
+            Image(systemName: isPaused ? "record.circle" : "pause.fill")
+                .font(Theme.Glyph.medium(12))
+                .foregroundStyle(Theme.Semantic.record)
+                .frame(width: 32, height: 32)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+                        .fill(Theme.Keys.card)
+                )
+                .contentShape(Rectangle())
+        }
+        .pressable()
+        .accessibilityLabel(isPaused ? "Resume" : "Pause")
+        .accessibilityIdentifier(isPaused ? "banner-resume" : "banner-pause")
     }
 
     /// Which of the answers is showing. Tappable as well as swipeable, because a

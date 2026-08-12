@@ -49,6 +49,20 @@ public struct SuggestionBar: View {
 
             suggestions
 
+            // **The way back from a Fix or a Rewrite, and it is the only control in
+            // this bar that is not configurable.** Both actions now write their
+            // answer straight into the field (see
+            // `KeyboardController.applyDirectly`), so the undo has to live where the
+            // user is already looking when the text changes under them — the row
+            // directly above the keys. It lasts until the next keystroke and costs
+            // the three candidates about 52pt of the bar for that long, which is
+            // the right trade while the last thing that happened to the field is an
+            // edit the keyboard made rather than a word the user is typing.
+            if controller.revertibleEdit != nil {
+                separator
+                revertButton
+            }
+
             if !controller.customization.barTrailing.isEmpty { separator }
 
             ForEach(controller.customization.barTrailing) { slot in
@@ -73,6 +87,10 @@ public struct SuggestionBar: View {
         .environment(\.layoutDirection, .leftToRight)
         .frame(height: Theme.Metrics.suggestionBarHeight)
         .padding(.horizontal, Theme.Space.xxs)
+        // The revert control arrives with an answer already in the field, so it
+        // fades in rather than appearing between two frames beside three candidate
+        // slots that emptied in the same moment.
+        .animation(Theme.Motion.content, value: controller.revertibleEdit)
     }
 
     // MARK: Candidates

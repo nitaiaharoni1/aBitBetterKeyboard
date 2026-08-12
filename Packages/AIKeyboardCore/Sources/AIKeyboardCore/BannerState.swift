@@ -67,7 +67,13 @@ public enum BannerState: Equatable {
     /// A recording is open in the containing app. The keyboard cannot start one —
     /// see `DictationSession` — so this state is only ever reached from one that
     /// could.
-    case dictating(transcript: String, isListening: Bool)
+    ///
+    /// `isListening` means audio is actually being kept, not merely that an
+    /// utterance is open: it is false both while transcribing and while
+    /// paused, which is why `isPaused` is its own field rather than a third
+    /// reading of `isListening` — the trailing control and the tag need to
+    /// tell those two apart even though the waveform draws them the same way.
+    case dictating(transcript: String, isListening: Bool, isPaused: Bool)
 
     /// An action the user tapped that could not run, and what they can do about it.
     ///
@@ -143,6 +149,11 @@ public enum BannerState: Equatable {
         dictationIsLive: Bool,
         dictationTranscript: String,
         dictationFailure: String,
+        /// Whether the open utterance is paused. Ignored once transcribing —
+        /// `KeyboardController.dictationIsPaused` reads `dictation.availability`,
+        /// which moves to `.transcribing` the moment Insert is tapped, so this
+        /// is already false by the time that matters.
+        dictationIsPaused: Bool,
         isWorking: Bool,
         runningAction: AIAction?,
         error: AIEngineError?,
@@ -163,7 +174,10 @@ public enum BannerState: Equatable {
             return .dictationFailed(dictationFailure)
         }
         if isDictating || dictationIsLive {
-            return .dictating(transcript: dictationTranscript, isListening: isDictating)
+            return .dictating(
+                transcript: dictationTranscript,
+                isListening: isDictating && !dictationIsPaused,
+                isPaused: dictationIsPaused)
         }
         // Above every idle branch and above the work branches, because this is a
         // sentence about the tap the user just made. Below dictation for the reason

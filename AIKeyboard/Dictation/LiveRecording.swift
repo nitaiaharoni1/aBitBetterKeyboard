@@ -21,6 +21,11 @@ final class LiveRecording: @unchecked Sendable {
     private let lock = OSAllocatedUnfairLock()
     private var buffer = UtteranceBuffer()
     private var open = false
+    /// Set while the keyboard has asked to pause. Distinct from `open`
+    /// deliberately: a paused recording is still open, `end()` still has to
+    /// hand back what was captured before the pause, and a `resume()` has to
+    /// find the same buffer it left.
+    private var paused = false
     private var lastLevel: Double = 0
 
     func begin() {
@@ -29,6 +34,7 @@ final class LiveRecording: @unchecked Sendable {
         buffer.reset()
         lastLevel = 0
         open = true
+        paused = false
     }
 
     /// Closes the recording and hands back everything the caller needs to decide
@@ -41,6 +47,7 @@ final class LiveRecording: @unchecked Sendable {
             lock.unlock()
         }
         open = false
+        paused = false
         return (buffer.wav(), buffer.seconds, buffer.verdict)
     }
 
@@ -48,7 +55,25 @@ final class LiveRecording: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         open = false
+        paused = false
         buffer.reset()
+    }
+
+    /// Stops the buffer growing without touching what it already holds. The
+    /// audio thread keeps calling `append` the whole time the microphone is
+    /// open — pausing is a decision about what happens to the samples it
+    /// hands over, not about whether it is called.
+    func pause() {
+        lock.lock()
+        defer { lock.unlock() }
+        paused = true
+        lastLevel = 0
+    }
+
+    func resume() {
+        lock.lock()
+        defer { lock.unlock() }
+        paused = false
     }
 
     /// **Nothing is kept between utterances, and the level still moves.** The
@@ -57,10 +82,18 @@ final class LiveRecording: @unchecked Sendable {
     /// without them asking — and would hit the sixty-second cap within a minute
     /// of idling. Measuring the arriving samples directly gives the keyboard's
     /// waveform something live to draw without keeping a single sample.
+    ///
+    /// **Paused is a third state, not a variant of closed.** `open && paused`
+    /// keeps the utterance's buffer exactly as the pause found it — nothing
+    /// appended, nothing reset — and reports a flat `0` so the keyboard's
+    /// waveform reads as stopped rather than drawing a burst from samples it
+    /// is about to throw away.
     func append(_ samples: UnsafeBufferPointer<Int16>) {
         lock.lock()
         defer { lock.unlock() }
-        if open {
+        if open && paused {
+            lastLevel = 0
+        } else if open {
             buffer.append(samples)
             lastLevel = buffer.level
         } else {

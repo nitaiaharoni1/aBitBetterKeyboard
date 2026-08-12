@@ -44,7 +44,13 @@ extension KeyboardController {
             beginWork(.fix, showing: .none) { [engine] in
                 try await engine.fix(source)
             } apply: { controller, text in
+                // **Straight into the field, with no Use button in front of it.**
+                // See `applyDirectly`. `aiResultText` is still set on the way past,
+                // because it is what `BannerState.resolve` reads to tell "the model
+                // answered" from "the model answered with nothing" — and an empty
+                // answer is the one case that still has to reach the strip.
                 controller.aiResultText = text
+                controller.applyDirectly(text, for: .fix)
             }
         // **Both of these clear `selectedToneIsCustom`, and forgetting it left the
         // flag lit across a Back.** It is set by `runTone`, and it used to be
@@ -62,6 +68,7 @@ extension KeyboardController {
                 try await engine.variants(for: source, tone: nil)
             } apply: { controller, variants in
                 controller.variants = variants
+                controller.applyDirectly(variants.first?.text ?? "", for: .rewrite)
             }
         case .tone:
             // **Runs the stored register instead of opening a picker.** The picker
@@ -211,10 +218,155 @@ extension KeyboardController {
         }
     }
 
+    /// Accepts an answer the banner is offering, which today is a reply and
+    /// nothing else — Fix and Rewrite apply themselves. See `applyDirectly`.
     public func applyResult(_ text: String) {
         Feedback.success()
+        // **Before the insertion, not after.** A reply lands in a field that may
+        // still be carrying a Fix's way back, and that way back replaces the *whole*
+        // field with what was there before — so reverting after inserting a reply
+        // would delete the reply along with the correction.
+        clearRevertibleEdit()
         replaceTargetText(with: text)
         dismissOverlay()
     }
 
+    // MARK: Applying without being asked twice
+
+    /// Writes an answer into the field the moment it arrives, and leaves a way
+    /// back.
+    ///
+    /// **The banner is not the place a correction is read.** Fix and Rewrite used
+    /// to put their answer on a 72pt strip behind a Use button, so the user read
+    /// the corrected sentence *beside* their message, decided about it there, and
+    /// then read it again in the field. One of those two readings is the real one.
+    /// Applying on arrival costs a tap and puts the change where it will actually
+    /// be judged — and Fix in particular is a correction of the user's own words
+    /// rather than a suggestion of new ones, which is exactly the kind of edit
+    /// autocorrect has always made without asking.
+    ///
+    /// **What that buys has to be paid for with an undo**, because the keyboard has
+    /// now changed somebody's message on its own: `revertibleEdit` holds what was
+    /// there, `SuggestionBar` draws the way back, and the next keystroke clears it
+    /// (`clearRevertibleEdit`). `UITextDocumentProxy` offers no undo of any kind, so
+    /// having kept the text is the entire mechanism.
+    ///
+    /// **An empty answer is left to the banner on purpose.** `BannerState.resolve`
+    /// turns "finished, no error, nothing to show" into "Nothing came back", which
+    /// is the one outcome the user can neither see nor explain — so this returns
+    /// without clearing and lets that sentence through. Everything else clears the
+    /// strip, because the answer is in the field where it can be read.
+    ///
+    /// **And so is an answer to a field that has moved on**, which is the hazard
+    /// auto-applying creates and the Use button used to cover. A model call takes
+    /// seconds and people keep typing through it: tap Fix, type the next word, and
+    /// an answer written about the sentence as it was would replace the whole field
+    /// and take that word out with it. `PredictiveRefiner` refuses on exactly this
+    /// test for exactly this reason. Here the answer is not thrown away, it is left
+    /// where it already is — `aiResultText` and `variants` are set before this runs,
+    /// so falling through leaves `BannerState` showing it behind a Use button, and
+    /// the user decides about a replacement they can see. It covers the second form
+    /// of the same problem for free: a selection that was deselected mid-call, where
+    /// applying would have written a correction of five words over the whole
+    /// message.
+    func applyDirectly(_ text: String, for action: AIAction) {
+        // The staleness test on the next line is also what makes this the right
+        // string: past it, `previous` is what was sent to the model *and* what is
+        // standing in the field right now — which is what `replaceTargetText` is
+        // about to take out and what the undo has to put back.
+        let previous = aiSourceText
+        guard aiTargetText == previous else { return }
+        // Asked before the replacement, because the replacement is what removes the
+        // selection. See `AIEdit.replacedSelection`.
+        let replacedSelection = selection != nil
+        // Nothing at all: leave it to `BannerState.resolve`'s "Nothing came back".
+        guard !text.isEmpty else { return }
+        // **Byte-for-byte identical is an answer, not a failure.** It is what
+        // `EditScope.applied` returns when the model named no mistakes, and it is
+        // the ordinary outcome of running Fix over a sentence that is already
+        // right. Re-typing the same characters would move the cursor and leave a
+        // revert button offering to change nothing, so it says so instead — a
+        // shimmer that ends in silence is the one thing the user cannot read.
+        guard text != previous else {
+            refuse(
+                .init(
+                    action: action,
+                    title: "Nothing to change",
+                    detail: "That already reads the way it should.",
+                    remedy: .none))
+            return
+        }
+        Feedback.success()
+        replaceTargetText(with: text)
+        revertibleEdit = AIEdit(
+            action: action, previous: previous, applied: text,
+            replacedSelection: replacedSelection)
+        // **Emptied, because the next action must not inherit it.**
+        // `selectTone(_:)` keeps whatever is already in `aiSourceText` — correct
+        // when it is reached from an action that has just filled it, and wrong from
+        // the long-press popup, which fills nothing. So a Fix followed by holding
+        // Rewrite and picking a register used to send the model the text as it was
+        // *before* the Fix, and then replace the field with a rewrite of it.
+        // `revertibleEdit` is what holds the old text now, and it holds it on
+        // purpose.
+        aiSourceText = ""
+        // The answer is in the field now, so there is nothing for the strip to say
+        // and it should not keep a row of the screen to say it.
+        clearBannerState()
+    }
+
+    /// Puts back what the last Fix or Rewrite replaced.
+    ///
+    /// **Two paths, because the two kinds of edit undo differently and getting it
+    /// wrong destroys the message.** A whole-field edit is undone by replacing the
+    /// whole field, which `replaceTargetText` already knows how to do across a
+    /// cursor sitting anywhere in it — so that path is reused rather than
+    /// reimplemented, and it does not care where the caret has moved to since.
+    ///
+    /// A **selection** edit replaced five characters in the middle of a sentence,
+    /// and there is no selection left by the time this runs — the replacement is
+    /// what consumed it. Sending that through `replaceTargetText` takes the
+    /// whole-field branch and leaves the field holding nothing but the fragment:
+    /// `hello there wrold friend`, Fix the selected `wrold`, revert, and the
+    /// message is the single word `wrold`. So that path deletes exactly as many
+    /// UTF-16 units as were inserted, from where they were inserted, and types the
+    /// old ones back.
+    ///
+    /// The guard is what makes the second path safe rather than merely narrow:
+    /// `replaceTargetText` leaves the caret immediately after what it inserted, so
+    /// the field must still end there. If it does not — a caret the host moved,
+    /// which fires no callback this keyboard can see — the edit is dropped without
+    /// touching the document, because deleting a count from the wrong place is the
+    /// one outcome worse than no undo at all.
+    public func revertAIEdit() {
+        guard let edit = revertibleEdit else { return }
+        Feedback.modifierPress()
+        revertibleEdit = nil
+
+        guard edit.replacedSelection else {
+            // `replaceTargetText` refuses on an empty source — that guard is what
+            // makes Reply insert rather than replace — so it is told what is
+            // standing there now, which is exactly what this is taking out.
+            aiSourceText = edit.applied
+            replaceTargetText(with: edit.previous)
+            aiSourceText = ""
+            return
+        }
+
+        guard contextBefore.hasSuffix(edit.applied) else { return }
+        deleteBackward(utf16Units: edit.applied.utf16.count)
+        target?.insertText(edit.previous)
+        refreshSuggestions()
+    }
+
+    /// Drops the way back, because the field has moved on.
+    ///
+    /// Called from every path that changes the document by the user's own hand. It
+    /// is deliberately *not* called from `refreshSuggestions`, which would be one
+    /// line instead of five: `replaceTargetText` refreshes the bar itself, so the
+    /// revert would be cleared by the very edit that created it.
+    func clearRevertibleEdit() {
+        guard revertibleEdit != nil else { return }
+        revertibleEdit = nil
+    }
 }

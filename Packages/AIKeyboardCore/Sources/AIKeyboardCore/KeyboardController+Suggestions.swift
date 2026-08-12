@@ -3,6 +3,13 @@ extension KeyboardController {
     // MARK: Suggestions
 
     public func refreshSuggestions() {
+        // **Above the Predictions guard, because it is not about predictions.**
+        // Fix and Rewrite are drawn disabled on an empty field, and this is what
+        // their keys redraw from; leaving it under the guard would freeze both keys
+        // in whatever state they were in for anyone who has turned the suggestion
+        // bar off. This function is the one thing every document change already
+        // goes through, including the host's own `textDidChange`.
+        refreshDocumentState()
         guard store.storedPredictions else {
             suggestions = []
             return
@@ -27,6 +34,31 @@ extension KeyboardController {
             suggestions = results
         }
         askForRefinement(prefix: prefix, context: context)
+    }
+
+    /// Re-reads the two facts about the document that the keys are drawn from,
+    /// without touching the suggestion bar or the async tier.
+    ///
+    /// **Separate from `refreshSuggestions` because the extension needs one of
+    /// them without the other.** `KeyboardViewController.viewWillAppear` has to
+    /// know whether the field it is coming up over has anything in it, or Fix and
+    /// Rewrite are drawn from whatever the last field left behind — and calling
+    /// the full refresh there would start `PredictiveRefiner`'s clock, which means
+    /// a model call every time the keyboard appears, for a word nobody has begun
+    /// typing.
+    ///
+    /// The second fact is that an edit can only be taken back while the text it
+    /// replaced is still standing. **A host that empties the field — the message
+    /// was sent — is the case that matters**, because nothing the user did clears
+    /// the revert there: the send happened in the other app, `textDidChange`
+    /// brings the news, and without this the revert button would still be sitting
+    /// in the bar offering to type a sent message back into an empty box. Ordered
+    /// after the flag so it reads the fresh answer, and safe to run from inside
+    /// `replaceTargetText` — `applyDirectly` records the edit *after* that call
+    /// returns, so this can never delete the edit that is being made.
+    public func refreshDocumentState() {
+        documentHasText = hasTextToWorkWith
+        if revertibleEdit != nil, !documentHasText { revertibleEdit = nil }
     }
 
     /// Start the async tier's clock. Every keystroke restarts it, so it only ever
@@ -133,6 +165,7 @@ extension KeyboardController {
 
     public func apply(_ suggestion: Suggestion) {
         Feedback.keyPress()
+        clearRevertibleEdit()
         // Text in, so it sounds like text going in. Tapping a candidate is the
         // one insertion that reaches the document without a `KeyCap` behind it,
         // and `press(_:)` is where every other one gets its click.

@@ -16,6 +16,7 @@ extension KeyboardController {
             dictationIsLive: dictationAvailability.isLive,
             dictationTranscript: dictationTranscript,
             dictationFailure: dictationFailure,
+            dictationIsPaused: dictationIsPaused,
             isWorking: isWorking,
             runningAction: runningAction,
             error: aiError,
@@ -39,6 +40,32 @@ extension KeyboardController {
         case .ai(.rewrite), .ai(.tone): return cap == .quickTone
         case .dictation: return cap == .dictation
         case nil: return false
+        }
+    }
+
+    /// Whether a key in the action row has nothing it could do, and should be
+    /// drawn as such.
+    ///
+    /// **Only the two keys that edit what is already there.** Fix and Rewrite need
+    /// a message; Reply is about the message on *screen* and is deliberately live
+    /// on an empty field, which is the whole point of it, and dictation fills the
+    /// field rather than reading it.
+    ///
+    /// This overrules the rule `SuggestionBar.ToneTap` was written under — that a
+    /// control which looks unavailable and swallows the tap teaches nothing — and
+    /// it is worth saying why, because that rule was learned from a real defect.
+    /// It was about a button that *looked* live: a fully saturated brand icon over
+    /// a faded gradient, which read as enabled, did nothing, and said nothing. A
+    /// key that is visibly dimmed makes the same statement the refusal made, in the
+    /// place the user is already looking, without spending a 72pt strip and a
+    /// Dismiss tap on a sentence they can work out from an empty field. The words
+    /// survive for anyone who cannot see it: `KeyView` says "Type something first"
+    /// as the key's accessibility hint, and `refuseForEmptyField` is still there
+    /// behind every route that is not a key.
+    public func isActionKeyDisabled(_ cap: KeyCap) -> Bool {
+        switch cap {
+        case .aiFix, .quickTone: return !documentHasText
+        default: return false
         }
     }
 

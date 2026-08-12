@@ -78,12 +78,16 @@ extension KeyView {
                 .foregroundStyle(labelColor)
 
         case .dictation:
-            // Outline, not `mic.fill`. A solid microphone reads as *recording* —
-            // it is the shape the banner uses for exactly that — and this key is
-            // the one that has not started yet.
+            // **Outline until it is actually recording, and then filled.** A solid
+            // microphone reads as *recording* — it is the shape the banner uses for
+            // exactly that — so it was wrong on a key that had not started yet, and
+            // it is right on the one key that is now also how a recording is
+            // finished. The word follows it: while a recording is open this key
+            // stops and inserts (`KeyboardController.toggleDictation`), and calling
+            // that "Dictate" would offer to start something that is already running.
             actionLabel(
-                icon: "mic",
-                title: "Dictate",
+                icon: isActionActive ? "mic.fill" : "mic",
+                title: isActionActive ? "Stop" : "Dictate",
                 tint: Theme.Brand.solid,
                 showsCaption: showsActionCaption)
 
@@ -176,10 +180,14 @@ extension KeyView {
     ///
     /// A function rather than an `if` inside the `@ViewBuilder` below: a branch
     /// statement in a builder body is parsed as view content, not as flow.
+    /// White on the filled brand cap a running action wears, and that is the whole
+    /// of what "active" looks like now — see `KeyView.capKind`.
     func actionTint(_ tint: Color) -> Color {
         if isPressed { return Theme.Keys.label }
-        if restsOnDarkCap && !isActionActive { return Theme.Keys.labelOnFunction }
-        return usesNeutralActionTint ? Theme.Keys.label : tint
+        if isActionActive { return Theme.Text.onBrand }
+        if restsOnDarkCap { return Theme.Keys.labelOnFunction }
+        let resting = usesNeutralActionTint ? Theme.Keys.label : tint
+        return resting.opacity(isDisabled ? KeyView.disabledLabelOpacity : 1)
     }
 
     @ViewBuilder

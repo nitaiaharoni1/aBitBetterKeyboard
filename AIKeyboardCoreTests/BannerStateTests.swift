@@ -21,6 +21,7 @@ final class BannerStateTests: XCTestCase {
         dictationIsLive: Bool = false,
         dictationTranscript: String = "",
         dictationFailure: String = "",
+        dictationIsPaused: Bool = false,
         isWorking: Bool = false,
         runningAction: AIAction? = nil,
         error: AIEngineError? = nil,
@@ -35,6 +36,7 @@ final class BannerStateTests: XCTestCase {
             dictationIsLive: dictationIsLive,
             dictationTranscript: dictationTranscript,
             dictationFailure: dictationFailure,
+            dictationIsPaused: dictationIsPaused,
             isWorking: isWorking,
             runningAction: runningAction,
             error: error,
@@ -53,7 +55,7 @@ final class BannerStateTests: XCTestCase {
     func testARecordingOutranksAModelCall() {
         let state = resolve(
             isDictating: true, isWorking: true, runningAction: .rewrite)
-        XCTAssertEqual(state, .dictating(transcript: "", isListening: true))
+        XCTAssertEqual(state, .dictating(transcript: "", isListening: true, isPaused: false))
     }
 
     /// **A failed recording is reported even though `isDictating` is already
@@ -71,7 +73,7 @@ final class BannerStateTests: XCTestCase {
         let state = resolve(
             isDictating: false, dictationIsLive: true, dictationTranscript: "hello",
             dictationFailure: "No speech")
-        XCTAssertEqual(state, .dictating(transcript: "hello", isListening: false))
+        XCTAssertEqual(state, .dictating(transcript: "hello", isListening: false, isPaused: false))
     }
 
     /// **Work outranks both a result and a failure**, because `beginWork` sets
@@ -108,7 +110,7 @@ final class BannerStateTests: XCTestCase {
     /// can wait.
     func testARecordingOutranksARefusal() {
         let state = resolve(isDictating: true, block: noSession)
-        XCTAssertEqual(state, .dictating(transcript: "", isListening: true))
+        XCTAssertEqual(state, .dictating(transcript: "", isListening: true, isPaused: false))
     }
 
     /// **A refusal outranks the idle hint**, which is the ordering the whole case

@@ -222,6 +222,7 @@ final class DictationKeyboardTests: XCTestCase {
                 dictationIsLive: controller.dictationAvailability.isLive,
                 dictationTranscript: controller.dictationTranscript,
                 dictationFailure: controller.dictationFailure,
+                dictationIsPaused: controller.dictationIsPaused,
                 isWorking: controller.isWorking,
                 runningAction: controller.runningAction,
                 error: controller.aiError,
@@ -346,6 +347,135 @@ final class DictationKeyboardTests: XCTestCase {
         XCTAssertEqual(target.text, "")
     }
 
+    // MARK: Pause and resume
+
+    /// **Live in every sense but the microphone's.** Pausing must not clear
+    /// `isDictating` — the mic key is still the way to finish the recording —
+    /// and once the recorder confirms the pause the session still has to read
+    /// as live, or the banner would treat a paused recording as one that had
+    /// ended.
+    func testAPausedUtteranceIsStillLiveAndReadsAsPaused() throws {
+        beginLiveSession()
+        session.poll()
+        controller.startDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+
+        controller.pauseDictation()
+        XCTAssertTrue(
+            try XCTUnwrap(recorder.request()).isPaused, "the pause never reached the request page")
+        XCTAssertTrue(
+            try XCTUnwrap(recorder.request()).wantsRecording(),
+            "pausing closed the utterance instead of only muting it")
+        XCTAssertTrue(controller.isDictating, "pausing must not clear isDictating")
+
+        // The recorder confirms the pause on its own poll; simulated here the
+        // way every live-session test in this file stands in for
+        // `DictationService`, by publishing the phase directly.
+        recorder.setPhase(.paused, utterance: utterance)
+        session.poll()
+
+        XCTAssertEqual(controller.dictationAvailability, .paused)
+        XCTAssertTrue(
+            controller.dictationAvailability.isLive, "a paused session must still read as live")
+        XCTAssertTrue(controller.dictationIsPaused)
+    }
+
+    /// Resuming clears the flag on the request page, and the recorder's own
+    /// confirmation is what brings `availability` back to `.listening`.
+    func testResumingAPausedUtteranceReadsAsListeningAgain() throws {
+        beginLiveSession()
+        session.poll()
+        controller.startDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+        controller.pauseDictation()
+        recorder.setPhase(.paused, utterance: utterance)
+        session.poll()
+        XCTAssertTrue(controller.dictationIsPaused)
+
+        controller.resumeDictation()
+        XCTAssertFalse(try XCTUnwrap(recorder.request()).isPaused)
+
+        recorder.setPhase(.listening, utterance: utterance)
+        session.poll()
+
+        XCTAssertEqual(controller.dictationAvailability, .listening)
+        XCTAssertFalse(controller.dictationIsPaused)
+    }
+
+    /// **The banner has to tell "paused" and "transcribing" apart even though
+    /// both read `isListening == false`.** `isPaused` is the field that
+    /// carries the difference into the trailing control and the tag.
+    func testTheBannerReadsPauseSeparatelyFromTranscribing() throws {
+        beginLiveSession()
+        session.poll()
+        controller.startDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+        controller.pauseDictation()
+        recorder.setPhase(.paused, utterance: utterance)
+        session.poll()
+
+        XCTAssertEqual(
+            BannerState.resolve(
+                isDictating: controller.isDictating,
+                dictationIsLive: controller.dictationAvailability.isLive,
+                dictationTranscript: controller.dictationTranscript,
+                dictationFailure: controller.dictationFailure,
+                dictationIsPaused: controller.dictationIsPaused,
+                isWorking: controller.isWorking,
+                runningAction: controller.runningAction,
+                error: controller.aiError,
+                block: controller.block,
+                options: controller.bannerOptions,
+                index: controller.bannerIndex,
+                screenContext: nil,
+                idleHint: BannerState.defaultHint),
+            .dictating(transcript: "", isListening: false, isPaused: true))
+    }
+
+    /// **The microphone key both starts and finishes a recording now.** A tap
+    /// with nothing live opens an utterance; a second tap finishes it and
+    /// asks for an insert, exactly as `stopDictation(insert: true)` always
+    /// has — `toggleDictation` is what the key calls for both halves.
+    func testToggleDictationStartsThenFinishesWithInsert() throws {
+        let id = beginLiveSession()
+        session.poll()
+
+        controller.toggleDictation()
+        XCTAssertTrue(controller.isDictating, "toggling with nothing live should start a recording")
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+
+        controller.toggleDictation()
+        XCTAssertFalse(controller.isDictating, "a second tap should finish the recording")
+        XCTAssertEqual(
+            recorder.request()?.stopUtterance, utterance,
+            "the second tap did not ask the recorder to stop")
+
+        try recorder.publish(
+            DictationTranscriptRecord(
+                sessionID: id, utterance: utterance, text: "noted",
+                recordedAt: 1, completedAt: 2, seconds: 1))
+        session.poll()
+
+        XCTAssertEqual(target.text, "noted", "toggling must still insert what was said")
+    }
+
+    /// A recording that is paused when the microphone key finishes it still
+    /// asks the recorder to stop — pausing must not be a way to strand an
+    /// utterance the mic key can no longer close.
+    func testTogglingOffAPausedRecordingStillRequestsAStop() throws {
+        beginLiveSession()
+        session.poll()
+        controller.startDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+        controller.pauseDictation()
+        recorder.setPhase(.paused, utterance: utterance)
+        session.poll()
+
+        controller.toggleDictation()
+        XCTAssertFalse(controller.isDictating)
+        XCTAssertEqual(recorder.request()?.stopUtterance, utterance)
+    }
+
     // MARK: The tap has to read the page
 
     /// **The one live-session test here with no `session.poll()` before the tap,
@@ -433,6 +563,7 @@ final class DictationKeyboardTests: XCTestCase {
                 dictationIsLive: controller.dictationAvailability.isLive,
                 dictationTranscript: controller.dictationTranscript,
                 dictationFailure: controller.dictationFailure,
+                dictationIsPaused: controller.dictationIsPaused,
                 isWorking: controller.isWorking,
                 runningAction: controller.runningAction,
                 error: controller.aiError,

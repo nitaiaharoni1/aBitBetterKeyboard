@@ -159,6 +159,15 @@ final class KeyboardViewController: UIInputViewController {
         // `$customization` sink landed — that sink is `.receive(on: RunLoop.main)`
         // and so is never synchronous with this.
         controller?.reloadCustomization()
+        // **The field this keyboard is coming up over, not the one it last saw.**
+        // iOS keeps one extension instance alive across fields and across host
+        // apps, so Fix and Rewrite — which are drawn disabled on an empty field —
+        // would otherwise open showing whatever the previous field's state was
+        // until something else moved. `refreshDocumentState()` rather than
+        // `refreshSuggestions()`: the full refresh starts `PredictiveRefiner`'s
+        // clock, and paying for a model call every time the keyboard appears, for
+        // a word nobody has started typing, is not what this line is for.
+        controller?.refreshDocumentState()
         updateKeyboardHeight()
     }
 

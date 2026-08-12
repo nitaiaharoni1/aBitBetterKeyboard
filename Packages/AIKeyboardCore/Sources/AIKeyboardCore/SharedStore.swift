@@ -100,6 +100,10 @@ public final class SharedStore: ObservableObject {
         /// A Unix timestamp written by the keyboard when it wants the app to start
         /// dictation. The app consumes it exactly once and refuses stale requests.
         static let dictationHandoffRequest = "dictationHandoffRequest"
+        /// `KeyboardLanguage.rawValue` for whichever layout the keyboard was
+        /// showing the last time it opened a dictation utterance. Written by the
+        /// keyboard, read by the app — see `storedDictationLanguage`.
+        static let dictationActiveLanguage = "dictationActiveLanguage"
     }
 
     /// Keys this store used to write and no longer reads.
@@ -346,6 +350,35 @@ public final class SharedStore: ObservableObject {
         defaults.removeObject(forKey: Key.dictationHandoffRequest)
         let age = now.timeIntervalSince1970 - ts
         return age >= 0 && age < 30
+    }
+
+    // MARK: Dictation language
+
+    /// The language the keyboard's layout was set to when it last opened a
+    /// dictation utterance — not `enabledLanguages`, which is every language
+    /// the user has ever turned on rather than the one they are dictating into
+    /// right now. `nil` means the keyboard has never opened an utterance in
+    /// this shared container: a session can be started and stopped from the
+    /// app alone, with no keyboard involved at all, and this must not claim a
+    /// language for that.
+    ///
+    /// **Read through `defaults` at the moment of use, on purpose, with no
+    /// `@Published` copy to reach for instead.** This is the
+    /// `storedPersonalDictionary` / `storedAutocorrect` trap in the direction
+    /// that setting has never run in: the keyboard extension writes it and
+    /// `DictationService`, in the containing app, is a different process that
+    /// may have been running since long before the write happened. A
+    /// `@Published` copy would only ever be right in the process that just
+    /// wrote it.
+    public var storedDictationLanguage: KeyboardLanguage? {
+        defaults.string(forKey: Key.dictationActiveLanguage).flatMap(KeyboardLanguage.init(rawValue:))
+    }
+
+    /// Records the language the keyboard is showing right now. Cheap enough to
+    /// call on every utterance and on every language switch — one string write
+    /// to `UserDefaults`, nothing worth debouncing.
+    public func recordDictationLanguage(_ language: KeyboardLanguage) {
+        defaults.set(language.rawValue, forKey: Key.dictationActiveLanguage)
     }
 
     // MARK: Personal dictionary

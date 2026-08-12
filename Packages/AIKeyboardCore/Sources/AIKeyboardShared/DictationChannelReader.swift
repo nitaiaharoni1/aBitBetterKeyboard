@@ -64,6 +64,11 @@ public final class DictationChannelReader: @unchecked Sendable {
             request.utterance &+= 1
             request.startedAt = now
             request.keyboardAliveAt = now
+            // A fresh utterance never starts paused, even if the one before it
+            // was left that way — without this, an utterance opened right
+            // after a pause that was never resumed would silently record
+            // nothing until the next tap on pause/resume.
+            request.pausedRaw = 0
             opened = request.utterance
         }
         return opened
@@ -73,6 +78,26 @@ public final class DictationChannelReader: @unchecked Sendable {
         requestPage?.mutate { request in
             request.stopUtterance = request.utterance
             request.stoppedAt = now
+            request.keyboardAliveAt = now
+        }
+    }
+
+    /// Stops the recorder keeping samples without closing the utterance —
+    /// `wantsRecording` stays true, so a resume continues the same recording
+    /// rather than starting a new one. `keyboardAliveAt` is refreshed for the
+    /// same reason every other write here refreshes it: the dead-man's switch
+    /// has to keep ticking while paused, or a keyboard idling on a paused
+    /// recording would look abandoned within three seconds.
+    public func pauseUtterance(now: UInt64 = CaptureClock.now()) {
+        requestPage?.mutate { request in
+            request.pausedRaw = 1
+            request.keyboardAliveAt = now
+        }
+    }
+
+    public func resumeUtterance(now: UInt64 = CaptureClock.now()) {
+        requestPage?.mutate { request in
+            request.pausedRaw = 0
             request.keyboardAliveAt = now
         }
     }

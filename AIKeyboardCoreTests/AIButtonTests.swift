@@ -169,10 +169,18 @@ private final class SecureTextTarget: TextTarget {
 /// old wiring answers "do nothing" to exactly the input the first test names.
 final class ToneButtonTapTests: XCTestCase {
 
-    func testAnEmptyFieldStillAnswersTheTap() {
+    /// **The empty field is its own state, and that is what this holds.** It used
+    /// to answer the tap with a sentence in the banner and now it takes no tap at
+    /// all — the button and the Rewrite key beside Fix are both drawn dim and
+    /// disabled, which is the statement the banner was making, in the place the
+    /// user is already looking. What must not come back is the shipped defect that
+    /// `ToneTap` was written against: a *third* answer, where the control looks lit
+    /// and does nothing. So the state stays distinguishable from `.rewrite`, and
+    /// the view is what turns it into a disabled control.
+    func testAnEmptyFieldIsItsOwnState() {
         XCTAssertEqual(
             SuggestionBar.toneTap(hasTextToWorkWith: false, isWorking: false), .needsText,
-            "a tap on an empty field is swallowed, which is what shipped")
+            "an empty field is indistinguishable from a field with something in it")
     }
 
     func testWithSomethingToRewriteItRewrites() {

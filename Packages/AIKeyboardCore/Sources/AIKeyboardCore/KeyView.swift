@@ -30,10 +30,15 @@ public struct KeyView: View {
     let showsActionCaption: Bool
     /// Whether action glyphs and captions should match the standard key label color.
     let usesNeutralActionTint: Bool
-    /// Whether this key is the action currently on screen in the banner (or the
-    /// open emoji grid). Controls paint a soft brand fill so the row says which
-    /// of the five is live without the user having to read the strip.
+    /// Whether this key is the action currently running (or the open emoji grid).
+    /// The key wears a filled brand cap so the row says which of the five is live
+    /// without the user having to read the strip.
     let isActionActive: Bool
+    /// Whether this key has nothing it could do — Fix and Rewrite over an empty
+    /// field. Drawn dim and takes no touch. See
+    /// `KeyboardController.isActionKeyDisabled` for why this is a disabled control
+    /// rather than one that refuses out loud.
+    let isDisabled: Bool
     let onPress: (KeyCap) -> Void
     let onRepeat: (() -> Void)?
     let onAlternate: ((String) -> Void)?
@@ -70,6 +75,7 @@ public struct KeyView: View {
         showsActionCaption: Bool = true,
         usesNeutralActionTint: Bool = false,
         isActionActive: Bool = false,
+        isDisabled: Bool = false,
         onPress: @escaping (KeyCap) -> Void,
         onRepeat: (() -> Void)? = nil,
         onAlternate: ((String) -> Void)? = nil,
@@ -87,6 +93,7 @@ public struct KeyView: View {
         self.showsActionCaption = showsActionCaption
         self.usesNeutralActionTint = usesNeutralActionTint
         self.isActionActive = isActionActive
+        self.isDisabled = isDisabled
         self.onPress = onPress
         self.onRepeat = onRepeat
         self.onAlternate = onAlternate
@@ -121,6 +128,13 @@ public struct KeyView: View {
         .zIndex(isPressed ? 1 : 0)
         .contentShape(Rectangle())
         .gesture(pressGesture)
+        // **The whole key, not the gesture alone.** `.disabled` takes the touch out
+        // of the subtree, so there is no path — gesture, accessibility action or
+        // rotor — that reaches `onPress` on a key that has nothing to do. A guard
+        // inside the handler would leave the key looking pressable and answering
+        // nothing, which is the defect this repo already shipped once on the
+        // one-tap rewrite button.
+        .disabled(isDisabled)
         // Cancellation lands here and nowhere else: SwiftUI resets a
         // `@GestureState` when the gesture ends *or* is cancelled, and only the
         // first of those calls `onEnded`.
@@ -146,11 +160,8 @@ public struct KeyView: View {
         .accessibilityValue(accessibilityValue)
         // The chevrons are the whole of the gesture's affordance and a VoiceOver
         // user cannot see them, so they are said instead.
-        .accessibilityHint(
-            spec.cap == .space
-                ? SpaceSwipe.slideHint(languageCount: enabledLanguages.count) : ""
-        )
-        .accessibilityAddTraits(.isKeyboardKey)
+        .accessibilityHint(hint)
+        .accessibilityAddTraits(traits)
         // **A long press and a slide is unusable under VoiceOver, so everything
         // behind one gets a non-gesture route.** The same rule the layout editor
         // is built on: every edit there has a button as well as a drag.
@@ -168,6 +179,32 @@ public struct KeyView: View {
             }
         }
     }
+
+    /// What a VoiceOver user is told about this key beyond its name.
+    ///
+    /// **A dimmed cap says "not now" to somebody who can see it and nothing at all
+    /// to somebody who cannot**, so a key with nothing to do spells out why — the
+    /// same sentence `refuseForEmptyField` prints, minus the strip. Otherwise it is
+    /// the space bar's slide hint, because the chevrons are the whole of that
+    /// gesture's affordance and a VoiceOver user cannot see them.
+    ///
+    /// Computed here rather than written inline in `body`: nested ternaries inside a
+    /// `ViewBuilder` chain are what tipped this view past the type-checker's
+    /// budget, and the build failure it gives ("unable to type-check this
+    /// expression in reasonable time") names the `ZStack` rather than the line that
+    /// caused it.
+    var hint: String {
+        if isDisabled { return "Type something first" }
+        guard spec.cap == .space else { return "" }
+        return SpaceSwipe.slideHint(languageCount: enabledLanguages.count)
+    }
+
+    /// **`.disabled(isDisabled)` below is what marks the key unavailable to
+    /// VoiceOver**, and there is no trait to add here for it: SwiftUI has no
+    /// `isNotEnabled` trait — that is a UIKit `UIAccessibilityTraits` spelling —
+    /// and the modifier already sets the underlying flag. The hint above is what
+    /// says *why*, which the flag alone never does.
+    var traits: AccessibilityTraits { .isKeyboardKey }
 
     /// Below this the caption comes off and the glyph stands alone.
     ///

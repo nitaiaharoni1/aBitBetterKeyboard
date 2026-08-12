@@ -36,14 +36,20 @@ public struct ActionBanner: View {
 
             trailing
         }
-        .padding(.trailing, Theme.Space.md)
+        // **Both ends, and only the trailing one was ever set.** The surface was
+        // inset 8pt from the right and flush against the left edge of the screen,
+        // so the card looked like a panel that had been slid off the side — and
+        // the recording tag sat hard against the bezel with the waveform running
+        // out from under it. Every other band in this keyboard is inset on both
+        // ends (`keyboardGridChrome`), so this was the one row that was not.
+        .padding(.horizontal, Theme.Space.md)
         .padding(.vertical, Theme.Space.xxs)
         .frame(maxWidth: .infinity)
         .frame(height: Theme.Metrics.bannerHeight)
         .background(
             RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                 .fill(surface)
-                .padding(.trailing, Theme.Space.xs)
+                .padding(.horizontal, Theme.Space.xs)
                 .padding(.top, Theme.Space.xxs)
                 .padding(.bottom, Theme.Space.xxs)
         )

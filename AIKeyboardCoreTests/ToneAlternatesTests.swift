@@ -61,9 +61,13 @@ final class ToneAlternatesTests: XCTestCase {
         super.tearDown()
     }
 
-    private func makeController(engine: ToneCallRecorder) -> KeyboardController {
+    /// Nil rather than a default `MockTextTarget()`, because a default argument is
+    /// evaluated in a nonisolated context and that type is main-actor isolated.
+    private func makeController(
+        engine: ToneCallRecorder, target: MockTextTarget? = nil
+    ) -> KeyboardController {
         KeyboardController(
-            target: MockTextTarget(text: "i cant make the standup"),
+            target: target ?? MockTextTarget(text: "i cant make the standup"),
             engine: RoutedIntelligence(onDevice: engine, cloud: nil))
     }
 
@@ -146,11 +150,24 @@ final class ToneAlternatesTests: XCTestCase {
 
     // MARK: Running one
 
+    /// **The end of this test moved from the strip to the field, and that is the
+    /// whole of what `applyDirectly` changed.** It used to finish on
+    /// `controller.selectedTone == .professional`, which was the panel's contract:
+    /// the answer waited behind a Use button and the six chips read that property
+    /// to show which register was standing. There is no panel and no Use button —
+    /// the rewrite is written into the document and `clearBannerState()` empties
+    /// every field the strip reads, `selectedTone` among them. Asserting it now
+    /// would pin a value nothing in the app reads back.
+    ///
+    /// So it asserts the two things that are still true and still worth breaking
+    /// the build over: the engine was asked for the register the user picked, and
+    /// the answer reached the field.
     func testPickingARegisterRunsThatRegister() async {
         store.prefersCustomTone = false
         store.defaultTone = .clearer
         let engine = ToneCallRecorder()
-        let controller = makeController(engine: engine)
+        let target = MockTextTarget(text: "i cant make the standup")
+        let controller = makeController(engine: engine, target: target)
 
         controller.selectTone(named: ToneStyle.professional.title)
         await settleToneController(controller)
@@ -158,8 +175,12 @@ final class ToneAlternatesTests: XCTestCase {
         XCTAssertEqual(engine.calls.count, 1)
         XCTAssertEqual(engine.calls.first?.tone, .professional)
         XCTAssertNil(engine.calls.first?.instruction, "a built-in register carries no instruction")
-        XCTAssertEqual(controller.selectedTone, .professional)
-        XCTAssertFalse(controller.selectedToneIsCustom)
+        XCTAssertEqual(
+            target.text, "rewritten",
+            "the register ran and its answer never reached the document")
+        XCTAssertNil(
+            controller.selectedTone,
+            "the answer is in the field, so the strip must not still be holding one")
     }
 
     /// The user's own words have to reach the engine, not just the built-in they
@@ -170,14 +191,19 @@ final class ToneAlternatesTests: XCTestCase {
         store.customTone = "short, blunt, no pleasantries"
         store.prefersCustomTone = true
         let engine = ToneCallRecorder()
-        let controller = makeController(engine: engine)
+        let target = MockTextTarget(text: "i cant make the standup")
+        let controller = makeController(engine: engine, target: target)
 
         controller.selectTone(named: ToneSetting.customTitle)
         await settleToneController(controller)
 
         XCTAssertEqual(engine.calls.first?.instruction, "short, blunt, no pleasantries")
         XCTAssertEqual(engine.calls.first?.tone, .friendly, "the register it falls back to")
-        XCTAssertTrue(controller.selectedToneIsCustom)
+        // `selectedToneIsCustom` was the third assertion here and is gone for the
+        // reason given on the test above: it is banner state, and there is no
+        // banner left to hold it once the answer is in the field.
+        XCTAssertEqual(
+            target.text, "rewritten", "the user's own words ran and produced nothing in the field")
     }
 
     /// A name nothing matches runs nothing, rather than falling through to a

@@ -149,6 +149,13 @@ extension KeyboardController {
             try await engine.variants(for: source, tone: tone, instruction: instruction)
         } apply: { controller, variants in
             controller.variants = variants
+            // **The first version, written straight into the field.** The three the
+            // model returns differ by the decision each takes, and choosing between
+            // them was a paging strip and a Use button over the message they were
+            // rewriting. A register the user picked — by tapping the key or by
+            // holding it — is already the choice; see `applyDirectly` for why the
+            // answer belongs in the field and what pays for it.
+            controller.applyDirectly(variants.first?.text ?? "", for: .rewrite)
         }
     }
 }

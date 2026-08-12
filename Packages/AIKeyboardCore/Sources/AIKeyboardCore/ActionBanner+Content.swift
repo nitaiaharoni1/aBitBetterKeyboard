@@ -33,8 +33,10 @@ extension ActionBanner {
                 "exclamationmark.triangle",
                 block.action?.title ?? "Dictation",
                 tint: Theme.Semantic.warning)
-        case .dictating(_, let isListening):
-            tag("mic", dictationTagTitle(isListening: isListening), tint: Theme.Semantic.record)
+        case .dictating(_, let isListening, let isPaused):
+            tag(
+                "mic", dictationTagTitle(isListening: isListening, isPaused: isPaused),
+                tint: Theme.Semantic.record)
         case .dictationFailed:
             tag("mic.slash", "Dictation", tint: Theme.Semantic.warning)
         }
@@ -57,10 +59,11 @@ extension ActionBanner {
     /// What did not survive is the `עב ⟷ EN` badge naming the languages heard. The
     /// transcript beside it is already written in its own script, so the badge was
     /// the cheaper of the two to lose.
-    func dictationTagTitle(isListening: Bool) -> String {
+    func dictationTagTitle(isListening: Bool, isPaused: Bool) -> String {
         if let remaining = controller.dictationRemainingSeconds, remaining < 60 {
             return "\(Int(remaining))s left"
         }
+        if isPaused { return "Paused" }
         return isListening ? "Recording" : "Transcribing"
     }
 
@@ -158,8 +161,14 @@ extension ActionBanner {
             .accessibilityLabel("\(block.title). \(block.detail)")
             .accessibilityIdentifier("banner-blocked")
 
-        case .dictating(let transcript, let isListening):
+        case .dictating(let transcript, let isListening, let isPaused):
             if transcript.isEmpty {
+                // `isActive: isListening` already draws flat bars while
+                // paused — `isListening` is false throughout the pause, see
+                // `BannerState.dictating` — so nothing extra is needed here to
+                // stop the waveform animating; the label still has to tell
+                // "paused" from "transcribing" apart, since both read
+                // `isListening == false`.
                 WaveformView(
                     phase: controller.waveformPhase,
                     barCount: 26,
@@ -167,7 +176,7 @@ extension ActionBanner {
                     isActive: isListening
                 )
                 .frame(height: 22)
-                .accessibilityLabel(isListening ? "Recording" : "Transcribing")
+                .accessibilityLabel(isPaused ? "Paused" : (isListening ? "Recording" : "Transcribing"))
             } else {
                 answer(transcript, language: controller.language, size: 14)
                     .accessibilityLabel("Transcript: \(transcript)")

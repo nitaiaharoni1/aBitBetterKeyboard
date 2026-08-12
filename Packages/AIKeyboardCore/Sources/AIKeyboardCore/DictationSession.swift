@@ -37,11 +37,17 @@ public final class DictationSession: ObservableObject {
         /// A session is live and waiting.
         case ready
         case listening
+        /// An utterance is open but the recorder has confirmed it stopped
+        /// keeping samples. Live in every sense that matters here — the
+        /// microphone key still lights, a second tap still finishes and
+        /// inserts what was captured before the pause — it is only the
+        /// waveform and the tag that read differently.
+        case paused
         case transcribing
 
         public var isLive: Bool {
             switch self {
-            case .ready, .listening, .transcribing: return true
+            case .ready, .listening, .paused, .transcribing: return true
             case .needsFullAccess, .noSession: return false
             }
         }
@@ -168,6 +174,19 @@ public final class DictationSession: ObservableObject {
         poll()
     }
 
+    /// Asks the recorder to stop keeping samples without closing the
+    /// utterance. `poll()` runs immediately after so a caller reading
+    /// `availability` right back does not see last tick's answer.
+    public func pauseUtterance() {
+        reader?.pauseUtterance()
+        poll()
+    }
+
+    public func resumeUtterance() {
+        reader?.resumeUtterance()
+        poll()
+    }
+
     public func cancelUtterance() {
         reader?.cancelUtterance()
         utterance = 0
@@ -221,6 +240,7 @@ public final class DictationSession: ObservableObject {
             availability =
                 utterance > 0 ? (awaitingTranscript ? .transcribing : .listening) : .ready
         case .listening: availability = .listening
+        case .paused: availability = .paused
         case .transcribing: availability = .transcribing
         }
 
@@ -274,6 +294,7 @@ public final class DictationSession: ObservableObject {
         case .noSession(let reason): return "noSession:\(reason)"
         case .ready: return "ready"
         case .listening: return "listening"
+        case .paused: return "paused"
         case .transcribing: return "transcribing"
         }
     }

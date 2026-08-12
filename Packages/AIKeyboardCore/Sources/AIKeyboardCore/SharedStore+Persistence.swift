@@ -15,7 +15,7 @@ extension SharedStore {
             Key.prefersCustomTone, Key.personalDictionary,
             Key.isSubscribed, Key.screenContextAllowed, Key.keyboardLayout,
             Key.recentEmoji, Key.hasAcknowledgedKeyboardSwitch,
-            Key.dictationHandoffRequest
+            Key.dictationHandoffRequest, Key.dictationActiveLanguage
             // Deliberately not `cloudBackendURL` or `cloudBackendToken`. A UI test
             // run would otherwise wipe the backend whoever is developing this
             // typed in, and it is the one setting here that cannot be recovered by

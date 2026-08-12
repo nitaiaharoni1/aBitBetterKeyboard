@@ -19,6 +19,15 @@ extension KeyView {
     }
 
     var capKind: CapKind {
+        // **A running action wears the primary cap, whole.** It used to paint a 14%
+        // brand wash over whatever cap the key already had, which on the warm-white
+        // AI keys is a barely-there tint — on a phone, in daylight, beside four
+        // identical white caps, the microphone's "I am recording right now" read as
+        // a slightly pink key. Answering it here rather than in `background` is what
+        // keeps the rule this switch was written for: the fill, the glyph's colour
+        // and the depth recipe all come from one answer, so an orange cap can never
+        // end up with a white cap's shadow or a white cap's graphite glyph.
+        if isActionActive { return .action }
         switch spec.cap {
         // Warm white stays dominant: letters, space, and the AI actions, whose
         // accent is the glyph's tint rather than the cap.
@@ -52,32 +61,41 @@ extension KeyView {
 
     var background: Color {
         if isPressed {
-            switch spec.cap {
-            // The white caps darken a step — the letter-key inversion.
-            case .character, .space, .quickTone, .aiReply, .aiFix:
-                return Theme.Keys.letterPressed
-            // Every dark or orange cap lightens to the letter white under a
-            // finger, the way stock iOS inverts its function keys.
-            default:
-                return Theme.Keys.functionPressed
-            }
+            // **Keyed off `capKind`, not off the cap.** The two said the same thing
+            // for every key that ships — the white-cap list below is exactly
+            // `.letter` — until an active key started wearing the orange cap, at
+            // which point a press on it would have darkened it like a letter
+            // instead of lightening it like the return key it now matches.
+            //
+            // Every dark or orange cap lightens to the letter white under a finger,
+            // the way stock iOS inverts its function keys; the white caps darken a
+            // step, the letter-key inversion.
+            return capKind == .letter ? Theme.Keys.letterPressed : Theme.Keys.functionPressed
         }
-        // Soft brand fill while this key's action is the one the banner is
-        // reporting — same recipe as `SuggestionBar.edgeButton`'s active tint.
-        if isActionActive { return Theme.Brand.solid.opacity(0.14) }
         return restingCap
     }
 
     /// The glyph's colour, resolved against the fill actually behind it.
     ///
-    /// Pressed and active fills are light in every appearance, so their glyph is
-    /// graphite whatever the resting cap was; at rest the dark caps take the
-    /// warm-white `labelOnFunction` and the orange return takes `Text.onBrand`.
+    /// A pressed fill is light in every appearance, so its glyph is graphite
+    /// whatever the resting cap was. At rest the dark caps take the warm-white
+    /// `labelOnFunction`, and the orange caps — the return key, and whichever
+    /// action is running — take `Text.onBrand`.
     var labelColor: Color {
-        if isPressed || isActionActive { return Theme.Keys.label }
-        if spec.cap == .ret { return Theme.Text.onBrand }
-        return restsOnDarkCap ? Theme.Keys.labelOnFunction : Theme.Keys.label
+        if isPressed { return Theme.Keys.label }
+        if capKind == .action { return Theme.Text.onBrand }
+        return (restsOnDarkCap ? Theme.Keys.labelOnFunction : Theme.Keys.label)
+            .opacity(isDisabled ? Self.disabledLabelOpacity : 1)
     }
+
+    /// How far a key with nothing to do fades its glyph.
+    ///
+    /// The cap itself is left alone: it is still a key, in the row where the user
+    /// left it, and fading the whole thing punches a hole in a grid whose evenness
+    /// is most of how it reads. Dimming the label alone is what iOS does to a
+    /// disabled filled button, and at 0.35 it is unmistakably off without becoming
+    /// an empty cap somebody has to guess the name of.
+    static let disabledLabelOpacity: Double = 0.35
 
     // MARK: Depth
     //

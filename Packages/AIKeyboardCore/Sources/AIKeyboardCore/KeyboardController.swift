@@ -94,6 +94,34 @@ public final class KeyboardController: ObservableObject {
     /// Which engine answered, so a best-effort answer can say so.
     @Published public var aiProvenance: AIProvenance?
 
+    /// The last Fix or Rewrite that was written straight into the field, and what
+    /// was there before it.
+    ///
+    /// **Fix and Rewrite no longer offer their answer, they make it**, so the user
+    /// reads the corrected sentence in their own message rather than on a strip
+    /// above the keys — which is where they were going to read it anyway before
+    /// sending. An edit made without being asked has to be undoable, and this is
+    /// the whole of that: the text that was replaced, the text that replaced it,
+    /// and which action did it. `SuggestionBar` draws a revert control while it is
+    /// set, and the next keystroke clears it — see `clearRevertibleEdit`.
+    /// `internal(set)` for the reason `emojiQuery` is: it is written from
+    /// `KeyboardController+AI`, which is a different file, and closed to the app and
+    /// the extension — nothing outside this package may claim an edit is undoable.
+    @Published public internal(set) var revertibleEdit: AIEdit?
+
+    /// Whether the field holds anything the text actions could work on.
+    ///
+    /// **A mirror of `hasTextToWorkWith`, and it exists because that one is a
+    /// question about the host's document rather than about this object.** Fix and
+    /// Rewrite are drawn disabled on an empty field, so their keys have to redraw
+    /// the moment the first character lands — and a `View` body reading
+    /// `hasTextToWorkWith` would be re-evaluated only when something else this
+    /// controller publishes happened to change. Filled by `refreshSuggestions`,
+    /// which the extension already calls from `textDidChange`, so it follows the
+    /// document however it moved: a keystroke, a cursor tap, or the host clearing
+    /// the field after the message was sent.
+    @Published public internal(set) var documentHasText = false
+
     /// Mirrored from the capture session so views can observe one object.
     @Published public var screenContext: ScreenContextState = .off
 

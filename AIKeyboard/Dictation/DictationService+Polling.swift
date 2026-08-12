@@ -64,6 +64,30 @@ extension DictationService {
             return
         }
 
+        // **Pausing changes what the recorder keeps, never whether the
+        // utterance is open.** `wantsRecording` stays true throughout — see
+        // `DictationRequest.pausedRaw` — so this only drives `LiveRecording`'s
+        // own paused mode and mirrors the confirmation back through `phase`,
+        // which is what lets the keyboard tell "asked to pause" from
+        // "actually paused" apart. Skipped once a stop has landed: the close
+        // below is about to publish `.transcribing` over whatever this wrote,
+        // and there is no reason to pay for the extra page write in between.
+        if openUtterance > 0, request.stopUtterance < openUtterance {
+            if request.isPaused {
+                recording.pause()
+                if phase != .paused {
+                    phase = .paused
+                    writer.setPhase(.paused, utterance: openUtterance)
+                }
+            } else {
+                recording.resume()
+                if phase == .paused {
+                    phase = .listening
+                    writer.setPhase(.listening, utterance: openUtterance)
+                }
+            }
+        }
+
         if openUtterance > 0, request.stopUtterance >= openUtterance {
             close(utterance: openUtterance)
         }
@@ -122,7 +146,18 @@ extension DictationService {
 
         let audio = taken.audio
         level = 0
-        let languages = SharedStore.shared.enabledLanguages
+        // **The language the keyboard was actually set to, not every language
+        // it has ever been set to.** `enabledLanguages` is every language the
+        // user turned on in Settings, which is what this used to pass — so a
+        // bilingual keyboard sitting on English hinted the transcriber with
+        // Hebrew too, for no better reason than the user having Hebrew
+        // installed. `storedDictationLanguage` is `nil` exactly once: a
+        // session started and stopped in the app before the keyboard ever
+        // opened an utterance in it, which is the one case with no "current
+        // language" to read.
+        let languages =
+            SharedStore.shared.storedDictationLanguage.map { [$0] }
+            ?? SharedStore.shared.enabledLanguages
 
         // **Not cancelled, and the previous one is not either.** An earlier
         // version cancelled any in-flight transcription here, which is wrong in

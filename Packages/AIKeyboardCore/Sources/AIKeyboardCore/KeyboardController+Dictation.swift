@@ -60,8 +60,77 @@ extension KeyboardController {
         dictation.startWatching()
         observeDictation()
         isDictating = dictation.beginUtterance()
-        if isDictating { Feedback.modifierPress() }
+        if isDictating {
+            Feedback.modifierPress()
+            // **Written on every utterance opened, not once at install.** A
+            // user who slides the space bar to a different language between
+            // two dictations needs the second one hinted with that language,
+            // and `enabledLanguages` alone cannot say which of the enabled
+            // languages is live right now — only the layout on screen at the
+            // moment of the tap can. See `SharedStore.storedDictationLanguage`.
+            store.recordDictationLanguage(language)
+        }
 
+        startWaveform()
+    }
+
+    /// Whether the open utterance is paused — audio is not being kept, but the
+    /// recording is intact and a resume continues it. Read off
+    /// `DictationSession.availability` rather than a flag of its own, because
+    /// that is the one place the recorder's own confirmation lands; see
+    /// `DictationPhase.paused`.
+    public var dictationIsPaused: Bool { dictation.availability == .paused }
+
+    /// Stops the recorder keeping samples without closing the utterance.
+    ///
+    /// Guarded on `isDictating` rather than pushed down into `DictationSession`
+    /// or `DictationChannelReader`, both of which would happily write the flag
+    /// with no utterance open — pausing a microphone that was never listening
+    /// has nothing to pause.
+    public func pauseDictation() {
+        guard isDictating else { return }
+        Feedback.modifierPress()
+        dictation.pauseUtterance()
+        waveformTask?.cancel()
+        waveformTask = nil
+    }
+
+    /// Resumes a paused utterance. Same guard as `pauseDictation`, and the
+    /// same waveform task `startDictation` starts — see `startWaveform()`.
+    public func resumeDictation() {
+        guard isDictating else { return }
+        Feedback.modifierPress()
+        dictation.resumeUtterance()
+        startWaveform()
+    }
+
+    /// Starts a recording when none is open, and finishes the open one
+    /// otherwise.
+    ///
+    /// **The microphone key's whole job now, not half of it.** The banner's
+    /// trailing control used to be a second route to `stopDictation` — see
+    /// `ActionBanner+Trailing` — and replacing it with pause/resume leaves
+    /// this key as the only way to finish an utterance. `isDictating` is true
+    /// from the moment `beginUtterance` succeeds until `stopDictation` or a
+    /// failure clears it, whether or not the utterance is currently paused —
+    /// so a second tap while paused still finishes and inserts whatever was
+    /// captured before the pause, exactly as a second tap while listening
+    /// always has.
+    public func toggleDictation() {
+        if isDictating {
+            stopDictation(insert: true)
+        } else {
+            startDictation()
+        }
+    }
+
+    /// Cancels and restarts the loop that drives the waveform's flourish.
+    ///
+    /// One place rather than the two call sites that need an identical fresh
+    /// task — `startDictation` and `resumeDictation` — because a `Task { ... }`
+    /// copied between them is exactly the duplication that goes stale the next
+    /// time the animation changes.
+    private func startWaveform() {
         waveformTask?.cancel()
         waveformTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -171,6 +240,11 @@ extension KeyboardController {
                 guard self.pendingDictationInsert else { return }
                 self.pendingDictationInsert = false
                 Feedback.success()
+                // A dictated sentence is text arriving in the field by the user's
+                // own act, so it takes the way back from a Fix or a Rewrite with it
+                // — that undo replaces the *whole* field with what was there before,
+                // which after this would mean deleting the sentence they just spoke.
+                self.clearRevertibleEdit()
                 let needsSpace = !self.contextBefore.isEmpty && !self.contextBefore.hasSuffix(" ")
                 self.target?.insertText((needsSpace ? " " : "") + text)
                 self.refreshSuggestions()

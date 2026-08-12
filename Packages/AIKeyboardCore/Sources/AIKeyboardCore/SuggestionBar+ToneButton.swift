@@ -14,10 +14,19 @@ extension SuggestionBar {
     /// it did nothing at all and said nothing about why.
     enum ToneTap: Equatable {
         case rewrite
-        /// Nothing to rewrite. The tap says so in the banner rather than opening
-        /// anything — the menu this used to be a shortcut through is deleted, and a
-        /// tap that draws nothing is precisely the defect this enum's third case
-        /// exists to prevent.
+        /// Nothing to rewrite.
+        ///
+        /// **It used to answer the tap with a sentence in the banner, and now it
+        /// takes no tap at all.** The rule this case was written under — that a
+        /// control which looks unavailable and swallows the tap teaches the user
+        /// nothing — was learned from a button that looked *live*: a fully
+        /// saturated brand icon over a faded gradient, which read as enabled and
+        /// then did nothing. The answer to that is to look unavailable, which is
+        /// what this state does now on both surfaces at once: this button and the
+        /// Rewrite key beside Fix in the action row are drawn dim and disabled
+        /// together. See `KeyboardController.isActionKeyDisabled`. The words did not
+        /// disappear with the banner — they are the accessibility hint, where they
+        /// reach the person who cannot see that the control is off.
         case needsText
         /// A call is already in flight. `beginWork` cancels its predecessor, so a
         /// second tap would throw away the answer being waited on — and this is
@@ -84,30 +93,34 @@ extension SuggestionBar {
     ///
     /// Three states, and they look like three things. With something to rewrite it
     /// is brand-tinted and lit. With nothing to rewrite the gradient goes and the
-    /// icon drops to `secondaryLabel`, so it is drawn exactly like the inactive
-    /// emoji button at the other end of this bar and cannot be mistaken for its
-    /// lit neighbour — and it stays tappable, because a control that looks
-    /// unavailable and swallows the tap teaches the user nothing. A call in flight
-    /// replaces the icon with a spinner and is the only state that disables it. A
-    /// call that *failed* needs nothing here: `beginWork` puts the reason in
-    /// `aiError` and `ActionBanner` is already showing it, one row up.
+    /// glyph fades to the same `KeyView.disabledLabelOpacity` the Rewrite key in
+    /// the action row fades to, and it takes no tap — the two are one control in
+    /// two places and used to disagree about what an empty field means, which is
+    /// D8's own defect. A call in flight replaces the icon with a spinner. A call
+    /// that *failed* needs nothing here: `beginWork` puts the reason in `aiError`
+    /// and `ActionBanner` is already showing it, one row up.
+    ///
+    /// Reads `documentHasText` rather than `hasTextToWorkWith`: they answer the
+    /// same question, but only the published one makes this body re-run when the
+    /// first character lands.
     var toneButton: some View {
         let tone = controller.defaultTone
         let isBusy = controller.isWorking
         let tap = Self.toneTap(
-            hasTextToWorkWith: controller.hasTextToWorkWith, isWorking: isBusy)
+            hasTextToWorkWith: controller.documentHasText, isWorking: isBusy)
 
-        let tint = tap == .rewrite ? Theme.Brand.solid : Theme.Keys.secondaryLabel
+        let tint =
+            tap == .rewrite
+            ? Theme.Brand.solid : Theme.Keys.label.opacity(KeyView.disabledLabelOpacity)
 
         return Button {
+            // Only one state can be reached by a tap now; the other two are
+            // disabled below. Left as a switch rather than a call so that adding a
+            // fourth state has to answer this question rather than inherit an
+            // answer.
             switch tap {
             case .rewrite: controller.runDefaultTone()
-            case .needsText:
-                // The bar's own button, which is not a key, so nothing has
-                // acknowledged the tap yet.
-                Feedback.actionPress()
-                controller.refuseForEmptyField(.rewrite)
-            case .ignore: break
+            case .needsText, .ignore: break
             }
         } label: {
             // The spinner replaces the glyph and not the label: a bare spinner in
@@ -142,7 +155,7 @@ extension SuggestionBar {
             .contentShape(Rectangle())
         }
         .pressable()
-        .disabled(tap == .ignore)
+        .disabled(tap != .rewrite)
         .accessibilityIdentifier("bar-tone")
         .accessibilityLabel("Rewrite as \(tone.title)")
         .accessibilityHint(toneHint(tap))
@@ -151,7 +164,7 @@ extension SuggestionBar {
     private func toneHint(_ tap: ToneTap) -> String {
         switch tap {
         case .ignore: return "Working"
-        case .needsText: return "Nothing to rewrite. Says what to do about it"
+        case .needsText: return "Nothing to rewrite yet. Type something first"
         // The same words `ToneSetting.settingsNote` points at this button with, so
         // "the one-tap rewrite button" names one control everywhere it is written.
         case .rewrite:

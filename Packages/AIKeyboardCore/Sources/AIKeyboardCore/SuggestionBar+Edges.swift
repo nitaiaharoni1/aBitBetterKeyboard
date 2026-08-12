@@ -82,6 +82,12 @@ extension SuggestionBar {
         }
     }
 
+    /// A bar copy of an action key, lit the same way the key in the grid is.
+    ///
+    /// **Filled brand, not a 14% wash, and the key it mirrors made the same
+    /// move.** See `KeyView.capKind`: a soft tint on a light strip is a control
+    /// that looks very slightly different from its neighbours, which is not what
+    /// "this is running right now" needs to say.
     fileprivate func edgeButton(
         systemImage: String,
         label: String,
@@ -91,16 +97,50 @@ extension SuggestionBar {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(Theme.Glyph.font(19))
-                .foregroundStyle(isActive ? Theme.Brand.solid : Theme.Keys.secondaryLabel)
+                .foregroundStyle(isActive ? Theme.Text.onBrand : Theme.Keys.secondaryLabel)
                 .frame(width: 44, height: 40)
                 .background(
                     RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
-                        .fill(isActive ? Theme.Brand.solid.opacity(0.14) : .clear)
+                        .fill(isActive ? Theme.Brand.action : .clear)
                 )
                 .contentShape(Rectangle())
         }
         .pressable()
         .accessibilityIdentifier("bar-\(label.lowercased())")
         .accessibilityLabel(label)
+    }
+
+    // MARK: Undo
+
+    /// Puts back what the last Fix or Rewrite replaced.
+    ///
+    /// **Tinted rather than filled, because it is an offer and not a state.** The
+    /// filled cap above means "this is happening"; this button means "you can take
+    /// that back", it is on screen for one keystroke, and it sits beside three
+    /// candidate slots that are empty at that exact moment — so it has to catch the
+    /// eye without reading as the thing that just ran.
+    ///
+    /// It names the action it undoes rather than saying "Undo", because by the time
+    /// it is read the field has already changed and the word is the only thing
+    /// saying *what* changed it.
+    var revertButton: some View {
+        let action = controller.revertibleEdit?.action
+        return Button {
+            controller.revertAIEdit()
+        } label: {
+            Image(systemName: "arrow.uturn.backward")
+                .font(Theme.Glyph.font(17))
+                .foregroundStyle(Theme.Brand.solid)
+                .frame(width: 44, height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+                        .fill(Theme.Brand.solid.opacity(0.14))
+                )
+                .contentShape(Rectangle())
+        }
+        .pressable()
+        .accessibilityIdentifier("bar-revert")
+        .accessibilityLabel("Undo \(action?.title ?? "")")
+        .accessibilityHint("Puts back what you had written")
     }
 }

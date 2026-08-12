@@ -63,7 +63,13 @@ extension KeyboardController {
             refreshSuggestions()
         case .dictation:
             Feedback.actionPress()
-            startDictation()
+            // **The one key that both starts and finishes a recording**, because
+            // the banner's trailing control is now Pause and Resume rather than the
+            // × that used to be the only way to stop. A microphone key that starts
+            // a recording it cannot end is a trap, and this key is the one lit
+            // orange while the recording runs, so it is the one a thumb goes back
+            // to. `toggleDictation` carries the two halves.
+            toggleDictation()
         case .emoji:
             // No `modifierPress()` here: `show(_:)` fires one as its first line,
             // and this key was buzzing twice for one tap.
@@ -95,12 +101,19 @@ extension KeyboardController {
             case .needsText: refuseForEmptyField(.rewrite)
             case .ignore: break
             }
+        // **Both of these end the undo window, and they are the only keys that do
+        // so without changing a character.** A selection-scoped revert deletes a
+        // count of units from where the caret is standing, so a caret that has
+        // moved since would take the wrong ones — see `revertAIEdit`, whose guard
+        // catches the case the host moves it and this catches the case we do.
         case .cursorLeft:
             Feedback.keyPress()
+            clearRevertibleEdit()
             target?.adjustTextPosition(byCharacterOffset: -1)
             refreshSuggestions()
         case .cursorRight:
             Feedback.keyPress()
+            clearRevertibleEdit()
             target?.adjustTextPosition(byCharacterOffset: 1)
             refreshSuggestions()
         case .hideKeyboard:
@@ -121,6 +134,11 @@ extension KeyboardController {
         // same keystroke, because fixing a typo before accepting a rewrite is
         // ordinary, so this cannot be `clearBannerState()`.
         block = nil
+        // The way back to what Fix or Rewrite replaced lasts until the next
+        // keystroke, which is this one: past it the field is no longer the field
+        // that answer was written into, and putting the old text back would take
+        // the new characters with it.
+        clearRevertibleEdit()
         let output = shift.isUppercase ? language.uppercased(value) : value
         target?.insertText(output)
         if shift == .on { shift = .off }
@@ -129,6 +147,7 @@ extension KeyboardController {
 
     func insertSpace() {
         Feedback.keyPress()
+        clearRevertibleEdit()
 
         // Two spaces in quick succession become a full stop, as on the system keyboard.
         let now = Date()
@@ -173,6 +192,7 @@ extension KeyboardController {
         // Deleting can empty the field as easily as typing can fill it, so the
         // refusal has to be re-earned either way rather than left standing.
         block = nil
+        clearRevertibleEdit()
         target?.deleteBackward()
         refreshSuggestions()
     }
@@ -190,6 +210,7 @@ extension KeyboardController {
 
     public func insertEmoji(_ emoji: String) {
         Feedback.keyPress()
+        clearRevertibleEdit()
         // Picked from the grid rather than pressed as a `KeyCap`, so this is the
         // one insertion `press(_:)` never speaks for. It still put text in.
         Feedback.keyClick(.tock)

@@ -34,16 +34,21 @@ final class DefaultToneTests: XCTestCase {
 
         XCTAssertEqual(engine.tones, [.professional], "the bar ignored the stored default tone")
         XCTAssertEqual(engine.fixCount, 0, "the one-tap action ran Fix, which has no tone to run by")
-        // **The answer arrives in the banner now, not in a panel over the keys.**
-        // What is worth pinning is unchanged in substance: that the surface showing
-        // the result names the action that produced it. `runningAction` is what the
-        // banner labels itself from, and a version that left it nil renders the
-        // idle hint over three fresh rewrites.
+        // **The answer is written into the field now, and the strip goes away.** It
+        // used to arrive in the banner behind a Use button, and what was pinned here
+        // was that the strip named the action it was showing. There is nothing left
+        // to name: `applyDirectly` puts the rewrite in the document and clears the
+        // banner, so the two assertions that can tell a working build from a broken
+        // one are the document and the way back out of it.
         XCTAssertEqual(controller.overlay, .none, "the one-tap rewrite covered the keys")
-        XCTAssertEqual(controller.runningAction, .rewrite)
-        XCTAssertEqual(controller.selectedTone, .professional)
-        XCTAssertEqual(controller.variants.first?.text, "rewritten")
-        XCTAssertEqual(controller.bannerOptions.first?.text, "rewritten")
+        XCTAssertEqual(controller.contextBefore, "rewritten", "the answer never reached the field")
+        XCTAssertEqual(controller.revertibleEdit?.action, .rewrite)
+        XCTAssertEqual(
+            controller.revertibleEdit?.previous, "i cant make the standup",
+            "there is no way back to what the user wrote")
+        XCTAssertNil(
+            controller.runningAction,
+            "the strip is still reporting an action whose answer is already in the field")
     }
 
     /// The residue case.
@@ -70,7 +75,11 @@ final class DefaultToneTests: XCTestCase {
         XCTAssertEqual(
             engine.sources, ["see you at six"],
             "the bar rewrote what an earlier action had left in aiSourceText")
-        XCTAssertEqual(controller.aiSourceText, "see you at six")
+        // The same fact in the shape it survives in: `aiSourceText` is emptied when
+        // the answer is applied, precisely so the *next* action cannot inherit it,
+        // and what was rewritten is recorded on the way back out instead.
+        XCTAssertEqual(controller.revertibleEdit?.previous, "see you at six")
+        XCTAssertEqual(controller.aiSourceText, "", "the next action inherits this one's text")
     }
 
     /// Nothing to work with. The button is disabled for this, and the controller
@@ -111,7 +120,7 @@ final class DefaultToneTests: XCTestCase {
         await settleToneController(controller)
 
         XCTAssertEqual(engine.variantCount, 1, "the second tap started a second call over the first")
-        XCTAssertEqual(controller.variants.first?.text, "rewritten")
+        XCTAssertEqual(controller.contextBefore, "rewritten")
     }
 
     /// A call that failed. The reason has to reach the panel, and the panel has to
@@ -175,11 +184,16 @@ final class DefaultToneTests: XCTestCase {
         let engine = ToneRecorder()
         let controller = makeToneController(text: "could you possibly take a look", engine: engine)
         controller.runDefaultTone()
+        // **Read before the answer lands, because applying it clears the strip.**
+        // `runTone` sets these two synchronously and `beginWork`'s task cannot have
+        // run yet — nothing has suspended. Asserting after `settle` would assert
+        // `clearBannerState`, which is true of every build.
+        XCTAssertTrue(controller.selectedToneIsCustom, "nothing knows a custom tone is running")
+
         await settleToneController(controller)
 
         XCTAssertEqual(engine.instructions, ["short, blunt, no pleasantries"])
         XCTAssertEqual(engine.tones, [.friendly], "the register the answer is labelled with was lost")
-        XCTAssertTrue(controller.selectedToneIsCustom, "the panel does not know a custom tone ran")
     }
 
     /// **A custom tone must not still be lit after the user has left it.**
@@ -201,22 +215,28 @@ final class DefaultToneTests: XCTestCase {
         let engine = ToneRecorder()
         let controller = makeToneController(text: "could you possibly take a look", engine: engine)
         controller.runDefaultTone()
-        await settleToneController(controller)
         XCTAssertTrue(controller.selectedToneIsCustom, "the custom tone never ran")
+        await settleToneController(controller)
 
         // Straight to Rewrite, with nothing dismissed in between. The Back tap
         // this used to make had nowhere to go once `AIMenuPanel` was deleted, and it
         // was never what the test was about: `run(.rewrite)` is what has to clear
         // the flag, and it is the only step that ever did.
+        //
+        // **Asserted before the call finishes, and that is what keeps the test
+        // honest now.** `applyDirectly` clears the whole strip when the answer lands,
+        // so a build where `run(.rewrite)` forgot its two lines would look identical
+        // after `settle` — the flag would be true for the length of the call, which
+        // is exactly the window it is read in, and false by the time anything looked.
         controller.run(.rewrite)
-        await settleToneController(controller)
 
         XCTAssertFalse(
             controller.selectedToneIsCustom,
             "Rewrite is titled \"\(ToneSetting.customTitle)\" and lights a chip nobody picked")
         XCTAssertNil(controller.selectedTone)
-        // The answer lands in the banner and nothing covers the keys.
         XCTAssertEqual(controller.overlay, .none)
+
+        await settleToneController(controller)
     }
 
     /// **`AIAction.tone` runs the stored register now, instead of opening a picker.**
@@ -241,17 +261,21 @@ final class DefaultToneTests: XCTestCase {
         let engine = ToneRecorder()
         let controller = makeToneController(text: "can you send me the deck", engine: engine)
         controller.run(.tone)
+
+        // Read while the call is in flight, for the reason the test above gives:
+        // the answer clears the strip on the way into the field.
+        XCTAssertTrue(
+            controller.selectedToneIsCustom,
+            "it ran a register other than the one the user chose")
+
         await settleToneController(controller)
 
         XCTAssertEqual(
             controller.overlay, .none,
             "the picker is deleted, so nothing may cover the keys")
-        XCTAssertFalse(
-            controller.variants.isEmpty,
+        XCTAssertEqual(
+            controller.contextBefore, "rewritten",
             "the action opened something instead of running the stored register")
-        XCTAssertTrue(
-            controller.selectedToneIsCustom,
-            "it ran a register other than the one the user chose")
     }
 
     // Settings tests live in DefaultToneSettingsTests.swift.

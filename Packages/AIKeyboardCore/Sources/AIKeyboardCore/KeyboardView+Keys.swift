@@ -192,6 +192,10 @@ extension KeyboardView {
                 // currently on screen — soft fill on that key. See
                 // `KeyboardController.isActionKeyActive`.
                 isActionActive: controller.isActionKeyActive(key.cap),
+                // Fix and Rewrite over an empty field. See
+                // `KeyboardController.isActionKeyDisabled` for why these two are
+                // drawn off rather than left to refuse in the strip.
+                isDisabled: controller.isActionKeyDisabled(key.cap),
                 onPress: { controller.press($0) },
                 // Through `press` rather than straight to `deleteBackward`, so a
                 // held delete clicks on every repeat the way it buzzes on every
