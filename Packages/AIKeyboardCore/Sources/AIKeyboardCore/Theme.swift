@@ -59,8 +59,22 @@ public enum Theme {
         /// Tint, icons, strokes, and accent text use the signature orange.
         public static let solid = start
 
-        /// Primary action fills use the same signature orange as the brand.
-        public static let action = start
+        /// Filled surfaces that carry white text use the deeper end of the same
+        /// gradient, and the split is a measured one rather than a preference.
+        ///
+        /// **White on `start` is 2.91:1, which is under WCAG's 3:1 floor for large
+        /// text and well under the 4.5:1 for body.** The teal this palette
+        /// replaced was 3.74:1, so the rebrand was a regression, not an
+        /// inheritance. It reaches every primary button, the return key and the
+        /// playground's message bubbles — every place `Text.onBrand` sits on a
+        /// brand fill. `end` is 3.64:1, which clears large text, keeps the
+        /// identity, and is a colour the palette already shipped as the far end of
+        /// `gradient`.
+        ///
+        /// `solid` deliberately stays on `start`: tint, icons, strokes and accent
+        /// text sit on the app's own light surfaces, where the bright orange is
+        /// the more legible of the two and the one the design is built around.
+        public static let action = end
     }
 
     // MARK: Semantic
