@@ -21,10 +21,27 @@ extension KeyView {
     /// default — it just runs it 100ms later, on the lift, which no thumb can feel.
     var runsOnLift: Bool { spec.cap == .quickTone && toneAlternates.count > 1 }
 
+    /// **The disabled check the key makes for itself, rather than trusting
+    /// `.disabled()` to make it.**
+    ///
+    /// `.disabled()` sets `\.isEnabled` in the environment and the built-in
+    /// controls consult it before they fire. This key is not a control: it is a raw
+    /// `DragGesture` on a `ZStack`, and nothing in `KeyView` reads that environment
+    /// value. Whether SwiftUI stops the gesture anyway is a framework detail that
+    /// has changed across releases, and the cost of being wrong about it is exactly
+    /// the defect the disabled state exists to remove — a key drawn dim that
+    /// answers the tap anyway, which is worse than one that is plainly lit.
+    ///
+    /// So both halves of the gesture ask this directly. `.disabled()` stays on the
+    /// view because it is also what tells VoiceOver, and the two agreeing costs one
+    /// line.
+    var acceptsTouches: Bool { !isDisabled }
+
     var pressGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .updating($isTouching) { _, touching, _ in touching = true }
             .onChanged { value in
+                guard acceptsTouches else { return }
                 guard isPressed else {
                     isPressed = true
                     // Every key but this one commits on finger-down, which is
@@ -60,6 +77,14 @@ extension KeyView {
                 selectedAlternate = hasSlid(value.translation) ? alternateIndex(at: value.location) : 0
             }
             .onEnded { value in
+                // Not just a mirror of the `onChanged` guard: `runsOnLift` means
+                // this is the *only* place the one-tap rewrite key ever fires, so a
+                // disabled Rewrite key with a guard on one half and not the other
+                // would still run on every tap.
+                guard acceptsTouches else {
+                    endPress()
+                    return
+                }
                 if slidesForLanguage {
                     // Not `endPress()`: that is the cancellation path and reports
                     // the touch as abandoned, which would throw away the slide
@@ -137,7 +162,7 @@ extension KeyView {
 
     /// Delete accelerates while held, the way every other keyboard behaves.
     private func startRepeatIfNeeded() {
-        guard let onRepeat, spec.cap == .backspace else { return }
+        guard acceptsTouches, let onRepeat, spec.cap == .backspace else { return }
         repeater.start(onRepeat)
     }
 
@@ -149,7 +174,12 @@ extension KeyView {
         // they come from a setting in the containing app. For a letter the two say
         // the same thing: the list is the character plus its alternates, so "more
         // than one" is exactly "has alternates".
-        guard hasAlternates else { return }
+        //
+        // `acceptsTouches` first: the one-tap rewrite key is both the key that has
+        // registers on a long press and one of the two that go disabled on an empty
+        // field, so without this a disabled key would still open its popup — and a
+        // popup pick reaches `onAlternate` on a path of its own.
+        guard acceptsTouches, hasAlternates else { return }
         // Here rather than at the end of the wait below, so a finger that slides
         // before the popup arms keeps what it slid to. `@State` outlives the
         // press, so without a reset somewhere the next press on this key would

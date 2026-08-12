@@ -100,8 +100,16 @@ extension KeyView {
             // doing one job is what that was, and this is the one that survived
             // because it does not move when the grid opens.
             //
-            // Neutral rather than brand in both states: `Theme.Brand` is reserved
-            // for the AI moments, and this one opens a grid of pictures.
+            // Neutral rather than brand in both label states: `Theme.Brand` is
+            // reserved for the AI moments, and this one opens a grid of pictures.
+            //
+            // **That is about the tint at rest, and the cap while the grid is open
+            // is a separate question with a different answer.** Every control in
+            // this row that is *currently doing something* wears the filled brand
+            // cap — see `KeyView.capKind` — and an open emoji grid is one of them,
+            // so this key fills like the rest rather than being the one active
+            // control drawn differently from its four neighbours. What stays true
+            // is that nothing about emoji is brand-tinted when it is not open.
             if isEmojiOpen {
                 Text(language.lettersPlaneLabel)
                     .font(.system(size: 16, weight: .light))

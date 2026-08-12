@@ -121,6 +121,28 @@ final class AIDirectEditTests: XCTestCase {
         XCTAssertEqual(target.document, "hello there wrold friend")
     }
 
+    /// **A reply accepted into an empty field lights the keys that need text.**
+    ///
+    /// Reply is the one action that runs on an empty field, so this is the ordinary
+    /// way a field goes from empty to full without a keystroke — and it takes
+    /// `replaceTargetText`'s insert-only branch, the one branch there that used to
+    /// skip `refreshSuggestions()`. Fix and Rewrite stayed drawn dim over a field
+    /// holding a whole sentence until some later keystroke recomputed it.
+    func testAcceptingAReplyIntoAnEmptyFieldLightsFixAndRewrite() {
+        let controller = makeDirectEditController(text: "", engine: DirectEditEngine())
+        XCTAssertTrue(controller.isActionKeyDisabled(.aiFix), "the state under test is empty")
+
+        // What accepting a reply does: `runReply` empties `aiSourceText` because a
+        // reply is inserted rather than substituted, and `applyResult` writes it in.
+        controller.aiSourceText = ""
+        controller.applyResult("Thursday works for me")
+
+        XCTAssertFalse(
+            controller.isActionKeyDisabled(.aiFix),
+            "Fix is still drawn dim over a field holding a whole sentence")
+        XCTAssertFalse(controller.isActionKeyDisabled(.quickTone))
+    }
+
     /// **The host emptying the field is the one clearing path the user does not
     /// make**, and nothing else covers it: they tap Send in the other app, the
     /// field goes blank, `textDidChange` brings the news, and no key on this
@@ -228,6 +250,40 @@ final class AIDirectEditTests: XCTestCase {
                 controller.documentHasText, controller.hasTextToWorkWith,
                 "the key and the action disagree about \"\(text)\"")
         }
+    }
+}
+
+// MARK: - The dictation strip's trailing control
+
+/// **What the slot beside a recording offers, in each of the three states
+/// `.dictating` covers.**
+///
+/// A decision rather than a screenshot, for the reason `SuggestionBar.ToneTap` is
+/// one: a button's action and a `.disabled()` modifier cannot be read back off a
+/// SwiftUI view, so a control that renders and answers nothing looks exactly like
+/// one that works. That is what shipped here — replacing the × with Pause drew a
+/// live-looking Pause button over the *transcription*, where `pauseDictation()`
+/// returns at its own guard because no utterance is open, and where the × had been
+/// the only way to call the pending insert off.
+final class DictationTrailingControlTests: XCTestCase {
+
+    func testARunningRecordingOffersPause() {
+        XCTAssertEqual(
+            ActionBanner.dictationControl(isListening: true, isPaused: false), .pause)
+    }
+
+    func testAPausedRecordingOffersResume() {
+        XCTAssertEqual(
+            ActionBanner.dictationControl(isListening: false, isPaused: true), .resume)
+    }
+
+    /// The state between the stop tap and the words arriving: nothing is open, so
+    /// there is nothing to pause, and Cancel is the last chance to stop the
+    /// transcript landing in the document.
+    func testATranscriptionOffersCancelRatherThanADeadPauseButton() {
+        XCTAssertEqual(
+            ActionBanner.dictationControl(isListening: false, isPaused: false), .cancel,
+            "the strip draws Pause over a transcription, and the tap does nothing")
     }
 }
 

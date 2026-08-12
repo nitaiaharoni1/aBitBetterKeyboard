@@ -64,20 +64,46 @@ final class EmptyFieldBarTests: XCTestCase {
         capture("empty-field-bar")
 
         let tone = element("key-quick-tone")
+        let fix = element("key-ai-fix")
         XCTAssertTrue(tone.exists, "the one-tap rewrite key is not in the action row")
-        tone.tap()
+        XCTAssertTrue(fix.exists, "the Fix key is not in the action row")
 
-        // Something to rewrite is the one thing an empty field does not have, so
-        // the tap has to say so. It used to open `AIMenuPanel` and this waited on
-        // that panel's Reply card; the panel is deleted, and the answer is a
-        // sentence in the strip with the keys still under it.
-        XCTAssertTrue(
-            element("banner-blocked").waitForExistence(timeout: 4),
-            "tapping the one-tap rewrite button on an empty field did nothing at all")
-        XCTAssertTrue(
-            tone.exists,
-            "the action row was covered, which is the thing this change removed")
+        // **The answer to an empty field is now the control itself, and this is
+        // where that is measured.** Both keys are drawn dim and take no tap, which
+        // is what `.disabled()` reports to the accessibility tree — the one thing
+        // about a `.disabled()` modifier that *can* be read back, and the reason
+        // this test exists rather than a unit test.
+        XCTAssertFalse(tone.isEnabled, "the one-tap rewrite key is live on an empty field")
+        XCTAssertFalse(fix.isEnabled, "the Fix key is live on an empty field")
+
+        // And the tap reaches nothing. `KeyView` guards its own gesture rather than
+        // trusting `.disabled()` to stop it — see `KeyView.acceptsTouches` — so this
+        // is the assertion that rejects the build where the key is only *drawn*
+        // disabled: there the tap still lands on `run(.rewrite)` and raises the
+        // refusal this test used to wait for.
+        tone.tap()
+        XCTAssertFalse(
+            element("banner-blocked").waitForExistence(timeout: 2),
+            "the dimmed key answered the tap, which is the defect it is dim to prevent")
+        XCTAssertTrue(tone.exists, "the action row was covered")
         capture("empty-field-tone-tapped")
+
+        // **The other half of the contract, and the half a screenshot would never
+        // show.** A key that never re-enables is a worse bug than one that never
+        // disables, and every assertion above passes against it. A space first,
+        // because whitespace is deliberately not text — `hasTextToWorkWith` trims —
+        // so the keys have to still be dim after it and live only after the letter.
+        element("key-space").tap()
+        XCTAssertFalse(fix.isEnabled, "a space alone counted as something to fix")
+
+        element("key-char-h").tap()
+        let liveFix = NSPredicate(format: "isEnabled == true")
+        expectation(for: liveFix, evaluatedWith: fix)
+        expectation(for: liveFix, evaluatedWith: tone)
+        waitForExpectations(timeout: 4) { error in
+            XCTAssertNil(error, "Fix and Rewrite stayed disabled after something was typed")
+        }
+        capture("empty-field-typed-again")
     }
 
     // MARK: Helpers

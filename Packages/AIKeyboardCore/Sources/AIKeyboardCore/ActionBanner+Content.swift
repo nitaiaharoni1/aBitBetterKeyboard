@@ -59,11 +59,18 @@ extension ActionBanner {
     /// What did not survive is the `עב ⟷ EN` badge naming the languages heard. The
     /// transcript beside it is already written in its own script, so the badge was
     /// the cheaper of the two to lose.
+    /// **Paused outranks the countdown, and it did not, which put two indicators in
+    /// one strip disagreeing.** Pause a recording inside the last minute and the
+    /// tag went on counting `42s left` while the waveform sat flat, the trailing
+    /// button said Resume and the accessibility label said Paused. The countdown is
+    /// news about the session; being paused is news about the microphone, and the
+    /// microphone is what the user just touched. The session still expires on its
+    /// own either way — that is what a session having a length is for.
     func dictationTagTitle(isListening: Bool, isPaused: Bool) -> String {
+        if isPaused { return "Paused" }
         if let remaining = controller.dictationRemainingSeconds, remaining < 60 {
             return "\(Int(remaining))s left"
         }
-        if isPaused { return "Paused" }
         return isListening ? "Recording" : "Transcribing"
     }
 

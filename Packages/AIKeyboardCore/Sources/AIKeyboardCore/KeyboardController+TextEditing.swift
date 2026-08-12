@@ -147,6 +147,15 @@ extension KeyboardController {
     func replaceTargetText(with replacement: String) {
         guard !aiSourceText.isEmpty else {
             target?.insertText(replacement)
+            // **The one branch here that used to skip this, and the only one that
+            // changes the document without replacing anything.** It is how a Reply
+            // lands — `runReply` empties `aiSourceText` on purpose, because a reply
+            // is inserted where the cursor is rather than over the message — and a
+            // reply is accepted into an *empty* field more often than not, which is
+            // the state Fix and Rewrite are drawn disabled in. Without the refresh
+            // their keys stayed dim over a field that now held a whole sentence,
+            // until some unrelated keystroke happened to recompute it.
+            refreshSuggestions()
             return
         }
         if selection != nil {
