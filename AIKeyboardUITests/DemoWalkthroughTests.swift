@@ -81,7 +81,8 @@ final class DemoWalkthroughTests: XCTestCase {
         app.launch()
 
         let names = [
-            "welcome", "languages", "add-keyboard", "full-access", "switch", "microphone", "try-it"
+            "welcome", "languages", "add-keyboard", "full-access", "switch", "microphone",
+            "practice-writing", "practice-everyday", "practice-smart-tools"
         ]
         for (index, name) in names.enumerated() {
             settle()
@@ -167,13 +168,15 @@ final class DemoWalkthroughTests: XCTestCase {
         capture("ai-fix-working")
         settle(1.6)
         capture("ai-fix-result")
-        // Either an answer to accept or a reason it failed. Both are terminal and
-        // both are the banner; asserting on the *answer* would make this test a
-        // test of whether a model is reachable from a simulator, which it is not —
-        // no backend token ships and the on-device model has no assets here.
+        // Either the answer is already in the field — Fix applies itself now, and
+        // `bar-revert` is the way back it leaves in the suggestion row — or the
+        // banner is holding a reason it failed. Both are terminal, and asserting on
+        // the *answer* would make this a test of whether a model is reachable from a
+        // simulator, which it is not: no backend token ships and the on-device model
+        // has no assets here.
         XCTAssertTrue(
-            element("banner-use").exists || element("banner-dismiss").exists,
-            "Fix left the banner with neither an answer nor a reason")
+            element("bar-revert").exists || element("banner-dismiss").exists,
+            "Fix left neither an applied answer nor a reason")
 
         // Rewrite in the default tone, which is the same three-way tap the bar
         // button used to make. Three versions come back, so the banner pages.
@@ -297,7 +300,7 @@ final class DemoWalkthroughTests: XCTestCase {
 
     // MARK: Helpers
 
-    /// Onboarding is seven taps; skip it when the screens under test come later.
+    /// Onboarding fits inside this ten-step guard; skip it when the screens under test come later.
     private func skipOnboardingIfPresent() {
         let start = app.buttons["Start typing"]
         let cont = app.buttons["Continue"]

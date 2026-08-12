@@ -12,7 +12,8 @@ struct OnboardingFlow: View {
     /// foreground, because that is when the user comes back from Settings.
     @State private var setup = SetupState()
 
-    private let stepCount = 7
+    private let setupStepCount = 6
+    private let stepCount = 6 + OnboardingPracticeStage.allCases.count
 
     /// The step whose footer's primary action is the globe-key confirmation.
     /// Named once here so the footer and the step itself cannot drift apart.
@@ -32,7 +33,10 @@ struct OnboardingFlow: View {
                     FullAccessStep(setup: setup).tag(3)
                     SwitchStep(setup: setup).tag(4)
                     MicrophoneStep(setup: setup).tag(5)
-                    TryItStep(setup: setup).tag(6)
+                    ForEach(OnboardingPracticeStage.allCases, id: \.rawValue) { practice in
+                        TryItStep(setup: setup, stage: practice)
+                            .tag(setupStepCount + practice.rawValue)
+                    }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(Theme.Motion.quick, value: step)
