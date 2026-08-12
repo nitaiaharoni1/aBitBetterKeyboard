@@ -53,8 +53,8 @@ extension SuggestionEngine {
     /// The table itself moved to `HebrewMorphology`, which is where the rest of
     /// the facts about how Hebrew spells a word end.
     @MainActor
-    static func hebrewFinalFormCorrection(of prefix: String) -> String? {
-        guard let corrected = HebrewMorphology.inFinalForm(prefix),
+    static func hebrewFinalFormCorrection(of word: String) -> String? {
+        guard let corrected = HebrewMorphology.inFinalForm(word),
             SeedLanguageModel.knows(corrected, in: .hebrew)
         else { return nil }
         return corrected
@@ -105,7 +105,24 @@ extension SuggestionEngine {
         personal: PersonalLanguageModel,
         codeSwitching: Bool = false
     ) -> [Suggestion] {
-        let lower = prefix.lowercased()
+        // **Every source below is asked about the word, and mixing that with the
+        // keystrokes is a defect all of its own.** The marks that sit at the edges
+        // of what was typed belong to the sentence, not to the word: a lookup
+        // handed `teh,` or `(hel` is a lookup that will find nothing, because no
+        // dictionary and no word list has an entry with a comma in it. The first
+        // repair here gave the *neighbour* rule the trimmed word and left the
+        // completion sources on the keystrokes, which is worse than either
+        // consistently: for `(hel` the completions went silent while the
+        // neighbours did not, so `hello` and `help` never arrived, `her` had no
+        // competition, and the bold slot — which is what the space bar inserts —
+        // became a word the user had not typed a single letter of. Plain `hel` was
+        // and is left alone. One string, asked of everything.
+        //
+        // Slot zero stays the literal keystrokes, marks and all, and
+        // `KeyboardController.restoringEdgeMarks` puts them back around whatever
+        // is committed, so trimming here never costs the user a character.
+        let core = wordCore(prefix)
+        let lower = core.lowercased()
         var out: [Candidate] = []
 
         // The literal keystrokes always stay available, so the engine can never
@@ -115,6 +132,17 @@ extension SuggestionEngine {
         // Every key was right and the layout was wrong. Deterministic, and the
         // strongest signal in here when it fires at all — see LayoutTransposition
         // for how narrow the gate is.
+        //
+        // **The one source that must see the keystrokes and not the word, and the
+        // corpus caught it within a run of being handed `core`.** A mark is only a
+        // mark on the plane it was typed on: `,` on QWERTY is `ת` on the Hebrew
+        // layout, so `,usv` — corpus `wl-02`, somebody typing `תודה` without
+        // noticing the globe — is four Hebrew letters and no punctuation at all.
+        // Trimming its leading comma left `usv`, which transposes to `ודה`, which
+        // is in no list, so the whole rule went silent and the bar offered `use`
+        // instead. Every other source here is asking a dictionary a question about
+        // a word; this one is replaying a sequence of key presses, and a key press
+        // has no edges to trim.
         if let other = otherLanguage,
             let transposed = LayoutTransposition.correction(
                 of: prefix, typedLanguage: typedLanguage, other: other,
@@ -133,7 +161,7 @@ extension SuggestionEngine {
         if typedLanguage == .english, let contraction = contractions[lower] {
             out.append(
                 Candidate(
-                    text: matchCase(of: prefix, applyingTo: contraction, in: typedLanguage),
+                    text: matchCase(of: core, applyingTo: contraction, in: typedLanguage),
                     language: .english, source: .orthography))
         }
 
@@ -150,7 +178,7 @@ extension SuggestionEngine {
         // rather than in the code point — there is no wrong character to correct —
         // so a rule generalised across right-to-left scripts would fire on
         // correctly spelled Arabic and mangle it.
-        if typedLanguage.script == .hebrew, let final = hebrewFinalFormCorrection(of: prefix) {
+        if typedLanguage.script == .hebrew, let final = hebrewFinalFormCorrection(of: core) {
             out.append(Candidate(text: final, language: .hebrew, source: .orthography))
         }
 
@@ -181,21 +209,24 @@ extension SuggestionEngine {
         // What this user actually types, which is the half no dictionary can
         // supply and the half that makes the bar theirs.
         out +=
-            personal.words(startingWith: prefix, in: typedLanguage, limit: 3)
+            personal.words(startingWith: core, in: typedLanguage, limit: 3)
             .enumerated()
             .map {
                 Candidate(
-                    text: matchCase(of: prefix, applyingTo: $0.element, in: typedLanguage),
+                    text: matchCase(of: core, applyingTo: $0.element, in: typedLanguage),
                     language: typedLanguage, source: .learned, ordinal: $0.offset)
             }
 
         // The bundled seed list, read through every Hebrew reading of the prefix.
-        out += seedCandidates(for: prefix, typedLanguage: typedLanguage, personal: personal)
+        out += seedCandidates(for: core, typedLanguage: typedLanguage, personal: personal)
 
         // Latin letters inside a Hebrew sentence, ranked before the dictionary.
         // Only here: in an English sentence Apple's ranking is the better judge and
         // this list would only crowd it.
-        if codeSwitching {
+        // `lower` is empty for a prefix that is only punctuation, and every word
+        // in the list starts with "", so the guard is what stops `...` offering two
+        // arbitrary English nouns — the same trap `comparable` carries next door.
+        if codeSwitching, !lower.isEmpty {
             out +=
                 codeSwitchVocabulary
                 .filter { $0.hasPrefix(lower) && $0 != lower }
@@ -203,12 +234,12 @@ extension SuggestionEngine {
                 .enumerated()
                 .map {
                     Candidate(
-                        text: matchCase(of: prefix, applyingTo: $0.element, in: typedLanguage),
+                        text: matchCase(of: core, applyingTo: $0.element, in: typedLanguage),
                         language: .english, source: .codeSwitch, ordinal: $0.offset)
                 }
         }
 
-        out += checkerCandidates(for: prefix, typedLanguage: typedLanguage)
+        out += checkerCandidates(for: core, typedLanguage: typedLanguage)
 
         // The sentence gets its say last, over everything already collected, so a
         // word the previous word is known to be followed by climbs whichever
@@ -313,8 +344,12 @@ extension SuggestionEngine {
         return out
     }
 
-    /// `UITextChecker`'s own answers about the word as typed: completions first,
-    /// and corrections only when the completions came back thin.
+    /// `UITextChecker`'s own answers about the word: completions first, and
+    /// corrections only when the completions came back thin.
+    ///
+    /// Takes the word rather than the keystrokes — `completions(for:)` trims the
+    /// edge marks once and hands the same string to every source, for the reason
+    /// written there.
     ///
     /// **Measured, disclosed gap in the correction half.** `recieve` completes to
     /// nothing, so the correction branch fires and `guesses` gives `receive`.
@@ -326,7 +361,7 @@ extension SuggestionEngine {
     /// than it returns once a frequency prior exists.
     @MainActor
     private static func checkerCandidates(
-        for prefix: String, typedLanguage: KeyboardLanguage
+        for word: String, typedLanguage: KeyboardLanguage
     )
         -> [Candidate]
     {
@@ -335,16 +370,16 @@ extension SuggestionEngine {
         // nothing to fall back to: another language's dictionary would offer
         // another language's words, which is worse than offering none.
         guard let locale = typedLanguage.spellCheckerLocale else { return [] }
-        let lower = prefix.lowercased()
+        let lower = word.lowercased()
         var out: [Candidate] = []
 
         out +=
-            checkerCompletions(of: prefix, locale: locale)
+            checkerCompletions(of: word, locale: locale)
             .prefix(4)
             .enumerated()
             .map {
                 Candidate(
-                    text: matchCase(of: prefix, applyingTo: $0.element, in: typedLanguage),
+                    text: matchCase(of: word, applyingTo: $0.element, in: typedLanguage),
                     language: typedLanguage, source: .checker, ordinal: $0.offset)
             }
 
@@ -371,28 +406,27 @@ extension SuggestionEngine {
         // the typo, with `תודה` never generated at all. Greeting somebody or
         // ending a clause is the commonest way a word meets a mark, so this was
         // most of the ground the rule was written to cover.
-        let core = wordCore(prefix)
-        if !SeedLanguageModel.knows(core, in: typedLanguage) {
+        if !SeedLanguageModel.knows(word, in: typedLanguage) {
             out +=
-                SeedLanguageModel.neighbours(of: core, in: typedLanguage, limit: 2)
+                SeedLanguageModel.neighbours(of: word, in: typedLanguage, limit: 2)
                 .enumerated()
                 .map {
                     Candidate(
-                        text: matchCase(of: prefix, applyingTo: $0.element, in: typedLanguage),
+                        text: matchCase(of: word, applyingTo: $0.element, in: typedLanguage),
                         language: typedLanguage, source: .neighbour, ordinal: $0.offset)
                 }
         }
 
         guard out.count < 2 else { return out }
 
-        let nsPrefix = prefix as NSString
-        let range = NSRange(location: 0, length: nsPrefix.length)
+        let nsWord = word as NSString
+        let range = NSRange(location: 0, length: nsWord.length)
         let misspelled = sharedChecker.rangeOfMisspelledWord(
-            in: prefix, range: range, startingAt: 0, wrap: false, language: locale)
+            in: word, range: range, startingAt: 0, wrap: false, language: locale)
         guard misspelled.location != NSNotFound else { return out }
 
         if let corrections = sharedChecker.guesses(
-            forWordRange: range, in: prefix, language: locale)
+            forWordRange: range, in: word, language: locale)
         {
             out +=
                 corrections
@@ -401,7 +435,7 @@ extension SuggestionEngine {
                 .enumerated()
                 .map {
                     Candidate(
-                        text: matchCase(of: prefix, applyingTo: $0.element, in: typedLanguage),
+                        text: matchCase(of: word, applyingTo: $0.element, in: typedLanguage),
                         language: typedLanguage, source: .correction, ordinal: $0.offset)
                 }
         }
@@ -432,8 +466,13 @@ extension SuggestionEngine {
         results: [Suggestion], supplementary: [String], personal: PersonalLanguageModel
     ) -> Bool {
         guard results.count > 1 else { return false }
-        let lower = prefix.lowercased()
+        // The word, not the keystrokes, for every question below — the same string
+        // `completions(for:)` asks its sources about. A mark at either edge is the
+        // sentence's, and both the contraction table and the final-form rule used
+        // to miss on it: `dont,` reached neither, so the correction that did arrive
+        // came from whatever the checker guessed instead.
         let word = wordCore(prefix)
+        let lower = word.lowercased()
 
         // The user's own list is absolute, and it is asked first rather than as a
         // clause on `isKnownWord` at the bottom: the contraction table and the
@@ -462,7 +501,7 @@ extension SuggestionEngine {
         // `contractions` — and never again at runtime.
         if typedLanguage == .english, contractions[lower] != nil { return true }
 
-        if typedLanguage.script == .hebrew, hebrewFinalFormCorrection(of: prefix) != nil {
+        if typedLanguage.script == .hebrew, hebrewFinalFormCorrection(of: word) != nil {
             return true
         }
 

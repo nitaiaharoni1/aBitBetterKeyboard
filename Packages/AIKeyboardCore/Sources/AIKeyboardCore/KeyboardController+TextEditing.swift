@@ -19,44 +19,64 @@ extension KeyboardController {
     }
 
     /// What the AI actions operate on: the selection if there is one, otherwise
-    /// the sentence the cursor sits in.
+    /// **everything in the field**.
+    ///
+    /// **It used to be the sentence the cursor sat in, and that made Fix get worse
+    /// the more it was used.** The boundary was `.!?\n`, so a message that had
+    /// already been corrected once carried a terminator in the middle of it, and
+    /// the second run saw only what came after: type `hi mamiwhat?`, Fix it to
+    /// `hi mami what?`, add `up`, and Fix is handed the single word `up` — with no
+    /// way to know it belongs to the question in front of it, and no way to produce
+    /// `hi mami whats up?`. The same is true of the ordinary case that has nothing
+    /// to do with a previous Fix: two sentences typed into one chat message are one
+    /// message, and correcting the second while pretending the first is not there
+    /// is how a pronoun ends up disagreeing with a name it cannot see.
+    ///
+    /// So the scope is the field. That is also what these actions are *about* — Fix
+    /// and Rewrite are message-level edits, the prompts say `Message:` and hand the
+    /// model one, and `OutputGuard` and `EditScope` both judge the answer against
+    /// the whole of what was sent. A selection still wins, because a selection is
+    /// the user saying which part they mean.
+    ///
+    /// What the field is, is whatever the host hands over: `documentContextBeforeInput`
+    /// and `…AfterInput` are the only readers a keyboard extension has, and iOS
+    /// truncates both. There is nothing behind them to reach for, so "everything in
+    /// the field" means everything the keyboard can see of it.
     public var aiTargetText: String {
         if let selection { return selection }
-        return currentSentence
+        return wholeField
     }
 
-    /// Where one sentence ends and the next begins.
-    static let sentenceTerminators = CharacterSet(charactersIn: ".!?\n")
-
-    var currentSentence: String {
-        (headBeforeCursor + tailAfterCursor).trimmingCharacters(in: .whitespaces)
+    /// The field, either side of the cursor, with the edges tidied.
+    var wholeField: String {
+        (editHead + editTail).trimmingCharacters(in: .whitespaces)
     }
 
-    var headBeforeCursor: String {
-        let before = contextBefore
-        guard
-            let range = before.rangeOfCharacter(from: Self.sentenceTerminators, options: .backwards)
-        else { return before }
-        return String(before[range.upperBound...])
-    }
+    /// The two halves an applied answer replaces. Named for the edit rather than
+    /// for the sentence they used to be, because the scope is no longer a sentence
+    /// and a name that says otherwise is how the two drift apart.
+    var editHead: String { contextBefore }
+    var editTail: String { contextAfter }
 
-    var tailAfterCursor: String {
-        let after = contextAfter
-        guard let range = after.rangeOfCharacter(from: Self.sentenceTerminators) else { return after }
-        return String(after[..<range.lowerBound])
-    }
-
-    var sentenceSpanBeforeCursor: Int {
-        let head = headBeforeCursor
+    /// How much in front of the cursor the replacement covers.
+    ///
+    /// Leading whitespace is deliberately outside the span: the field may begin
+    /// with a space the user put there and an answer is not a claim about it.
+    var editSpanBeforeCursor: Int {
+        let head = editHead
         let start = head.firstIndex { !$0.isWhitespace } ?? head.endIndex
         return head[start...].utf16.count
     }
 
-    var sentenceSpanAfterCursor: Int { tailAfterCursor.utf16.count }
+    var editSpanAfterCursor: Int { editTail.utf16.count }
 
-    var sentenceDeleteSpanAfterCursor: Int {
-        let tail = tailAfterCursor
-        guard sentenceSpanBeforeCursor == 0 else { return tail.utf16.count }
+    /// The same, behind the cursor — and it skips the tail's leading whitespace
+    /// only when there is nothing in front of the cursor at all, which is the one
+    /// case where that whitespace is the *start* of the field rather than the gap
+    /// between two words the answer spans.
+    var editDeleteSpanAfterCursor: Int {
+        let tail = editTail
+        guard editSpanBeforeCursor == 0 else { return tail.utf16.count }
         let start = tail.firstIndex { !$0.isWhitespace } ?? tail.endIndex
         return tail[start...].utf16.count
     }
@@ -81,12 +101,47 @@ extension KeyboardController {
         }
         let typed = currentWordPrefix
         deleteBackward(utf16Units: typed.utf16.count)
-        target?.insertText(Self.restoringTrailingMarks(of: typed, to: replacement))
+        target?.insertText(Self.restoringEdgeMarks(of: typed, to: replacement))
     }
 
-    static func restoringTrailingMarks(of typed: String, to replacement: String) -> String {
-        let marks = String(typed.reversed().prefix { $0.isPunctuation }.reversed())
-        return replacement.hasSuffix(marks) ? replacement : replacement + marks
+    /// A candidate wearing the marks the typed word wore.
+    ///
+    /// **`replaceCurrentWord` deletes the whole prefix, and the whole prefix
+    /// includes the punctuation**, so without this every correction ate a mark:
+    /// `recieve,` committed as `receive `, `helo,` as `help `.
+    ///
+    /// **Both edges, because `SuggestionEngine` now reads both.** This restored
+    /// the trailing run alone, which was enough while a leading mark stopped every
+    /// lookup dead — `(recieve` reached `receive` through `UITextChecker.guesses`
+    /// and quietly dropped the bracket, and nothing else got that far. The engine
+    /// asks its sources about `wordCore` now, so an opening bracket or quote no
+    /// longer hides the word inside it, and the mark has to come home the same way
+    /// the closing one does.
+    ///
+    /// **It restores exactly what `wordCore` removed, rather than re-deriving it.**
+    /// A version of this that put back the punctuation *runs* at each end looked
+    /// equivalent and was not, because `wordCore` also strips a possessive `'s` —
+    /// and `'s` is not a run of punctuation, it ends in a letter. So the engine
+    /// reduced `Nitai's` to `Nitai`, offered a correction of that, and the
+    /// possessive was deleted: `Nitai's` committed as `Nit`. Locating the core
+    /// inside the keystrokes makes the two halves impossible to drift apart, which
+    /// matters because they live in different files.
+    ///
+    /// Neither side is added when the candidate already carries it, because
+    /// candidate zero *is* the literal keystrokes and would otherwise double them.
+    /// A prefix that is nothing but punctuation has no core, and nothing to
+    /// restore around: it is returned as it came.
+    static func restoringEdgeMarks(of typed: String, to replacement: String) -> String {
+        let core = SuggestionEngine.wordCore(typed)
+        guard !core.isEmpty, let range = typed.range(of: core, options: .literal) else {
+            return replacement
+        }
+        let leading = String(typed[..<range.lowerBound])
+        let trailing = String(typed[range.upperBound...])
+        var out = replacement
+        if !out.hasPrefix(leading) { out = leading + out }
+        if !out.hasSuffix(trailing) { out += trailing }
+        return out
     }
 
     func replaceTargetText(with replacement: String) {
@@ -100,16 +155,16 @@ extension KeyboardController {
             refreshSuggestions()
             return
         }
-        let head = sentenceSpanBeforeCursor
-        let tail = sentenceSpanAfterCursor
+        let head = editSpanBeforeCursor
+        let tail = editSpanAfterCursor
         guard tail > 0 else {
             deleteBackward(utf16Units: head)
             target?.insertText(replacement)
             refreshSuggestions()
             return
         }
-        let tailText = tailAfterCursor
-        let tailDeletes = sentenceDeleteSpanAfterCursor
+        let tailText = editTail
+        let tailDeletes = editDeleteSpanAfterCursor
         target?.adjustTextPosition(byCharacterOffset: tail)
         if contextBefore.hasSuffix(tailText) {
             deleteBackward(utf16Units: head + tailDeletes)

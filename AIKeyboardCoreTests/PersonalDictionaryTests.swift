@@ -81,10 +81,20 @@ final class PersonalDictionaryTests: XCTestCase {
     /// an empty dictionary the keyboard really does replace it — this is what makes
     /// each of those entries a case rather than a word autocorrect was never going
     /// to touch.
+    ///
+    /// **`בלי־פרופ` was on this list and had to come off, and that is a real
+    /// change rather than a test being relaxed.** The only thing that ever
+    /// threatened it was the Hebrew final-form rule, which rewrote its closing pe
+    /// and gave `בלי־פרוף`; that rule now has to land on a word the seed list
+    /// knows, and `בלי־פרוף` is not one, so nothing in the engine wants to touch
+    /// this word any more. It is still in `shippedPersonalDictionary` and still
+    /// covered by the test above — but that coverage is now vacuous *for this one
+    /// word*, because it would pass with the personal dictionary deleted. The four
+    /// below are the ones still carrying the proof.
     func testTheSameWordsAreDestroyedWhenTheListIsEmpty() {
         SharedStore.shared.personalDictionary = []
 
-        for word in ["Nitai", "Handi", "Wispr", "סאפא", "בלי־פרופ"] {
+        for word in ["Nitai", "Handi", "Wispr", "סאפא"] {
             let language: KeyboardLanguage =
                 SuggestionEngine.dominantLanguage(in: word) ?? .english
             XCTAssertNotEqual(
@@ -236,9 +246,18 @@ final class PersonalDictionaryTests: XCTestCase {
     func testTheSameWordsPlusAMarkAreStillDestroyedWithNoList() {
         SharedStore.shared.personalDictionary = []
 
+        // `Handi,` used to be destroyed as `Handy,` and is now destroyed as
+        // `Handing,`, which is what plain `Handi` has always given: the comma is
+        // trimmed before the lookups, so a word with a mark after it and the same
+        // word without one are now corrected identically. That agreement is the
+        // point of the change, and either answer serves this test, which is about
+        // the word being at risk at all.
         XCTAssertEqual(committed("Hi Nitai,", in: .english), "Hi Nit, ")
-        XCTAssertEqual(committed("Hi Handi,", in: .english), "Hi Handy, ")
-        XCTAssertEqual(committed("Hi Nitai's", in: .english), "Hi Nita's ")
+        XCTAssertEqual(committed("Hi Handi,", in: .english), "Hi Handing, ")
+        // And the possessive survives being corrected — `wordCore` strips `'s` to
+        // do the lookup and `restoringEdgeMarks` puts it back, or this line would
+        // read `Hi Nit ` and the user would have lost two characters they typed.
+        XCTAssertEqual(committed("Hi Nitai's", in: .english), "Hi Nit's ")
         XCTAssertEqual(committed("שלום סאפא,", in: .hebrew), "שלום ספא, ")
     }
 
@@ -246,19 +265,46 @@ final class PersonalDictionaryTests: XCTestCase {
     /// the mark that ended the sentence.** `replaceCurrentWord` deletes the whole
     /// prefix, and the whole prefix includes the comma. Measured before this fix:
     /// `recieve,` committed as `receive `, `helo,` as `help `, `sched,` as `she'd `.
-    /// See `KeyboardController.restoringTrailingMarks`.
+    /// See `KeyboardController.restoringEdgeMarks`.
     ///
     /// **`helo,` reads `hello, ` now, and the change is the point of
     /// `SeedLanguageModel`.** `help` was what `UITextChecker.guesses` ranked first
     /// with no frequency model behind it; `hello` is what the person typing meant.
     /// What this test is *for* is unaffected either way — the comma survives the
     /// correction, whichever word the correction lands on.
+    ///
+    /// **`sched,` reads `schedule, ` now, for the same reason one step further
+    /// on.** It used to commit `she'd,`: the comma was part of the string handed
+    /// to `UITextChecker`, which has no completion for `sched,` and so fell
+    /// through to `guesses`, and `she'd` is what a spelling guess makes of five
+    /// letters it does not recognise. With every source asking about the word,
+    /// `sched` completes to `schedule` and a completion outranks a correction.
+    /// Nobody typing `sched,` meant `she'd,`.
     func testAnOrdinaryCorrectionKeepsTheMarkThatEndedTheSentence() {
         SharedStore.shared.personalDictionary = []
 
         XCTAssertEqual(committed("recieve,", in: .english), "receive, ")
         XCTAssertEqual(committed("helo,", in: .english), "hello, ")
-        XCTAssertEqual(committed("sched,", in: .english), "she'd, ")
+        XCTAssertEqual(committed("sched,", in: .english), "schedule, ")
+    }
+
+    /// And the mark in *front* of the word comes home too.
+    ///
+    /// `replaceCurrentWord` deletes the whole prefix and the whole prefix includes
+    /// the bracket, so while `restoringEdgeMarks` restored the trailing run alone
+    /// this was a silent deletion: `(recieve` committed as `receive `, one
+    /// character shorter than what the user typed and with the bracket they opened
+    /// gone. It went unnoticed because a leading mark also hid the word from every
+    /// lookup except `UITextChecker.guesses`, so it was the only path that ever got
+    /// far enough to eat one.
+    func testACorrectionKeepsTheMarkThatOpenedTheWord() {
+        SharedStore.shared.personalDictionary = []
+
+        XCTAssertEqual(committed("Say (recieve", in: .english), "Say (receive ")
+        XCTAssertEqual(committed("Say (helo)", in: .english), "Say (hello) ")
+        XCTAssertEqual(
+            committed("Say \"helo\"", in: .english), "Say \"hello\" ",
+            "a quote is punctuation at both ends and both ends are the user's")
     }
 
     /// And tapping the first candidate — which *is* the literal keystrokes, mark

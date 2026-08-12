@@ -121,6 +121,28 @@ final class ContextAwareSuggestionTests: XCTestCase {
             "got \(english.map(\.text)) — the mark cost the correction the bold slot")
     }
 
+    /// **The second bug the first mark repair made, and the reason every source
+    /// now sees one string.** Giving `wordCore` to the neighbour rule while the
+    /// completion sources kept the keystrokes meant a word with a mark in front of
+    /// it had neighbours and no completions — so for `(hel` neither `hello` nor
+    /// `help` was ever generated, `her` won a race it should never have been in,
+    /// and the space bar was set to insert a word sharing two letters with what
+    /// was typed. Plain `hel` was left alone throughout, which is what makes this
+    /// a bug about the mark rather than about the ranking.
+    func testAMarkInFrontOfTheWordDoesNotHideItsCompletions() {
+        for typed in ["(hel", "\"hel", "'hel"] {
+            let results = SuggestionEngine.suggestions(
+                prefix: typed, context: "Say ", languages: [.english],
+                personal: emptyPersonal())
+            XCTAssertEqual(
+                results.first(where: \.isDefault)?.text, typed,
+                "space would replace a three-letter word in progress: \(results.map(\.text))")
+            XCTAssertTrue(
+                results.contains { $0.text == "hello" },
+                "the mark hid the completions: \(results.map(\.text))")
+        }
+    }
+
     // MARK: Hebrew morphology
 
     /// One seed entry for `עבודה` has to serve `לעבודה`, `בעבודה` and `מהעבודה`,
@@ -151,6 +173,15 @@ final class ContextAwareSuggestionTests: XCTestCase {
 
     /// Four correct keystrokes read in the wrong alphabet. No spell checker can
     /// help — `akuo` is not a misspelling of anything.
+    ///
+    /// **`,usv` is not decoration and must not be tidied away.** A mark is only a
+    /// mark on the plane it was typed on: `,` on QWERTY is `ת` on the Hebrew
+    /// layout, so those four characters are four Hebrew letters and no
+    /// punctuation. When `completions(for:)` began handing every source the
+    /// trimmed word, this rule got `usv`, which transposes to `ודה`, which is in
+    /// no list — the whole rule went silent and the bar offered `use`. It reads
+    /// the keystrokes, alone among the sources, because it is replaying key
+    /// presses rather than asking a dictionary about a word.
     func testWrongLayoutIsCorrectedAndCommitted() {
         for (typed, meant) in [("akuo", "שלום"), (",usv", "תודה"), ("יקךךם", "hello")] {
             let results = SuggestionEngine.suggestions(
