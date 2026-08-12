@@ -109,6 +109,19 @@ xcrun altool --upload-app -f "$ipa" -t ios \
 # that reports success on a failure is worse than no script: the number in the
 # repo goes on saying it shipped.
 status="${PIPESTATUS[0]}"
+
+# **And `altool` exits 0 on a failed upload, so the status alone is not enough
+# either.** On 2026-08-12 it refused build 15 with the same 409 as build 13 —
+# printing `ERROR: [altool…] Failed to upload package.` and `Failed to upload
+# archive at …` — and then returned 0, so `PIPESTATUS` was 0, the guard below
+# never fired, and the script said "Uploaded version 0.1 build 15". That is the
+# exact defect the comment above describes, reached a second way: the first fix
+# caught a failing pipeline, and this one has to catch a lying exit code. The log
+# is the only witness, so the log is what gets read.
+if [ "$status" -eq 0 ] && grep -qE "ERROR: \[altool|Failed to upload" "$build/upload.log"; then
+    status=1
+fi
+
 if [ "$status" -ne 0 ]; then
     echo >&2
     echo "upload failed — full log at $build/upload.log" >&2
