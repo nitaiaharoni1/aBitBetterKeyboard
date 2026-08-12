@@ -100,6 +100,26 @@ echo "==> Uploading version $version build $shipped"
 xcrun altool --upload-app -f "$ipa" -t ios \
     --apiKey "$KEY_ID" --apiIssuer "$issuer" 2>&1 | tee "$build/upload.log"
 
+# **`set -e` cannot see this one, and the script claimed success over a failed
+# upload because of it.** A pipeline's status is its *last* command's, which here
+# is `tee` and is always 0 — so on 2026-08-12 altool refused build 13 with a 409
+# ("the bundle version must be higher than the previously uploaded version"), the
+# script printed "Uploaded version 0.1 build 13", exited 0, and the only thing
+# that said otherwise was the error text scrolled off above it. A release script
+# that reports success on a failure is worse than no script: the number in the
+# repo goes on saying it shipped.
+status="${PIPESTATUS[0]}"
+if [ "$status" -ne 0 ]; then
+    echo >&2
+    echo "upload failed — full log at $build/upload.log" >&2
+    # The commonest failure by far, and the one with an obvious next step.
+    if grep -q "previously uploaded version" "$build/upload.log"; then
+        echo "Build $shipped is already on App Store Connect." >&2
+        echo "Bump CURRENT_PROJECT_VERSION in $PROJECT, commit it, then run this again." >&2
+    fi
+    exit "$status"
+fi
+
 echo
 echo "Uploaded version $version build $shipped. Processing takes a few minutes."
 echo "https://appstoreconnect.apple.com/apps"
