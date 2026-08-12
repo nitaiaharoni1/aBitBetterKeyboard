@@ -24,6 +24,26 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
+		<!--
+		  `fetch` is what lets iOS wake this app to renew the session token that
+		  every cloud action in the keyboard depends on. Only the containing app
+		  can attest — the keyboard is a different bundle ID and an extension has
+		  no `UIApplication` to launch anything with — and a token lasts ninety
+		  days, so without this the recovery for an install that has gone stale is
+		  to ask the user to open an app they have no reason to open, about a
+		  cloud model they have never been shown. See `AppAttestation.scheduleRefresh`.
+		-->
+		<string>fetch</string>
+	</array>
+	<!--
+	  Submitting a `BGTaskRequest` for an identifier that is not in this list
+	  throws, and registering a handler for one that is not in it traps. The
+	  string is spelled once in Swift, as `AppAttestation.refreshTaskIdentifier`,
+	  and this is the copy iOS reads.
+	-->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.nitai.aikeyboard.attest</string>
 	</array>
 	<!--
 	  The deep link that lets a keyboard extension hand off to this app so the

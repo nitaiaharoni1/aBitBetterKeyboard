@@ -67,18 +67,26 @@ struct ScreenContextView: View {
             // Not "Where the screen is read" any more. That title was true of one
             // of the four things this setting switches on, and it is what made the
             // other three impossible to find.
-            SectionHeader(title: "Before you start: the cloud model")
+            SectionHeader(title: "Before you start")
 
             Card {
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
+                    // **Was an instruction to set a server, which nobody using
+                    // this can do.** Reading a screen does need somewhere to send
+                    // it, and that is worth saying because the frame leaves the
+                    // device. What is not worth saying is that it is a setting:
+                    // `AppAttestation` connects it, and until it has, the only
+                    // true sentence is that this will not start yet.
                     Text(
-                        "Reading a screen needs a server to send it to, and it is the same one the keyboard's AI actions use. Until it is set, screen context will not start."
+                        "Reading a screen sends the frame to the same server the keyboard's AI actions use. \(BackendTransport.setUpRecovery)"
                     )
                     .font(Theme.Fonts.callout)
                     .foregroundStyle(Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
+                    #if DEBUG
                     CloudModelRow()
+                    #endif
                 }
             }
         }

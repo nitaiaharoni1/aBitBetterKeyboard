@@ -288,14 +288,22 @@ public struct BackendTransport: CloudTransport {
     /// `AIEngineError.unsupportedLanguage`, `.deviceNotSupported`,
     /// `ScreenContextEndReason.notConfigured` and the cloud dictation card.
     ///
-    /// **"Finish setting it up under \(settingsPath)" became the wrong instruction
-    /// the moment the token field it pointed at left the shipping app.**
-    /// `AppAttestation` fills this build's bearer now, and it runs at launch, so
-    /// there is nothing left for a user to type — the one thing they can still do
-    /// is open the app and let it try again. `settingsPath` survives below for the
-    /// Debug token row and for the URL field, which is still real and still
-    /// user-editable; it is just not what this sentence points at any more.
-    public static let setUpRecovery = "Open AI Keyboard once to reconnect."
+    /// **Not an instruction, and every version of it until now was one.** First
+    /// "Finish setting it up under \(settingsPath)", which pointed at a token
+    /// field that has since left the shipping app. Then "Open AI Keyboard once to
+    /// reconnect", which is a chore handed to somebody who does not know this
+    /// product has a cloud model, cannot see one, and did not ask for one. There
+    /// is no setting behind either sentence: `AppAttestation` fills the bearer, at
+    /// launch, on every return to the foreground, and on a background refresh
+    /// while the app is closed. The honest sentence is therefore a status, not a
+    /// task — and it is the same shape `SetupState.fullAccessDetail` already
+    /// settled on for the same state.
+    ///
+    /// It has to read correctly appended to four different first lines
+    /// (`unsupportedLanguage`, `cloudNotConfigured`, `deviceNotSupported`) and
+    /// standing alone as `ScreenContextEndReason.notConfigured.recovery`, which is
+    /// why it names the app rather than saying "it".
+    public static let setUpRecovery = "AI Keyboard is reconnecting. Try again in a moment."
 
     // send, encoded, mapped, and decode are in BackendTransport+Send.swift.
 }

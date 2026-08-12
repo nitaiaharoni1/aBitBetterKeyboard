@@ -88,7 +88,12 @@ public enum AIEngineError: Error, Equatable, Sendable {
         case .refused: return "Can't rewrite this"
         case .inputTooLong: return "Text too long"
         case .needsFullAccess: return "Needs Full Access"
-        case .cloudNotConfigured: return "Cloud model not ready"
+        // **Names a state, not a component.** "Cloud model not ready" tells the
+        // owner of a keyboard that there is a cloud model, that it is a thing
+        // they might be expected to have set up, and that theirs is broken. None
+        // of the three is true or useful: it is filled in by attestation, there
+        // is nothing to set up, and it reconnects on its own.
+        case .cloudNotConfigured: return "Not connected"
         case .network: return "No connection"
         case .empty: return "Nothing came back"
         case .invented: return "Nothing safe to show"
@@ -104,10 +109,10 @@ public enum AIEngineError: Error, Equatable, Sendable {
             return "Still downloading.\nTry again in a few minutes."
         case .appleIntelligenceOff:
             return "Turn on Apple Intelligence in Settings to use AI on device."
-        // The three that dead-end on the same missing setting name the same row.
-        // Each of these used to end at "no cloud model is set up" and stop, which
-        // is the whole of the Hebrew experience on a stock install: every AI
-        // action fails, and none of them says where to go.
+        // The three that dead-end on an unconnected app close with the same
+        // sentence. Each of these used to end at "no cloud model is set up" and
+        // stop, which is the whole of the Hebrew experience on a stock install:
+        // every AI action fails, and none of them says what is happening.
         case .deviceNotSupported:
             return
                 "This device can't run AI on device.\n\(BackendTransport.setUpRecovery)"
@@ -120,24 +125,23 @@ public enum AIEngineError: Error, Equatable, Sendable {
             return "Select a shorter passage and try again."
         case .needsFullAccess:
             return
-                "This needs the cloud model.\nTurn on Full Access in Settings › Keyboards."
+                "This needs network access.\nTurn on Full Access in Settings › Keyboards."
         case .cloudNotConfigured:
-            // **"None is set up" stopped being true, and this is the one error a
-            // fresh install actually hits.** At runtime there is now exactly one
-            // thing that produces this case: `BackendTransport.mapped` turning a
-            // 401 or 403 into it, which means the backend *answered* and turned
-            // this app away.
+            // **The one error a fresh install actually hits.** At runtime there
+            // is exactly one thing that produces this case:
+            // `BackendTransport.mapped` turning a 401 or 403 into it, which means
+            // the backend *answered* and turned this app away.
             //
-            // **"Missing, mistyped or revoked" stopped being the likely cause the
-            // moment nobody types a token.** `AppAttestation` is what fills this
-            // build's bearer now, so a 401 here means one of two things: the app
-            // has never had network since install, so attestation never ran, or
-            // it has not been opened in ninety days and the session token it
-            // wrote has expired. Either way there is no field to check — the fix
-            // is opening the app, so that is the one thing this message says.
-            return "Cloud model turned this away.\n\(BackendTransport.setUpRecovery)"
+            // **"Cloud model turned this away" described the mechanism to
+            // somebody who cannot act on it.** `AppAttestation` fills this
+            // build's bearer, so a 401 here means the app has not managed to
+            // attest yet: no network since install, or a session token that
+            // aged out. There is no field to check and no screen to visit, and
+            // the app retries at launch, on foreground and on a background
+            // refresh — so the whole of the useful content is the recovery line.
+            return BackendTransport.setUpRecovery
         case .network(let detail):
-            return detail.isEmpty ? "Couldn't reach the cloud model." : detail
+            return detail.isEmpty ? "Couldn't connect. Check your network." : detail
         case .empty:
             return "The model returned nothing.\nTry again."
         case .invented:

@@ -46,9 +46,9 @@ struct ScreenContextPrompt: Equatable {
         // The same wall as the one above, reached before the broadcast instead of
         // one second after it.
         guard cloudConfigured else {
-            title = "Cloud model not ready"
+            title = "Not connected"
             detail =
-                "Reply needs the cloud model.\n\(BackendTransport.setUpRecovery)"
+                "Reply needs a connection.\n\(BackendTransport.setUpRecovery)"
             offersPicker = false
             return
         }

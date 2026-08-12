@@ -18,8 +18,18 @@ struct SettingsAISection: View {
             SectionHeader(title: "AI")
             Card {
                 VStack(spacing: Theme.Space.sm) {
+                    // **Not a setting, and it stopped being one when the token
+                    // stopped being typed.** What is behind this row is a server
+                    // address and, in Debug, an access token. A shipping install
+                    // has neither to give: `AppAttestation` connects it, and the
+                    // only thing the row could tell that user is that a component
+                    // they have never heard of is in a state they cannot change.
+                    // "Not set up" against a keyboard that connects itself is the
+                    // exact claim `SetupState` exists to stop.
+                    #if DEBUG
                     CloudModelRow()
                     Divider.themed
+                    #endif
                     HStack(spacing: Theme.Space.sm) {
                         IconBadge(systemName: "slider.horizontal.3")
                         Text("Default tone")

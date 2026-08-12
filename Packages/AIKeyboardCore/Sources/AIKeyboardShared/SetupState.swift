@@ -177,7 +177,7 @@ public struct SetupState: Equatable, Sendable {
         guard fullAccess == .confirmed else { return "Typing and on-device AI work without it" }
         return cloudConfigured
             ? "On — cloud rewrites and key clicks work"
-            : "On — key clicks work. The cloud model has not connected yet; it connects on its own "
+            : "On — key clicks work. AI Keyboard has not connected yet; it connects on its own "
                 + "once this app has a network connection."
     }
 
@@ -196,9 +196,13 @@ public struct SetupState: Equatable, Sendable {
             // this named a settings screen; attestation fills that in by itself
             // now, so the honest instruction is the network, not a destination.
             // See `fullAccessDetail`.
-            : "The system key click sound, and the network a cloud model needs — including the connection "
-                + "this app makes once to set that model up. Until it does, Hebrew Fix, Rewrite and Reply "
-                + "are refused."
+            // The phrase "cloud rewrites" is deliberately absent from this branch
+            // and `SetupStateTests` fails the build if it comes back: this is the
+            // state where there are none, and the whole point of the split is not
+            // to promise them here.
+            : "The system key click sound, and the network AI Keyboard needs — including the connection "
+                + "this app makes once, on its own. Until it does, Hebrew Fix, Rewrite and Reply are "
+                + "refused."
     }
 
     /// What onboarding's Full Access step lists under "Works without it".
@@ -221,7 +225,7 @@ public struct SetupState: Equatable, Sendable {
         "Typing, autocorrect, predictions and emoji run on the device either way. Nothing that crosses "
         + "between the two does: iOS only lets the keyboard read this app's storage once Full Access is "
         + "on, so without it the languages you picked, your tone and your personal dictionary never "
-        + "reach it. It falls back to English and Hebrew, with no key click and no cloud model."
+        + "reach it. It falls back to English and Hebrew, with no key click and no cloud rewrites."
 
     /// The same consequence, said where the choice is made rather than two screens
     /// later. Shown beside the language list only while Full Access is unconfirmed,

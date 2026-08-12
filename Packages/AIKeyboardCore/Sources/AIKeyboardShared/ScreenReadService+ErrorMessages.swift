@@ -32,9 +32,15 @@ extension ScreenReadService {
     /// sent a user looking for a box that is not there. A 401 here means the same
     /// two things it means for `AIEngineError.cloudNotConfigured`: attestation has
     /// never run because the app has had no network since install, or the token it
-    /// wrote has expired. Opening the app is what fixes both.
+    /// wrote has expired. The app reconnects itself for both.
+    ///
+    /// **Interpolates `setUpRecovery` rather than carrying its own copy of it**,
+    /// which is what let this sentence keep saying "Open AI Keyboard once to
+    /// reconnect" for a whole change whose entire point was to stop saying that.
+    /// `CloudModelSettingNameTests` covers the four messages that already shared
+    /// the constant and could not have caught this one.
     public static let tokenRejected =
-        "The screen reading server turned this app away. Open AI Keyboard once to reconnect."
+        "The screen couldn't be read. \(BackendTransport.setUpRecovery)"
 
     /// A non-200 the backend did not describe: usually a 404, i.e. a host that
     /// exists and is not running this service.

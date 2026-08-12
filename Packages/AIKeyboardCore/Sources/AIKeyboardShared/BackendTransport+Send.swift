@@ -89,8 +89,8 @@ extension BackendTransport {
         // The backend forwards a provider safety block as 422 so it reads as a
         // decision about the text rather than as a service failure.
         case 422: return .refused
-        case 429: return .failed("The cloud model is busy. Try again in a moment.")
-        case 500...599: return .network("The cloud model is unavailable right now.")
+        case 429: return .failed("Busy right now. Try again in a moment.")
+        case 500...599: return .network("Unavailable right now. Try again shortly.")
         default: return .failed(message)
         }
     }

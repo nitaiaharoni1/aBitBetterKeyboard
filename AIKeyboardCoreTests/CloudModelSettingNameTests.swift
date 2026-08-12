@@ -3,46 +3,89 @@ import XCTest
 @testable import AIKeyboardCore
 @testable import AIKeyboardShared
 
-/// One recovery sentence, used wherever a missing cloud model dead-ends.
+/// One recovery sentence, used wherever an unconnected app dead-ends, and the
+/// rule that it must not describe the plumbing.
 ///
 /// `cloudBackendURL` is read by three processes. Before attestation, failures
 /// pointed at a field titled "Where the screen is read" or said nothing useful.
-/// These assert the property that stops that recurring: every dead end names the
-/// same recovery — open the app and let it reconnect.
+/// Then they pointed at a real screen, which was an improvement until the screen
+/// stopped having anything on it a user could act on: `AppAttestation` fills the
+/// bearer, at launch, on foreground and on a background refresh, so the only
+/// honest thing to report is that it is reconnecting.
+///
+/// These assert both halves of that: every dead end names the same recovery, and
+/// none of them says "cloud model" to somebody who has never been shown one.
 final class CloudModelSettingNameTests: XCTestCase {
 
-    /// The four failures that dead-end on the cloud all say the same next step.
-    func testEveryDeadEndNamesTheSameRecovery() {
-        let messages: [(String, String)] = [
+    /// Every message a user can reach when the app has not connected.
+    private var deadEnds: [(String, String)] {
+        [
             ("unsupportedLanguage", AIEngineError.unsupportedLanguage(.hebrew).message),
             ("cloudNotConfigured", AIEngineError.cloudNotConfigured.message),
             ("deviceNotSupported", AIEngineError.deviceNotSupported.message),
             ("notConfigured", ScreenContextEndReason.notConfigured.recovery)
         ]
-        for (name, message) in messages {
+    }
+
+    /// The four failures that dead-end on the cloud all say the same next step.
+    func testEveryDeadEndNamesTheSameRecovery() {
+        for (name, message) in deadEnds {
             XCTAssertTrue(
                 message.contains(BackendTransport.setUpRecovery),
-                "\(name) reports a missing cloud model and names nowhere to go: \(message)")
+                "\(name) reports an unconnected app and names no recovery: \(message)")
         }
     }
 
-    /// The settings path still names a real row for the Debug URL field; the
-    /// shipping recovery no longer points there, because attestation filled the
-    /// token and there is nothing left for the user to type.
-    func testTheSettingsPathNamesTheSectionAndTheRow() {
-        XCTAssertEqual(BackendTransport.settingsPath, "Settings › AI › Cloud model")
-        XCTAssertEqual(BackendTransport.setUpRecovery, "Open AI Keyboard once to reconnect.")
+    /// **The words "cloud model" are ours, not the user's.**
+    ///
+    /// Nothing in the shipping app offers a cloud model, asks for one, or lets
+    /// anybody change one — the row that reached that screen is compiled out of
+    /// Release. A failure that names it tells the owner of a keyboard that a
+    /// component they have never heard of is broken and implies they were meant
+    /// to have configured it.
+    ///
+    /// Asserted over the rendered strings rather than by reading the source,
+    /// because the leak that prompted this was an interpolation: the sentence
+    /// naming the component lived in `setUpRecovery` and arrived inside four
+    /// messages that each looked clean where they were written.
+    func testNoDeadEndNamesTheCloudModelAtTheUser() {
+        let titles = [
+            ("cloudNotConfigured", AIEngineError.cloudNotConfigured.title),
+            ("notConfigured", ScreenContextEndReason.notConfigured.explanation)
+        ]
+        for (name, text) in deadEnds + titles {
+            XCTAssertFalse(
+                text.localizedCaseInsensitiveContains("cloud model"),
+                "\(name) says 'cloud model' to somebody who has never been shown one: \(text)")
+        }
     }
 
-    /// The screen-context refusal no longer claims to be about screen reading
-    /// alone, because the setting it is missing is not.
-    func testTheScreenContextRefusalNamesTheCloudModel() {
+    /// **The recovery is a status, not an errand.** "Open AI Keyboard once to
+    /// reconnect" was an instruction, and the keyboard cannot carry it out on the
+    /// user's behalf: an extension has no `UIApplication`. The app reconnects on
+    /// its own at launch, on foreground and on a background wake-up, so the
+    /// sentence reports that instead of assigning it.
+    ///
+    /// `settingsPath` still names a real row, because the Debug URL and token
+    /// fields are still there and still reached that way.
+    func testTheRecoveryReportsRatherThanInstructs() {
+        XCTAssertEqual(BackendTransport.settingsPath, "Settings › AI › Cloud model")
+        XCTAssertEqual(
+            BackendTransport.setUpRecovery, "AI Keyboard is reconnecting. Try again in a moment.")
+        XCTAssertFalse(
+            BackendTransport.setUpRecovery.localizedCaseInsensitiveContains("open ai keyboard"),
+            "the recovery tells the user to open an app they are often already in")
+    }
+
+    /// The screen-context ending says what is true of the app rather than
+    /// blaming screen reading for something four other features share.
+    func testTheScreenContextRefusalNamesTheApp() {
         let explanation = ScreenContextEndReason.notConfigured.explanation
         XCTAssertTrue(
-            explanation.localizedCaseInsensitiveContains("cloud model"),
-            "the ending blames screen reading for a setting four other features share: \(explanation)")
+            explanation.localizedCaseInsensitiveContains("ai keyboard"),
+            "the ending blames screen reading for a state the whole app is in: \(explanation)")
         XCTAssertFalse(
             explanation.localizedCaseInsensitiveContains("in this build"),
-            "there is a screen for this now, so it is not something the build withheld")
+            "it reconnects on its own, so it is not something the build withheld")
     }
 }

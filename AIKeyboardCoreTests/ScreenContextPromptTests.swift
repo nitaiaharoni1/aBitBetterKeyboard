@@ -30,7 +30,12 @@ final class ScreenContextPromptTests: XCTestCase {
         XCTAssertTrue(
             withoutCloud.detail.contains(BackendTransport.setUpRecovery),
             "and it does not say what would make it work: \(withoutCloud.detail)")
-        XCTAssertEqual(withoutCloud.title, "Cloud model not ready")
+        // Names the state, not the component. See
+        // `CloudModelSettingNameTests.testNoDeadEndNamesTheCloudModelAtTheUser`.
+        XCTAssertEqual(withoutCloud.title, "Not connected")
+        XCTAssertFalse(
+            withoutCloud.detail.localizedCaseInsensitiveContains("cloud model"),
+            "the prompt names a component the user has never been shown: \(withoutCloud.detail)")
     }
 
     /// The other half, and it is not redundant: a version that simply never

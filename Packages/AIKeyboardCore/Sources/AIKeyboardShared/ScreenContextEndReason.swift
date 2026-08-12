@@ -84,12 +84,12 @@ public enum ScreenContextEndReason: UInt8, Codable, Sendable, CaseIterable {
         case .notEnded: return "Screen context is off."
         case .stopped: return "Screen context stopped."
         case .lost: return "Screen context stopped unexpectedly."
-        // Names the cloud model rather than "screen reading … in this build",
-        // because it is one setting serving two features and the sentence has to
-        // survive being read by somebody who came here from a failed Hebrew
-        // rewrite. See `BackendTransport.settingsPath`.
+        // Says what is true of the app rather than naming the component, for the
+        // reason `AIEngineError.cloudNotConfigured.title` does: this is read by
+        // somebody who came here from a failed Hebrew rewrite and has never been
+        // shown a cloud model, because there is nothing for them to do with one.
         case .notConfigured:
-            return "The cloud model isn't ready, and reading a screen needs it."
+            return "AI Keyboard isn't connected yet, and reading a screen needs it."
         case .noFrames: return "No screen frames arrived."
         }
     }

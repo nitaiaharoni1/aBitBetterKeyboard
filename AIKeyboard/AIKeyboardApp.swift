@@ -73,6 +73,22 @@ struct AIKeyboardApp: App {
                     }
                 }
         }
+        // **iOS wakes the app for this, and the user never learns it happened.**
+        // A session token lasts ninety days and only this process can renew one,
+        // so an install whose owner onboarded and never came back would have gone
+        // dark on every AI action until they happened to open the app again. That
+        // is the whole reason the keyboard used to have to say "open AI Keyboard"
+        // to somebody who had no idea it had a cloud model. `.backgroundTask` both
+        // registers the identifier at launch and handles the wake-up; an
+        // identifier that is permitted in `Info.plist` and never registered is a
+        // launch crash, which is why the two names come from one constant.
+        .backgroundTask(.appRefresh(AppAttestation.refreshTaskIdentifier)) {
+            await AppAttestation.refreshIfNeeded(store: .shared)
+            // Rescheduled from inside the wake-up, because iOS grants exactly one
+            // run per submitted request. Without this the app reconnects itself
+            // precisely once and then never again.
+            await AppAttestation.scheduleRefresh()
+        }
     }
 }
 
@@ -122,7 +138,14 @@ struct RootView: View {
         // somebody force-quits and reopens. `refreshIfNeeded` is cheap when there
         // is nothing to do and holds its own cooldown, so this cannot loop.
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .active else { return }
+            guard phase == .active else {
+                // Submitted on the way out, because a request survives the app
+                // being suspended and terminated but not being uninstalled, and
+                // this is the last moment the app is guaranteed to run. Resubmitting
+                // an identifier that already has a pending request replaces it.
+                AppAttestation.scheduleRefresh()
+                return
+            }
             Task { await AppAttestation.refreshIfNeeded(store: store) }
         }
         // Full-screen so the swipe-back gesture is the main affordance, which

@@ -1,4 +1,5 @@
 import AIKeyboardCore
+import BackgroundTasks
 import CryptoKit
 import DeviceCheck
 import Foundation
@@ -83,9 +84,51 @@ public enum AppAttestation {
     }
 
     /// The Cloud model screen's Try again, which asks once more whatever the last
-    /// attempt reported.
+    /// attempt reported. Debug only in practice: the row that reaches that screen
+    /// is compiled out of Release, because a connection the user cannot see is not
+    /// a connection they should have to repair.
     public static func attestNow(store: SharedStore) async {
         await attest(store: store)
+    }
+
+    /// The identifier `Info.plist` permits and `AIKeyboardApp` registers.
+    ///
+    /// **Named here rather than typed in three places**, because a background task
+    /// whose identifier is absent from `BGTaskSchedulerPermittedIdentifiers`
+    /// throws on submit, and one that is permitted but never registered crashes
+    /// the app on launch. Neither failure is visible from the screen this feature
+    /// has, which is none.
+    public static let refreshTaskIdentifier = "com.nitai.aikeyboard.attest"
+
+    /// Ask iOS to wake the app and let it reconnect while nobody is looking.
+    ///
+    /// **This is what makes the cloud invisible instead of merely unexplained.** A
+    /// session token lives ninety days and only the containing app can renew one,
+    /// so without this the honest instruction to a user whose token has aged out
+    /// is "open an app you have no reason to open" — and the keyboard has no way
+    /// to make that happen, since `UIApplication` does not exist in an extension
+    /// and the responder-chain `openURL` trick is disallowed. With it, the app
+    /// gets woken, attests, and the keyboard is working again before anybody
+    /// notices it stopped.
+    ///
+    /// A day, not an hour: the token has a sixty-day margin before it expires, so
+    /// there is nothing to be gained by asking more often, and `earliestBeginDate`
+    /// is a floor iOS is free to ignore for far longer on a phone that is rarely
+    /// charged. Submitting a request for an identifier that already has one
+    /// replaces it, so calling this on every background is a no-op rather than a
+    /// queue.
+    public static func scheduleRefresh() {
+        let request = BGAppRefreshTaskRequest(identifier: refreshTaskIdentifier)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 24 * 60 * 60)
+        do {
+            try BGTaskScheduler.shared.submit(request)
+        } catch {
+            // Simulators refuse to schedule at all, and a device with Background
+            // App Refresh switched off refuses too. Neither is worth a screen:
+            // launch and foreground still attest, which is every path that
+            // existed before this one.
+            log.notice("background refresh not scheduled: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     static func needsRefresh(store: SharedStore) -> Bool {

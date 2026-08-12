@@ -1,16 +1,23 @@
 import AIKeyboardCore
 import SwiftUI
 
-/// Shown when no cloud model is configured.
+/// Shown when the app has not connected yet.
 ///
 /// Dictation without a backend is a microphone that records into nothing: the
 /// failure would land after the user has already spoken. This card says so
 /// before they start, in the same words every other cloud dead-end in the app
-/// uses, and links directly to the fix.
+/// uses.
+///
+/// **It no longer offers a fix, because there is not one to offer.** The heading
+/// said "Needs a cloud model" and the card ended in a row leading to a server
+/// address. Nobody using this product has a server address, has been told they
+/// need one, or can do anything with the screen behind that row — the connection
+/// is made by `AppAttestation` without being asked. What is left is the part that
+/// is worth saying: speech leaves the device, and here is why it has to.
 struct DictationCloudSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            SectionHeader(title: "Needs a cloud model")
+            SectionHeader(title: "Not connected yet")
 
             Card {
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
@@ -21,9 +28,9 @@ struct DictationCloudSection: View {
                     .foregroundStyle(Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                    // The same row Settings and Screen Context point at, so the
-                    // fix keeps one name everywhere it is offered.
+                    #if DEBUG
                     CloudModelRow()
+                    #endif
                 }
             }
         }
