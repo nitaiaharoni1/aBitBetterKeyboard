@@ -41,6 +41,13 @@ PROJECT="AIKeyboard.xcodeproj"
 SCHEME="AIKeyboard"
 APP_ID="com.nitai.aikeyboard"
 SENTENCE="בוא נעשה sync"
+# The reading the recorder publishes half a second in, before the full one, and
+# deliberately shorter than `SENTENCE` rather than equal to it: two greps looking
+# for the same string would both pass on a build that logged the transcript into
+# the partial's slot. Both are prefixes of `DictationChannelProbe.sentence`, and
+# the keyboard truncates what it logs to 24 characters, so each grep matches a
+# prefix rather than a whole sentence — see `DictationSession.report()`.
+PARTIAL="בוא נעשה"
 LOG="$(mktemp -t dictation)"
 
 pass() { printf '  \033[32mPASS\033[0m %s\n' "$1"; }
@@ -122,6 +129,16 @@ echo "$WATCH" | grep -q "availability=noSession" && echo "  (it started from noS
 echo "$WATCH" | grep -q "availability=listening" \
   && pass "the extension saw the other process's session and opened an utterance" \
   || fail "the extension never saw a live session"
+
+# **Streaming, and it is checked before the final transcript on purpose.** The
+# recorder publishes a reading of the utterance so far every couple of seconds and
+# the keyboard puts each one in the field, replacing the last; the final transcript
+# then replaces all of them. A build where the partial never crosses still passes
+# the transcript check below, and the user still gets their sentence — two seconds
+# after they stop speaking instead of while they speak, which is the whole feature.
+echo "$WATCH" | grep -q "partial=$PARTIAL" \
+  && pass "the extension received a partial transcript while the utterance was open" \
+  || fail "no partial crossed the App Group, so dictation does not stream"
 
 echo "$WATCH" | grep -q "transcript=$SENTENCE" \
   && pass "the extension received the transcript the app process published" \

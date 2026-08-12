@@ -64,6 +64,29 @@ public final class DictationService: ObservableObject {
     /// two can overlap — see `close(utterance:)` — and the first to finish must
     /// not report the session idle while the second is still running.
     var inFlight = 0
+    /// Apple's dictation model, transcribing the open utterance as it is spoken.
+    ///
+    /// **This is where the streaming half lives now, and it replaced a great deal
+    /// of machinery.** Partials used to be Vertex calls on a cadence, which needed
+    /// a throttle, a no-growth check, a one-in-flight guard, a never-repeating
+    /// token so a late task could not clear a newer one's slot, and a WAV encode of
+    /// the whole buffer every couple of seconds under the audio thread's lock.
+    /// All of that is deleted. See `LiveTranscriber`.
+    ///
+    /// Nil when the keyboard's language is not one of the 43 Apple can transcribe,
+    /// or when the model is not installed yet. That is not an error: the recording
+    /// still works and `CloudDictation` still produces the transcript at the end.
+    /// The only thing lost is the words appearing while somebody speaks.
+    ///
+    /// **Typed `Any?` on purpose.** This class deploys to iOS 17 and
+    /// `LiveTranscriber` needs 26, and Swift will not let a stored property carry a
+    /// type that is newer than its container. The cast happens at each use, inside
+    /// the `#available` check that has to be there anyway.
+    var live: Any?
+    /// Rises every time a reading is published for the current utterance,
+    /// matching `DictationPartialRecord.sequence` and
+    /// `DictationState.partialSequence`. Reset per utterance in `open(utterance:)`.
+    var partialSequence: UInt32 = 0
     var observers: [NSObjectProtocol] = []
 
     /// **Monotonic, not the wall clock.** `expiresAt` below is a `Date` for the

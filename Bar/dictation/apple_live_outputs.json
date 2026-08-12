@@ -1,0 +1,326 @@
+[
+  {
+    "text" : "‏נועה תעדכני בבקשה את הדו״ח לפני הישיבה עם ההנהלה מחר ב-10:30",
+    "languages" : "he-IL",
+    "language_mix" : "he",
+    "id" : "he-01",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "seconds" : 4.8760000000000003,
+    "speech" : "yes"
+  },
+  {
+    "languages" : "he-IL",
+    "language_mix" : "he",
+    "id" : "he-02",
+    "seconds" : 4.7709999999999999,
+    "text" : "‏דברתי עם יואב מעצבת של מובילי הם רוצים לראות הדגמה בשבוע הבא",
+    "speech" : "yes",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL"
+  },
+  {
+    "language_mix" : "he",
+    "seconds" : 4.4889999999999999,
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "speech" : "yes",
+    "text" : "‏צריך לסגור את התקציב לרבעון הבא עד יום חמישי אחרת זה נדחה לינואר",
+    "languages" : "he-IL",
+    "id" : "he-03"
+  },
+  {
+    "languages" : "he-IL",
+    "id" : "he-04",
+    "speech" : "yes",
+    "text" : "‏שלחתי לשירה את החוזה ב-WhatsApp היא אמרה שתחזור אליי אחרי הצהרים",
+    "language_mix" : "he",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "seconds" : 4.8719999999999999
+  },
+  {
+    "text" : "‏הפגישה עם המשקיעים של פיטנגו נדחתה ליום שלישי הבא בשעה 9:00 בבוקר",
+    "id" : "he-05",
+    "speech" : "yes",
+    "seconds" : 5.2779999999999996,
+    "languages" : "he-IL",
+    "language_mix" : "he",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL"
+  },
+  {
+    "text" : "‏אבישי ביקש שנעביר את כל הקבצים לתיקייה המשותפת לפני סוף החודש",
+    "language_mix" : "he",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "speech" : "yes",
+    "id" : "he-06",
+    "languages" : "he-IL",
+    "seconds" : 4.6130000000000004
+  },
+  {
+    "seconds" : 4.0339999999999998,
+    "id" : "he-07",
+    "language_mix" : "he",
+    "speech" : "yes",
+    "languages" : "he-IL",
+    "text" : "‏יש לנו תקלה בשרת של הלקוח בחיפה אני נוסע לשם מחר בבוקר",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL"
+  },
+  {
+    "text" : "‏תגידי לרונית שאני מאחר לישיבת הצוות יש פקקים בכביש שש",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "language_mix" : "he",
+    "seconds" : 4.3760000000000003,
+    "id" : "he-08",
+    "languages" : "he-IL",
+    "speech" : "yes"
+  },
+  {
+    "text" : "‏המנהל הכללי של סי X אידי שבע XP שלוש Cup עם תמר שהם מגייסים עוד 200 מהנדסים השנה",
+    "language_mix" : "he",
+    "seconds" : 6.242,
+    "id" : "he-09",
+    "speech" : "yes",
+    "languages" : "he-IL",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL"
+  },
+  {
+    "language_mix" : "he",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "languages" : "he-IL",
+    "speech" : "yes",
+    "text" : "‏אני חושב שכדאי לנו לבדוק את זה עוד פעם לפני שאנחנו מעלים לאוויר",
+    "id" : "he-10",
+    "seconds" : 3.9980000000000002
+  },
+  {
+    "speech" : "yes",
+    "languages" : "he-IL",
+    "text" : "‏כתבה לי בבקשה סיכום קצר של השיחה עם הלקוח חוץ מייל מייל",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "seconds" : 4.0270000000000001,
+    "language_mix" : "he",
+    "id" : "he-11"
+  },
+  {
+    "seconds" : 4.8949999999999996,
+    "text" : "‏הגשנו את הבקשה לרשות החדשנות התשובה אמורה להגיע תוך שישה שבועות",
+    "id" : "he-12",
+    "languages" : "he-IL",
+    "speech" : "yes",
+    "language_mix" : "he",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL"
+  },
+  {
+    "seconds" : 3.2850000000000001,
+    "text" : "Can you review the deck before the board meeting on Thursday morning?",
+    "languages" : "en-US",
+    "config" : "apple DictationTranscriber progressiveLongDictation en-US",
+    "language_mix" : "en",
+    "speech" : "yes",
+    "id" : "en-01"
+  },
+  {
+    "text" : "I pushed the fix to staging, but the pipeline is still failing on the integration test",
+    "seconds" : 5.1139999999999999,
+    "language_mix" : "en",
+    "speech" : "yes",
+    "config" : "apple DictationTranscriber progressiveLongDictation en-US",
+    "languages" : "en-US",
+    "id" : "en-02"
+  },
+  {
+    "languages" : "en-US",
+    "text" : "Let's move the stand up to 915 so ya can join from Tel Aviv",
+    "seconds" : 3.8570000000000002,
+    "language_mix" : "en",
+    "speech" : "yes",
+    "id" : "en-03",
+    "config" : "apple DictationTranscriber progressiveLongDictation en-US"
+  },
+  {
+    "language_mix" : "en",
+    "seconds" : 4.1740000000000004,
+    "id" : "en-04",
+    "config" : "apple DictationTranscriber progressiveLongDictation en-US",
+    "speech" : "yes",
+    "languages" : "en-US",
+    "text" : "We closed the seed round last week 12 million led by Alf"
+  },
+  {
+    "text" : "The customer in Berlin once so to compliance before they signed the contract",
+    "languages" : "en-US",
+    "speech" : "yes",
+    "language_mix" : "en",
+    "config" : "apple DictationTranscriber progressiveLongDictation en-US",
+    "id" : "en-05",
+    "seconds" : 4.6520000000000001
+  },
+  {
+    "languages" : "en-US",
+    "language_mix" : "en",
+    "text" : "Please send me the invoice from the Veerendra. I need it for the quarterly.",
+    "id" : "en-06",
+    "speech" : "yes",
+    "config" : "apple DictationTranscriber progressiveLongDictation en-US",
+    "seconds" : 4.6509999999999998
+  },
+  {
+    "seconds" : 3.9249999999999998,
+    "speech" : "yes",
+    "languages" : "en-US",
+    "id" : "en-07",
+    "text" : "I think we should ship the beta to 100 users first and see what break",
+    "config" : "apple DictationTranscriber progressiveLongDictation en-US",
+    "language_mix" : "en"
+  },
+  {
+    "languages" : "en-US",
+    "speech" : "yes",
+    "config" : "apple DictationTranscriber progressiveLongDictation en-US",
+    "id" : "en-08",
+    "text" : "Rabbit is Sunday, so ask Dora about the migration script",
+    "language_mix" : "en",
+    "seconds" : 3.02
+  },
+  {
+    "config" : "apple DictationTranscriber progressiveLongDictation en-US",
+    "languages" : "en-US",
+    "speech" : "yes",
+    "language_mix" : "en",
+    "seconds" : 4.024,
+    "text" : "The latency went up after the deploy. Can you check the database connection pool?",
+    "id" : "en-09"
+  },
+  {
+    "language_mix" : "en",
+    "id" : "en-10",
+    "seconds" : 3.3370000000000002,
+    "text" : "We need to hire two more backend engineers before the end of the quarter",
+    "config" : "apple DictationTranscriber progressiveLongDictation en-US",
+    "speech" : "yes",
+    "languages" : "en-US"
+  },
+  {
+    "language_mix" : "en",
+    "speech" : "yes",
+    "text" : "I'll be working from home tomorrow ping me on Slack if anything urgent comes up",
+    "id" : "en-11",
+    "config" : "apple DictationTranscriber progressiveLongDictation en-US",
+    "languages" : "en-US",
+    "seconds" : 4.2300000000000004
+  },
+  {
+    "text" : "The demo with wicks went well they want to start a pilot in September",
+    "id" : "en-12",
+    "config" : "apple DictationTranscriber progressiveLongDictation en-US",
+    "seconds" : 4.1470000000000002,
+    "language_mix" : "en",
+    "speech" : "yes",
+    "languages" : "en-US"
+  },
+  {
+    "speech" : "yes",
+    "languages" : "he-IL",
+    "text" : "‏בוא נעשה סקין קצר על האירוע של שלוש לפני הסטנד אפ",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "id" : "mix-01",
+    "language_mix" : "he-en",
+    "seconds" : 3.9940000000000002
+  },
+  {
+    "id" : "mix-02",
+    "text" : "‏אני אשלח לך את דיאמנט מחר בבוקר אחרי שאני מסיימת את הריו",
+    "speech" : "yes",
+    "languages" : "he-IL",
+    "seconds" : 4.4619999999999997,
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "language_mix" : "he-en"
+  },
+  {
+    "id" : "mix-03",
+    "speech" : "yes",
+    "text" : "‏צריך לעשות לו לפרידה כשהן אחרי טסט עוברים ביציאה",
+    "language_mix" : "he-en",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "languages" : "he-IL",
+    "seconds" : 4.1020000000000003
+  },
+  {
+    "id" : "mix-04",
+    "language_mix" : "he-en",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "languages" : "he-IL",
+    "text" : "‏שלחתי לך בית למיטינג בזום תאשר בבקשה בית קלנדר",
+    "seconds" : 4.3609999999999998,
+    "speech" : "yes"
+  },
+  {
+    "id" : "mix-05",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "seconds" : 4.9299999999999997,
+    "text" : "‏דיזיינר אלה הם הקפ לותעברי עליהם לפני הספרינט פלא אנינג",
+    "language_mix" : "he-en",
+    "languages" : "he-IL",
+    "speech" : "yes"
+  },
+  {
+    "languages" : "he-IL",
+    "speech" : "yes",
+    "seconds" : 5.415,
+    "text" : "‏יש באג בלג׳ינס של האפליקציה פתחו DJ CD 7 XP 13",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "id" : "mix-06",
+    "language_mix" : "he-en"
+  },
+  {
+    "text" : "‏המשקיעים רוצים לראות את המטריקס של אד שירן ברבעון האחרון",
+    "id" : "mix-07",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "languages" : "he-IL",
+    "seconds" : 3.8620000000000001,
+    "language_mix" : "he-en",
+    "speech" : "yes"
+  },
+  {
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "language_mix" : "he-en",
+    "seconds" : 3.1030000000000002,
+    "speech" : "yes",
+    "languages" : "he-IL",
+    "text" : "‏תעשה לי פייבר ותכתוב Summer של הכל עם הלקוח",
+    "id" : "mix-08"
+  },
+  {
+    "speech" : "yes",
+    "language_mix" : "he-en",
+    "id" : "mix-09",
+    "text" : "‏בורדינג של העובדים החדשים מתחיל ביום ראשון עם H R",
+    "languages" : "he-IL",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "seconds" : 3.9089999999999998
+  },
+  {
+    "text" : "‏צריך לעדכן את הפרסים באתר לפני של הגרסה החדשה",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "id" : "mix-10",
+    "seconds" : 4.5389999999999997,
+    "language_mix" : "he-en",
+    "speech" : "yes",
+    "languages" : "he-IL"
+  },
+  {
+    "text" : "‏אני ברימות היום אפשר לדבר איתי בסלק או ב-WhatsApp",
+    "language_mix" : "he-en",
+    "id" : "mix-11",
+    "seconds" : 3.742,
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "languages" : "he-IL",
+    "speech" : "yes"
+  },
+  {
+    "text" : "‏היא באה כן של דניאל מוכן חסר רק אינטגריטי עם הפה של החברה",
+    "id" : "mix-12",
+    "languages" : "he-IL",
+    "config" : "apple DictationTranscriber progressiveLongDictation he-IL",
+    "language_mix" : "he-en",
+    "seconds" : 4.6749999999999998,
+    "speech" : "yes"
+  }
+]

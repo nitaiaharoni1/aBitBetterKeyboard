@@ -16,7 +16,6 @@ extension KeyboardController {
             dictationIsLive: dictationAvailability.isLive,
             dictationTranscript: dictationTranscript,
             dictationFailure: dictationFailure,
-            dictationIsPaused: dictationIsPaused,
             isWorking: isWorking,
             runningAction: runningAction,
             error: aiError,
@@ -32,16 +31,74 @@ extension KeyboardController {
 
     /// Whether a key in the action row (or an edge copy of one) should read as
     /// the thing currently happening.
+    ///
+    /// **Asked of the controller rather than of the strip, because the strip is
+    /// no longer up for the two states this most has to answer.** It used to read
+    /// `BannerState.activeActionKey`, which worked only for as long as every live
+    /// state had a row of its own; a running call and a live recording draw no
+    /// strip now, and a key that stopped lighting for them would leave the user
+    /// with nothing at all saying which of the five they had tapped.
     public func isActionKeyActive(_ cap: KeyCap) -> Bool {
         if case .emoji = cap { return overlay.isEmoji }
-        switch bannerState.activeActionKey {
-        case .ai(.reply): return cap == .aiReply
-        case .ai(.fix): return cap == .aiFix
-        case .ai(.rewrite), .ai(.tone): return cap == .quickTone
-        case .dictation: return cap == .dictation
-        case nil: return false
+        if cap == .dictation {
+            // A dictation refusal carries no `AIAction` — that is what `nil`
+            // means in `Block.action` — so it is the microphone it belongs to.
+            return isDictationActive || (block.map { $0.action == nil } ?? false)
+        }
+        guard let action = activeAIAction else { return false }
+        switch action {
+        case .reply: return cap == .aiReply
+        case .fix: return cap == .aiFix
+        case .rewrite, .tone: return cap == .quickTone
         }
     }
+
+    /// Which of the three text actions the row should draw as current.
+    ///
+    /// The same order `BannerState.resolve` asks its questions in, and for the
+    /// same reasons: a recording outranks everything because it is running in
+    /// another process, a refusal is about the tap that was just made, and a call
+    /// in flight outranks the previous call's leftovers.
+    var activeAIAction: AIAction? {
+        if isDictationActive { return nil }
+        if let block { return block.action }
+        if isWorking { return runningAction }
+        switch bannerState {
+        case .options(let action, _, _), .failed(let action, _, _): return action
+        default: return nil
+        }
+    }
+
+    /// What the microphone key is showing.
+    ///
+    /// **The recording is reported by the key now, and this is where that is
+    /// decided.** It used to be a 69pt strip with a waveform in it; the strip is
+    /// gone for a recording, so the four things it said — starting, listening,
+    /// paused, finishing — have to be four appearances of one key. See
+    /// `DictationKeyState`.
+    ///
+    /// `pendingDictationInsert` is the window in the middle: `isDictating` is
+    /// already false and the transcription is still in flight. A key that went
+    /// dark there would offer to start a second recording over the first one's
+    /// answer.
+    public var dictationKeyState: DictationKeyState {
+        if isDictating {
+            guard !dictationIsPaused else { return .paused }
+            // **Paused outranks the countdown, which is why it is asked first**,
+            // and getting that the wrong way round shipped once: a recording
+            // paused inside the last minute went on counting down while the
+            // microphone was not listening. The countdown is news about the
+            // session; being paused is news about the microphone, and the
+            // microphone is what the user just touched.
+            let remaining = dictationRemainingSeconds
+            return .recording(secondsLeft: remaining.flatMap { $0 < 60 ? Int($0) : nil })
+        }
+        if pendingDictationInsert { return .finishing }
+        return .idle
+    }
+
+    /// Whether the microphone key is the live control right now.
+    public var isDictationActive: Bool { dictationKeyState.isActive }
 
     /// Whether a key in the action row has nothing it could do, and should be
     /// drawn as such.
@@ -57,16 +114,42 @@ extension KeyboardController {
     /// It was about a button that *looked* live: a fully saturated brand icon over
     /// a faded gradient, which read as enabled, did nothing, and said nothing. A
     /// key that is visibly dimmed makes the same statement the refusal made, in the
-    /// place the user is already looking, without spending a 72pt strip and a
-    /// Dismiss tap on a sentence they can work out from an empty field. The words
-    /// survive for anyone who cannot see it: `KeyView` says "Type something first"
-    /// as the key's accessibility hint, and `refuseForEmptyField` is still there
-    /// behind every route that is not a key.
+    /// place the user is already looking, without spending a strip and a Dismiss
+    /// tap on a sentence they can work out from an empty field. The words survive
+    /// for anyone who cannot see it: `KeyView` reads `actionKeyDisabledReason` as
+    /// the key's accessibility hint — one of two sentences now, since a recording
+    /// in progress disables these keys as well as an empty field — and
+    /// `refuseForEmptyField` is still there behind every route that is not a key.
+    /// **A recording disables all three, including the one that needs no text.**
+    /// The field is being written into a couple of words at a time while somebody
+    /// speaks, so every one of these actions would be editing a sentence that is
+    /// still arriving: Fix is handed a half-finished message and replaces the whole
+    /// field with a correction of it, `streamedDictation` then points at text that
+    /// is no longer there, and the transcript that lands a second later cannot find
+    /// its draft and inserts a second copy beside it. Reply is included because it
+    /// inserts at the caret, which is exactly where the next reading is about to go.
     public func isActionKeyDisabled(_ cap: KeyCap) -> Bool {
+        if isDictationActive {
+            return cap == .aiFix || cap == .quickTone || cap == .aiReply
+        }
         switch cap {
         case .aiFix, .quickTone: return !documentHasText
         default: return false
         }
+    }
+
+    /// Why a key in the action row is drawn off, in the words the accessibility
+    /// hint prints. Empty when it is not off.
+    ///
+    /// **A dimmed cap says "not now" to somebody who can see it and nothing at all
+    /// to somebody who cannot**, so the reason has to survive in words — and there
+    /// are two reasons now. "Type something first" was the only one for as long as
+    /// an empty field was the only thing that could disable these keys, and reading
+    /// it out over a live recording would be telling the user to do the one thing
+    /// they are already doing.
+    public func actionKeyDisabledReason(_ cap: KeyCap) -> String {
+        guard isActionKeyDisabled(cap) else { return "" }
+        return isDictationActive ? "Not while you're dictating" : "Type something first"
     }
 
     /// Clears every published field the banner reads for an AI answer.

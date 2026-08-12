@@ -1,0 +1,30 @@
+{
+  "generated_by": "Bar/grouped/make-rows.py",
+  "source": "Packages/AIKeyboardCore/Sources/AIKeyboardCore/LetterLayouts.swift",
+  "note": "Physical key order, which is already Apple's left-to-right screen order. Right-to-left layouts are NOT mirrored here — see .claude/rules/keyboard-layout.md, where reading this as logical order reversed six languages at once.",
+  "languages": {
+    "en": {
+      "rows": [
+        "qwertyuiop",
+        "asdfghjkl",
+        "zxcvbnm"
+      ],
+      "letters": 26
+    },
+    "he": {
+      "rows": [
+        "קראטוןםפ",
+        "שדגכעיחלךף",
+        "זסבהנמצתץ"
+      ],
+      "letters": 27,
+      "finalForms": {
+        "ך": "כ",
+        "ם": "מ",
+        "ן": "נ",
+        "ף": "פ",
+        "ץ": "צ"
+      }
+    }
+  }
+}

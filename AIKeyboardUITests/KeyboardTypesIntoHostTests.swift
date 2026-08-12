@@ -198,7 +198,7 @@ final class KeyboardTypesIntoHostTests: KeyboardExtensionTestCase {
     /// banner to be fully on screen and hittable, then dismiss it.
     ///
     /// Height check: `app.keyboards.firstMatch` is the UIKit keyboard window the
-    /// extension occupies. The banner is 72 pt; we assert growth of at least 60 pt
+    /// extension occupies. The banner is 69 pt; we assert growth of at least 60 pt
     /// (generous threshold for simulator timing and coordinate-space rounding).
     func testARefusalGrowsTheRealExtensionToFitTheBanner() throws {
         _ = try standExtensionOverARealTextField()
@@ -219,14 +219,14 @@ final class KeyboardTypesIntoHostTests: KeyboardExtensionTestCase {
             banner.waitForExistence(timeout: 5) && banner.isHittable,
             "the refusal banner was clipped because the extension kept its idle height")
 
-        // The banner adds 72 pt; require at least 60 pt of growth so the
+        // The banner adds 69 pt; require at least 60 pt of growth so the
         // assertion still passes under sub-point simulator rounding.
         let afterHeight = keyboard.frame.height
         XCTAssertGreaterThan(
             afterHeight - beforeHeight, 60,
             """
             Extension grew \(afterHeight - beforeHeight) pt after the banner appeared; \
-            expected > 60 pt (banner is 72 pt). The height-constraint wiring in \
+            expected > 60 pt (banner is 69 pt). The height-constraint wiring in \
             KeyboardViewController may not be reaching the host.
             """)
 

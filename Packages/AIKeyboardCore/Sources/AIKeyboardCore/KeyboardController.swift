@@ -138,17 +138,47 @@ public final class KeyboardController: ObservableObject {
 
     @Published public var isDictating = false
     @Published public var dictationTranscript = ""
+
+    /// Which way the transcript reads.
+    ///
+    /// **Nothing draws this today, and it is kept on purpose rather than by
+    /// oversight.** Its reader was the deleted strip, which laid a transcript out
+    /// in its own direction while it sat above the keys; the words go straight into
+    /// the field now, and a text field decides its own direction. What stops it
+    /// being deleted is the chain underneath: it is the only consumer of
+    /// `DictationSession.transcriptLanguages`, which is the only consumer of
+    /// `DictationTranscriptRecord.languages` and `DictationPartialRecord.languages`
+    /// — real data crossing the App Group that the transcriber went to the trouble
+    /// of reporting. `KeyboardController.isRightToLeft(reported:text:)` also holds
+    /// a measured trap that would be lost with it, and `DictationKeyboardTests` is
+    /// what holds it: the direction has to come from the *reported* languages,
+    /// because counting letters lays `בוא נעשה sync על ה-roadmap` out left to right.
     @Published public var dictationIsRightToLeft = false
     /// Why there is no transcript, in a sentence fit to show. Empty otherwise.
     @Published public var dictationFailure = ""
-    @Published public var waveformPhase: Double = 0
 
-    /// What the keyboard can do about dictation right now. The panel reads it
-    /// directly; there is nothing to mirror, and mirroring it would be a second
-    /// copy of a state that changes ten times a second.
-    public var dictationAvailability: DictationSession.Availability { dictation.availability }
-    public var dictationLevel: Double { dictation.level }
-    public var dictationRemainingSeconds: Double? { dictation.remainingSeconds }
+    /// What the keyboard can do about dictation right now.
+    ///
+    /// **Mirrored rather than read through, and the reason is the strip that is no
+    /// longer there.** This was a computed property forwarding to
+    /// `DictationSession`, and it worked only because the deleted waveform
+    /// republished `waveformPhase` twenty times a second, dragging every other
+    /// dictation reading onto the screen with it. With the recording drawn on the
+    /// microphone key and the pause control in the suggestion bar, nothing else
+    /// publishes: a tap on Pause would change `availability` on another object and
+    /// leave both surfaces showing the state before it. Subscribed in `init`, not
+    /// in `observeDictation()`, so a controller that has never started a recording
+    /// still reports what the session can see.
+    @Published public private(set) var dictationAvailability: DictationSession.Availability =
+        .noSession(.notEnded)
+    /// Seconds before the session closes itself, when it will. The microphone key
+    /// counts the last minute of it — see `DictationKeyState`.
+    ///
+    /// **Mirrored a whole second at a time.** `DictationSession` republishes this
+    /// on every one of its ten polls a second; the caption it feeds counts in
+    /// seconds, so forwarding each tick would re-render the entire keyboard ten
+    /// times a second to redraw the same three characters.
+    @Published public private(set) var dictationRemainingSeconds: Double?
 
     /// The emoji last inserted, most recent first. Seeded from `SharedStore` in
     /// `init` and written back by `insertEmoji`, so the Recent tab survives iOS
@@ -225,12 +255,34 @@ public final class KeyboardController: ObservableObject {
     /// temporary directory.
     let dictation: DictationSession
 
-    var waveformTask: Task<Void, Never>?
     var workingTask: Task<Void, Never>?
     var languageSwitchTask: Task<Void, Never>?
-    /// The user tapped Insert and the words have not arrived yet. Insertion is
+    /// The user tapped Stop and the words have not arrived yet. Insertion is
     /// deferred because the recording is transcribed in another process.
-    var pendingDictationInsert = false
+    ///
+    /// **Published, because the microphone key draws this state.** It is what
+    /// `dictationKeyState` answers `.finishing` on, and the strip that used to say
+    /// "Transcribing" is gone — a plain `var` would leave the key showing Stop over
+    /// a recording that had already stopped until some unrelated publish happened
+    /// to redraw it.
+    @Published var pendingDictationInsert = false
+
+    /// Exactly what the open recording has written into the field, the space in
+    /// front of it included, or empty when it has written nothing.
+    ///
+    /// **It is a record of an edit this keyboard made, held for the same reason
+    /// `revertibleEdit` is one**: `UITextDocumentProxy` offers no undo and no way
+    /// to address a range, so replacing what was streamed a moment ago means
+    /// knowing character for character what it was. See
+    /// `KeyboardController.replaceStreamedDictation`.
+    var streamedDictation = ""
+
+    /// True once the field has moved out from under what this recording streamed —
+    /// the user typed, moved the caret, or the host rewrote it. No more partials
+    /// are written after that, because each would land as a fresh copy rather than
+    /// replacing the last.
+    var dictationStreamAbandoned = false
+
     var dictationObservers = Set<AnyCancellable>()
     var lastSpaceTapAt: Date?
     var spaceTouch = SpaceSwipe.Touch()
@@ -264,6 +316,10 @@ public final class KeyboardController: ObservableObject {
     /// a store the tests had filled themselves. Scripted demo words are not
     /// somebody's vocabulary either.
     let personal: PersonalLanguageModel
+
+    /// The word being typed on grouped keys, when that feature is on. Empty and
+    /// inert otherwise. See `KeyboardController+Grouped.swift`.
+    let grouped = GroupedInput()
 
     public init(
         target: TextTarget?,
@@ -305,6 +361,23 @@ public final class KeyboardController: ObservableObject {
                 self?.applyRefinement(words, for: askedAbout)
             }
         }
+
+        // See `dictationAvailability`. Here rather than in `observeDictation()`
+        // because a controller that has never opened an utterance still has to
+        // report what the session can see, and because the sink is what makes a
+        // pause visible on the two surfaces that draw one.
+        dictationAvailability = dictation.availability
+        dictation.$availability
+            .sink { [weak self] availability in self?.dictationAvailability = availability }
+            .store(in: &cancellables)
+        dictation.$remainingSeconds
+            .sink { [weak self] seconds in
+                guard let self else { return }
+                let whole = seconds.map { $0.rounded(.down) }
+                guard whole != self.dictationRemainingSeconds else { return }
+                self.dictationRemainingSeconds = whole
+            }
+            .store(in: &cancellables)
 
         let session = ScreenContextSession.shared
         screenContext = session.state

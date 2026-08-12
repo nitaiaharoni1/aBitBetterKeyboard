@@ -102,6 +102,21 @@ struct RootView: View {
         Group {
             if store.hasCompletedOnboarding {
                 MainTabView(selection: $selectedMainTab)
+                    // **`Theme.Brand` is a global, so somebody has to tell
+                    // SwiftUI it moved.** Most of the views that draw an accent
+                    // observe nothing and take no parameter that changes with
+                    // the palette, so without this they keep the colour they
+                    // were built with until something unrelated invalidates
+                    // them. Rebuilding the tab tree is the cheap, total answer.
+                    //
+                    // The state it costs is navigation depth inside a tab, and
+                    // that is affordable *because of where the picker is*: it
+                    // sits on the Settings root, which is the only screen a
+                    // palette can be changed from, so there is nothing pushed
+                    // above it to lose. Moving the picker behind a
+                    // `NavigationRow` would break that and this would start
+                    // dismissing the screen the user tapped on.
+                    .id(store.brandPalette)
             } else {
                 OnboardingFlow()
             }

@@ -100,14 +100,19 @@ extension SuggestionBar {
     /// that *failed* needs nothing here: `beginWork` puts the reason in `aiError`
     /// and `ActionBanner` is already showing it, one row up.
     ///
-    /// Reads `documentHasText` rather than `hasTextToWorkWith`: they answer the
-    /// same question, but only the published one makes this body re-run when the
-    /// first character lands.
+    /// **The question is asked of `isActionKeyDisabled` rather than of
+    /// `documentHasText`, so this button and the Rewrite key cannot answer it
+    /// differently.** They used to each read the field for themselves, which is
+    /// D8's own defect, and the reasons a control is unavailable have since grown:
+    /// an empty field is one, and a recording in progress is another — nothing may
+    /// edit a message while it is still being spoken into. Reading the same
+    /// published question keeps the two in step by construction rather than by
+    /// both remembering to add the new clause.
     var toneButton: some View {
         let tone = controller.defaultTone
         let isBusy = controller.isWorking
         let tap = Self.toneTap(
-            hasTextToWorkWith: controller.documentHasText, isWorking: isBusy)
+            hasTextToWorkWith: !controller.isActionKeyDisabled(.quickTone), isWorking: isBusy)
 
         let tint =
             tap == .rewrite
@@ -164,7 +169,11 @@ extension SuggestionBar {
     private func toneHint(_ tap: ToneTap) -> String {
         switch tap {
         case .ignore: return "Working"
-        case .needsText: return "Nothing to rewrite yet. Type something first"
+        // Two reasons wear this one case, so the words come from the same place
+        // the key's own hint reads them from rather than being spelled here — a
+        // button that says "type something first" over a live recording is telling
+        // the user to do the one thing they are already doing.
+        case .needsText: return controller.actionKeyDisabledReason(.quickTone)
         // The same words `ToneSetting.settingsNote` points at this button with, so
         // "the one-tap rewrite button" names one control everywhere it is written.
         case .rewrite:

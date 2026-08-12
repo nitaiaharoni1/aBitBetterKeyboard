@@ -36,7 +36,10 @@ final class FrameFingerprintKeyboardCropTests: XCTestCase {
     }
 
     /// A simulated deployed frame: host conversation on top, our own keyboard
-    /// at the bottom, and a `ShimmerLine` gradient at the given leading edge.
+    /// at the bottom, and a bright band of our own animating chrome at the given
+    /// leading edge — a shimmer when this was written, `WorkingProgressBar` now.
+    /// What it stands for is the thing this test is about: our own UI moving
+    /// inside the fingerprint band.
     private func deployedFrame(newest: Range<Int>, shimmer: Int) -> [UInt8] {
         var pixels = [UInt8](repeating: 128, count: width * height * 4)
         paint(&pixels, rows: newest, columns: 24..<220, value: 255)

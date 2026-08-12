@@ -135,6 +135,21 @@ extension KeyboardController {
     /// reported separately rather than by widening it, so nothing downstream has
     /// to change to keep working.
     func runTone(_ setting: ToneSetting) {
+        // **Nothing edits the field while it is still being spoken into, and this
+        // is where that has to be said for every tone route.** `run(_:)` carries
+        // the same guard and does *not* cover these: `press(.quickTone)` calls
+        // `runDefaultTone()` directly, and the register popup calls
+        // `selectTone(named:)` — neither goes anywhere near `run(_:)`, so a guard
+        // written only there is a backstop that does not exist for the one key that
+        // has two ways of being tapped. This function is where all four routes
+        // converge (`runDefaultTone`, both `selectTone` overloads, and the popup
+        // through them), which makes it the only place one line can cover them all.
+        //
+        // Silent, unlike the empty-field refusal above it: the key is drawn off for
+        // the length of the recording and says why, and a refusal strip opening
+        // under somebody mid-sentence would be the banner coming back for exactly
+        // the case it was taken away for.
+        guard !isDictationActive else { return }
         let tone = setting.style
         let instruction = setting.instruction
         selectedTone = tone

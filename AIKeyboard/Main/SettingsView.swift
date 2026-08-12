@@ -14,6 +14,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: Theme.Space.lg) {
                         SettingsTypingSection()
                         SettingsAISection()
+                        lookSection
                         feedbackSection
                         moreSection
                         footer
@@ -33,6 +34,18 @@ struct SettingsView: View {
                     .background(Theme.Surface.background.opacity(0.96))
             }
             .toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    // MARK: Look
+
+    /// The same picker onboarding shows, in the same order, because it is the
+    /// same view. Inline rather than behind a `NavigationRow`: there are four
+    /// options and the answer is a colour, so a screen that has to be opened to
+    /// see them costs more than it saves.
+    private var lookSection: some View {
+        section("Look") {
+            PalettePicker()
         }
     }
 

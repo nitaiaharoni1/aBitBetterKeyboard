@@ -6,10 +6,12 @@ extension KeyboardController {
 
     public func startDictation() {
         reportInteraction(.dictation)
-        // **These three resets are above the guard, not below it, and that is not
+        // **These resets are above the guard, not below it, and that is not
         // tidiness.** They used to run unconditionally, before the availability
         // check opened the panel; putting the check first left the no-session tap
-        // without them. `dictation.$failure` only ever *sets* `dictationFailure`,
+        // without them. The last two are the streaming bookkeeping, and they belong
+        // in the same place for the same reason: a refused tap has to leave nothing
+        // behind that a later recording would try to delete. `dictation.$failure` only ever *sets* `dictationFailure`,
         // and the only other place that clears it is `stopDictation`'s teardown —
         // which the user reaches through a Dismiss button that is gone the moment
         // the session ends, because `.dictationFailed` needs a live session to
@@ -19,6 +21,8 @@ extension KeyboardController {
         dictationTranscript = ""
         dictationFailure = ""
         pendingDictationInsert = false
+        streamedDictation = ""
+        dictationStreamAbandoned = false
 
         // **This is what the guard below is asking, and without it the answer
         // was a value nothing had ever read.** `DictationSession.availability`
@@ -61,7 +65,31 @@ extension KeyboardController {
         observeDictation()
         isDictating = dictation.beginUtterance()
         if isDictating {
-            Feedback.modifierPress()
+            // **No haptic here, and there used to be one.** The only route in is
+            // `toggleDictation()` from `press(.dictation)`, which has already fired
+            // `Feedback.actionPress()` for the key — so this buzzed a second time
+            // for one tap, which is the defect `.claude/rules/keyboard-layout.md`
+            // records the Emoji key shipping. The refusal path below deliberately
+            // has none either, for the same reason `refuse(_:)` does not.
+            //
+            // **The way back from the last Fix goes when the recording opens, not
+            // when its first words land.** Two reasons, and the second is the one
+            // that matters. A revert replaces the *whole* field with what was there
+            // before, so once anything has been spoken into it that undo would
+            // delete the sentence — which is why the transcript sinks clear it too.
+            // And the undo and the pause control share a slot in the suggestion
+            // bar: leaving both up for the two seconds before the first reading
+            // arrives squeezes the three candidates by about 106 points, for an
+            // offer nobody could act on. Inside this branch rather than beside the
+            // three resets above it, so a *refused* tap does not quietly take away
+            // an undo the user still has.
+            clearRevertibleEdit()
+            // And a call that was already running when the microphone was tapped
+            // goes with it. `run(_:)` refuses to *start* one during a recording;
+            // this is the other half, and without it the answer to the pre-recording
+            // sentence reappears behind a Use button the moment the recording ends,
+            // offering to replace everything that was said. See `cancelAIWork`.
+            cancelAIWork()
             // **Written on every utterance opened, not once at install.** A
             // user who slides the space bar to a different language between
             // two dictations needs the second one hinted with that language,
@@ -70,16 +98,14 @@ extension KeyboardController {
             // moment of the tap can. See `SharedStore.storedDictationLanguage`.
             store.recordDictationLanguage(language)
         }
-
-        startWaveform()
     }
 
     /// Whether the open utterance is paused — audio is not being kept, but the
-    /// recording is intact and a resume continues it. Read off
-    /// `DictationSession.availability` rather than a flag of its own, because
-    /// that is the one place the recorder's own confirmation lands; see
-    /// `DictationPhase.paused`.
-    public var dictationIsPaused: Bool { dictation.availability == .paused }
+    /// recording is intact and a resume continues it. Read off the mirrored
+    /// availability rather than a flag of its own, because that is the one place
+    /// the recorder's own confirmation lands; see `DictationPhase.paused` and
+    /// `KeyboardController.dictationAvailability`.
+    public var dictationIsPaused: Bool { dictationAvailability == .paused }
 
     /// Stops the recorder keeping samples without closing the utterance.
     ///
@@ -91,53 +117,37 @@ extension KeyboardController {
         guard isDictating else { return }
         Feedback.modifierPress()
         dictation.pauseUtterance()
-        waveformTask?.cancel()
-        waveformTask = nil
     }
 
-    /// Resumes a paused utterance. Same guard as `pauseDictation`, and the
-    /// same waveform task `startDictation` starts — see `startWaveform()`.
+    /// Resumes a paused utterance. Same guard as `pauseDictation`.
     public func resumeDictation() {
         guard isDictating else { return }
         Feedback.modifierPress()
         dictation.resumeUtterance()
-        startWaveform()
     }
 
-    /// Starts a recording when none is open, and finishes the open one
-    /// otherwise.
+    /// Starts a recording when none is open, finishes the open one, and calls off
+    /// a finish that has not landed yet.
     ///
-    /// **The microphone key's whole job now, not half of it.** The banner's
-    /// trailing control used to be a second route to `stopDictation` — see
-    /// `ActionBanner+Trailing` — and replacing it with pause/resume leaves
-    /// this key as the only way to finish an utterance. `isDictating` is true
-    /// from the moment `beginUtterance` succeeds until `stopDictation` or a
-    /// failure clears it, whether or not the utterance is currently paused —
-    /// so a second tap while paused still finishes and inserts whatever was
-    /// captured before the pause, exactly as a second tap while listening
-    /// always has.
+    /// **The microphone key's whole job, and it is now the only control this
+    /// feature has.** The strip that carried Pause, Resume and Cancel is not drawn
+    /// for a recording any more; pausing moved to the suggestion bar and everything
+    /// else is this key.
+    ///
+    /// The third case is the one worth spelling out. Between the stop tap and the
+    /// words arriving, `isDictating` is already false — so the version of this that
+    /// asked only that question opened a **second** utterance on top of a
+    /// transcription that was still in flight, and the answer to the first landed
+    /// in the middle of the second. It is also the last moment the insert can be
+    /// called off, which is what the strip's × used to offer: past this, the
+    /// transcript sink inserts unconditionally. Whatever the recording already
+    /// streamed into the field stays where it is — those are the user's own words
+    /// and cancelling a wait is not a request to delete them.
     public func toggleDictation() {
-        if isDictating {
-            stopDictation(insert: true)
-        } else {
-            startDictation()
-        }
-    }
-
-    /// Cancels and restarts the loop that drives the waveform's flourish.
-    ///
-    /// One place rather than the two call sites that need an identical fresh
-    /// task — `startDictation` and `resumeDictation` — because a `Task { ... }`
-    /// copied between them is exactly the duplication that goes stale the next
-    /// time the animation changes.
-    private func startWaveform() {
-        waveformTask?.cancel()
-        waveformTask = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                self.waveformPhase += 0.05 + self.dictation.level * 0.5
-                try? await Task.sleep(for: .milliseconds(45))
-            }
+        switch dictationKeyState {
+        case .recording, .paused: stopDictation(insert: true)
+        case .finishing: stopDictation(insert: false)
+        case .idle: startDictation()
         }
     }
 
@@ -190,9 +200,6 @@ extension KeyboardController {
     }
 
     public func stopDictation(insert: Bool) {
-        waveformTask?.cancel()
-        waveformTask = nil
-
         if insert, isDictating {
             pendingDictationInsert = true
             isDictating = false
@@ -217,6 +224,151 @@ extension KeyboardController {
         dictation.stopWatching()
         dictationTranscript = ""
         dictationFailure = ""
+        // **Forgotten, never deleted.** What was streamed is what the user said,
+        // and this is reached from the keyboard being dismissed as well as from a
+        // cancel — taking text out of somebody's message on the way off screen is
+        // not a thing a keyboard may do. Clearing the record only means the next
+        // recording will not try to replace text it did not write.
+        streamedDictation = ""
+        dictationStreamAbandoned = false
+    }
+
+    // MARK: Streaming
+
+    /// Puts the words into the field as they are spoken.
+    ///
+    /// **A transcript used to arrive once, at the end, and the wait was the whole
+    /// feel of the feature**: the user finished a sentence, tapped Stop, and
+    /// watched a keyboard do nothing for the two seconds a cloud call takes. The
+    /// recorder publishes a better reading of the same audio every couple of
+    /// seconds now (see `DictationService`), and each one replaces the last — so
+    /// what is in the field is always the whole utterance as currently understood,
+    /// never a growing pile of fragments, and words move as later audio settles
+    /// them.
+    ///
+    /// It refuses to run once the field has moved out from under it. See
+    /// `replaceStreamedDictation`.
+    func streamDictation(_ text: String) {
+        guard isDictating || pendingDictationInsert, !dictationStreamAbandoned else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != streamedText else { return }
+        // **The field moved, so this recording stops writing to it.** A partial
+        // that cannot take out the draft it replaces would put a second copy of
+        // the sentence in beside the first, and then a third on the next partial —
+        // so a draft is dropped rather than duplicated. The *final* transcript is
+        // not, which is the whole reason this decision is here and not inside
+        // `replaceStreamedDictation`: giving up on a draft costs a couple of
+        // seconds of text that is already on screen, and giving up on the
+        // transcript would lose the sentence outright.
+        guard canReplaceStreamedDictation(with: trimmed) else {
+            dictationStreamAbandoned = true
+            streamedDictation = ""
+            return
+        }
+        replaceStreamedDictation(with: trimmed)
+    }
+
+    /// What this recording has written into the field, without the space that was
+    /// put in front of it.
+    private var streamedText: String {
+        streamedDictation.hasPrefix(" ") ? String(streamedDictation.dropFirst()) : streamedDictation
+    }
+
+    /// What has to be standing at the caret before a single character is deleted.
+    ///
+    /// **The run that is actually about to be removed, not the whole draft, and
+    /// that difference is what lets streaming survive a long dictation.**
+    /// `documentContextBeforeInput` is a *window* — iOS truncates it, and there is
+    /// nothing behind it to reach for — so a draft longer than that window can
+    /// never be found whole inside it. Checking against the whole draft therefore
+    /// stops streaming partway through exactly the long dictations streaming is
+    /// for, and hands the user a duplicated sentence at the end for its trouble.
+    /// The stale run is a word or two, so it is always inside the window.
+    ///
+    /// The safety guarantee is unchanged and is the one that matters: nothing is
+    /// deleted unless the characters about to be deleted are the ones this
+    /// recording wrote and are sitting at the caret right now.
+    ///
+    /// When the new reading only *extends* the old one there is nothing to delete,
+    /// and the anchor becomes the end of the draft instead — otherwise a stray
+    /// keystroke at the caret would be silently written over the top of.
+    private func streamAnchor(replacing text: String) -> String {
+        let old = streamedText
+        let stale = String(old.dropFirst(old.commonPrefix(with: text).count))
+        guard stale.isEmpty else { return stale }
+        return String(old.suffix(Self.streamAnchorCharacters))
+    }
+
+    /// How much of an unchanged draft has to be found at the caret. Long enough
+    /// that a keystroke or a caret move cannot slip past it, short enough to sit
+    /// inside any host's context window.
+    static let streamAnchorCharacters = 16
+
+    /// Whether the draft this recording wrote is still where it was left.
+    private func canReplaceStreamedDictation(with text: String) -> Bool {
+        guard !streamedDictation.isEmpty else { return true }
+        return contextBefore.hasSuffix(streamAnchor(replacing: text))
+    }
+
+    /// Swaps what this recording has already written for a better reading of it.
+    ///
+    /// **Only the tail that actually changed is rewritten, and that is a
+    /// performance requirement rather than a nicety.** Each reading is nearly all
+    /// of the one before it, and `deleteBackward(utf16Units:)` is a loop of proxy
+    /// calls that reads `documentContextBeforeInput` twice per press to find out
+    /// what a press removed. Retyping the whole utterance every two seconds is
+    /// therefore hundreds of round trips through the host for a sentence that grew
+    /// by one word — about 1,300 of them on a thirty-second dictation, on the main
+    /// thread, while the user is speaking. Deleting from the first character that
+    /// differs makes the ordinary partial a handful of keystrokes, and it stops the
+    /// whole sentence flickering in the field four times a minute.
+    ///
+    /// **What it will not do is delete text it did not write.** When the draft is
+    /// no longer at the end of the field it is left exactly where it is and the new
+    /// text is inserted at the caret — a duplicate, and the honest one: this is
+    /// reached with the final transcript, which is the whole of what was said, and
+    /// dropping it would be losing the sentence to avoid an untidy field. The
+    /// partial path never gets this far; `streamDictation` asks
+    /// `canReplaceStreamedDictation(with:)` first and gives up instead.
+    func replaceStreamedDictation(with text: String) {
+        guard !streamedDictation.isEmpty else {
+            insertStreamedDictation(text)
+            return
+        }
+        guard canReplaceStreamedDictation(with: text) else {
+            dictationStreamAbandoned = true
+            streamedDictation = ""
+            insertStreamedDictation(text)
+            return
+        }
+
+        // `commonPrefix` compares by `Character`, so a grapheme cluster is either
+        // wholly shared or wholly rewritten — which is what keeps the UTF-16 count
+        // below from ever landing inside an emoji or a Hebrew letter with niqqud on
+        // it. The count itself has to be UTF-16, because that is what the proxy
+        // deletes in.
+        let old = streamedText
+        let shared = old.commonPrefix(with: text)
+        deleteBackward(utf16Units: old.utf16.count - shared.utf16.count)
+        let fresh = String(text.dropFirst(shared.count))
+        if !fresh.isEmpty { target?.insertText(fresh) }
+        streamedDictation = (streamedDictation.hasPrefix(" ") ? " " : "") + text
+        refreshDocumentState()
+    }
+
+    /// Writes a reading into a field this recording has nothing standing in.
+    private func insertStreamedDictation(_ text: String) {
+        // Asked of the field as it is now, which after an abandoned draft includes
+        // that draft: this is a question about what the text is landing next to.
+        let before = contextBefore
+        let inserted = (before.isEmpty || before.hasSuffix(" ") ? "" : " ") + text
+        target?.insertText(inserted)
+        streamedDictation = inserted
+        // The two keys that need text light up as soon as there is some. The full
+        // `refreshSuggestions` is deliberately not called: the host's own
+        // `textDidChange` will run it for this insertion anyway, and this path also
+        // runs in the in-app playground, where there is no host to do it.
+        refreshDocumentState()
     }
 
     static func isRightToLeft(reported: String, text: String) -> Bool {
@@ -231,6 +383,23 @@ extension KeyboardController {
     func observeDictation() {
         guard dictationObservers.isEmpty else { return }
 
+        // The words so far, replaced wholesale each time a better reading of the
+        // same audio arrives. See `streamDictation`.
+        dictation.$partialTranscript
+            .sink { [weak self] text in
+                guard let self, !text.isEmpty else { return }
+                self.dictationTranscript = text
+                self.dictationIsRightToLeft = Self.isRightToLeft(
+                    reported: self.dictation.transcriptLanguages, text: text)
+                // A spoken sentence is text arriving in the field by the user's own
+                // act, so it takes the way back from a Fix or a Rewrite with it —
+                // that undo replaces the *whole* field with what was there before,
+                // which after this would mean deleting what they just said.
+                self.clearRevertibleEdit()
+                self.streamDictation(text)
+            }
+            .store(in: &dictationObservers)
+
         dictation.$transcript
             .sink { [weak self] text in
                 guard let self, !text.isEmpty else { return }
@@ -240,13 +409,17 @@ extension KeyboardController {
                 guard self.pendingDictationInsert else { return }
                 self.pendingDictationInsert = false
                 Feedback.success()
-                // A dictated sentence is text arriving in the field by the user's
-                // own act, so it takes the way back from a Fix or a Rewrite with it
-                // — that undo replaces the *whole* field with what was there before,
-                // which after this would mean deleting the sentence they just spoke.
                 self.clearRevertibleEdit()
-                let needsSpace = !self.contextBefore.isEmpty && !self.contextBefore.hasSuffix(" ")
-                self.target?.insertText((needsSpace ? " " : "") + text)
+                // **The last reading replaces every earlier one rather than being
+                // appended to them.** It is a transcription of the whole utterance
+                // with all of the audio behind it, so it is the better text as well
+                // as the complete one; the partials that preceded it are drafts of
+                // this exact sentence. With nothing streamed — a recording shorter
+                // than the first partial, or one whose field moved — this is a plain
+                // insertion, which is what it always was.
+                self.replaceStreamedDictation(with: text)
+                self.streamedDictation = ""
+                self.dictationStreamAbandoned = false
                 self.refreshSuggestions()
                 self.dictation.stopWatching()
                 withAnimation(Theme.Motion.panel) { self.overlay = .none }
@@ -258,6 +431,32 @@ extension KeyboardController {
                 guard let self, !detail.isEmpty else { return }
                 self.pendingDictationInsert = false
                 self.isDictating = false
+                // **A failure after the words are already in the field is not
+                // "Nothing to insert".** Streaming means the ordinary recording has
+                // published two or three readings before the final call is even
+                // made, so a network failure on that last call would otherwise put
+                // a refusal on screen over a sentence the user can see themselves
+                // in the field — and offer them a Dismiss button for it. The last
+                // second or two of speech is genuinely lost; saying so would take a
+                // strip, and the sentence standing in the field says more.
+                guard self.streamedDictation.isEmpty else {
+                    self.streamedDictation = ""
+                    self.dictationStreamAbandoned = false
+                    // **And the watch has to be stopped here, by hand.** Leaving
+                    // `dictationFailure` empty is what keeps the strip off screen,
+                    // and it is also what makes `stopDictation` return at its own
+                    // guard — so nothing else would ever tear this down, not even
+                    // `KeyboardViewController.viewWillDisappear`, and a `RunLoop`
+                    // timer left running in a dismissed keyboard goes on refreshing
+                    // `DictationRequest.keyboardAliveAt`. That is the one thing that
+                    // defeats the dead-man's switch. The other failure path leaves
+                    // the watch up on purpose, because `.dictationFailed` needs a
+                    // live session to render and the user's Dismiss is what stops
+                    // it; this path has no sentence and no Dismiss.
+                    self.dictation.stopWatching()
+                    self.refreshSuggestions()
+                    return
+                }
                 self.dictationFailure = detail
             }
             .store(in: &dictationObservers)

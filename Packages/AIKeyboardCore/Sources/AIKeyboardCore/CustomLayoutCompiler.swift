@@ -30,10 +30,11 @@ extension KeyboardLayout {
         for language: KeyboardLanguage,
         plane: KeyboardPlane,
         showsGlobe: Bool,
-        customization: KeyboardCustomization
+        customization: KeyboardCustomization,
+        grouping: GroupedKeys.Level = .off
     ) -> [KeyRow] {
         var rows: [KeyRow] = []
-        let columns = columns(for: language, plane: plane)
+        let columns = columns(for: language, plane: plane, grouping: grouping)
 
         // The number row is a letters-plane affordance. On the numbers plane the
         // digits are already the top row, and drawing them twice is not a feature.
@@ -43,7 +44,7 @@ extension KeyboardLayout {
 
         // `Self.` because the local `rows` shadows the static one from the line it
         // is declared on, so the bare call does not compile.
-        rows += Self.rows(for: language, plane: plane)
+        rows += Self.rows(for: language, plane: plane, grouping: grouping)
 
         rows.append(
             compile(

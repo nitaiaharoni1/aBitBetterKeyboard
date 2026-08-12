@@ -104,9 +104,14 @@ final class LiveRecording: @unchecked Sendable {
     /// The level, and whether the cap has been reached. Read by the 10 Hz poll,
     /// which is fast enough for a waveform and means the audio thread publishes
     /// nothing and touches no actor.
+    ///
+    /// It briefly also reported the buffered sample count, which the cloud partial
+    /// scheduler used to decide when to re-upload. Apple's transcriber reads the
+    /// tap directly, so nothing needs that any more.
     func reading() -> (level: Double, isFull: Bool) {
         lock.lock()
         defer { lock.unlock() }
         return (lastLevel, open && buffer.isFull)
     }
+
 }

@@ -9,6 +9,7 @@ public final class DictationChannelReader: @unchecked Sendable {
 
     private let stateURL: URL
     private let transcriptURL: URL
+    private let partialURL: URL
     private let directory: URL
     private let requestPage: SharedPage<DictationRequest>?
     private let statePage = OSAllocatedUnfairLock<SharedPage<DictationState>?>(initialState: nil)
@@ -22,6 +23,7 @@ public final class DictationChannelReader: @unchecked Sendable {
         self.directory = directory
         self.stateURL = directory.appendingPathComponent("state.bin")
         self.transcriptURL = directory.appendingPathComponent("transcript.json")
+        self.partialURL = directory.appendingPathComponent("partial.json")
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         self.requestPage = SharedPage<DictationRequest>(
             url: directory.appendingPathComponent("request.bin"),
@@ -41,6 +43,11 @@ public final class DictationChannelReader: @unchecked Sendable {
     public func transcript() -> DictationTranscriptRecord? {
         guard let data = try? Data(contentsOf: transcriptURL) else { return nil }
         return try? JSONDecoder().decode(DictationTranscriptRecord.self, from: data)
+    }
+
+    public func partial() -> DictationPartialRecord? {
+        guard let data = try? Data(contentsOf: partialURL) else { return nil }
+        return try? JSONDecoder().decode(DictationPartialRecord.self, from: data)
     }
 
     @discardableResult

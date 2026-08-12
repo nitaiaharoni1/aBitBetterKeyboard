@@ -65,6 +65,14 @@ extension KeyboardController {
     /// fires into a pause.
     private func askForRefinement(prefix: String, context: String) {
         guard let refiner else { return }
+        // **Not while somebody is speaking.** A recording rewrites the tail of the
+        // field every couple of seconds as a better reading of the same words
+        // arrives (see `KeyboardController.replaceStreamedDictation`), and every
+        // one of those rewrites reaches the host's `textDidChange` and lands here —
+        // so a thirty-second dictation would buy a dozen model calls to predict the
+        // next word of a sentence the user is not typing. The local tier still
+        // runs; it is free.
+        guard !isDictating else { return }
         refiner.refine(
             PredictiveRefiner.Request(
                 textBefore: context,

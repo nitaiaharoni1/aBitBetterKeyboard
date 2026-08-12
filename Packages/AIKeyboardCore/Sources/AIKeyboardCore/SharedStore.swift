@@ -76,6 +76,7 @@ public final class SharedStore: ObservableObject {
         static let haptics = "haptics"
         static let keySounds = "keySounds"
         static let learnsFromTyping = "learnsFromTyping"
+        static let groupedLevel = "groupedLevel"
         static let defaultTone = "defaultTone"
         /// The two `BackendTransport.configured` reads. It declares them inline in
         /// `AIKeyboardShared`, which cannot see this enum, so they are spelled
@@ -97,6 +98,7 @@ public final class SharedStore: ObservableObject {
         static let keyboardLayout = "keyboardLayout"
         static let recentEmoji = "recentEmoji"
         static let hasAcknowledgedKeyboardSwitch = "hasAcknowledgedKeyboardSwitch"
+        static let brandPalette = "brandPalette"
         /// A Unix timestamp written by the keyboard when it wants the app to start
         /// dictation. The app consumes it exactly once and refuses stale requests.
         static let dictationHandoffRequest = "dictationHandoffRequest"
@@ -154,6 +156,37 @@ public final class SharedStore: ObservableObject {
     /// the user-side confirmation that the handoff happened.
     @Published public var hasAcknowledgedKeyboardSwitch: Bool = false {
         didSet { defaults.set(hasAcknowledgedKeyboardSwitch, forKey: Key.hasAcknowledgedKeyboardSwitch) }
+    }
+
+    // MARK: Look
+
+    /// The accent both processes wear. Picked on the second onboarding step and
+    /// changeable afterwards in Settings › Look.
+    /// **Writes `Theme.palette` as well as the store, and the order matters.**
+    /// `didSet` runs before `objectWillChange` reaches SwiftUI, so by the time a
+    /// view rebuilds in response to this the global the colours read is already
+    /// the new one. Setting it from the observing view instead — in an
+    /// `onChange` — would render one frame in the old accent.
+    @Published public var brandPalette: BrandPalette = .orange {
+        didSet {
+            defaults.set(brandPalette.rawValue, forKey: Key.brandPalette)
+            Theme.palette = brandPalette
+        }
+    }
+
+    /// The same choice, read out of the store at the moment it is needed.
+    ///
+    /// **The keyboard has to use this one, for the reason `storedAutocorrect`
+    /// exists.** The picker is in the app and every key it recolours is drawn in
+    /// the keyboard extension; those are two processes, and `load()` fills the
+    /// `@Published` copy above once, when whichever process asked was launched.
+    /// iOS keeps a keyboard extension alive across host apps, so an instance
+    /// that was already running when the user changed palette would otherwise go
+    /// on drawing the old accent — which, for a setting whose entire visible
+    /// effect is a colour, looks exactly like the setting not working.
+    public var storedBrandPalette: BrandPalette {
+        defaults.string(forKey: Key.brandPalette).flatMap(BrandPalette.init(rawValue:))
+            ?? brandPalette
     }
 
     // MARK: Languages
@@ -222,6 +255,24 @@ public final class SharedStore: ObservableObject {
     /// those words, and the button next to it empties the store.
     @Published public var learnsFromTyping = true {
         didSet { defaults.set(learnsFromTyping, forKey: Key.learnsFromTyping) }
+    }
+
+    /// How many letters share one key. `.off` ships, and that is not timidity:
+    /// `Bar/grouped/` measured the trade and the gentlest setting still costs
+    /// about a point and a half of accuracy, which nobody should be opted into.
+    @Published public var groupedLevel: GroupedKeys.Level = .off {
+        didSet { defaults.set(groupedLevel.rawValue, forKey: Key.groupedLevel) }
+    }
+
+    /// **Read at the keystroke, never from the `@Published` copy.** Exactly the
+    /// `storedAutocorrect` trap: the switch lives in the containing app and every
+    /// press it governs happens in the extension, so an instance iOS kept alive
+    /// would go on grouping keys after the user turned the feature off — and with
+    /// grouping the mismatch is not a wrong suggestion, it is every keystroke
+    /// typing the wrong letter.
+    public var storedGroupedLevel: GroupedKeys.Level {
+        guard defaults.object(forKey: Key.groupedLevel) != nil else { return groupedLevel }
+        return GroupedKeys.Level(rawValue: defaults.integer(forKey: Key.groupedLevel)) ?? .off
     }
 
     /// Same cross-process rule as `storedAutocorrect`: the toggle is in the app and

@@ -55,9 +55,22 @@ final class DictationCrossProcessTests: KeyboardExtensionTestCase {
             .firstMatch
         if microphone.waitForExistence(timeout: 5) {
             microphone.tap()
-            let insert = app.descendants(matching: .any).matching(identifier: "dictation-insert")
-                .firstMatch
-            if insert.waitForExistence(timeout: 5) { insert.tap() }
+
+            // Long enough for the recorder to publish a partial — it sends one half
+            // a second in — and for the keyboard's 10 Hz poll to notice it. That is
+            // what `Scripts/prove-dictation.sh`'s `partial=` check reads back.
+            Thread.sleep(forTimeInterval: 2)
+
+            // **The second tap is the stop, and this used to wait on a button that
+            // no longer exists.** Finishing a recording was `dictation-insert` in a
+            // panel over the keys; the panel is deleted and the identifier went with
+            // it, so this spent five seconds waiting for an element nothing draws
+            // and then never stopped the utterance at all. The recorder therefore
+            // never published a transcript, and check 4's transcript assertion —
+            // the one the whole script is for — could not pass on any build. The
+            // microphone key both starts and finishes now; see
+            // `KeyboardController.toggleDictation`.
+            microphone.tap()
         }
 
         Thread.sleep(forTimeInterval: observationWindow)

@@ -54,6 +54,12 @@ public struct DictationState: Equatable, Sendable {
     /// would otherwise have invented a sentence was stopped.
     public var refusedNoSpeech: UInt32 = 0
     public var failures: UInt32 = 0
+    /// Bumped by `DictationChannelWriter.publishPartial` every time a fresher
+    /// partial transcript is written. The keyboard polls this at 10 Hz and
+    /// only reads `partial.json` when the number has moved — a plain integer
+    /// is cheap enough to compare on every tick, and the file it stands in
+    /// for is not.
+    public var partialSequence: UInt32 = 0
 
     public init() {}
 
@@ -300,5 +306,44 @@ public struct DictationTranscriptRecord: Codable, Equatable, Sendable {
         case .nothing: return detail.isEmpty ? "I didn't catch that." : detail
         case .failed: return detail.isEmpty ? "That couldn't be transcribed." : detail
         }
+    }
+}
+
+/// What the utterance the keyboard has open sounds like so far, republished
+/// as the recording continues rather than sent once at the end.
+///
+/// **Text only, by construction — the same promise `DictationTranscriptRecord`
+/// carries and for the same reason.** A partial is still a sentence somebody
+/// is in the middle of saying; nothing here is audio, and nothing here is a
+/// path to any.
+public struct DictationPartialRecord: Codable, Equatable, Sendable {
+
+    public let sessionID: UUID
+    /// The `DictationRequest.utterance` this answers. A partial carrying any
+    /// other number belongs to an utterance the keyboard has already moved
+    /// past.
+    public let utterance: UInt64
+    /// Rises by one every time this utterance gets a fresher partial.
+    /// `DictationState.partialSequence` carries the same number, which is how
+    /// the keyboard notices there is something new without parsing this file,
+    /// and a reader that has already applied a higher number than this one
+    /// ignores it — a partial must never make the text on screen go backwards.
+    public let sequence: UInt32
+    public let text: String
+    /// BCP-47 codes, same shape as `DictationTranscriptRecord.languages`.
+    public let languages: String
+    /// How much audio this partial was taken from.
+    public let seconds: Double
+
+    public init(
+        sessionID: UUID, utterance: UInt64, sequence: UInt32, text: String, languages: String = "",
+        seconds: Double
+    ) {
+        self.sessionID = sessionID
+        self.utterance = utterance
+        self.sequence = sequence
+        self.text = text
+        self.languages = languages
+        self.seconds = seconds
     }
 }

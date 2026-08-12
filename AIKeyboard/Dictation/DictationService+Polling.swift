@@ -1,5 +1,6 @@
 import AIKeyboardCore
 import Foundation
+import Speech
 
 extension DictationService {
 
@@ -36,8 +37,8 @@ extension DictationService {
         writer.setLevel(reading.level)
         if reading.isFull, openUtterance > 0 {
             // Sixty seconds is somebody who has forgotten they are recording, so
-            // it closes as if they had tapped Insert rather than discarding what
-            // they said.
+            // it closes as if they had tapped the microphone again rather than
+            // discarding what they said.
             Self.log.notice("utterance \(self.openUtterance) hit the length cap")
             close(utterance: openUtterance)
             return
@@ -99,9 +100,112 @@ extension DictationService {
         recordingStartedAt = now
         phase = .listening
         writer?.setPhase(.listening, utterance: utterance)
+        // A fresh utterance has no readings of its own yet, and the page's own
+        // copy has to be cleared too, not just this process's — see
+        // `DictationChannelWriter.resetPartial`: the previous utterance's
+        // `partialSequence` left on the page would read as "new" to the keyboard,
+        // and `partial.json` would still hold a sentence from an utterance nobody
+        // is dictating any more.
+        partialSequence = 0
+        writer?.resetPartial()
+        startLiveTranscription(for: utterance)
+    }
+
+    /// Downloads the speech models for the languages this keyboard is set to, so
+    /// the first tap on the microphone has one ready.
+    ///
+    /// **At session start, not at utterance start.** It is a model download;
+    /// making somebody wait for one after tapping the microphone is the spinner
+    /// this whole feature exists to remove. An utterance opened before it finishes
+    /// simply does not stream, and the transcript still lands.
+    ///
+    /// Bounded by `AssetInventory.maximumReservedLocales`, which is 5, so it asks
+    /// for the languages the user has actually enabled rather than all 64.
+    func prepareLiveTranscription() {
+        guard #available(iOS 26.0, *) else { return }
+        let languages = SharedStore.shared.enabledLanguages
+        Task {
+            for language in languages.prefix(AssetInventory.maximumReservedLocales) {
+                guard let locale = await LiveTranscriber.supportedLocale(for: language) else {
+                    continue
+                }
+                await LiveTranscriber.prepare(locale: locale)
+            }
+        }
+    }
+
+    /// Opens Apple's transcriber for this utterance, when it can serve the
+    /// language and the model is installed.
+    ///
+    /// **Every failure here is silent and costs only the streaming.** A language
+    /// Apple does not list, a model that has not finished downloading, an analyzer
+    /// that refuses to start: the microphone is still recording and
+    /// `close(utterance:)` still sends the whole thing to `CloudDictation`. What
+    /// the user loses is the words appearing as they speak, which is exactly the
+    /// behaviour this feature had before it existed.
+    private func startLiveTranscription(for utterance: UInt64) {
+        guard #available(iOS 26.0, *) else { return }
+        // The layout the keyboard was on when it opened the utterance, read fresh
+        // off the store for the cross-process reason `close(utterance:)` reads it
+        // fresh: this is a different process from the one that wrote it.
+        let language =
+            SharedStore.shared.storedDictationLanguage
+            ?? SharedStore.shared.enabledLanguages.first ?? .english
+        Task { [weak self] in
+            guard let locale = await LiveTranscriber.supportedLocale(for: language) else { return }
+            guard let self, self.openUtterance == utterance else { return }
+            let transcriber = LiveTranscriber { [weak self] text in
+                self?.publishReading(text, for: utterance)
+            }
+            do {
+                try await transcriber.start(locale: locale)
+                // Checked again on the far side of the await: an utterance can
+                // close while a model is being brought up, and a transcriber
+                // attached to a recording that has ended would publish readings
+                // over whatever the user does next.
+                guard self.openUtterance == utterance else {
+                    await transcriber.finish()
+                    return
+                }
+                self.live = transcriber
+            } catch {
+                Self.log.notice(
+                    "dictation-live did not start: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// One reading of the open utterance, onto the same page the cloud partials
+    /// used. Nothing downstream of here changed: the keyboard notices through
+    /// `DictationState.partialSequence`, decodes `partial.json`, matches it to its
+    /// own utterance and puts it in the field.
+    private func publishReading(_ text: String, for utterance: UInt64) {
+        guard openUtterance == utterance, let writer else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        partialSequence &+= 1
+        try? writer.publishPartial(
+            DictationPartialRecord(
+                sessionID: sessionID, utterance: utterance, sequence: partialSequence,
+                text: trimmed, languages: "", seconds: 0))
+    }
+
+    /// Ends the transcriber, whichever way the utterance ended.
+    func endLiveTranscription(finishing: Bool) {
+        guard #available(iOS 26.0, *), let transcriber = live as? LiveTranscriber else {
+            live = nil
+            return
+        }
+        live = nil
+        guard finishing else {
+            transcriber.cancel()
+            return
+        }
+        Task { await transcriber.finish() }
     }
 
     private func drop() {
+        endLiveTranscription(finishing: false)
         recording.discard()
         openUtterance = 0
         phase = .idle
@@ -110,6 +214,12 @@ extension DictationService {
 
     private func close(utterance: UInt64) {
         guard openUtterance == utterance, let writer else { return }
+        // **Finished rather than cancelled**, so the analyzer closes cleanly and
+        // releases the model. Anything it emits on the way out is dropped by
+        // `publishReading`'s own guard, because `openUtterance` is zeroed on the
+        // next line — the transcript below is the answer of record and is a second
+        // or two away.
+        endLiveTranscription(finishing: true)
         openUtterance = 0
         phase = .transcribing
         writer.setPhase(.transcribing, utterance: utterance)

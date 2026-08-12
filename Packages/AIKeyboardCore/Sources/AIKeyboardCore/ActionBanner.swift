@@ -11,13 +11,19 @@ import SwiftUI
 /// what they had typed while choosing how to rewrite it. This is one strip for
 /// every active moment, and the keys are never covered.
 ///
-/// **Absent when idle.** The default "Type, or pick an action below" instruction
-/// is what the action row already says by existing, so the strip is omitted until
-/// there is a live reading, a model call, a refusal or a recording. Its height
-/// while shown is still constant: a strip that grows when an answer arrives would
-/// move the three candidates under the thumb mid-choice. The host height follows
-/// presence; `KeyboardGeometry.ownUIHeightFraction` still reports the tallest form
-/// so a mid-read resize cannot move the fingerprint band.
+/// **Absent unless it has a sentence.** It is drawn for a live reading, a refusal,
+/// a failure and an answer nothing could apply, and for nothing else. The default
+/// "Type, or pick an action below" instruction is what the action row already says
+/// by existing — and a **model call** and a **live recording**, which were the two
+/// states this was up for most, now report where nothing has to move: three
+/// reserved points of `WorkingProgressBar` above the candidates, and the
+/// microphone key itself in record red. A 69pt row that appeared on a tap and left
+/// on the answer was relaying out the whole keyboard twice per Fix.
+///
+/// Its height while shown is still constant: a strip that grew when an answer
+/// arrived would move the three candidates under the thumb mid-choice. The host
+/// height follows presence; `KeyboardGeometry.ownUIHeightFraction` still reports
+/// the tallest form so a mid-read resize cannot move the fingerprint band.
 public struct ActionBanner: View {
 
     @ObservedObject var controller: KeyboardController

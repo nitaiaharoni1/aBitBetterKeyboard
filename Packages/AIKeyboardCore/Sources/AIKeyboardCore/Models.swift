@@ -75,3 +75,110 @@ public enum ShiftState: Sendable {
 
     public var isUppercase: Bool { self != .off }
 }
+
+// MARK: - The microphone key
+
+/// What the microphone key is showing, as one value.
+///
+/// **The recording used to be reported by a 69pt strip and is reported by the key
+/// itself now**, which means the key has four appearances instead of two and a
+/// `Bool` cannot carry them. It is resolved on `KeyboardController`
+/// (`dictationKeyState`) rather than derived inside `KeyView`, because three of
+/// the four depend on state that lives in another process and reaches the keyboard
+/// through `DictationSession` — a `KeySpec` is a value and can read none of it.
+///
+/// Resolving it as a value rather than as a chain of `if`s in a `ViewBuilder` is
+/// the same rule `SuggestionBar.ToneTap` was written under: what a SwiftUI view
+/// draws cannot be read back in a test, so the decision is taken somewhere that
+/// can.
+public enum DictationKeyState: Equatable, Sendable {
+    /// Nothing is running. The key offers to start.
+    case idle
+    /// The microphone is open and what it hears is being kept. **The one state
+    /// drawn in record red.**
+    ///
+    /// `secondsLeft` is the session's own countdown and is non-nil only inside the
+    /// last minute of it. **It is on the key because the strip that used to carry
+    /// it is gone**, and it is the one thing that strip said which was worth
+    /// keeping: a session closes itself, so without it a recording stops
+    /// mid-sentence with nothing having warned anybody. A clock that runs for the
+    /// whole session is one the user is invited to watch; a clock that appears is
+    /// news.
+    case recording(secondsLeft: Int?)
+    /// An utterance is open and the recorder has stopped keeping samples. Still
+    /// lit, and deliberately not red: red means a live microphone.
+    case paused
+    /// The recording is closed and the last words are still in flight. A tap here
+    /// calls the insert off, which is the only moment that is possible — see
+    /// `KeyboardController.toggleDictation`.
+    case finishing
+
+    /// Whether the key is the live control, whatever it is doing.
+    public var isActive: Bool { self != .idle }
+
+    /// Whether a microphone is keeping what it hears right now. The record-red
+    /// cap, and the question every caller means when it asks — asked as a property
+    /// rather than as `== .recording`, which stopped compiling the moment the
+    /// countdown became a payload and would otherwise have to be spelled
+    /// `if case`.
+    public var isRecording: Bool {
+        if case .recording = self { return true }
+        return false
+    }
+
+    public var icon: String {
+        switch self {
+        case .idle: return "mic"
+        case .recording, .paused: return "mic.fill"
+        case .finishing: return "waveform"
+        }
+    }
+
+    /// What a tap does, except while paused, where the key says what *is* rather
+    /// than what would happen — the resume control sits one row up in the
+    /// suggestion bar, and two controls both captioned for the same tap would be
+    /// two answers to one question.
+    public var title: String {
+        switch self {
+        case .idle: return "Dictate"
+        case .recording(let secondsLeft):
+            guard let secondsLeft else { return "Stop" }
+            return "\(secondsLeft)s left"
+        case .paused: return "Paused"
+        case .finishing: return "Cancel"
+        }
+    }
+
+    /// What a tap does, spelled out for VoiceOver.
+    ///
+    /// **The four states were drawn four ways and said one thing.** The key's
+    /// label comes from `KeyCap`, which knows nothing about a recording, so it
+    /// read "Dictate, button" whether the microphone was idle, live, paused or
+    /// finishing — the whole distinction this type exists to draw was silent, and
+    /// the one state where being wrong matters most is the one where a microphone
+    /// is on. The caption above cannot serve: it is nine points of text that says
+    /// `42s left`, and a countdown is not what a tap does.
+    ///
+    /// Longer than the caption on purpose. A caption is read beside a glyph, a red
+    /// cap and four neighbouring keys; this is read alone.
+    public var accessibilityLabel: String {
+        switch self {
+        case .idle: return "Dictate"
+        case .recording, .paused: return "Stop recording"
+        case .finishing: return "Cancel transcription"
+        }
+    }
+
+    /// The state itself, for what a tap does not say. Empty when there is nothing
+    /// to add.
+    public var accessibilityValue: String {
+        switch self {
+        case .idle: return ""
+        case .recording(let secondsLeft):
+            guard let secondsLeft else { return "Recording" }
+            return "Recording, \(secondsLeft) seconds left"
+        case .paused: return "Paused"
+        case .finishing: return "Transcribing"
+        }
+    }
+}

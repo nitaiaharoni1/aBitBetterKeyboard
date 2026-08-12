@@ -96,38 +96,6 @@ public struct LanguageTag: View {
     }
 }
 
-// MARK: - Shimmer
-
-/// Placeholder motion while a mock AI call is in flight.
-public struct ShimmerLine: View {
-    private let width: CGFloat?
-    private let phase: Double
-
-    public init(width: CGFloat? = nil, phase: Double) {
-        self.width = width
-        self.phase = phase
-    }
-
-    public var body: some View {
-        RoundedRectangle(cornerRadius: 4, style: .continuous)
-            .fill(Theme.Text.secondary.opacity(0.18))
-            .frame(width: width, height: 11)
-            .overlay {
-                GeometryReader { geo in
-                    LinearGradient(
-                        colors: [.clear, Theme.Text.primary.opacity(0.16), .clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: geo.size.width * 0.5)
-                    .offset(x: (phase * 1.6 - 0.4) * geo.size.width)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-            }
-            .accessibilityHidden(true)
-    }
-}
-
 // MARK: - Press feedback
 
 /// Scale-down on touch. Applied to every tappable surface outside the key grid,

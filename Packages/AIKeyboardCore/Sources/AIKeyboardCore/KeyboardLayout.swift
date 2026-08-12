@@ -6,10 +6,13 @@ import Foundation
 public enum KeyboardLayout {
 
     /// The rows for a language and plane. Row 4 is appended by `bottomRow`.
-    public static func rows(for language: KeyboardLanguage, plane: KeyboardPlane) -> [KeyRow] {
+    public static func rows(
+        for language: KeyboardLanguage, plane: KeyboardPlane,
+        grouping: GroupedKeys.Level = .off
+    ) -> [KeyRow] {
         switch plane {
         case .letters:
-            return letters(for: language)
+            return letters(for: language, grouping: grouping)
         case .numbers:
             return numbers(for: language)
         case .symbols:
@@ -38,11 +41,23 @@ public enum KeyboardLayout {
     /// which is the ten it already had. The budget is asked of every row rather
     /// than of the bottom one alone, because a row that is not the bottom one can
     /// still be the widest.
-    public static func columns(for language: KeyboardLanguage, plane: KeyboardPlane) -> Int {
-        guard plane == .letters, let layout = letterLayouts[language] else { return 10 }
+    public static func columns(
+        for language: KeyboardLanguage, plane: KeyboardPlane,
+        grouping level: GroupedKeys.Level = .off
+    ) -> Int {
+        guard plane == .letters, let base = letterLayouts[language] else { return 10 }
+        let layout = GroupedKeys.layout(base, language: language, level: level)
         let needed = layout.rows.indices.map { index in
             layout.rows[index].count + Int(stretchUnits(of: layout, row: index))
         }
+        // **The floor of ten is what makes grouped keys big, by not applying to
+        // them.** It exists so nine-key Greek keeps English's key size instead of
+        // growing, which is right for a layout that merely has fewer letters. A
+        // grouped layout has fewer *keys* on purpose: the entire feature is target
+        // size, and holding it to ten columns would draw three narrow keys
+        // centred in a ten-column grid — the same number of taps as before, none
+        // of the width, which is the one outcome with no reason to exist.
+        guard level == .off else { return max(1, needed.max() ?? 1) }
         return max(10, needed.max() ?? 10)
     }
 
@@ -162,9 +177,31 @@ public enum KeyboardLayout {
         table.mapValues { $0.map(String.init) }
     }
 
-    private static func letters(for language: KeyboardLanguage) -> [KeyRow] {
-        guard let layout = letterLayouts[language] else { return letters(for: .english) }
-        let columns = CGFloat(columns(for: language, plane: .letters))
+    private static func letters(
+        for language: KeyboardLanguage, grouping level: GroupedKeys.Level
+    )
+        -> [KeyRow]
+    {
+        guard let base = letterLayouts[language] else {
+            return letters(for: .english, grouping: level)
+        }
+        // Grouped keys are an ordinary `LetterLayout` whose caps happen to carry
+        // several letters each, so everything below this line — the width solver,
+        // the delete-row rule, the side insets — is untouched by the feature.
+        // `.off` returns `base` unchanged, so this is a no-op for every user who
+        // has not turned it on.
+        //
+        // **The level is passed in and never read from `SharedStore` here.** This
+        // function used to read the singleton, which made the whole layout engine
+        // depend on global mutable state: a dial left on in the simulator's App
+        // Group would silently make `RenderedRowOrderTests` and
+        // `LanguageCatalogueTests` measure a grouped keyboard, which is the same
+        // trap `PersonalLanguageModel` sprang when the suite taught it its own
+        // vocabulary. Defaulting to `.off` means every existing caller and every
+        // test keeps today's keyboard; only the view, which knows what the user
+        // chose, asks for anything else.
+        let layout = GroupedKeys.layout(base, language: language, level: level)
+        let columns = CGFloat(columns(for: language, plane: .letters, grouping: level))
         let deleteRow = deleteRow(of: layout)
 
         // Delete closes a strictly shortest top row; otherwise it stays on the

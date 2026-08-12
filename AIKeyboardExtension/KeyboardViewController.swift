@@ -30,6 +30,10 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        // `store.load()` is what puts the palette into `Theme` at launch, through
+        // `brandPalette`'s `didSet` — so there is deliberately no
+        // `applyBrandPalette()` here. It is `viewWillAppear` that needs it, for
+        // the instance iOS kept alive across a change made in the app.
         let store = SharedStore.shared
         store.load()
 
@@ -130,6 +134,27 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
+    /// Puts the user's accent into `Theme` for this process, and repaints if it
+    /// moved.
+    ///
+    /// **Read through `storedBrandPalette`, not the `@Published` copy**, for the
+    /// reason that accessor documents: the palette is written in the app and
+    /// every key it recolours is drawn here, and `load()` fills the published
+    /// copy once per process launch.
+    ///
+    /// The nudge is the extension's half of the invalidation the app does with
+    /// `.id(store.brandPalette)`. `KeyboardView` observes the controller and
+    /// nothing else, so a global that changed while this keyboard sat in the
+    /// background would otherwise not reach the keys until something unrelated
+    /// published. Guarded on an actual change, because `viewWillAppear` runs
+    /// every time the keyboard comes up and a rebuild of every key is not free.
+    private func applyBrandPalette() {
+        let palette = SharedStore.shared.storedBrandPalette
+        guard palette != Theme.palette else { return }
+        Theme.palette = palette
+        controller?.objectWillChange.send()
+    }
+
     private func install<Content: View>(_ root: Content) {
         let host = UIHostingController(rootView: root)
         host.view.backgroundColor = .clear
@@ -159,6 +184,12 @@ final class KeyboardViewController: UIInputViewController {
         // `$customization` sink landed — that sink is `.receive(on: RunLoop.main)`
         // and so is never synchronous with this.
         controller?.reloadCustomization()
+        // Re-read for exactly the reason above: the picker is in the companion
+        // app, iOS keeps this process alive in the background, and the first
+        // appearance after the user changed palette is the one that has to be
+        // right. `viewDidLoad` alone would leave a live instance drawing the old
+        // accent for as long as iOS chose to keep it.
+        applyBrandPalette()
         // **The field this keyboard is coming up over, not the one it last saw.**
         // iOS keeps one extension instance alive across fields and across host
         // apps, so Fix and Rewrite — which are drawn disabled on an empty field —

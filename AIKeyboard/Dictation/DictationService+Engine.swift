@@ -49,6 +49,17 @@ extension DictationService {
                 status.pointee = .haveData
                 return incoming
             }
+            // **Apple's transcriber is fed the *untouched* input buffer, not the
+            // 16 kHz Int16 one below.** It asks for its own preferred format
+            // through `SpeechAnalyzer.bestAvailableAudioFormat`, and converting
+            // twice — once to the recording's format, once from that to the
+            // analyzer's — would resample resampled audio for no reason. This
+            // costs one more conversion on the tap thread and keeps both paths
+            // reading from the microphone rather than from each other.
+            if #available(iOS 26.0, *), let live = self.live as? LiveTranscriber {
+                live.append(incoming)
+            }
+
             guard error == nil, converted.frameLength > 0,
                 let channel = converted.int16ChannelData
             else { return }

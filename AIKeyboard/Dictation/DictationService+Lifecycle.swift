@@ -66,6 +66,7 @@ extension DictationService {
         observeInterruptions()
         observeEngineConfigurationChanges()
         startPolling()
+        prepareLiveTranscription()
         Self.log.notice("dictation session started id=\(self.sessionID.uuidString, privacy: .public)")
         return true
     }
@@ -81,6 +82,12 @@ extension DictationService {
 
         transcribing?.cancel()
         transcribing = nil
+        // **Apple's transcriber goes too.** It holds a loaded speech model and an
+        // open analyzer; the session is ending, so there is nothing left for it to
+        // transcribe and nobody to read it. Cancelled rather than finished, because
+        // a clean finish waits for the analyzer to drain and the answer has nowhere
+        // to go — `writer.end(_:)` below sets `hasEnded` and deletes `partial.json`.
+        endLiveTranscription(finishing: false)
         timer?.invalidate()
         timer = nil
         for observer in observers { NotificationCenter.default.removeObserver(observer) }

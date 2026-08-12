@@ -7,7 +7,7 @@ extension ActionBanner {
     @ViewBuilder
     var trailing: some View {
         switch state {
-        case .hint, .context, .working:
+        case .hint, .context:
             EmptyView()
 
         case .options(_, let options, let index):
@@ -41,31 +41,6 @@ extension ActionBanner {
                 }
             }
 
-        case .dictating(_, let isListening, let isPaused):
-            // **Pause and Resume replaced the × over a recording, and only over a
-            // recording.** Finishing one moved to the microphone key
-            // (`KeyboardController.toggleDictation()`), which frees this slot: the
-            // session runs in another process for as long as the user likes, so
-            // there has to be a way to stop *listening* without ending it.
-            //
-            // `.dictating` covers one more state than that, and drawing Pause over
-            // it was a live-looking button that did nothing. Between the stop tap
-            // and the words arriving the strip says Transcribing — `isListening`
-            // and `isPaused` are both false, nothing is open to pause, and
-            // `pauseDictation()` returns at its own `guard isDictating`. That is
-            // also the last moment the user can call the insert off, which the ×
-            // used to offer as Cancel and which nothing else does: the transcript
-            // sink inserts unconditionally once `pendingDictationInsert` is set.
-            // See `ActionBanner.dictationControl`.
-            switch Self.dictationControl(isListening: isListening, isPaused: isPaused) {
-            case .pause, .resume:
-                pauseResumeButton(isPaused: isPaused)
-            case .cancel:
-                dismissButton(identifier: "banner-stop", label: "Cancel") {
-                    controller.stopDictation(insert: false)
-                }
-            }
-
         case .dictationFailed:
             // `stopDictation(insert: false)` rather than `clearBanner`: the reason
             // lives on the session, not on the banner, so clearing this side of it
@@ -96,56 +71,6 @@ extension ActionBanner {
         .pressable()
         .accessibilityLabel(label)
         .accessibilityIdentifier(identifier)
-    }
-
-    /// What the trailing slot offers over a dictation strip, as a decision rather
-    /// than a chain of `if`s inside a `ViewBuilder`.
-    ///
-    /// **Separate and testable for the reason `SuggestionBar.ToneTap` is**: a
-    /// `.disabled()` modifier and a button's action cannot be read back off a
-    /// SwiftUI view, so a control that renders but answers nothing looks exactly
-    /// like one that works — which is the defect this enum's third case exists to
-    /// prevent, and which shipped here once already as a Pause button drawn over a
-    /// transcription with nothing to pause.
-    enum DictationControl: Equatable {
-        case pause
-        case resume
-        /// Neither: no utterance is open. Today that is the wait between the stop
-        /// tap and the words arriving, and Cancel is what it offers, because it is
-        /// the last moment the insert can be called off.
-        case cancel
-    }
-
-    static func dictationControl(isListening: Bool, isPaused: Bool) -> DictationControl {
-        if isPaused { return .resume }
-        return isListening ? .pause : .cancel
-    }
-
-    /// The recording's own trailing control: pause while listening, resume
-    /// while paused. Same 32×32 geometry as `dismissButton`, because it sits
-    /// in the same slot and a size change here would shift the strip's
-    /// trailing edge for every other state.
-    ///
-    /// **`record.circle` for resume, not `mic.fill`.** `mic.fill` is already
-    /// what the microphone key wears — reusing it here would read as "open a
-    /// second microphone" rather than "keep going with this one" — and a
-    /// filled red circle is the shape a paused recording already resumes to
-    /// elsewhere on iOS (Voice Memos' own pause button is a plain red dot).
-    func pauseResumeButton(isPaused: Bool) -> some View {
-        Button(action: { isPaused ? controller.resumeDictation() : controller.pauseDictation() }) {
-            Image(systemName: isPaused ? "record.circle" : "pause.fill")
-                .font(Theme.Glyph.medium(12))
-                .foregroundStyle(Theme.Semantic.record)
-                .frame(width: 32, height: 32)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
-                        .fill(Theme.Keys.card)
-                )
-                .contentShape(Rectangle())
-        }
-        .pressable()
-        .accessibilityLabel(isPaused ? "Resume" : "Pause")
-        .accessibilityIdentifier(isPaused ? "banner-resume" : "banner-pause")
     }
 
     /// Which of the answers is showing. Tappable as well as swipeable, because a

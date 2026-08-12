@@ -42,6 +42,14 @@ public struct BannerOption: Identifiable, Equatable, Sendable {
 /// under the new action's name. Resolving once, in one ordered place, is what
 /// makes "which of these wins" a decision with a test on it rather than the order
 /// somebody happened to write the `if`s in.
+///
+/// **Two of the states it used to carry are no longer sentences.** A model call in
+/// flight is `WorkingProgressBar`, three reserved points above the candidates, and
+/// a live recording is the microphone key itself in record red — both say what
+/// they were saying without spending a 69pt row that appears and leaves. They are
+/// still *resolved* here, because the order these questions are asked in is the
+/// whole value of this type; they simply resolve to the idle state, which draws
+/// nothing.
 public enum BannerState: Equatable {
 
     /// Nothing has been asked for. Carries what to say about that, which is the
@@ -53,27 +61,21 @@ public enum BannerState: Equatable {
     /// 30pt row to say.
     case context(sender: String, message: String, language: KeyboardLanguage)
 
-    /// A model call is in flight.
-    case working(AIAction)
-
-    /// Answers came back. `index` is which one is showing.
+    /// Answers came back and nothing applied them.
+    ///
+    /// **The one path that still reaches this is an answer to a field that moved
+    /// on.** Fix, Rewrite and Reply write straight into the field the moment the
+    /// model answers, so an ordinary call clears this strip rather than filling it.
+    /// `applyDirectly` refuses when the field is no longer the one the model was
+    /// asked about — somebody typed through the call — and leaves the answer here,
+    /// behind a Use button, for a user who can see both. `index` is which one is
+    /// showing.
     case options(action: AIAction, options: [BannerOption], index: Int)
 
     /// The call failed for a reason the user can read. `AIEngineError` already
     /// separates title from message; only the title fits on one line, and the
     /// message is what the accessibility label carries.
     case failed(action: AIAction, title: String, detail: String)
-
-    /// A recording is open in the containing app. The keyboard cannot start one —
-    /// see `DictationSession` — so this state is only ever reached from one that
-    /// could.
-    ///
-    /// `isListening` means audio is actually being kept, not merely that an
-    /// utterance is open: it is false both while transcribing and while
-    /// paused, which is why `isPaused` is its own field rather than a third
-    /// reading of `isListening` — the trailing control and the tag need to
-    /// tell those two apart even though the waveform draws them the same way.
-    case dictating(transcript: String, isListening: Bool, isPaused: Bool)
 
     /// An action the user tapped that could not run, and what they can do about it.
     ///
@@ -139,21 +141,22 @@ public enum BannerState: Equatable {
     ///
     /// **The order of these branches is the whole point and it is not
     /// alphabetical.** Dictation outranks a model call because a recording is
-    /// running in another process and stopping it is time-critical. A failure
-    /// outranks options because a failed call can leave the previous action's
-    /// answers in place. Work outranks both results and failure because
-    /// `beginWork` clears `aiError` and sets `isWorking` in the same breath, and a
-    /// retry must not flash the previous failure. Everything else is idle.
+    /// running in another process. A failure outranks options because a failed
+    /// call can leave the previous action's answers in place. Work outranks both
+    /// results and failure because `beginWork` clears `aiError` and sets
+    /// `isWorking` in the same breath, and a retry must not flash the previous
+    /// failure. Everything else is idle.
+    ///
+    /// **Two of those branches now resolve to idle rather than to a strip**, and
+    /// they keep their place in the order for exactly the reason the order exists:
+    /// a recording and a running call must still take precedence over the previous
+    /// action's leftover answers, or stopping one would flash a Use button over
+    /// three replies from a minute ago.
     public static func resolve(
         isDictating: Bool,
         dictationIsLive: Bool,
         dictationTranscript: String,
         dictationFailure: String,
-        /// Whether the open utterance is paused. Ignored once transcribing —
-        /// `KeyboardController.dictationIsPaused` reads `dictation.availability`,
-        /// which moves to `.transcribing` the moment Insert is tapped, so this
-        /// is already false by the time that matters.
-        dictationIsPaused: Bool,
         isWorking: Bool,
         runningAction: AIAction?,
         error: AIEngineError?,
@@ -173,16 +176,23 @@ public enum BannerState: Equatable {
         if !dictationFailure.isEmpty, dictationTranscript.isEmpty, dictationIsLive || isDictating {
             return .dictationFailed(dictationFailure)
         }
-        if isDictating || dictationIsLive {
-            return .dictating(
-                transcript: dictationTranscript,
-                isListening: isDictating && !dictationIsPaused,
-                isPaused: dictationIsPaused)
-        }
+        // **A recording draws no strip and still outranks everything below it.**
+        // The microphone key is red for the length of it and the words arrive in
+        // the field as they are spoken, so there is nothing left for a row above
+        // the candidates to say — but a recording started after a Fix must not
+        // leave that Fix's leftover answer on screen behind a Use button, which is
+        // what falling through to the branches below would do.
+        if isDictating || dictationIsLive { return idle(screenContext, idleHint) }
         // Above every idle branch and above the work branches, because this is a
         // sentence about the tap the user just made. Below dictation for the reason
         // dictation is first: that is a recording running in another process.
         if let block { return .blocked(block) }
+
+        // **A call in flight is the progress bar, and it is asked here for the
+        // same reason the recording above is.** `beginWork` clears `aiError` and
+        // sets `isWorking` in the same breath, so a retry tested below this line
+        // would flash the failure it is retrying.
+        if isWorking { return idle(screenContext, idleHint) }
 
         // A running action is what names every branch below, so an action-shaped
         // state without one is not renderable. It cannot happen — `beginWork` sets
@@ -190,7 +200,6 @@ public enum BannerState: Equatable {
         // what keeps that a cosmetic bug rather than a crash in a keyboard.
         guard let runningAction else { return idle(screenContext, idleHint) }
 
-        if isWorking { return .working(runningAction) }
         if let error {
             return .failed(action: runningAction, title: error.title, detail: error.message)
         }
@@ -230,37 +239,19 @@ public enum BannerState: Equatable {
     /// Whether the strip earns its row on screen.
     ///
     /// The idle instruction does not: "Type, or pick an action below" is what the
-    /// action row already says by existing. Everything else does — a live reading,
-    /// a model call, a refusal, a recording.
+    /// action row already says by existing. What is left all does — a live
+    /// reading, a refusal, a failure, an answer nothing could apply.
+    ///
+    /// **A model call and a recording used to be on this list and are the reason
+    /// it is worth stating.** Both are constant, frequent states, and both were
+    /// spending 69 points of a 368-point keyboard on a word: the row appeared, the
+    /// keys moved down, and it left again a second later. They report in the
+    /// progress bar and on the microphone key now, where nothing has to move.
     public var isPresented: Bool {
         switch self {
         case .hint: return false
-        case .context, .working, .options, .failed, .dictating, .blocked, .dictationFailed:
+        case .context, .options, .failed, .blocked, .dictationFailed:
             return true
         }
-    }
-
-    /// Which action-row key should read as current, if any.
-    ///
-    /// A live screen-context reading is not an action the user started, so it
-    /// lights nothing. Dictation is not an `AIAction`, so it is named separately.
-    public var activeActionKey: ActionKey? {
-        switch self {
-        case .working(let action), .options(action: let action, _, _),
-            .failed(action: let action, _, _):
-            return .ai(action)
-        case .blocked(let block):
-            return block.action.map { .ai($0) } ?? .dictation
-        case .dictating, .dictationFailed:
-            return .dictation
-        case .hint, .context:
-            return nil
-        }
-    }
-
-    /// A key in the action row that the banner can mark as current.
-    public enum ActionKey: Equatable, Sendable {
-        case ai(AIAction)
-        case dictation
     }
 }

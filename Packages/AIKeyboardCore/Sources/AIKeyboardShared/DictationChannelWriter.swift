@@ -10,6 +10,7 @@ public final class DictationChannelWriter: @unchecked Sendable {
     private let statePage: SharedPage<DictationState>
     private let requestURL: URL
     private let transcriptURL: URL
+    private let partialURL: URL
     private let requestPage = OSAllocatedUnfairLock<SharedPage<DictationRequest>?>(initialState: nil)
     private let hasEnded = OSAllocatedUnfairLock(initialState: false)
 
@@ -31,6 +32,7 @@ public final class DictationChannelWriter: @unchecked Sendable {
         self.statePage = page
         self.requestURL = directory.appendingPathComponent("request.bin")
         self.transcriptURL = directory.appendingPathComponent("transcript.json")
+        self.partialURL = directory.appendingPathComponent("partial.json")
     }
 
     @discardableResult
@@ -40,6 +42,7 @@ public final class DictationChannelWriter: @unchecked Sendable {
     ) -> UUID {
         hasEnded.withLock { $0 = false }
         try? FileManager.default.removeItem(at: transcriptURL)
+        try? FileManager.default.removeItem(at: partialURL)
         statePage.reset()
         statePage.mutate { state in
             state.setSessionID(sessionID)
@@ -83,6 +86,7 @@ public final class DictationChannelWriter: @unchecked Sendable {
             state.heartbeatAt = now
         }
         try? FileManager.default.removeItem(at: transcriptURL)
+        try? FileManager.default.removeItem(at: partialURL)
     }
 
     public func state() -> DictationState? { statePage.load() }
@@ -116,6 +120,44 @@ public final class DictationChannelWriter: @unchecked Sendable {
 
         if hasEnded.withLock({ $0 }) {
             try? FileManager.default.removeItem(at: transcriptURL)
+            throw DictationChannelError.sessionEnded
+        }
+    }
+
+    /// Clears the previous utterance's partial: the counter on the state page
+    /// and `partial.json` itself. Called from `open(utterance:)` alongside the
+    /// service's own per-utterance resets.
+    ///
+    /// **Both halves matter.** Leaving `partialSequence` behind costs the
+    /// keyboard a `partial.json` read on every poll until the new utterance's
+    /// first partial overwrites it — `DictationSession.poll()` treats any
+    /// change in that counter as "go read the file", and a stale number from
+    /// an utterance that already closed still counts as a change. And leaving
+    /// the file behind is the same sentence-on-disk problem
+    /// `discardTranscriptOfADeadSession` exists for: a partial from an
+    /// utterance nobody is dictating any more sitting in a backed-up
+    /// container until the next one happens to overwrite it.
+    public func resetPartial() {
+        statePage.mutate { $0.partialSequence = 0 }
+        try? FileManager.default.removeItem(at: partialURL)
+    }
+
+    /// Publishes a partial transcript — the same atomic write and the same
+    /// two-sided end-of-session refusal `publish` makes, and for the same
+    /// reason: a partial that lands after `end()` has already deleted the
+    /// file is a sentence somebody was mid-way through dictating, and it must
+    /// not sit in a backed-up container until the next launch.
+    public func publishPartial(_ record: DictationPartialRecord) throws {
+        guard !hasEnded.withLock({ $0 }) else { throw DictationChannelError.sessionEnded }
+
+        let data = try JSONEncoder().encode(record)
+        try data.write(
+            to: partialURL,
+            options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        statePage.mutate { $0.partialSequence = record.sequence }
+
+        if hasEnded.withLock({ $0 }) {
+            try? FileManager.default.removeItem(at: partialURL)
             throw DictationChannelError.sessionEnded
         }
     }

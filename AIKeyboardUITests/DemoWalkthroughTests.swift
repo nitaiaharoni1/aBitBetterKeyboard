@@ -81,7 +81,8 @@ final class DemoWalkthroughTests: XCTestCase {
         app.launch()
 
         let names = [
-            "welcome", "languages", "add-keyboard", "full-access", "switch", "microphone",
+            "welcome", "palette", "languages", "add-keyboard", "full-access", "switch",
+            "microphone",
             "practice-writing", "practice-everyday", "practice-smart-tools"
         ]
         for (index, name) in names.enumerated() {
@@ -179,7 +180,10 @@ final class DemoWalkthroughTests: XCTestCase {
             "Fix left neither an applied answer nor a reason")
 
         // Rewrite in the default tone, which is the same three-way tap the bar
-        // button used to make. Three versions come back, so the banner pages.
+        // button used to make. Three versions come back and the first is written
+        // straight into the field — the strip only pages through the other two on
+        // the fallback path, where the field moved while the model was thinking.
+        // See `KeyboardController.applyDirectly`.
         tap(element("key-quick-tone"), "one-tap rewrite key")
         settle(1.8)
         capture("ai-rewrite")
@@ -300,13 +304,14 @@ final class DemoWalkthroughTests: XCTestCase {
 
     // MARK: Helpers
 
-    /// Onboarding fits inside this ten-step guard; skip it when the screens under test come later.
+    /// Onboarding fits inside this guard; skip it when the screens under test come later.
+    /// Ten steps today, so the bound has to clear ten taps, not equal them.
     private func skipOnboardingIfPresent() {
         let start = app.buttons["Start typing"]
         let cont = app.buttons["Continue"]
         let switched = app.buttons["I've switched to it"]
         var guardCount = 0
-        while guardCount < 10 {
+        while guardCount < 14 {
             settle(0.5)
             if start.exists {
                 start.tap()

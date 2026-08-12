@@ -11,8 +11,6 @@ extension ActionBanner {
             EmptyView()
         case .context:
             tag(AIAction.reply.icon, "On screen", tint: Theme.Keys.secondaryLabel)
-        case .working(let action):
-            tag(action.icon, action.title, tint: Theme.Brand.solid)
         case .options(let action, _, _):
             // **Amber when the answer is a best effort**, which means the on-device
             // model answered in a language Apple does not list as supported because
@@ -33,10 +31,6 @@ extension ActionBanner {
                 "exclamationmark.triangle",
                 block.action?.title ?? "Dictation",
                 tint: Theme.Semantic.warning)
-        case .dictating(_, let isListening, let isPaused):
-            tag(
-                "mic", dictationTagTitle(isListening: isListening, isPaused: isPaused),
-                tint: Theme.Semantic.record)
         case .dictationFailed:
             tag("mic.slash", "Dictation", tint: Theme.Semantic.warning)
         }
@@ -59,21 +53,6 @@ extension ActionBanner {
     /// What did not survive is the `עב ⟷ EN` badge naming the languages heard. The
     /// transcript beside it is already written in its own script, so the badge was
     /// the cheaper of the two to lose.
-    /// **Paused outranks the countdown, and it did not, which put two indicators in
-    /// one strip disagreeing.** Pause a recording inside the last minute and the
-    /// tag went on counting `42s left` while the waveform sat flat, the trailing
-    /// button said Resume and the accessibility label said Paused. The countdown is
-    /// news about the session; being paused is news about the microphone, and the
-    /// microphone is what the user just touched. The session still expires on its
-    /// own either way — that is what a session having a length is for.
-    func dictationTagTitle(isListening: Bool, isPaused: Bool) -> String {
-        if isPaused { return "Paused" }
-        if let remaining = controller.dictationRemainingSeconds, remaining < 60 {
-            return "\(Int(remaining))s left"
-        }
-        return isListening ? "Recording" : "Transcribing"
-    }
-
     func tag(_ icon: String, _ title: String, tint: Color) -> some View {
         VStack(spacing: 1) {
             Image(systemName: icon)
@@ -105,18 +84,6 @@ extension ActionBanner {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("From \(sender): \(message)")
-
-        case .working(let action):
-            // The same shimmer the panel used, at one line. The phase is driven by
-            // `beginWork`'s own animation task, so it stops when the call does
-            // rather than on a timer of its own.
-            VStack(alignment: .leading, spacing: 4) {
-                ShimmerLine(width: nil, phase: controller.workingPhase)
-                ShimmerLine(
-                    width: 120,
-                    phase: (controller.workingPhase + 0.18).truncatingRemainder(dividingBy: 1))
-            }
-            .accessibilityLabel("\(action.title), working")
 
         case .options(_, let options, let index):
             let option = options[index]
@@ -168,27 +135,6 @@ extension ActionBanner {
             .accessibilityLabel("\(block.title). \(block.detail)")
             .accessibilityIdentifier("banner-blocked")
 
-        case .dictating(let transcript, let isListening, let isPaused):
-            if transcript.isEmpty {
-                // `isActive: isListening` already draws flat bars while
-                // paused — `isListening` is false throughout the pause, see
-                // `BannerState.dictating` — so nothing extra is needed here to
-                // stop the waveform animating; the label still has to tell
-                // "paused" from "transcribing" apart, since both read
-                // `isListening == false`.
-                WaveformView(
-                    phase: controller.waveformPhase,
-                    barCount: 26,
-                    color: Theme.Semantic.record.opacity(0.85),
-                    isActive: isListening
-                )
-                .frame(height: 22)
-                .accessibilityLabel(isPaused ? "Paused" : (isListening ? "Recording" : "Transcribing"))
-            } else {
-                answer(transcript, language: controller.language, size: 14)
-                    .accessibilityLabel("Transcript: \(transcript)")
-            }
-
         case .dictationFailed(let reason):
             VStack(alignment: .leading, spacing: 2) {
                 Text("Nothing to insert")
@@ -207,7 +153,7 @@ extension ActionBanner {
         Text(text)
             .font(.system(size: 11))
             .foregroundStyle(Theme.Keys.secondaryLabel)
-            // **Three lines, and the strip is 72 pt so they fit.** Two lines in a
+            // **Three lines, and the strip is 69 pt so they fit.** Two lines in a
             // 48–56 pt strip is what put an ellipsis on "Reading a screen needs
             // the cloud model…" — a refusal the user has to act on, truncated
             // before the recovery. Scale a hair before truncating; past three

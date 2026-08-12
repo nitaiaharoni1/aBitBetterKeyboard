@@ -95,6 +95,21 @@ public final class PersonalLanguageModel {
         count(of: word, in: language) >= Self.protectThreshold
     }
 
+    /// Every word this person has typed often enough to count, most typed first.
+    ///
+    /// Exists for `GroupedDecoder`, which has to *enumerate* a vocabulary rather
+    /// than ask about one word or one prefix: a grouped keystroke is a set of
+    /// possible prefixes, so the decoder indexes the whole list up front. Gated on
+    /// `boostThreshold` for the same reason `words(startingWith:)` is — one
+    /// accidental typing of a non-word should not put it in the dictionary that
+    /// decides what other keystrokes mean.
+    func allWords(in language: KeyboardLanguage) -> [String] {
+        guard let counts = store.unigrams[language.languageTag] else { return [] }
+        return counts.filter { $0.value >= Self.boostThreshold }
+            .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
+            .map(\.key)
+    }
+
     /// Learned words starting with this prefix, most typed first.
     func words(startingWith prefix: String, in language: KeyboardLanguage, limit: Int) -> [String] {
         let folded = SeedLanguageModel.fold(prefix)

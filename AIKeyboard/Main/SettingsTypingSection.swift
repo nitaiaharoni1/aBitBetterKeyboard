@@ -16,6 +16,47 @@ struct SettingsTypingSection: View {
     private let learningSubtitle =
         "Remembers words and word pairs you type, on this device only. Never in password fields."
 
+    /// Wider keys, several letters each, and the keyboard works out the word.
+    ///
+    /// **The accuracy is on the row, next to the choice, because it is the whole
+    /// trade.** Every step up this dial makes the keys bigger and the guessing
+    /// worse, and a picker that only says "Three letters" hides the half that
+    /// costs something. The numbers are the top-1 rates measured in
+    /// `Bar/grouped/results.json` — what the space bar would insert — and they are
+    /// labelled as measured rather than promised.
+    @ViewBuilder private var groupedKeysRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: Theme.Space.sm) {
+                IconBadge(systemName: "rectangle.grid.1x2")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Grouped keys")
+                        .font(Theme.Fonts.body)
+                        .foregroundStyle(Theme.Text.primary)
+                    Text("Bigger keys holding several letters. The keyboard picks the word.")
+                        .font(Theme.Fonts.caption)
+                        .foregroundStyle(Theme.Text.secondary)
+                }
+                Spacer(minLength: 0)
+                Picker("Grouped keys", selection: $store.groupedLevel) {
+                    ForEach(GroupedKeys.Level.allCases, id: \.self) { level in
+                        Text(level.title).tag(level)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+            }
+            if store.groupedLevel != .off {
+                let measured = store.groupedLevel.measuredAccuracy
+                Text(
+                    "Measured: the right word is chosen \(measured.english)% of the time in English, "
+                        + "\(measured.hebrew)% in Hebrew. Hold a key to pick one letter exactly."
+                )
+                .font(Theme.Fonts.caption)
+                .foregroundStyle(Theme.Text.secondary)
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             SectionHeader(title: "Typing")
@@ -71,6 +112,8 @@ struct SettingsTypingSection: View {
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.Semantic.record)
                     }
+                    Divider.themed
+                    groupedKeysRow
                     Divider.themed
                     ToggleRow(
                         title: "Number row",

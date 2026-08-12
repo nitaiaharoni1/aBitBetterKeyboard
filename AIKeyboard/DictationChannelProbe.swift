@@ -39,6 +39,20 @@ final class DictationChannelProbe: @unchecked Sendable {
     /// Matched exactly by `Scripts/prove-dictation.sh`.
     static let sentence = "בוא נעשה sync על ה-roadmap של Q3"
 
+    /// The same sentence heard half way through, which is what a real partial is:
+    /// not a fragment appended to what came before, but a shorter reading of the
+    /// whole utterance so far, replaced wholesale when a better one arrives.
+    ///
+    /// It is a **prefix** of `sentence` on purpose. That is the ordinary shape, and
+    /// it is the shape that catches the worst bug this feature can have: a keyboard
+    /// that appends instead of replacing ends up with the partial *and* the final
+    /// in the field, and every assertion about the final words having arrived
+    /// passes against it.
+    /// Deliberately **not** the same string as the check on the final transcript
+    /// matches: two greps looking for one sentence would both pass on a build that
+    /// logged the transcript into the partial's slot.
+    static let partialSentence = "בוא נעשה"
+
     private let queue = DispatchQueue(label: "com.nitai.aikeyboard.dictation-probe")
     private var writer: DictationChannelWriter?
     private var sessionID = UUID()
@@ -95,6 +109,23 @@ final class DictationChannelProbe: @unchecked Sendable {
             openUtterance = request.utterance
             openedAt = now
             writer.setPhase(.listening, utterance: openUtterance)
+            // **A partial, half a second in, because streaming is the half of this
+            // channel with no other two-process proof.** `DictationService` sends
+            // one every couple of seconds while somebody is speaking; one is enough
+            // to show that a partial written by this process is noticed through
+            // `DictationState.partialSequence`, decoded, matched to the keyboard's
+            // own utterance, and put in the field — none of which a single-process
+            // test can see. Half a second so it lands inside the shortest recording
+            // a UI test will hold, and well before the stop below.
+            let utterance = openUtterance
+            queue.asyncAfter(deadline: .now() + 0.5) { [self] in
+                guard openUtterance == utterance else { return }
+                try? writer.publishPartial(
+                    DictationPartialRecord(
+                        sessionID: sessionID, utterance: utterance, sequence: 1,
+                        text: Self.partialSentence, languages: "he,en", seconds: 1.0))
+                Self.log.notice("dictation-probe published a partial for utterance \(utterance)")
+            }
             return
         }
 

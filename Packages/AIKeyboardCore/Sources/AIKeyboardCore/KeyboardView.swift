@@ -31,16 +31,23 @@ public struct KeyboardView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // **One strip when there is something to say, nothing when idle.**
-            // `ScreenContextStrip` occupied a 30pt row only while a capture session
-            // was live, and every AI answer arrived in a panel over the keys. The
-            // banner is both of those: the live reading, and the running action
-            // and its answer. The idle instruction is omitted — see
-            // `BannerState.isPresented`.
+            // **One strip when there is something to say, nothing the rest of the
+            // time — and "the rest of the time" now includes the two states it was
+            // most often up for.** `ScreenContextStrip` occupied a 30pt row only
+            // while a capture session was live, and every AI answer arrived in a
+            // panel over the keys; the banner was both. A running call is the
+            // progress bar below instead, and a live recording is the microphone
+            // key drawn in record red, so what is left here is a live reading, a
+            // refusal and a failure. See `BannerState.isPresented`.
             if controller.showsActionBanner {
                 ActionBanner(controller: controller)
                     .transition(.opacity)
             }
+
+            // Between the banner and the candidates, and present in every state:
+            // its three points are reserved so a call starting cannot move the
+            // three candidate slots under a thumb. See `WorkingProgressBar`.
+            WorkingProgressBar(controller: controller)
 
             SuggestionBar(controller: controller)
 

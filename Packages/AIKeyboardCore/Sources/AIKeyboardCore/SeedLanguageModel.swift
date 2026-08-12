@@ -49,6 +49,17 @@ enum SeedLanguageModel {
         rank(of: word, in: language) != nil
     }
 
+    /// The whole seed list for a language, commonest first.
+    ///
+    /// Exists for `GroupedDecoder`, which has to *enumerate* a vocabulary rather
+    /// than ask about one word: a grouped keystroke is a set of possible prefixes,
+    /// and `UITextChecker` cannot be asked that question. This is the fallback it
+    /// runs on when the generated resource is absent, and a few hundred words is
+    /// exactly as thin as it sounds.
+    static func allWords(in language: KeyboardLanguage) -> [String] {
+        catalogue[language.languageTag]?.unigrams ?? []
+    }
+
     /// Words that commonly follow the end of this sentence, most likely first.
     ///
     /// **Takes the last few words, not the last one, and tries the longest key

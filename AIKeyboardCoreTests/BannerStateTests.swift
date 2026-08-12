@@ -2,13 +2,20 @@ import XCTest
 
 @testable import AIKeyboardCore
 
-/// **Which of six things the banner says when more than one of them is true.**
+/// **Which of several things the banner says when more than one of them is
+/// true.**
 ///
-/// The strip above the suggestion bar is driven by six published properties that
+/// The strip above the suggestion bar is driven by published properties that
 /// different code paths set and clear — `isWorking`, `aiError`, `variants`,
 /// `replies`, `aiResultText`, `isDictating` — and a view that branched on them in
 /// sequence would render whichever it happened to test first. `BannerState.resolve`
 /// is the one ordered place that decides, so this is where the order is pinned.
+///
+/// **Two of those states no longer draw anything, and the order still matters for
+/// them.** A running call is `WorkingProgressBar` and a live recording is the
+/// microphone key; both resolve to the idle state here, and both have to keep
+/// their place ahead of the branches below, or a recording started after a Fix
+/// would put that Fix's leftover answer back on screen.
 ///
 /// Every case here is written to reject a plausible wrong ordering rather than to
 /// restate the implementation.
@@ -21,7 +28,6 @@ final class BannerStateTests: XCTestCase {
         dictationIsLive: Bool = false,
         dictationTranscript: String = "",
         dictationFailure: String = "",
-        dictationIsPaused: Bool = false,
         isWorking: Bool = false,
         runningAction: AIAction? = nil,
         error: AIEngineError? = nil,
@@ -36,7 +42,6 @@ final class BannerStateTests: XCTestCase {
             dictationIsLive: dictationIsLive,
             dictationTranscript: dictationTranscript,
             dictationFailure: dictationFailure,
-            dictationIsPaused: dictationIsPaused,
             isWorking: isWorking,
             runningAction: runningAction,
             error: error,
@@ -49,13 +54,25 @@ final class BannerStateTests: XCTestCase {
 
     // MARK: Ordering
 
-    /// **A recording outranks a model call**, because it is running in another
-    /// process and stopping it is the time-critical thing on screen. A version that
-    /// tested `isWorking` first would hide the Stop button behind a shimmer.
-    func testARecordingOutranksAModelCall() {
+    /// **A recording draws no strip, and it still has to outrank everything under
+    /// it.**
+    ///
+    /// Neither a recording nor a model call earns a row any more — one is on the
+    /// microphone key, the other is `WorkingProgressBar` — so the interesting
+    /// question is no longer which of the two is drawn. It is that a recording
+    /// started while the previous action's answers are still in `options` must not
+    /// let those answers back onto the screen: `resolve` reaches the option branch
+    /// by falling through, and a recording that fell through with it would put a
+    /// Use button over three replies from before the user started speaking.
+    ///
+    /// Asserting `!isPresented` is what rejects that build. Asserting `.hint`
+    /// alone would not, because `.hint` is also what a *correct* fall-through to
+    /// the idle branch produces.
+    func testARecordingKeepsThePreviousAnswersOffTheScreen() {
         let state = resolve(
-            isDictating: true, isWorking: true, runningAction: .rewrite)
-        XCTAssertEqual(state, .dictating(transcript: "", isListening: true, isPaused: false))
+            isDictating: true, isWorking: true, runningAction: .rewrite, options: [reply])
+        XCTAssertFalse(state.isPresented)
+        XCTAssertEqual(state, .hint(BannerState.defaultHint))
     }
 
     /// **A failed recording is reported even though `isDictating` is already
@@ -69,21 +86,30 @@ final class BannerStateTests: XCTestCase {
     }
 
     /// A transcript that landed is not a failure, whatever is left in the reason.
+    ///
+    /// The words are in the field by the time this is asked — they were streamed
+    /// there as they were spoken — so what this rejects is a "Nothing to insert"
+    /// strip appearing over a sentence the user can see.
     func testATranscriptWinsOverAStaleFailure() {
         let state = resolve(
             isDictating: false, dictationIsLive: true, dictationTranscript: "hello",
             dictationFailure: "No speech")
-        XCTAssertEqual(state, .dictating(transcript: "hello", isListening: false, isPaused: false))
+        XCTAssertFalse(state.isPresented)
     }
 
     /// **Work outranks both a result and a failure**, because `beginWork` sets
     /// `isWorking` and clears `aiError` in the same breath: a retry must not flash
     /// the previous attempt's error, and must not show the previous action's
     /// answers under the new action's name.
+    ///
+    /// The shimmer that used to prove this is gone, so the assertion is that
+    /// nothing at all is drawn — which the wrong ordering fails twice over, once
+    /// with `.failed` and once with `.options`.
     func testWorkOutranksAStaleResultAndAStaleFailure() {
         let state = resolve(
             isWorking: true, runningAction: .fix, error: .refused, options: [reply])
-        XCTAssertEqual(state, .working(.fix))
+        XCTAssertFalse(state.isPresented)
+        XCTAssertEqual(state, .hint(BannerState.defaultHint))
     }
 
     /// A failure outranks options, because a failed call can leave the previous
@@ -105,12 +131,11 @@ final class BannerStateTests: XCTestCase {
         remedy: .broadcastPicker)
 
     /// **A recording outranks a refusal**, for the reason it outranks everything else
-    /// here: it is running in another process and stopping it is the time-critical
-    /// thing on screen. A refusal is a sentence about a tap that did nothing, and it
-    /// can wait.
+    /// here: it is running in another process. A refusal is a sentence about a tap
+    /// that did nothing, and it can wait — the alternative is a 69pt strip opening
+    /// underneath somebody who has already started speaking.
     func testARecordingOutranksARefusal() {
-        let state = resolve(isDictating: true, block: noSession)
-        XCTAssertEqual(state, .dictating(transcript: "", isListening: true, isPaused: false))
+        XCTAssertFalse(resolve(isDictating: true, block: noSession).isPresented)
     }
 
     /// **A refusal outranks the idle hint**, which is the ordering the whole case
@@ -132,13 +157,22 @@ final class BannerStateTests: XCTestCase {
         XCTAssertEqual(resolve(block: noSession, screenContext: context), .blocked(noSession))
     }
 
-    /// **A refusal does not survive the next call.** `beginWork` clears it, so a state
-    /// carrying both is unreachable — but `resolve` is the one place that decides, and
-    /// a version testing `block` after `isWorking` would leave a stale refusal under a
-    /// running shimmer the day that clearing regressed.
-    func testWorkOutranksARefusal() {
+    /// **A refusal outranks a call in flight, and this test used to claim the
+    /// opposite of what `resolve` does.**
+    ///
+    /// It asserted `.working(.fix)` while `resolve` has tested `block` above
+    /// `isWorking` since the refusals were converted from panels — so it was red,
+    /// and nobody saw it, because the suite is not run on every change here. The
+    /// two can only disagree on a state that `beginWork` makes unreachable (it
+    /// clears `block` in the same breath as it sets `isWorking`), which is why a
+    /// wrong answer cost nothing and went unnoticed.
+    ///
+    /// `resolve`'s order is the one kept: a refusal is a sentence about the tap the
+    /// user just made, and the call it would be hidden behind now draws a progress
+    /// bar rather than a strip, so there is nothing for it to compete with.
+    func testARefusalOutranksACallInFlight() {
         XCTAssertEqual(
-            resolve(isWorking: true, runningAction: .fix, block: noSession), .working(.fix))
+            resolve(isWorking: true, runningAction: .fix, block: noSession), .blocked(noSession))
     }
 
     // MARK: The empty answer
@@ -181,15 +215,22 @@ final class BannerStateTests: XCTestCase {
         XCTAssertEqual(resolve(idleHint: "Screen context is paused"), .hint("Screen context is paused"))
     }
 
-    /// **The idle instruction does not earn a row.** A version that kept the
-    /// banner up for `.hint` would still spend 48 pt teaching the user what the
-    /// action row already says by existing.
-    func testTheIdleHintDoesNotPresentTheBanner() {
+    /// **What earns a row and what does not**, which is the whole of what this
+    /// strip costs the keyboard.
+    ///
+    /// Two entries here changed direction rather than being added: a model call
+    /// and a live recording used to present, and now do not. They are the two most
+    /// frequent states in the feature, and both were spending 69 points of a
+    /// 368-point keyboard on a word that a three-point progress bar and a red key
+    /// say without moving anything. What survives is the set of states with a
+    /// *sentence* in them.
+    func testOnlyTheStatesWithSomethingToSayEarnARow() {
         XCTAssertFalse(resolve().isPresented)
-        XCTAssertTrue(resolve(isWorking: true, runningAction: .fix).isPresented)
+        XCTAssertFalse(resolve(isWorking: true, runningAction: .fix).isPresented)
+        XCTAssertFalse(resolve(isDictating: true).isPresented)
+
         XCTAssertTrue(resolve(runningAction: .rewrite, options: [reply]).isPresented)
         XCTAssertTrue(resolve(runningAction: .fix, error: .refused).isPresented)
-        XCTAssertTrue(resolve(isDictating: true).isPresented)
         XCTAssertTrue(resolve(block: noSession).isPresented)
         XCTAssertTrue(
             resolve(
@@ -199,43 +240,6 @@ final class BannerStateTests: XCTestCase {
         let context = ScreenContext(
             appName: "", appIcon: "", sender: "Dani", message: "when?", language: .hebrew)
         XCTAssertTrue(resolve(screenContext: context).isPresented)
-    }
-
-    /// The action-row highlight names the action the banner is reporting, and a
-    /// live reading lights nothing — it is not something the user started.
-    func testTheActiveActionKeyMatchesWhatTheBannerIsReporting() {
-        XCTAssertEqual(
-            resolve(isWorking: true, runningAction: .reply).activeActionKey, .ai(.reply))
-        XCTAssertEqual(
-            resolve(runningAction: .rewrite, options: [reply]).activeActionKey,
-            .ai(.rewrite))
-        XCTAssertEqual(
-            resolve(runningAction: .fix, error: .refused).activeActionKey,
-            .ai(.fix))
-        XCTAssertEqual(
-            resolve(isWorking: true, runningAction: .tone).activeActionKey,
-            .ai(.tone))
-        XCTAssertEqual(
-            resolve(isDictating: true).activeActionKey, .dictation)
-        XCTAssertEqual(
-            resolve(block: noSession).activeActionKey, .ai(.reply))
-        let noDictationSession = BannerState.Block(
-            action: nil,
-            title: "Dictation is not ready",
-            detail: "Start a session in the app.",
-            remedy: .none)
-        XCTAssertEqual(
-            resolve(block: noDictationSession).activeActionKey, .dictation)
-        XCTAssertEqual(
-            resolve(
-                dictationIsLive: true,
-                dictationFailure: "No speech"
-            ).activeActionKey,
-            .dictation)
-        XCTAssertNil(resolve().activeActionKey)
-        let context = ScreenContext(
-            appName: "", appIcon: "", sender: "Dani", message: "when?", language: .hebrew)
-        XCTAssertNil(resolve(screenContext: context).activeActionKey)
     }
 
     /// An index left over from an action with more answers must not read past the

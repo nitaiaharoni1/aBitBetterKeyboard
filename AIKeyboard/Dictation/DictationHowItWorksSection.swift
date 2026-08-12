@@ -30,7 +30,7 @@ struct DictationHowItWorksSection: View {
                         number: 3,
                         title: "Tap the microphone on the keyboard",
                         detail:
-                            "Speak, then tap Insert. The recording is transcribed and the words go straight into the field."
+                            "The key turns red and your words appear in the field as you speak. Tap it again to stop."
                     )
                     ExplainerStepRow(
                         number: 4,

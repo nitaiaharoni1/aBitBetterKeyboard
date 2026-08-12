@@ -15,7 +15,8 @@ extension SharedStore {
             Key.prefersCustomTone, Key.personalDictionary,
             Key.isSubscribed, Key.screenContextAllowed, Key.keyboardLayout,
             Key.recentEmoji, Key.hasAcknowledgedKeyboardSwitch,
-            Key.dictationHandoffRequest, Key.dictationActiveLanguage
+            Key.dictationHandoffRequest, Key.dictationActiveLanguage,
+            Key.brandPalette
             // Deliberately not `cloudBackendURL` or `cloudBackendToken`. A UI test
             // run would otherwise wipe the backend whoever is developing this
             // typed in, and it is the one setting here that cannot be recovered by
@@ -32,6 +33,7 @@ extension SharedStore {
         }
         hasCompletedOnboarding = false
         hasAcknowledgedKeyboardSwitch = false
+        brandPalette = .orange
         enabledLanguages = Self.shippedDefaultLanguages
         autocorrect = true
         autocapitalise = true
@@ -63,6 +65,13 @@ extension SharedStore {
         if defaults.object(forKey: Key.hasAcknowledgedKeyboardSwitch) != nil {
             hasAcknowledgedKeyboardSwitch = defaults.bool(forKey: Key.hasAcknowledgedKeyboardSwitch)
         }
+        // Assigned unconditionally rather than only when the key exists, because
+        // this is also what puts the shipped default into `Theme.palette` — the
+        // published property starts on `.orange` and so would never fire its
+        // `didSet` on a fresh install.
+        brandPalette =
+            defaults.string(forKey: Key.brandPalette).flatMap(BrandPalette.init(rawValue:))
+            ?? .orange
         if let raw = defaults.array(forKey: Key.enabledLanguages) as? [String] {
             let parsed = raw.compactMap(KeyboardLanguage.init(rawValue:))
             if !parsed.isEmpty { enabledLanguages = parsed }
@@ -78,6 +87,9 @@ extension SharedStore {
         }
         if defaults.object(forKey: Key.learnsFromTyping) != nil {
             learnsFromTyping = defaults.bool(forKey: Key.learnsFromTyping)
+        }
+        if let level = GroupedKeys.Level(rawValue: defaults.integer(forKey: Key.groupedLevel)) {
+            groupedLevel = level
         }
         if defaults.object(forKey: Key.haptics) != nil { haptics = defaults.bool(forKey: Key.haptics) }
         if defaults.object(forKey: Key.keySounds) != nil { keySounds = defaults.bool(forKey: Key.keySounds) }
@@ -122,7 +134,8 @@ extension SharedStore {
             """
             load storage=\(self.storage.rawValue, privacy: .public) \
             languages=\(self.enabledLanguages.map(\.rawValue).joined(separator: ","), privacy: .public) \
-            onboarded=\(self.hasCompletedOnboarding, privacy: .public)
+            onboarded=\(self.hasCompletedOnboarding, privacy: .public) \
+            palette=\(self.brandPalette.rawValue, privacy: .public)
             """
         )
     }

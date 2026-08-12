@@ -35,29 +35,66 @@ public extension Color {
 /// Single source of truth for the visual language, shared by the app and the keyboard.
 public enum Theme {
 
+    // MARK: Palette
+
+    /// Which accent `Brand` currently answers with.
+    ///
+    /// **Cached rather than read from the store per access, and that is a
+    /// latency decision.** `Brand.solid` is touched at 63 call sites, several of
+    /// them inside `KeyView`'s per-key drawing, so a keyboard redraw would put
+    /// thirty-odd `UserDefaults` lookups and string-to-enum parses on a path this
+    /// repo measures in milliseconds. Refreshed instead at the three moments it
+    /// can change: `SharedStore.load()` at each process launch,
+    /// `SharedStore.brandPalette`'s `didSet` in the app, and
+    /// `KeyboardViewController.viewWillAppear` in the extension — which is the
+    /// cross-process one, since the picker runs in the app and iOS keeps a
+    /// keyboard instance alive across it.
+    ///
+    /// Changing this does **not** repaint anything by itself. SwiftUI has no way
+    /// to know a global moved, so the two roots invalidate explicitly — see the
+    /// `.id(store.brandPalette)` in `RootView` and `OnboardingFlow`.
+    public static var palette: BrandPalette = .orange
+
     // MARK: Brand
 
-    /// One signature hue, a warm orange, held across the app and the keyboard.
+    /// One signature hue, held across the app and the keyboard.
     /// The gradient is same-hue and stays reserved for AI moments only: the
     /// sparkle key, the AI panel header, an active suggestion. Never for chrome.
+    ///
+    /// **Which hue is the user's choice now, and every name here is a computed
+    /// property because of it.** `BrandPalette` is picked in onboarding and
+    /// stored in the App Group; these read `Theme.palette`, so a call site that
+    /// was written against a constant keeps working unchanged. Nothing else in
+    /// `Theme` moves: a palette is the accent and only the accent.
     public enum Brand {
-        public static let start = Color(hex: 0xEE7442)  // orange
-        public static let end = Color(hex: 0xD9632F)  // deep orange
+        public static var start: Color { Theme.palette.color(.fillStart) }
+        public static var end: Color { Theme.palette.color(.fillEnd) }
 
-        public static let gradient = LinearGradient(
-            colors: [start, end],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        public static var gradient: LinearGradient {
+            LinearGradient(
+                colors: [start, end],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
 
-        public static let softGradient = LinearGradient(
-            colors: [start.opacity(0.14), end.opacity(0.14)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        public static var softGradient: LinearGradient {
+            LinearGradient(
+                colors: [start.opacity(0.14), end.opacity(0.14)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
 
-        /// Tint, icons, strokes, and accent text use the signature orange.
-        public static let solid = start
+        /// Tint, icons, strokes, and accent text use the signature hue.
+        ///
+        /// **No longer always `start`, and monochrome is why.** In the three
+        /// coloured palettes this is the same literal `start` resolves to, as it
+        /// always was. In monochrome it is a *lighter* graphite than anything
+        /// that gets filled, because this role sits on the app's own surfaces
+        /// and the fill roles sit under white text, and grey cannot satisfy both
+        /// floors with one value.
+        public static var solid: Color { Theme.palette.color(.solid) }
 
         /// Filled surfaces that carry white text use the deeper end of the same
         /// gradient, and the split is a measured one rather than a preference.
@@ -74,7 +111,17 @@ public enum Theme {
         /// `solid` deliberately stays on `start`: tint, icons, strokes and accent
         /// text sit on the app's own light surfaces, where the bright orange is
         /// the more legible of the two and the one the design is built around.
-        public static let action = end
+        ///
+        /// **That 3.64:1 is now the worst of the four palettes rather than the
+        /// only one.** Pink's fill is 5.35:1 under white and blue's is 5.17:1, so
+        /// both clear the 4.5:1 body floor the orange never did, and
+        /// monochrome's is 13.34:1 in light and 4.80:1 in dark. The orange is
+        /// unchanged on purpose — moving it would move the default every
+        /// existing install is already wearing — so a user who wants the caption
+        /// under a lit action key to clear AA can now get there by choosing a
+        /// different palette, which is not what this row was for but is a real
+        /// consequence of it.
+        public static var action: Color { end }
     }
 
     // MARK: Semantic

@@ -48,6 +48,9 @@ public enum DictationChannel {
     public static var transcriptURL: URL? {
         directoryURL?.appendingPathComponent("transcript.json")
     }
+    public static var partialURL: URL? {
+        directoryURL?.appendingPathComponent("partial.json")
+    }
 
     /// False in the keyboard until the user grants Full Access, which is why
     /// dictation is a Full-Access feature end to end.
@@ -59,35 +62,49 @@ public enum DictationChannel {
     /// gives: another process may have these pages mapped, and unlinking a mapped
     /// file leaves it reading an inode nobody will write again.
     public static func clear() {
-        guard prepareDirectory() != nil, let stateURL, let requestURL, let transcriptURL else {
+        guard prepareDirectory() != nil, let stateURL, let requestURL, let transcriptURL,
+            let partialURL
+        else {
             return
         }
         SharedPage<DictationState>(url: stateURL, bytes: statePageBytes, writable: true)?.reset()
         SharedPage<DictationRequest>(url: requestURL, bytes: requestPageBytes, writable: true)?
             .reset()
         try? FileManager.default.removeItem(at: transcriptURL)
+        try? FileManager.default.removeItem(at: partialURL)
     }
 
-    /// Removes a transcript whose session is no longer running.
+    /// Removes a transcript or partial whose session is no longer running.
     ///
     /// The same obligation `CaptureChannel.discardReadingOfADeadSession` carries,
     /// and it is sharper here: a transcript is a sentence the user *dictated*,
-    /// sitting in a container that is backed up. The app deletes it when a
-    /// session ends; this covers the ending the app never sees, which is the
-    /// jetsam kill the whole heartbeat exists to detect.
+    /// sitting in a container that is backed up — and a partial is exactly the
+    /// same sentence, caught mid-utterance rather than at the end. The app
+    /// deletes both when a session ends; this covers the ending the app never
+    /// sees, which is the jetsam kill the whole heartbeat exists to detect.
     @discardableResult
     public static func discardTranscriptOfADeadSession(
         in directory: URL, now: UInt64 = CaptureClock.now()
     ) -> Bool {
         let transcript = directory.appendingPathComponent("transcript.json")
-        guard FileManager.default.fileExists(atPath: transcript.path) else { return false }
+        let partial = directory.appendingPathComponent("partial.json")
+        let hasTranscript = FileManager.default.fileExists(atPath: transcript.path)
+        let hasPartial = FileManager.default.fileExists(atPath: partial.path)
+        guard hasTranscript || hasPartial else { return false }
 
         let state = SharedPage<DictationState>(
             url: directory.appendingPathComponent("state.bin"),
             bytes: statePageBytes, writable: false)?.load()
         if let state, state.isAlive(now: now) { return false }
 
-        return (try? FileManager.default.removeItem(at: transcript)) != nil
+        var removedSomething = false
+        if hasTranscript, (try? FileManager.default.removeItem(at: transcript)) != nil {
+            removedSomething = true
+        }
+        if hasPartial, (try? FileManager.default.removeItem(at: partial)) != nil {
+            removedSomething = true
+        }
+        return removedSomething
     }
 
     static func prepareDirectory(_ url: URL? = DictationChannel.directoryURL) -> URL? {

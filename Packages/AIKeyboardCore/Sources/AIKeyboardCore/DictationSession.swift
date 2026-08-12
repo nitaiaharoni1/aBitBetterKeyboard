@@ -56,6 +56,11 @@ public final class DictationSession: ObservableObject {
     @Published public private(set) var availability: Availability = .noSession(.notEnded)
     @Published public private(set) var level: Double = 0
     @Published public private(set) var transcript = ""
+    /// The transcript so far for the utterance this keyboard has open, or
+    /// empty when there is none. Replaced wholesale each time a better one
+    /// arrives from `poll()` — never appended to, because the app re-sends
+    /// the whole utterance on every partial rather than a delta.
+    @Published public private(set) var partialTranscript = ""
     /// What the transcriber reported hearing, comma-separated BCP-47, most
     /// spoken first. Empty until a transcript lands.
     @Published public private(set) var transcriptLanguages = ""
@@ -80,6 +85,11 @@ public final class DictationSession: ObservableObject {
 
     private var reader: DictationChannelReader?
     private var timer: Timer?
+    /// The highest partial sequence already applied to `partialTranscript`,
+    /// scoped to the utterance currently open — reset everywhere `utterance`
+    /// or `partialTranscript` is reset, so a fresh utterance's first partial
+    /// is never compared against the previous utterance's last one.
+    private var lastAppliedPartialSequence: UInt32 = 0
     private var lastLogged = ""
     /// The loudest level seen since the last line was emitted. See `report()`.
     private var peakSinceLogged: Double = 0
@@ -150,6 +160,8 @@ public final class DictationSession: ObservableObject {
         availability = .noSession(.notEnded)
         level = 0
         remainingSeconds = nil
+        partialTranscript = ""
+        lastAppliedPartialSequence = 0
     }
 
     // MARK: Utterances
@@ -162,6 +174,8 @@ public final class DictationSession: ObservableObject {
         transcript = ""
         transcriptLanguages = ""
         failure = ""
+        partialTranscript = ""
+        lastAppliedPartialSequence = 0
         awaitingTranscript = false
         utterance = reader.beginUtterance()
         poll()
@@ -194,6 +208,8 @@ public final class DictationSession: ObservableObject {
         transcript = ""
         transcriptLanguages = ""
         failure = ""
+        partialTranscript = ""
+        lastAppliedPartialSequence = 0
         poll()
     }
 
@@ -244,6 +260,21 @@ public final class DictationSession: ObservableObject {
         case .transcribing: availability = .transcribing
         }
 
+        // **Cheapest check first.** `state.partialSequence` is a plain integer
+        // read off the page already in hand, so comparing it against the last
+        // one applied costs nothing; `reader.partial()` opens and decodes a
+        // file, which is worth doing only once there is reason to think it
+        // changed. The record itself is still checked against this keyboard's
+        // own session and utterance — the page can say "something changed"
+        // for a partial that belongs to nobody this keyboard is listening to.
+        if utterance > 0, state.partialSequence != lastAppliedPartialSequence,
+            let partial = reader.partial(), partial.sessionID == state.sessionID,
+            partial.utterance == utterance, partial.sequence > lastAppliedPartialSequence
+        {
+            lastAppliedPartialSequence = partial.sequence
+            partialTranscript = partial.text
+        }
+
         if utterance > 0, let record = reader.transcript(), record.utterance == utterance,
             record.sessionID == state.sessionID
         {
@@ -251,6 +282,7 @@ public final class DictationSession: ObservableObject {
             awaitingTranscript = false
             availability = .ready
             level = 0
+            partialTranscript = ""
             switch record.outcome {
             case .transcribed:
                 transcriptLanguages = record.languages
@@ -277,9 +309,16 @@ public final class DictationSession: ObservableObject {
         // extension — which is both waste and a way to lose the lines that
         // matter. What is logged is the peak since the last line, so the level
         // still crosses into the log without deciding when to write one.
+        // **The partial is in the line for the same reason the transcript is.**
+        // Streaming crosses the App Group exactly as the final transcript does, and
+        // the only evidence that it does is what the *consuming* process says it
+        // saw — a log from the recorder would prove nothing about the two sharing a
+        // page. Without this, `Scripts/prove-dictation.sh` could prove that a
+        // transcript crosses and nothing at all about the readings before it.
         let line =
             "dictation-watch storage=\(DictationChannel.isReachable ? "appGroup" : "processLocal") "
             + "availability=\(Self.name(of: availability)) utterance=\(utterance) "
+            + "partial=\(partialTranscript.isEmpty ? "none" : String(partialTranscript.prefix(24))) "
             + "transcript=\(transcript.isEmpty ? "none" : String(transcript.prefix(24)))"
         guard line != lastLogged else { return }
         lastLogged = line

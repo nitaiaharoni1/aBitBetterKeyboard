@@ -38,6 +38,13 @@ extension KeyboardController {
         // something other than the document, so it gets first refusal on the key.
         if overlay == .emojiSearch, consumeForEmojiSearch(cap) { return }
 
+        // A grouped word is a claim about the characters directly behind the
+        // cursor, so anything that moves the cursor, opens a plane, switches
+        // language or writes text this keyboard did not decode retires it —
+        // otherwise the next grouped press rewrites whatever now sits there.
+        // Letters, delete and shift are the three that continue it.
+        if grouped.isTyping, GroupedInput.interrupts(cap) { endGroupedWord() }
+
         switch cap {
         case .character(let value):
             insertCharacter(value)
@@ -62,13 +69,16 @@ extension KeyboardController {
             shift = store.autocapitalise ? .on : .off
             refreshSuggestions()
         case .dictation:
+            // **The only haptic on this path.** `startDictation` used to fire a
+            // second one of its own, which is one tap buzzing twice — the Emoji
+            // key's defect, recorded in `.claude/rules/keyboard-layout.md`.
             Feedback.actionPress()
-            // **The one key that both starts and finishes a recording**, because
-            // the banner's trailing control is now Pause and Resume rather than the
-            // × that used to be the only way to stop. A microphone key that starts
-            // a recording it cannot end is a trap, and this key is the one lit
-            // orange while the recording runs, so it is the one a thumb goes back
-            // to. `toggleDictation` carries the two halves.
+            // **The one control this feature has.** It starts a recording, it is
+            // drawn in record red while one is running, it stops it, and a tap
+            // while the last words are still being transcribed calls the insert
+            // off. There is no strip behind it any more to offer any of that, so a
+            // key that could start something it could not end would be a trap.
+            // `toggleDictation` carries all three halves.
             toggleDictation()
         case .emoji:
             // No `modifierPress()` here: `show(_:)` fires one as its first line,
@@ -129,6 +139,17 @@ extension KeyboardController {
     /// shows one letter and types another.
     func insertCharacter(_ value: String) {
         Feedback.keyPress()
+        // A key carrying several letters types no letter of its own: it adds one
+        // keystroke to the word in progress and the decoder says what that word
+        // is. A single letter arriving *while* a grouped word is open is the
+        // long-press escape hatch picking one letter out of the group just
+        // pressed, which pins that position rather than starting a new key.
+        if isGroupedCap(value) {
+            pressGroupedKey(value)
+            return
+        }
+        if isGroupedTyping, pinGroupedLetter(value) { return }
+        if isGroupedTyping { endGroupedWord() }
         // **Only the refusal, never the whole banner.** "Type something first" stops
         // being true the moment they type something. An *answer* has to survive the
         // same keystroke, because fixing a typo before accepting a rewrite is
@@ -148,6 +169,11 @@ extension KeyboardController {
     func insertSpace() {
         Feedback.keyPress()
         clearRevertibleEdit()
+        // The word is finished, so the strokes that built it stop describing
+        // anything under the cursor. Everything below — including committing the
+        // bold suggestion — then runs exactly as it does with grouping off, on the
+        // text the decoder already wrote into the field.
+        endGroupedWord()
 
         // Two spaces in quick succession become a full stop, as on the system keyboard.
         let now = Date()
@@ -193,6 +219,11 @@ extension KeyboardController {
         // refusal has to be re-earned either way rather than left standing.
         block = nil
         clearRevertibleEdit()
+        // Backspace takes back a whole key press while a grouped word is open,
+        // because the letters on screen were never typed one at a time: removing
+        // one leaves a word the remaining keystrokes cannot produce, and the next
+        // press then decodes against a code that no longer matches the field.
+        if deleteGroupedStroke() { return }
         target?.deleteBackward()
         refreshSuggestions()
     }

@@ -1,0 +1,2404 @@
+{
+  "generated": "2026-08-12",
+  "generator": "Bar/grouped/make-testtext.py",
+  "provenance": "Every text here was authored for this repo as test material and then frozen; none of it is naturally occurring keyboard input. The typing entries are mid-typing moments reconstructed into whole words from the corpus's own `intended` / `mustNotCorrect` / `acceptable` fields, so the last word of such an entry is the corpus's answer rather than a keystroke record. The ai-text entries are inputs written to probe specific failure modes (already-correct sentences, meaning traps, mixed script). The dictation transcripts are human-authored sentences, but the audio in that corpus is synthetic macOS `say` speech and its own header says so; only the text is used here, so that warning does not transfer, while the sentences were still written to be read aloud cleanly. The screen-context messages are the chat bodies drawn into 30 generated screenshots of WhatsApp, Slack, Messages, Telegram and Mail. What this means for the numbers: vocabulary, sentence length and the rate of code-switching were all chosen by a person to exercise hard cases, so word frequencies do not match a real user's stream and any absolute accuracy figure measured on this file is a statement about this file. Differences between two decoders measured on the same entries are the number worth reading.",
+  "counts": {
+    "en": {
+      "entries": 190,
+      "words": 1805
+    },
+    "he": {
+      "entries": 198,
+      "words": 1475
+    }
+  },
+  "entries": [
+    {
+      "id": "typing-en-comp-01",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-comp-01.context+acceptable[0]",
+      "text": "I'll be there in ten minutes"
+    },
+    {
+      "id": "typing-en-comp-02",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-comp-02.context+acceptable[0]",
+      "text": "Can you send me the invoice"
+    },
+    {
+      "id": "typing-en-comp-03",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-comp-03.context+acceptable[0]",
+      "text": "Thanks for the quick response"
+    },
+    {
+      "id": "typing-en-comp-04",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-comp-04.context+acceptable[0]",
+      "text": "Let's move the meeting to Thursday"
+    },
+    {
+      "id": "typing-en-comp-05",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-comp-05.context+acceptable[0]",
+      "text": "I'm still waiting on the approval"
+    },
+    {
+      "id": "typing-en-comp-06",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-comp-06.context+acceptable[0]",
+      "text": "The apartment is on Dizengoff"
+    },
+    {
+      "id": "typing-en-comp-07",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-comp-07.context+acceptable[0]",
+      "text": "Please confirm the reservation"
+    },
+    {
+      "id": "typing-en-comp-08",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-comp-08.context+acceptable[0]",
+      "text": "She works at a startup in Herzliya"
+    },
+    {
+      "id": "typing-en-comp-09",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-comp-09.context+acceptable[0]",
+      "text": "I need to reschedule my appointment"
+    },
+    {
+      "id": "typing-en-comp-10",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-comp-10.context+acceptable[0]",
+      "text": "Just landed, walking to baggage"
+    },
+    {
+      "id": "typing-en-next-01",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-next-01.context",
+      "text": "Happy"
+    },
+    {
+      "id": "typing-en-next-02",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-next-02.context+acceptable[0]",
+      "text": "Thank you so much"
+    },
+    {
+      "id": "typing-en-next-03",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-next-03.context",
+      "text": "See you"
+    },
+    {
+      "id": "typing-en-next-04",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-next-04.context+acceptable[0]",
+      "text": "I'm on my way"
+    },
+    {
+      "id": "typing-en-next-05",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-next-05.context",
+      "text": "Sorry for the"
+    },
+    {
+      "id": "typing-en-next-06",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-next-06.context",
+      "text": "Have a great"
+    },
+    {
+      "id": "typing-en-next-07",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-next-07.context",
+      "text": "Can we push it to next"
+    },
+    {
+      "id": "typing-en-next-08",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#en-next-08.context",
+      "text": "Attached is the signed"
+    },
+    {
+      "id": "typing-he-comp-01",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-comp-01.context+acceptable[0]",
+      "text": "אני מגיע בעוד עשר דקות"
+    },
+    {
+      "id": "typing-he-comp-02",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-comp-02.context+acceptable[0]",
+      "text": "תשלח לי בבקשה את החשבונית"
+    },
+    {
+      "id": "typing-he-comp-03",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-comp-03.context+acceptable[0]",
+      "text": "אני צריך לקבוע תור"
+    },
+    {
+      "id": "typing-he-comp-04",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-comp-04.context+acceptable[0]",
+      "text": "אני בדרך לעבודה"
+    },
+    {
+      "id": "typing-he-comp-05",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-comp-05.context+acceptable[0]",
+      "text": "תודה רבה על העזרה"
+    },
+    {
+      "id": "typing-he-comp-06",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-comp-06.context+acceptable[0]",
+      "text": "אני לא בטוח"
+    },
+    {
+      "id": "typing-he-comp-07",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-comp-07.context+acceptable[0]",
+      "text": "צריך להזמין מונית"
+    },
+    {
+      "id": "typing-he-comp-08",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-comp-08.context+acceptable[0]",
+      "text": "יש לי פגישה"
+    },
+    {
+      "id": "typing-he-comp-09",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-comp-09.context+acceptable[0]",
+      "text": "הילדים חוזרים מהגן"
+    },
+    {
+      "id": "typing-he-comp-10",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-comp-10.context+acceptable[0]",
+      "text": "כמה זה עולה"
+    },
+    {
+      "id": "typing-he-comp-11",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-comp-11.context+acceptable[0]",
+      "text": "שלחתי לך את הכתובת"
+    },
+    {
+      "id": "typing-he-comp-12",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-comp-12.context+acceptable[0]",
+      "text": "אני אחזור אליך מאוחר"
+    },
+    {
+      "id": "typing-he-next-01",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-next-01.context+acceptable[0]",
+      "text": "בוקר טוב"
+    },
+    {
+      "id": "typing-he-next-02",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-next-02.context+acceptable[0]",
+      "text": "שבת שלום"
+    },
+    {
+      "id": "typing-he-next-03",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-next-03.context+acceptable[0]",
+      "text": "תודה רבה"
+    },
+    {
+      "id": "typing-he-next-04",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-next-04.context",
+      "text": "מה"
+    },
+    {
+      "id": "typing-he-next-05",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-next-05.context+acceptable[0]",
+      "text": "בסדר גמור"
+    },
+    {
+      "id": "typing-he-next-06",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-next-06.context",
+      "text": "יום"
+    },
+    {
+      "id": "typing-he-next-07",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-next-07.context",
+      "text": "אני בדרך"
+    },
+    {
+      "id": "typing-he-next-08",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-next-08.context+acceptable[0]",
+      "text": "חג שמח"
+    },
+    {
+      "id": "typing-he-next-09",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-next-09.context",
+      "text": "אני צריך"
+    },
+    {
+      "id": "typing-he-next-10",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#he-next-10.context",
+      "text": "נדבר"
+    },
+    {
+      "id": "typing-cs-01",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#cs-01.context+acceptable[0]",
+      "text": "אני צריך לעשות deploy",
+      "codeSwitch": true
+    },
+    {
+      "id": "typing-cs-02",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#cs-02.context+acceptable[0]",
+      "text": "יש לנו meeting",
+      "codeSwitch": true
+    },
+    {
+      "id": "typing-cs-03",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#cs-03.context+acceptable[0]",
+      "text": "שלחתי לך את זה בSlack",
+      "codeSwitch": true
+    },
+    {
+      "id": "typing-cs-04",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#cs-04.context+acceptable[0]",
+      "text": "הזמנתי אוכל בWolt",
+      "codeSwitch": true
+    },
+    {
+      "id": "typing-cs-05",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#cs-05.context+acceptable[0]",
+      "text": "אני מצרף screenshot",
+      "codeSwitch": true
+    },
+    {
+      "id": "typing-cs-06",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#cs-06.context+acceptable[0]",
+      "text": "בוא נעשה standup",
+      "codeSwitch": true
+    },
+    {
+      "id": "typing-cs-07",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#cs-07.context+acceptable[0]",
+      "text": "צריך לסגור את הsprint",
+      "codeSwitch": true
+    },
+    {
+      "id": "typing-cs-08",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#cs-08.context+acceptable[0]",
+      "text": "תסתכל על הfeedback",
+      "codeSwitch": true
+    },
+    {
+      "id": "typing-cs-09",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#cs-09.context+acceptable[0]",
+      "text": "אני עובד על הbudget",
+      "codeSwitch": true
+    },
+    {
+      "id": "typing-cs-11",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#cs-11.context+acceptable[0]",
+      "text": "הכנתי presentation לפגישה",
+      "codeSwitch": true
+    },
+    {
+      "id": "typing-cs-12",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#cs-12.context",
+      "text": "בוא נעשה"
+    },
+    {
+      "id": "typing-cs-13",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#cs-13.context+acceptable[0]",
+      "text": "Can you check the חשבונית",
+      "codeSwitch": true
+    },
+    {
+      "id": "typing-cs-14",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#cs-14.context+acceptable[0]",
+      "text": "אני שולח לך invite",
+      "codeSwitch": true
+    },
+    {
+      "id": "typing-apos-01",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#apos-01.context+intended",
+      "text": "Sorry I don't"
+    },
+    {
+      "id": "typing-apos-02",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#apos-02.context+intended",
+      "text": "I'm"
+    },
+    {
+      "id": "typing-apos-03",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#apos-03.context+intended",
+      "text": "I can't"
+    },
+    {
+      "id": "typing-apos-04",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#apos-04.context+intended",
+      "text": "I think you're"
+    },
+    {
+      "id": "typing-apos-05",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#apos-05.context+intended",
+      "text": "I think it's"
+    },
+    {
+      "id": "typing-apos-06",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#apos-06.context+intended",
+      "text": "I'll"
+    },
+    {
+      "id": "typing-apos-07",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#apos-07.context+intended",
+      "text": "Yeah that's"
+    },
+    {
+      "id": "typing-apos-08",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#apos-08.context+intended",
+      "text": "I haven't"
+    },
+    {
+      "id": "typing-apos-09",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#apos-09.context+intended",
+      "text": "Tomorrow we're"
+    },
+    {
+      "id": "typing-typo-01",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#typo-01.context+intended",
+      "text": "Send me the"
+    },
+    {
+      "id": "typing-typo-02",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#typo-02.context+intended",
+      "text": "Did you receive"
+    },
+    {
+      "id": "typing-typo-03",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#typo-03.context+intended",
+      "text": "What's the address"
+    },
+    {
+      "id": "typing-typo-04",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#typo-04.context+intended",
+      "text": "See you tomorrow"
+    },
+    {
+      "id": "typing-typo-05",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#typo-05.context+intended",
+      "text": "I will definitely"
+    },
+    {
+      "id": "typing-typo-06",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#typo-06.context+intended",
+      "text": "Please send a separate"
+    },
+    {
+      "id": "typing-typo-07",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#typo-07.context+intended",
+      "text": "Book a table at the restaurant"
+    },
+    {
+      "id": "typing-typo-08",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#typo-08.context+intended",
+      "text": "About the meeting"
+    },
+    {
+      "id": "typing-typo-09",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#typo-09.context+intended",
+      "text": "thanks"
+    },
+    {
+      "id": "typing-typo-10",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#typo-10.context+intended",
+      "text": "תודה"
+    },
+    {
+      "id": "typing-typo-11",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#typo-11.context+intended",
+      "text": "שלום"
+    },
+    {
+      "id": "typing-typo-12",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#typo-12.context+intended",
+      "text": "אני מגיע בעוד רבע"
+    },
+    {
+      "id": "typing-nc-02",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#nc-02.context+prefix",
+      "text": "That's a good id"
+    },
+    {
+      "id": "typing-nc-03",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#nc-03.context+prefix",
+      "text": "ok"
+    },
+    {
+      "id": "typing-nc-04",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#nc-04.context+prefix",
+      "text": "Take the bus"
+    },
+    {
+      "id": "typing-nc-05",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#nc-05.context+prefix",
+      "text": "Nitai"
+    },
+    {
+      "id": "typing-nc-06",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#nc-06.context+prefix",
+      "text": "Ask Tzachi"
+    },
+    {
+      "id": "typing-nc-07",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#nc-07.context+prefix",
+      "text": "Meet me at 8"
+    },
+    {
+      "id": "typing-nc-08",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#nc-08.context+prefix",
+      "text": "לא"
+    },
+    {
+      "id": "typing-nc-09",
+      "language": "he",
+      "source": "Bar/typing/corpus.json#nc-09.context+prefix",
+      "text": "אני רק"
+    },
+    {
+      "id": "typing-nc-10",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#nc-10.context+prefix",
+      "text": "Hi"
+    },
+    {
+      "id": "typing-nc-11",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#nc-11.context+prefix",
+      "text": "Coming in"
+    },
+    {
+      "id": "typing-nc-12",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#nc-12.context+prefix",
+      "text": "Pay with Bit"
+    },
+    {
+      "id": "typing-wl-03",
+      "language": "en",
+      "source": "Bar/typing/corpus.json#wl-03.context+intended",
+      "text": "hello"
+    },
+    {
+      "id": "aitext-fix-en-01",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#fix-en-01.input",
+      "text": "I dont think we should do it because its not make sense"
+    },
+    {
+      "id": "aitext-fix-en-02",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#fix-en-02.input",
+      "text": "Sounds good, I'll send you the deck tonight."
+    },
+    {
+      "id": "aitext-fix-en-03",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#fix-en-03.input",
+      "text": "The onboarding is good but its flow breaks on the last screen"
+    },
+    {
+      "id": "aitext-fix-en-04",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#fix-en-04.input",
+      "text": "can you send me the id for the sprint ticket"
+    },
+    {
+      "id": "aitext-fix-en-05",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#fix-en-05.input",
+      "text": "sorry i was ill last week and didnt see your message"
+    },
+    {
+      "id": "aitext-fix-en-06",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#fix-en-06.input",
+      "text": "he said \"i dont know\" and left it there"
+    },
+    {
+      "id": "aitext-fix-en-07",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#fix-en-07.input",
+      "text": "omg that meeting was sooo long 😅 im gonna need coffee"
+    },
+    {
+      "id": "aitext-fix-en-08",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#fix-en-08.input",
+      "text": "Ill sedn you teh updated presentaion after the standup tommorow"
+    },
+    {
+      "id": "aitext-fix-en-09",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#fix-en-09.input",
+      "text": "the numbers from last week doesnt match what the dashboard show"
+    },
+    {
+      "id": "aitext-fix-en-10",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#fix-en-10.input",
+      "text": "Please dont forget to send the invoice before the 15th, otherwise finance wont process it this month."
+    },
+    {
+      "id": "aitext-fix-he-01",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#fix-he-01.input",
+      "text": "היי, אני חושב שאנחנו צריכים לדבר על זה מחרר בבקשא"
+    },
+    {
+      "id": "aitext-fix-he-02",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#fix-he-02.input",
+      "text": "אני יבדוק את זה ואחזור אליך"
+    },
+    {
+      "id": "aitext-fix-he-03",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#fix-he-03.input",
+      "text": "תודה רבה, קיבלתי. אני עובר על זה עכשיו ומעדכן."
+    },
+    {
+      "id": "aitext-fix-he-04",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#fix-he-04.input",
+      "text": "מעולה, נתראה מחר בבוקר"
+    },
+    {
+      "id": "aitext-fix-he-05",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#fix-he-05.input",
+      "text": "אתה יכול להעביר לי את הקובץ של אתמול"
+    },
+    {
+      "id": "aitext-fix-he-06",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#fix-he-06.input",
+      "text": "יאללה סבבה, נדבר אח\"כ"
+    },
+    {
+      "id": "aitext-fix-he-07",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#fix-he-07.input",
+      "text": "שלחתי לך את הקובץ אתמול בערב, תגדי לי אם קיבלת"
+    },
+    {
+      "id": "aitext-fix-he-08",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#fix-he-08.input",
+      "text": "מה קורה אני מנסה להתקשר אליך כל הבוקר"
+    },
+    {
+      "id": "aitext-fix-mix-01",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#fix-mix-01.input",
+      "text": "אני אשלח לך את ה-document מחר אחרי ה-standup",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-fix-mix-02",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#fix-mix-02.input",
+      "text": "העליתי את התיקון ל-staging והכל עובד, its fine",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-fix-mix-03",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#fix-mix-03.input",
+      "text": "Can you check the deployment on staging, אני חושב שיש שם באג בבקשא",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-fix-mix-04",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#fix-mix-04.input",
+      "text": "בוא נעשה sync קצר על ה-roadmap של Q3",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-fix-mix-05",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#fix-mix-05.input",
+      "text": "אנני צריך את ה-API key בשביל ה-demo של מחר",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-fix-mix-06",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#fix-mix-06.input",
+      "text": "צריך לעשות refactor ל-service הזה לפני ה-release",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-rw-en-02",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#rw-en-02.input",
+      "text": "hey i need this by tomorrow please"
+    },
+    {
+      "id": "aitext-rw-en-03",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#rw-en-03.input",
+      "text": "Thanks for turning that around so fast, it made a real difference today."
+    },
+    {
+      "id": "aitext-rw-en-04",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#rw-en-04.input",
+      "text": "i cant make the 9am standup tomorrow"
+    },
+    {
+      "id": "aitext-rw-he-01",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#rw-he-01.input",
+      "text": "אני לא חושב שכדאי לנו לעשות את זה"
+    },
+    {
+      "id": "aitext-rw-he-02",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#rw-he-02.input",
+      "text": "אפשר לקבל את התשובה שלך עד סוף היום"
+    },
+    {
+      "id": "aitext-rw-he-03",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#rw-he-03.input",
+      "text": "תודה רבה על העזרה אתמול, ממש הצלת אותי"
+    },
+    {
+      "id": "aitext-rw-he-04",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#rw-he-04.input",
+      "text": "אני לא יכול לקחת את זה עכשיו יש לי יותר מדי דברים"
+    },
+    {
+      "id": "aitext-rw-mix-01",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#rw-mix-01.input",
+      "text": "צריך לדחות את ה-launch כי ה-QA לא סיים",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-rw-mix-03",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#rw-mix-03.input",
+      "text": "תעשה את ה-review של ה-PR עד היום בערב",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-rw-mix-04",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#rw-mix-04.input",
+      "text": "ה-meeting היה waste of time, אף אחד לא הגיע מוכן",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-tn-en-01",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#tn-en-01.input",
+      "text": "i think we should probably just move the meeting to next week"
+    },
+    {
+      "id": "aitext-tn-en-02",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#tn-en-02.input",
+      "text": "due to the fact that the client hasnt replied yet, i would like to postpone the review that we had scheduled for friday"
+    },
+    {
+      "id": "aitext-tn-en-03",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#tn-en-03.input",
+      "text": "hey can you fix the bug in the checkout flow its been broken since monday"
+    },
+    {
+      "id": "aitext-tn-en-04",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#tn-en-04.input",
+      "text": "we are not doing that"
+    },
+    {
+      "id": "aitext-tn-he-01",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#tn-he-01.input",
+      "text": "אני רוצה לבקש ממך לבדוק את הנתונים שהעברתי אליך"
+    },
+    {
+      "id": "aitext-tn-he-02",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#tn-he-02.input",
+      "text": "אולי אפשר בבקשה לשקול לדחות את הפגישה של יום ראשון"
+    },
+    {
+      "id": "aitext-tn-he-03",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#tn-he-03.input",
+      "text": "תשמע אני לא מרוצה מהתוצאה של הפרויקט הזה בכלל"
+    },
+    {
+      "id": "aitext-tn-mix-01",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#tn-mix-01.input",
+      "text": "לא הספקתי לעשות review ל-PR שלך, סליחה",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-tn-mix-02",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#tn-mix-02.input",
+      "text": "אני חושב שאולי כדאי שנעשה עוד iteration על ה-design לפני שאנחנו שולחים את זה ל-client",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-tn-mix-03",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#tn-mix-03.input",
+      "text": "ה-deploy נכשל שוב, אני חושב שזה קשור ל-config שהשתנה אתמול אבל אני לא בטוח",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-rp-en-01",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#rp-en-01.context.message",
+      "text": "Can you take the standup tomorrow? I have a conflict at 9."
+    },
+    {
+      "id": "aitext-rp-en-02",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#rp-en-02.context.message",
+      "text": "Can you look at this when you get a chance?"
+    },
+    {
+      "id": "aitext-rp-en-03",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#rp-en-03.context.message",
+      "text": "Hi! We're hiring for a senior iOS role and your background looks like a great fit. Would you be open to a quick call this week?"
+    },
+    {
+      "id": "aitext-rp-en-04",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#rp-en-04.context.message",
+      "text": "The plumber can come Tuesday between 8 and 12, does that work?"
+    },
+    {
+      "id": "aitext-rp-he-01",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#rp-he-01.context.message",
+      "text": "היי, אתה פנוי לארוחת ערב הערב? חשבתי על המקום החדש ביפו"
+    },
+    {
+      "id": "aitext-rp-he-02",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#rp-he-02.context.message",
+      "text": "אחי תוכל להחזיר לי את ה-500 שקל שהלוויתי לך? קצת בלחץ החודש"
+    },
+    {
+      "id": "aitext-rp-he-03",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#rp-he-03.context.message",
+      "text": "אפשר לדבר רגע?"
+    },
+    {
+      "id": "aitext-rp-he-04",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#rp-he-04.context.message",
+      "text": "יש לנו ערב גיבוש של הצוות ביום חמישי ב-19:00, אתה מגיע?"
+    },
+    {
+      "id": "aitext-rp-mix-01",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#rp-mix-01.context.message",
+      "text": "שלחתי לך את ה-deck, אפשר feedback עד מחר בצהריים?",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-rp-mix-02",
+      "language": "en",
+      "source": "Bar/ai-text/corpus.json#rp-mix-02.context.message",
+      "text": "העלית את ה-hotfix ל-production? ה-monitoring עדיין מראה errors",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-rp-mix-03",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#rp-mix-03.context.message",
+      "text": "היי, ה-app קורס לי כשאני מנסה להעלות תמונה. זה קורה כבר יומיים",
+      "codeSwitch": true
+    },
+    {
+      "id": "aitext-rp-mix-04",
+      "language": "he",
+      "source": "Bar/ai-text/corpus.json#rp-mix-04.context.message",
+      "text": "אני רוצה שתיקח ownership על ה-onboarding flow ברבעון הבא",
+      "codeSwitch": true
+    },
+    {
+      "id": "dictation-he-01",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#he-01.transcript",
+      "text": "נועה, תעדכני בבקשה את הדוח לפני הישיבה עם ההנהלה מחר בעשר וחצי"
+    },
+    {
+      "id": "dictation-he-02",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#he-02.transcript",
+      "text": "דיברתי עם יואב מהצוות של מובילאיי, הם רוצים לראות הדגמה בשבוע הבא"
+    },
+    {
+      "id": "dictation-he-03",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#he-03.transcript",
+      "text": "צריך לסגור את התקציב לרבעון הבא עד יום חמישי, אחרת זה נדחה לינואר"
+    },
+    {
+      "id": "dictation-he-04",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#he-04.transcript",
+      "text": "שלחתי לשירה את החוזה בווטסאפ, היא אמרה שתחזור אלי אחרי הצהריים"
+    },
+    {
+      "id": "dictation-he-05",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#he-05.transcript",
+      "text": "הפגישה עם המשקיעים של פיטנגו נדחתה ליום שלישי הבא בשעה תשע בבוקר"
+    },
+    {
+      "id": "dictation-he-06",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#he-06.transcript",
+      "text": "אבישי ביקש שנעביר את כל הקבצים לתיקייה המשותפת לפני סוף החודש"
+    },
+    {
+      "id": "dictation-he-07",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#he-07.transcript",
+      "text": "יש לנו תקלה בשרת של הלקוח בחיפה, אני נוסע לשם מחר בבוקר"
+    },
+    {
+      "id": "dictation-he-08",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#he-08.transcript",
+      "text": "תגידי לרונית שאני מאחר לישיבת הצוות, יש פקקים בכביש שש"
+    },
+    {
+      "id": "dictation-he-09",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#he-09.transcript",
+      "text": "המנהל הכללי של צ'ק פוינט אמר שהם מגייסים עוד מאתיים מהנדסים השנה"
+    },
+    {
+      "id": "dictation-he-10",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#he-10.transcript",
+      "text": "אני חושב שכדאי לנו לבדוק את זה עוד פעם לפני שאנחנו מעלים לאוויר"
+    },
+    {
+      "id": "dictation-he-11",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#he-11.transcript",
+      "text": "כתבי לי בבקשה סיכום קצר של השיחה עם הלקוח ותשלחי לכולם במייל"
+    },
+    {
+      "id": "dictation-he-12",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#he-12.transcript",
+      "text": "הגשנו את הבקשה לרשות החדשנות, התשובה אמורה להגיע תוך שישה שבועות"
+    },
+    {
+      "id": "dictation-en-01",
+      "language": "en",
+      "source": "Bar/dictation/ground-truth.json#en-01.transcript",
+      "text": "Can you review the deck before the board meeting on Thursday morning?"
+    },
+    {
+      "id": "dictation-en-02",
+      "language": "en",
+      "source": "Bar/dictation/ground-truth.json#en-02.transcript",
+      "text": "I pushed the fix to staging, but the pipeline is still failing on the integration tests."
+    },
+    {
+      "id": "dictation-en-03",
+      "language": "en",
+      "source": "Bar/dictation/ground-truth.json#en-03.transcript",
+      "text": "Let's move the standup to nine fifteen so Yotam can join from Tel Aviv."
+    },
+    {
+      "id": "dictation-en-04",
+      "language": "en",
+      "source": "Bar/dictation/ground-truth.json#en-04.transcript",
+      "text": "We closed the seed round last week, twelve million led by Aleph."
+    },
+    {
+      "id": "dictation-en-05",
+      "language": "en",
+      "source": "Bar/dictation/ground-truth.json#en-05.transcript",
+      "text": "The customer in Berlin wants SOC two compliance before they sign the contract."
+    },
+    {
+      "id": "dictation-en-06",
+      "language": "en",
+      "source": "Bar/dictation/ground-truth.json#en-06.transcript",
+      "text": "Please send me the invoice from the vendor, I need it for the quarterly report."
+    },
+    {
+      "id": "dictation-en-07",
+      "language": "en",
+      "source": "Bar/dictation/ground-truth.json#en-07.transcript",
+      "text": "I think we should ship the beta to a hundred users first and see what breaks."
+    },
+    {
+      "id": "dictation-en-08",
+      "language": "en",
+      "source": "Bar/dictation/ground-truth.json#en-08.transcript",
+      "text": "Ravit is on vacation until Sunday, so ask Dor about the migration script."
+    },
+    {
+      "id": "dictation-en-09",
+      "language": "en",
+      "source": "Bar/dictation/ground-truth.json#en-09.transcript",
+      "text": "The latency went up after the deploy, can you check the database connection pool?"
+    },
+    {
+      "id": "dictation-en-10",
+      "language": "en",
+      "source": "Bar/dictation/ground-truth.json#en-10.transcript",
+      "text": "We need to hire two more backend engineers before the end of the quarter."
+    },
+    {
+      "id": "dictation-en-11",
+      "language": "en",
+      "source": "Bar/dictation/ground-truth.json#en-11.transcript",
+      "text": "I'll be working from home tomorrow, ping me on Slack if anything urgent comes up."
+    },
+    {
+      "id": "dictation-en-12",
+      "language": "en",
+      "source": "Bar/dictation/ground-truth.json#en-12.transcript",
+      "text": "The demo with Wix went well, they want to start a pilot in September."
+    },
+    {
+      "id": "dictation-mix-01",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#mix-01.transcript",
+      "text": "בוא נעשה sync קצר על ה-roadmap של Q3 לפני ה-standup",
+      "codeSwitch": true
+    },
+    {
+      "id": "dictation-mix-02",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#mix-02.transcript",
+      "text": "אני אשלח לך את ה-document מחר בבוקר אחרי שאני מסיים את ה-review",
+      "codeSwitch": true
+    },
+    {
+      "id": "dictation-mix-03",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#mix-03.transcript",
+      "text": "צריך לעשות deploy ל-production אחרי שה-tests עוברים ב-CI",
+      "codeSwitch": true
+    },
+    {
+      "id": "dictation-mix-04",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#mix-04.transcript",
+      "text": "שלחתי לך invite ל-meeting בזום, תאשר בבקשה ב-calendar",
+      "codeSwitch": true
+    },
+    {
+      "id": "dictation-mix-05",
+      "language": "en",
+      "source": "Bar/dictation/ground-truth.json#mix-05.transcript",
+      "text": "ה-designer העלה את ה-mockups ל-Figma, תעברי עליהם לפני ה-sprint planning",
+      "codeSwitch": true
+    },
+    {
+      "id": "dictation-mix-06",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#mix-06.transcript",
+      "text": "יש bug ב-login של האפליקציה, ה-QA פתחו ticket בג'ירה",
+      "codeSwitch": true
+    },
+    {
+      "id": "dictation-mix-07",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#mix-07.transcript",
+      "text": "המשקיעים רוצים לראות את ה-metrics של ה-churn ברבעון האחרון",
+      "codeSwitch": true
+    },
+    {
+      "id": "dictation-mix-08",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#mix-08.transcript",
+      "text": "תעשה לי favor ותכתוב summary של ה-call עם הלקוח",
+      "codeSwitch": true
+    },
+    {
+      "id": "dictation-mix-09",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#mix-09.transcript",
+      "text": "ה-onboarding של העובדים החדשים מתחיל ביום ראשון עם ה-HR",
+      "codeSwitch": true
+    },
+    {
+      "id": "dictation-mix-10",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#mix-10.transcript",
+      "text": "צריך לעדכן את ה-pricing באתר לפני ה-launch של הגרסה החדשה",
+      "codeSwitch": true
+    },
+    {
+      "id": "dictation-mix-11",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#mix-11.transcript",
+      "text": "אני ב-remote היום, אפשר לדבר איתי ב-Slack או ב-WhatsApp",
+      "codeSwitch": true
+    },
+    {
+      "id": "dictation-mix-12",
+      "language": "he",
+      "source": "Bar/dictation/ground-truth.json#mix-12.transcript",
+      "text": "ה-backend של דניאל מוכן, חסר רק ה-integration עם ה-API של החברה",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-wa-01-m00",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-01.messagesOnScreen[0].text",
+      "text": "היי, איך היה בכנס אתמול?"
+    },
+    {
+      "id": "screen-wa-01-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-01.messagesOnScreen[1].text",
+      "text": "מעניין. פגשתי שם את דניאל מהחברה ההיא"
+    },
+    {
+      "id": "screen-wa-01-m02",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-01.messagesOnScreen[2].text",
+      "text": "מעולה. הוא עדיין מחפש ספקים?"
+    },
+    {
+      "id": "screen-wa-01-m03",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-01.messagesOnScreen[3].text",
+      "text": "כן, אמרתי לו שנשלח לו משהו השבוע"
+    },
+    {
+      "id": "screen-wa-01-m04",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-01.messagesOnScreen[4].text",
+      "text": "יופי, אני אכין טיוטה היום"
+    },
+    {
+      "id": "screen-wa-01-m05",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-01.messagesOnScreen[5].text",
+      "text": "בוקר טוב! ראית את המייל מרונן?"
+    },
+    {
+      "id": "screen-wa-01-m06",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-01.messagesOnScreen[6].text",
+      "text": "כן, עניתי לו אתמול בלילה"
+    },
+    {
+      "id": "screen-wa-01-m07",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-01.messagesOnScreen[7].text",
+      "text": "מעולה. אז אנחנו סוגרים על פגישה ביום שלישי ב-10:30 במשרד?"
+    },
+    {
+      "id": "screen-wa-02-m00",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-02.messagesOnScreen[0].text",
+      "text": "נחתת?"
+    },
+    {
+      "id": "screen-wa-02-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-02.messagesOnScreen[1].text",
+      "text": "נחתנו, מחכה למזוודה"
+    },
+    {
+      "id": "screen-wa-02-m02",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-02.messagesOnScreen[2].text",
+      "text": "סעי בזהירות, יורד גשם"
+    },
+    {
+      "id": "screen-wa-02-m03",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-02.messagesOnScreen[3].text",
+      "text": "חזרתי! הטיסה איחרה בשעתיים"
+    },
+    {
+      "id": "screen-wa-02-m04",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-02.messagesOnScreen[4].text",
+      "text": "וואי, נשמע מתיש. הספקת לישון?"
+    },
+    {
+      "id": "screen-wa-02-m05",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-02.messagesOnScreen[5].text",
+      "text": "קצת. אני הולך לישון מוקדם היום"
+    },
+    {
+      "id": "screen-wa-02-m06",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-02.messagesOnScreen[6].text",
+      "text": "מגיע לך. תשלח תמונות כשתתעורר"
+    },
+    {
+      "id": "screen-wa-02-m07",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-02.messagesOnScreen[7].text",
+      "text": "העליתי עכשיו לאלבום המשותף"
+    },
+    {
+      "id": "screen-wa-02-m08",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-02.messagesOnScreen[8].text",
+      "text": "וואו הצילומים מהטיול יצאו מדהים 😍"
+    },
+    {
+      "id": "screen-wa-02-m09",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-02.messagesOnScreen[9].text",
+      "text": "נכון?! שלחתי לך את כולם בדרייב"
+    },
+    {
+      "id": "screen-wa-02-m10",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-02.messagesOnScreen[10].text",
+      "text": "תודה!! 🙏 אני אעלה כמה לאינסטגרם מחר בבוקר, בסדר מבחינתך?"
+    },
+    {
+      "id": "screen-wa-03-m00",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-03.messagesOnScreen[0].text",
+      "text": "בוקר טוב, מתחילים את הספרינט היום?"
+    },
+    {
+      "id": "screen-wa-03-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-03.messagesOnScreen[1].text",
+      "text": "כן, אחרי הסטנדאפ"
+    },
+    {
+      "id": "screen-wa-03-m02",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-03.messagesOnScreen[2].text",
+      "text": "אני עדיין מחכה לאישור מהעיצוב על המסך האחרון"
+    },
+    {
+      "id": "screen-wa-03-m03",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-03.messagesOnScreen[3].text",
+      "text": "אישרתי אתמול בערב, תבדקי בפיגמה"
+    },
+    {
+      "id": "screen-wa-03-m04",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-03.messagesOnScreen[4].text",
+      "text": "מצוין, ראיתי. מתחילה לבנות"
+    },
+    {
+      "id": "screen-wa-03-m05",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-03.messagesOnScreen[5].text",
+      "text": "העליתי את ה-build החדש ל-TestFlight, מספר 142",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-wa-03-m06",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-03.messagesOnScreen[6].text",
+      "text": "אני בודק עכשיו"
+    },
+    {
+      "id": "screen-wa-03-m07",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-03.messagesOnScreen[7].text",
+      "text": "מעולה, תעדכנו"
+    },
+    {
+      "id": "screen-wa-03-m08",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-03.messagesOnScreen[8].text",
+      "text": "יש bug ב-onboarding, המסך השני נתקע כשבוחרים עברית. אפשר fix לפני ה-release מחר?",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-wa-04-m01",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-04.messagesOnScreen[1].text",
+      "text": "Barely. Coffee first."
+    },
+    {
+      "id": "screen-wa-04-m02",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-04.messagesOnScreen[2].text",
+      "text": "Fair. Take five minutes, this one is long."
+    },
+    {
+      "id": "screen-wa-04-m03",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-04.messagesOnScreen[3].text",
+      "text": "Go ahead, I'm reading."
+    },
+    {
+      "id": "screen-wa-04-m04",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-04.messagesOnScreen[4].text",
+      "text": "Right, here it is."
+    },
+    {
+      "id": "screen-wa-04-m05",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-04.messagesOnScreen[5].text",
+      "text": "Morning, quick recap from the call with the vendor yesterday so it is written down somewhere: they can hold the current pricing until the end of the quarter, but only if we commit to the two year term. If we go month to month the rate goes up by about eighteen percent starting in October, and they will not budge on the setup fee. I told them we would come back by Thursday."
+    },
+    {
+      "id": "screen-wa-04-m06",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-04.messagesOnScreen[6].text",
+      "text": "Thanks for writing it up. Two years is a lot to commit to."
+    },
+    {
+      "id": "screen-wa-04-m07",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-04.messagesOnScreen[7].text",
+      "text": "Also the legal review came back clean, so nothing blocking on that side."
+    },
+    {
+      "id": "screen-wa-04-m08",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-04.messagesOnScreen[8].text",
+      "text": "Good. I will look at the numbers tonight."
+    },
+    {
+      "id": "screen-wa-04-m09",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-04.messagesOnScreen[9].text",
+      "text": "Can you sanity check the numbers before I reply to them on Thursday?"
+    },
+    {
+      "id": "screen-wa-05-m00",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-05.messagesOnScreen[0].text",
+      "text": "בוקר טוב, לקחתי את האוטו למוסך"
+    },
+    {
+      "id": "screen-wa-05-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-05.messagesOnScreen[1].text",
+      "text": "תודה רבה! אמרו כמה זמן?"
+    },
+    {
+      "id": "screen-wa-05-m02",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-05.messagesOnScreen[2].text",
+      "text": "אמרו עד אחר הצהריים"
+    },
+    {
+      "id": "screen-wa-05-m03",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-05.messagesOnScreen[3].text",
+      "text": "שלום, סידרתי את העניין עם המוסך"
+    },
+    {
+      "id": "screen-wa-05-m04",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-05.messagesOnScreen[4].text",
+      "text": "תודה! כמה יצא בסוף?"
+    },
+    {
+      "id": "screen-wa-05-m05",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-05.messagesOnScreen[5].text",
+      "text": "1,240 כולל הבלמים. הם נתנו הנחה"
+    },
+    {
+      "id": "screen-wa-05-m06",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-05.messagesOnScreen[6].text",
+      "text": "מעולה, אני אעביר לך הערב"
+    },
+    {
+      "id": "screen-wa-05-m07",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-05.messagesOnScreen[7].text",
+      "text": "אין לחץ"
+    },
+    {
+      "id": "screen-wa-05-m08",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-05.messagesOnScreen[8].text",
+      "text": "אתה מגיע לארוחת ערב בשישי? אמא שואלת"
+    },
+    {
+      "id": "screen-wa-05-m09",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-05.messagesOnScreen[9].text",
+      "text": "כן, נגיע בסביבות שבע"
+    },
+    {
+      "id": "screen-wa-05-m10",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-05.messagesOnScreen[10].text",
+      "text": "אני מביא יין"
+    },
+    {
+      "id": "screen-wa-06-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-06.messagesOnScreen[1].text",
+      "text": "הבא. העבודות יתחילו ביום שלישי ה-3 בספטמבר ויימשכו כשלושה שבועות, אולי קצת יותר אם יתגלו בעיות רטיבות בקיר המערבי כמו שקרה בבניין הסמוך בשנה שעברה. בזמן העבודות המעלית תהיה מושבתת בכל יום בין 8:00 ל-16:00, אז מי שצריך להוריד או להעלות דברים כבדים מתבקש לעשות את זה בשעות הערב או בסופי שבוע. גם הכניסה הראשית תיחסם לסירוגין, ובימים האלה ניכנס דרך החניון התחתון. בנוסף, צריך לאסוף 450 שקל מכל דירה עד סוף החודש כדי לשלם לקבלן את המקדמה. אפשר להעביר לי בביט או במזומן לתיבת הדואר בקומת הכניסה. מי שמשלם במזומן שירשום את מספר הדירה על המעטפה. תעדכנו אותי בהקדם אם יש בעיה עם התאריכים או עם הסכום, ואם מישהו רוצה להצטרף לוועד השיפוץ שיכתוב לי בפרטי.",
+      "clipped": true
+    },
+    {
+      "id": "screen-wa-07-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-07.messagesOnScreen[0].text",
+      "text": "morning, is the cluster still on the old instance type?"
+    },
+    {
+      "id": "screen-wa-07-m01",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-07.messagesOnScreen[1].text",
+      "text": "yes, migration is scheduled for next sprint"
+    },
+    {
+      "id": "screen-wa-07-m02",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-07.messagesOnScreen[2].text",
+      "text": "ok, that's what I assumed"
+    },
+    {
+      "id": "screen-wa-07-m03",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-07.messagesOnScreen[3].text",
+      "text": "did the storage numbers ever come back from finance?"
+    },
+    {
+      "id": "screen-wa-07-m04",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-07.messagesOnScreen[4].text",
+      "text": "not yet, chasing them"
+    },
+    {
+      "id": "screen-wa-07-m05",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-07.messagesOnScreen[5].text",
+      "text": "ok. I need them before I can size the cluster"
+    },
+    {
+      "id": "screen-wa-07-m06",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-07.messagesOnScreen[6].text",
+      "text": "understood, I'll push today"
+    },
+    {
+      "id": "screen-wa-07-m07",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-07.messagesOnScreen[7].text",
+      "text": "hey are you around?"
+    },
+    {
+      "id": "screen-wa-07-m08",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-07.messagesOnScreen[8].text",
+      "text": "just got out of a meeting, what's up"
+    },
+    {
+      "id": "screen-wa-08-m00",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-08.messagesOnScreen[0].text",
+      "text": "בוקר טוב, סיימתי לקרוא את ה-RFC",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-wa-08-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-08.messagesOnScreen[1].text",
+      "text": "ומה דעתך?"
+    },
+    {
+      "id": "screen-wa-08-m02",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-08.messagesOnScreen[2].text",
+      "text": "בגדול מסכים. יש כמה דברים שכדאי לחדד"
+    },
+    {
+      "id": "screen-wa-08-m03",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-08.messagesOnScreen[3].text",
+      "text": "אשמח לשמוע"
+    },
+    {
+      "id": "screen-wa-08-m04",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-08.messagesOnScreen[4].text",
+      "text": "היי, יש לך דקה אחר כך?"
+    },
+    {
+      "id": "screen-wa-08-m05",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-08.messagesOnScreen[5].text",
+      "text": "כן, אחרי 3 אני פנוי"
+    },
+    {
+      "id": "screen-wa-08-m06",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-08.messagesOnScreen[6].text",
+      "text": "מעולה. רוצה לעבור על ה-architecture לפני שאנחנו מתחילים",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-wa-08-m07",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-08.messagesOnScreen[7].text",
+      "text": "בדיוק על זה חשבתי"
+    },
+    {
+      "id": "screen-wa-08-m08",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#wa-08.messagesOnScreen[8].text",
+      "text": "העליתי את ה-spec ל-Notion, יש שם 3 open questions",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-wa-08-m09",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#wa-08.messagesOnScreen[9].text",
+      "text": "קראתי. על שאלה 2 אני חושב שכדאי ללכת על server-side, זה יחסוך לנו את כל ה- sync logic",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-sl-01-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-01.messagesOnScreen[0].text",
+      "text": "Anyone still merging into main this morning?"
+    },
+    {
+      "id": "screen-sl-01-m01",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-01.messagesOnScreen[1].text",
+      "text": "Not me, I'm done for now."
+    },
+    {
+      "id": "screen-sl-01-m02",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-01.messagesOnScreen[2].text",
+      "text": "Same, go ahead."
+    },
+    {
+      "id": "screen-sl-01-m03",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-01.messagesOnScreen[3].text",
+      "text": "Starting the staging deploy now, should be about ten minutes."
+    },
+    {
+      "id": "screen-sl-01-m04",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-01.messagesOnScreen[4].text",
+      "text": "Thanks. I'll hold off on merging until it's green."
+    },
+    {
+      "id": "screen-sl-01-m05",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-01.messagesOnScreen[5].text",
+      "text": "Deploy to staging finished, build 4471 is up."
+    },
+    {
+      "id": "screen-sl-01-m06",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-01.messagesOnScreen[6].text",
+      "text": "No errors in the last 20 minutes."
+    },
+    {
+      "id": "screen-sl-01-m07",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-01.messagesOnScreen[7].text",
+      "text": "Nice. I'll run the smoke tests after lunch."
+    },
+    {
+      "id": "screen-sl-02-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-02.messagesOnScreen[0].text",
+      "text": "Morning. Did you get anywhere with the auth bug?"
+    },
+    {
+      "id": "screen-sl-02-m01",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-02.messagesOnScreen[1].text",
+      "text": "Reproduced it. It only happens after the token expires mid-session."
+    },
+    {
+      "id": "screen-sl-02-m02",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-02.messagesOnScreen[2].text",
+      "text": "That narrows it a lot. Give me twenty minutes."
+    },
+    {
+      "id": "screen-sl-02-m03",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-02.messagesOnScreen[3].text",
+      "text": "Pushed the fix for the token refresh loop. Turned out we were retrying on 401 without clearing the cached credential."
+    },
+    {
+      "id": "screen-sl-02-m04",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-02.messagesOnScreen[4].text",
+      "text": "Beautiful. Does that also explain the logout spikes on Android?"
+    },
+    {
+      "id": "screen-sl-02-m05",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-02.messagesOnScreen[5].text",
+      "text": "Almost certainly. Can you check the Sentry numbers after the release goes out at 2?"
+    },
+    {
+      "id": "screen-sl-03-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-03.messagesOnScreen[0].text",
+      "text": "(eu-west-1). Auto-paged the on-call.",
+      "clipped": true
+    },
+    {
+      "id": "screen-sl-03-m01",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-03.messagesOnScreen[1].text",
+      "text": "I'm on it. Looking at the gateway dashboards now."
+    },
+    {
+      "id": "screen-sl-03-m02",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-03.messagesOnScreen[2].text",
+      "text": "Error rate is sitting around eleven percent."
+    },
+    {
+      "id": "screen-sl-03-m03",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-03.messagesOnScreen[3].text",
+      "text": "Anything you need from me, or are you good?"
+    },
+    {
+      "id": "screen-sl-03-m04",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-03.messagesOnScreen[4].text",
+      "text": "Good for now. Go back to sleep, I'll write it up."
+    },
+    {
+      "id": "screen-sl-03-m05",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-03.messagesOnScreen[5].text",
+      "text": "Thanks. Ping me if it turns into a page."
+    },
+    {
+      "id": "screen-sl-03-m06",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-03.messagesOnScreen[6].text",
+      "text": "Root cause is the connection pool on the read replica. We raised max connections last week for the migration and never put it back, so the gateway was opening more sockets than the replica would accept and failing closed instead of queueing. Rolled the config back at 3:41 and error rate was under one percent within four minutes. Nothing was lost, but roughly nine thousand requests got a 502 during the window."
+    },
+    {
+      "id": "screen-sl-03-m07",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-03.messagesOnScreen[7].text",
+      "text": "Thanks for handling it overnight. Anything still open?"
+    },
+    {
+      "id": "screen-sl-03-m08",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-03.messagesOnScreen[8].text",
+      "text": "Wrote the postmortem draft. Can you add the customer impact section before the review at 4?"
+    },
+    {
+      "id": "screen-sl-04-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-04.messagesOnScreen[0].text",
+      "text": "Reminder: Hebrew launch is a week from Thursday."
+    },
+    {
+      "id": "screen-sl-04-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#sl-04.messagesOnScreen[1].text",
+      "text": "התרגומים מוכנים, נשאר רק העמוד הראשי"
+    },
+    {
+      "id": "screen-sl-04-m02",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-04.messagesOnScreen[2].text",
+      "text": "Who is reviewing the legal copy?"
+    },
+    {
+      "id": "screen-sl-04-m03",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-04.messagesOnScreen[3].text",
+      "text": "Legal signed off yesterday. We're clear."
+    },
+    {
+      "id": "screen-sl-04-m04",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#sl-04.messagesOnScreen[4].text",
+      "text": "עמוד הנחיתה בעברית עלה, אשמח לעיניים לפני שאנחנו מפרסמים"
+    },
+    {
+      "id": "screen-sl-04-m05",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-04.messagesOnScreen[5].text",
+      "text": "Looks good. RTL punctuation on the pricing table is off though."
+    },
+    {
+      "id": "screen-sl-04-m06",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#sl-04.messagesOnScreen[6].text",
+      "text": "תיקנתי את ה-RTL בטבלה, אפשר לעשות review לפני שאני מעלה ל-production?",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-sl-05-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-05.messagesOnScreen[0].text",
+      "text": "Pulled the key row spacing up by two points across all three keyboard heights."
+    },
+    {
+      "id": "screen-sl-05-m01",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-05.messagesOnScreen[1].text",
+      "text": "Did that fix the thumb reach complaint?"
+    },
+    {
+      "id": "screen-sl-05-m02",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-05.messagesOnScreen[2].text",
+      "text": "On the small phone yes. On the Pro Max it made the bottom row worse."
+    },
+    {
+      "id": "screen-sl-05-m03",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-05.messagesOnScreen[3].text",
+      "text": "Can we scale it per device class instead of a flat value?"
+    },
+    {
+      "id": "screen-sl-05-m04",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-05.messagesOnScreen[4].text",
+      "text": "That is what I ended up doing. The new spacing reads much better on the 6.3 inch. Can you export the dark variant too so I can drop both into the review deck?"
+    },
+    {
+      "id": "screen-sl-06-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-06.messagesOnScreen[0].text",
+      "text": "aikeyboard-ios 1.4.0 build started. Triggered by sofia.marchetti."
+    },
+    {
+      "id": "screen-sl-06-m01",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-06.messagesOnScreen[1].text",
+      "text": "Tests passed: 412 of 412. Archive uploaded."
+    },
+    {
+      "id": "screen-sl-06-m02",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-06.messagesOnScreen[2].text",
+      "text": "aikeyboard-ios 1.4.0 promoted to production. 0 rollbacks, 0 failed health checks."
+    },
+    {
+      "id": "screen-sl-06-m03",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-06.messagesOnScreen[3].text",
+      "text": "1.4.0 is live in the App Store. The ratings dashboard is already picking up Hebrew reviews."
+    },
+    {
+      "id": "screen-sl-06-m04",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-06.messagesOnScreen[4].text",
+      "text": "Two people have asked for a floating keyboard."
+    },
+    {
+      "id": "screen-sl-06-m05",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#sl-06.messagesOnScreen[5].text",
+      "text": "Can someone own the 1.4.1 hotfix list? I can start it after lunch if nobody else has it."
+    },
+    {
+      "id": "screen-im-01-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-01.messagesOnScreen[0].text",
+      "text": "Made it home fine, thanks for driving"
+    },
+    {
+      "id": "screen-im-01-m01",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-01.messagesOnScreen[1].text",
+      "text": "Any time. That was a long night"
+    },
+    {
+      "id": "screen-im-01-m02",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-01.messagesOnScreen[2].text",
+      "text": "Worth it though"
+    },
+    {
+      "id": "screen-im-01-m03",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-01.messagesOnScreen[3].text",
+      "text": "Morning! Did you see the photos from Saturday?"
+    },
+    {
+      "id": "screen-im-01-m04",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-01.messagesOnScreen[4].text",
+      "text": "Just went through them. The one by the harbour is great."
+    },
+    {
+      "id": "screen-im-01-m05",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-01.messagesOnScreen[5].text",
+      "text": "That's my favourite too. I'll print it."
+    },
+    {
+      "id": "screen-im-01-m06",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-01.messagesOnScreen[6].text",
+      "text": "Send me one as well"
+    },
+    {
+      "id": "screen-im-01-m07",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-01.messagesOnScreen[7].text",
+      "text": "Are we still on for Thursday?"
+    },
+    {
+      "id": "screen-im-01-m08",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-01.messagesOnScreen[8].text",
+      "text": "Yes, 7pm at the usual place"
+    },
+    {
+      "id": "screen-im-01-m09",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-01.messagesOnScreen[9].text",
+      "text": "Perfect. Bringing my sister, hope that's ok."
+    },
+    {
+      "id": "screen-im-02-m00",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-02.messagesOnScreen[0].text",
+      "text": "היום היה ארוך במיוחד"
+    },
+    {
+      "id": "screen-im-02-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-02.messagesOnScreen[1].text",
+      "text": "גם אצלי. שלוש ישיבות ברצף"
+    },
+    {
+      "id": "screen-im-02-m02",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-02.messagesOnScreen[2].text",
+      "text": "לפחות נגמר"
+    },
+    {
+      "id": "screen-im-02-m03",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-02.messagesOnScreen[3].text",
+      "text": "בדיוק"
+    },
+    {
+      "id": "screen-im-02-m04",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-02.messagesOnScreen[4].text",
+      "text": "אני יוצאת מהמשרד עוד מעט"
+    },
+    {
+      "id": "screen-im-02-m05",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-02.messagesOnScreen[5].text",
+      "text": "מזמין אוכל, מה בא לך?"
+    },
+    {
+      "id": "screen-im-02-m06",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-02.messagesOnScreen[6].text",
+      "text": "מה שאתה מזמין תמיד"
+    },
+    {
+      "id": "screen-im-02-m07",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-02.messagesOnScreen[7].text",
+      "text": "אז פיצה"
+    },
+    {
+      "id": "screen-im-02-m08",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-02.messagesOnScreen[8].text",
+      "text": "ראית מה קרה במשחק?? 😱"
+    },
+    {
+      "id": "screen-im-02-m09",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-02.messagesOnScreen[9].text",
+      "text": "לא הספקתי, מה פספסתי"
+    },
+    {
+      "id": "screen-im-02-m10",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-02.messagesOnScreen[10].text",
+      "text": "שתי דקות לסיום, גול ממחצית המגרש 🤯⚽️ אני עדיין בהלם, אתה חייב לראות את החזרה"
+    },
+    {
+      "id": "screen-im-03-m00",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-03.messagesOnScreen[0].text",
+      "text": "היי, נדבר מחר על ההצעה?"
+    },
+    {
+      "id": "screen-im-03-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-03.messagesOnScreen[1].text",
+      "text": "כן, אני במשרד מתשע"
+    },
+    {
+      "id": "screen-im-03-m02",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-03.messagesOnScreen[2].text",
+      "text": "מושלם, אקפוץ אליך"
+    },
+    {
+      "id": "screen-im-03-m03",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-03.messagesOnScreen[3].text",
+      "text": "מחכה לך"
+    },
+    {
+      "id": "screen-im-03-m04",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-03.messagesOnScreen[4].text",
+      "text": "בוקר טוב, אני יוצא לדרך"
+    },
+    {
+      "id": "screen-im-03-m05",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-03.messagesOnScreen[5].text",
+      "text": "מעולה, נתראה בעוד חצי שעה"
+    },
+    {
+      "id": "screen-im-03-m06",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-03.messagesOnScreen[6].text",
+      "text": "יש פקק בכביש 4, אולי אאחר קצת"
+    },
+    {
+      "id": "screen-im-03-m07",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-03.messagesOnScreen[7].text",
+      "text": "שלח לי בבקשה את הכתובת של המשרד החדש"
+    },
+    {
+      "id": "screen-im-03-m08",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-03.messagesOnScreen[8].text",
+      "text": "רוטשילד 45, קומה 8"
+    },
+    {
+      "id": "screen-im-03-m09",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-03.messagesOnScreen[9].text",
+      "text": "תודה, ובאיזו קומה החניה?"
+    },
+    {
+      "id": "screen-im-03-m10",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-03.messagesOnScreen[10].text",
+      "text": "מינוס 2, יש שער עם קוד 1948#"
+    },
+    {
+      "id": "screen-im-04-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-04.messagesOnScreen[0].text",
+      "text": "Merged the settings refactor. Nothing user visible."
+    },
+    {
+      "id": "screen-im-04-m01",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-04.messagesOnScreen[1].text",
+      "text": "Nice, that unblocks the theme work"
+    },
+    {
+      "id": "screen-im-04-m02",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-04.messagesOnScreen[2].text",
+      "text": "מישהו יודע למה ה-CI נופל על iOS 26?",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-im-04-m03",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-04.messagesOnScreen[3].text",
+      "text": "It's the new privacy manifest. Xcode 26 rejects the old key."
+    },
+    {
+      "id": "screen-im-04-m04",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-04.messagesOnScreen[4].text",
+      "text": "Adding it now"
+    },
+    {
+      "id": "screen-im-04-m05",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-04.messagesOnScreen[5].text",
+      "text": "מעולה. אחרי שזה עובר תוכל לעשות rebase ל-feature/keyboard-rtl? יש שם conflict ב-Package.resolved",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-im-05-m00",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-05.messagesOnScreen[0].text",
+      "text": "שלום! תזכורת לתור שלך מחר ב-9:15 אצל ד\"ר לוין. נא להגיע 10 דקות לפני."
+    },
+    {
+      "id": "screen-im-05-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-05.messagesOnScreen[1].text",
+      "text": "מאשר, תודה"
+    },
+    {
+      "id": "screen-im-05-m02",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-05.messagesOnScreen[2].text",
+      "text": "מצוין. אם צריך לבטל, אפשר להשיב לכאן עד 20:00 היום."
+    },
+    {
+      "id": "screen-im-06-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-06.messagesOnScreen[0].text",
+      "text": "Did you ever get that OCR thing working?"
+    },
+    {
+      "id": "screen-im-06-m01",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-06.messagesOnScreen[1].text",
+      "text": "Sort of. Accuracy is fine, picking the right line is the hard part"
+    },
+    {
+      "id": "screen-im-06-m02",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-06.messagesOnScreen[2].text",
+      "text": "That's exactly what the article said"
+    },
+    {
+      "id": "screen-im-06-m03",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-06.messagesOnScreen[3].text",
+      "text": "This is the piece I was talking about"
+    },
+    {
+      "id": "screen-im-06-m04",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-06.messagesOnScreen[4].text",
+      "text": "Saved it, will read tonight."
+    },
+    {
+      "id": "screen-im-06-m05",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#im-06.messagesOnScreen[5].text",
+      "text": "The section on Hebrew line detection is the part you'll care about. Worth five minutes."
+    },
+    {
+      "id": "screen-im-07-m00",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-07.messagesOnScreen[0].text",
+      "text": "היי! סוף סוף הגיעה המדפסת החדשה"
+    },
+    {
+      "id": "screen-im-07-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-07.messagesOnScreen[1].text",
+      "text": "איזה יופי, איך היא?"
+    },
+    {
+      "id": "screen-im-07-m02",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-07.messagesOnScreen[2].text",
+      "text": "לוקח זמן להתרגל אבל התוצאות שוות את זה"
+    },
+    {
+      "id": "screen-im-07-m03",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-07.messagesOnScreen[3].text",
+      "text": "זה מה שהדפסתי אתמול, ה-print quality יצא ממש טוב",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-im-07-m04",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-07.messagesOnScreen[4].text",
+      "text": "וואו, זה מדהים"
+    },
+    {
+      "id": "screen-im-07-m05",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#im-07.messagesOnScreen[5].text",
+      "text": "רוצה שאדפיס לך אחד? תגיד לי איזה size ואני מזמינה מחר",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-tg-01-m00",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-01.messagesOnScreen[0].text",
+      "text": "בוקר טוב, אני מגיע בסביבות עשר"
+    },
+    {
+      "id": "screen-tg-01-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-01.messagesOnScreen[1].text",
+      "text": "מעולה, אני משאיר את השער פתוח"
+    },
+    {
+      "id": "screen-tg-01-m02",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-01.messagesOnScreen[2].text",
+      "text": "תודה. להביא משהו?"
+    },
+    {
+      "id": "screen-tg-01-m03",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-01.messagesOnScreen[3].text",
+      "text": "רק שקיות אשפה גדולות אם יש לך"
+    },
+    {
+      "id": "screen-tg-01-m04",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-01.messagesOnScreen[4].text",
+      "text": "היי, סיימתי לסדר את החצר"
+    },
+    {
+      "id": "screen-tg-01-m05",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-01.messagesOnScreen[5].text",
+      "text": "אלוף. נשאר משהו לזרוק?"
+    },
+    {
+      "id": "screen-tg-01-m06",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-01.messagesOnScreen[6].text",
+      "text": "רק הקרשים הישנים, שמתי אותם ליד המחסן"
+    },
+    {
+      "id": "screen-tg-01-m07",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-01.messagesOnScreen[7].text",
+      "text": "אני אקח אותם מחר בבוקר"
+    },
+    {
+      "id": "screen-tg-01-m08",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-01.messagesOnScreen[8].text",
+      "text": "אתה זוכר איפה שמנו את המפתחות של המחסן?"
+    },
+    {
+      "id": "screen-tg-01-m09",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-01.messagesOnScreen[9].text",
+      "text": "במגירה השנייה במטבח, מתחת לספר הטלפונים. אם הם לא שם תשאל את יוסי, הוא לקח אותם בשבת"
+    },
+    {
+      "id": "screen-tg-02-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-02.messagesOnScreen[0].text",
+      "text": "Are you at the office today or working from home?"
+    },
+    {
+      "id": "screen-tg-02-m01",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-02.messagesOnScreen[1].text",
+      "text": "Home until lunch, then in."
+    },
+    {
+      "id": "screen-tg-02-m02",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-02.messagesOnScreen[2].text",
+      "text": "Good, I'll grab you after. Something came out this morning."
+    },
+    {
+      "id": "screen-tg-02-m03",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-02.messagesOnScreen[3].text",
+      "text": "Now I'm curious."
+    },
+    {
+      "id": "screen-tg-02-m04",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-02.messagesOnScreen[4].text",
+      "text": "Apple is opening the keyboard extension sandbox in iOS 27, allowing full network access without a container app."
+    },
+    {
+      "id": "screen-tg-02-m05",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-02.messagesOnScreen[5].text",
+      "text": "That changes our whole architecture."
+    },
+    {
+      "id": "screen-tg-02-m06",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-02.messagesOnScreen[6].text",
+      "text": "נכון, אבל רק ב-iOS 27. אנחנו עדיין צריכים את ה-App Group fallback לשנתיים הקרובות, לא?",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-tg-03-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-03.messagesOnScreen[0].text",
+      "text": "Shipment left the port this morning."
+    },
+    {
+      "id": "screen-tg-03-m01",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-03.messagesOnScreen[1].text",
+      "text": "Good. ETA still Friday?"
+    },
+    {
+      "id": "screen-tg-03-m02",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-03.messagesOnScreen[2].text",
+      "text": "Thursday evening if customs is quick."
+    },
+    {
+      "id": "screen-tg-03-m03",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-03.messagesOnScreen[3].text",
+      "text": "I'll let the warehouse know."
+    },
+    {
+      "id": "screen-tg-03-m04",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-03.messagesOnScreen[4].text",
+      "text": "The warehouse confirmed the pallet count."
+    },
+    {
+      "id": "screen-tg-03-m05",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-03.messagesOnScreen[5].text",
+      "text": "All forty?"
+    },
+    {
+      "id": "screen-tg-03-m06",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-03.messagesOnScreen[6].text",
+      "text": "Thirty eight. Two were damaged in transit."
+    },
+    {
+      "id": "screen-tg-03-m07",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-03.messagesOnScreen[7].text",
+      "text": "File a claim, we can't absorb that."
+    },
+    {
+      "id": "screen-tg-03-m08",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-03.messagesOnScreen[8].text",
+      "text": "Already did, this morning."
+    },
+    {
+      "id": "screen-tg-03-m09",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-03.messagesOnScreen[9].text",
+      "text": "Did the invoice for June ever get paid? Accounting is asking."
+    },
+    {
+      "id": "screen-tg-03-m10",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-03.messagesOnScreen[10].text",
+      "text": "Checking now."
+    },
+    {
+      "id": "screen-tg-03-m11",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-03.messagesOnScreen[11].text",
+      "text": "Paid on the 3rd, reference 88412. I'll forward the confirmation."
+    },
+    {
+      "id": "screen-tg-04-m00",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-04.messagesOnScreen[0].text",
+      "text": "אישור הורים חתום?",
+      "clipped": true
+    },
+    {
+      "id": "screen-tg-04-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-04.messagesOnScreen[1].text",
+      "text": "כן, המחנכת ביקשה להביא מודפס. שלחו את זה בטופס ביום ראשון"
+    },
+    {
+      "id": "screen-tg-04-m02",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-04.messagesOnScreen[2].text",
+      "text": "תודה, הדפסתי אתמול"
+    },
+    {
+      "id": "screen-tg-04-m03",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-04.messagesOnScreen[3].text",
+      "text": "מעולה, אני ארוץ להדפיס עכשיו"
+    },
+    {
+      "id": "screen-tg-04-m04",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-04.messagesOnScreen[4].text",
+      "text": "בוקר טוב לכולם! מזכירה שמחר יש טיול שנתי"
+    },
+    {
+      "id": "screen-tg-04-m05",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-04.messagesOnScreen[5].text",
+      "text": "צריך להביא כובע, בקבוק מים גדול ואוכל לכל היום"
+    },
+    {
+      "id": "screen-tg-04-m06",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-04.messagesOnScreen[6].text",
+      "text": "מה השעה שחוזרים? צריך לארגן הסעות לילדים שההורים עובדים"
+    },
+    {
+      "id": "screen-tg-05-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-05.messagesOnScreen[0].text",
+      "text": "Build 1.4.2 installed fine here, no crash on launch."
+    },
+    {
+      "id": "screen-tg-05-m01",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-05.messagesOnScreen[1].text",
+      "text": "Same. Arabic layout still missing though, any plans?"
+    },
+    {
+      "id": "screen-tg-05-m02",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-05.messagesOnScreen[2].text",
+      "text": "ה-swipe typing בעברית עובד ממש טוב בבטא הזאת 👏",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-tg-05-m03",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#tg-05.messagesOnScreen[3].text",
+      "text": "Same here on English. Only issue is the number row disappears in landscape."
+    },
+    {
+      "id": "screen-tg-05-m04",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#tg-05.messagesOnScreen[4].text",
+      "text": "@nitai יש תאריך ל-1.5? אנחנו רוצים לעדכן את הצוות שלנו לפני הרבעון הבא",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-ml-01-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#ml-01.messagesOnScreen[0].text",
+      "text": "Hi Nitai, Legal came back on the renewal. They are fine with the two year term but want the liability cap raised to match last year's contract. Everything else is agreed. Can you confirm by Friday so we can get signatures out before the quarter closes?"
+    },
+    {
+      "id": "screen-ml-02-m00",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#ml-02.messagesOnScreen[0].text",
+      "text": "רונית, מצרף את ניתאי לשרשור. הוא זה שבנה את המקלדת שהזכרתי בישיבה. ניתאי, רונית מובילה אצלנו את הרכש. שווה שתדברו ישירות."
+    },
+    {
+      "id": "screen-ml-02-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#ml-02.messagesOnScreen[1].text",
+      "text": "שלום ניתאי, קיבלנו את ההמלצה עליך מצוות המוצר. אנחנו מחפשים ספק לפיתוח מקלדת עברית מותאמת לארגון, כולל תמיכה בהכתבה ובתרגום פנימי. אשמח לקבל הצעת מחיר ראשונית עד סוף השבוע, ולתאם שיחה קצרה בשבוע הבא. האם יום שני בעשר בבוקר מתאים לך?"
+    },
+    {
+      "id": "screen-ml-03-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#ml-03.messagesOnScreen[0].text",
+      "text": "Attaching the traces from the RTL cursor bug. Short version: when the user types a Latin word inside a Hebrew sentence, the caret jumps to the visual end of the run instead of the logical one, and the next backspace deletes the wrong character. I tried three fixes. Forcing the base writing direction per paragraph works but breaks mixed quotes. Overriding the bidi level on the attributed string fixes the caret and breaks selection. Letting the system handle it is correct everywhere except inside our own suggestion strip. What would you do here?",
+      "clipped": true
+    },
+    {
+      "id": "screen-ml-03-m01",
+      "language": "he",
+      "source": "Bar/screen-context/ground-truth.json#ml-03.messagesOnScreen[1].text",
+      "text": "תודה על הפירוט. שתי הערות: ראשית, ה-bidi algorithm של iOS כבר מטפל ברוב המקרים, אז אני לא בטוח שצריך override ידני. שנית, ה-NSAttributedString שאתה בונה מאבד את ה-writing direction כשהוא עובר דרך ה-App Group. אפשר לקבוע פגישה מחר ב-14:00?",
+      "codeSwitch": true
+    },
+    {
+      "id": "screen-ml-04-m00",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#ml-04.messagesOnScreen[0].text",
+      "text": "Hi, I went through the onboarding screens. Screens one and three are clear. Screen two asks for keyboard access before it has explained why, and three testers backed out there. Suggested rewrite is in the shared doc. Can you take a look before Thursday's build?"
+    },
+    {
+      "id": "screen-ml-04-m01",
+      "language": "en",
+      "source": "Bar/screen-context/ground-truth.json#ml-04.messagesOnScreen[1].text",
+      "text": "Thanks Marta, edits are in the doc. Take another look when you can and I'll cut the build after."
+    }
+  ]
+}

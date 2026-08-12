@@ -31,7 +31,7 @@ No linter is configured.
 - **`AIKeyboardShared` is the Foundation-only target** that the keyboard and the broadcast extension both link. `AIKeyboardCore` re-exports it. `AIKeyboardBroadcast` links `AIKeyboardShared` alone and must never link `AIKeyboardCore` — that would drag SwiftUI and UIKit into a process capped at ~50 MB.
 - **Targets use `PBXFileSystemSynchronizedRootGroup`** (`objectVersion = 77`), so any file dropped into `AIKeyboard/`, `AIKeyboardExtension/`, `AIKeyboardBroadcast/`, `AIKeyboardUITests/` or `AIKeyboardCoreTests/` is compiled into that target with no `.pbxproj` edit — all five are synchronized roots. A file that must *not* compile needs a `membershipExceptions` entry, as both `AIKeyboardExtension/Info.plist` and `AIKeyboardBroadcast/Info.plist` have.
 - **`swift build` inside `Packages/AIKeyboardCore` fails on macOS.** `Package.swift` declares `platforms: [.iOS(.v17)]` and the sources import UIKit and AudioToolbox, so the package only builds through the Xcode project against an iOS Simulator destination.
-- `Bar/` holds the frozen corpora and scoring harnesses (`ai-text`, `dictation`, `screen-context`, `layouts`, `typing`). `Scripts/prove-*.sh` hold the checks that fail the build when an architectural invariant is broken.
+- `Bar/` holds the frozen corpora and scoring harnesses (`ai-text`, `dictation`, `screen-context`, `layouts`, `typing`, `grouped`). `Scripts/prove-*.sh` hold the checks that fail the build when an architectural invariant is broken. **`grouped` is the only one that measures something this repo does not ship** — a keyboard whose keys each carry several letters — so it needs no simulator and runs in seconds; see `.claude/docs/grouped-keys-design.md`.
 
 ## What is real
 

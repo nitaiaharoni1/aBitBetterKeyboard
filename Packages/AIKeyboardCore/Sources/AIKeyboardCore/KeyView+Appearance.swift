@@ -15,10 +15,19 @@ extension KeyView {
     /// take one role's colour with another role's shadow. `KeyStyleButton`
     /// takes the same enum for the same reason.
     enum CapKind {
-        case letter, strong, soft, action
+        case letter, strong, soft, action, record
     }
 
     var capKind: CapKind {
+        // **Record red outranks the brand cap, and it is the narrowest state on
+        // this keyboard.** A recording used to announce itself in a 69pt strip
+        // with a waveform running across it; with the strip gone, the key is the
+        // whole of the notice, and "the microphone in your keyboard is on right
+        // now" is not a sentence an orange cap identical to the one Fix wears can
+        // carry. `Theme.Semantic.record` is the only red in the product and this
+        // is what it is for. It is deliberately off through a pause and off while
+        // the last words are transcribed — see `DictationKeyState`.
+        if dictationState.isRecording { return .record }
         // **A running action wears the primary cap, whole.** It used to paint a 14%
         // brand wash over whatever cap the key already had, which on the warm-white
         // AI keys is a barely-there tint — on a phone, in daylight, beside four
@@ -51,6 +60,7 @@ extension KeyView {
         case .letter: return Theme.Keys.letter
         case .strong: return Theme.Keys.functionStrong
         case .action: return Theme.Brand.action
+        case .record: return Theme.Semantic.record
         case .soft: return Theme.Keys.functionSoft
         }
     }
@@ -83,7 +93,7 @@ extension KeyView {
     /// action is running — take `Text.onBrand`.
     var labelColor: Color {
         if isPressed { return Theme.Keys.label }
-        if capKind == .action { return Theme.Text.onBrand }
+        if capKind == .action || capKind == .record { return Theme.Text.onBrand }
         return (restsOnDarkCap ? Theme.Keys.labelOnFunction : Theme.Keys.label)
             .opacity(isDisabled ? Self.disabledLabelOpacity : 1)
     }
@@ -111,6 +121,7 @@ extension KeyView {
         case .strong: return .black.opacity(0.45)
         case .soft: return .black.opacity(0.35)
         case .action: return Color(hex: 0xB95023, alpha: 0.55)
+        case .record: return Color(hex: 0x8E2B28, alpha: 0.55)
         }
     }
 
@@ -121,10 +132,15 @@ extension KeyView {
         case .strong: return .black.opacity(0.10)
         case .soft: return .black.opacity(0.08)
         case .action: return Theme.Brand.action.opacity(0.30)
+        case .record: return Theme.Semantic.record.opacity(0.34)
         }
     }
 
     var accessibilityValue: String {
+        // The microphone's state, which its label cannot carry: "Stop recording"
+        // is what a tap does and says nothing about a countdown running out or a
+        // recording sitting paused. See `DictationKeyState.accessibilityValue`.
+        if spec.cap == .dictation { return dictationState.accessibilityValue }
         guard spec.cap == .space else { return "" }
         guard let indication else {
             return enabledLanguages.count > 1 ? language.displayName : ""

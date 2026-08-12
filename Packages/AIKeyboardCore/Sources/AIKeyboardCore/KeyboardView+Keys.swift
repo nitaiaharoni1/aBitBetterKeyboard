@@ -7,7 +7,13 @@ extension KeyboardView {
     var keyGrid: some View {
         GeometryReader { geo in
             let layout = controller.customization
-            let columns = KeyboardLayout.columns(for: controller.language, plane: controller.plane)
+            // The one place that knows what the user chose. `KeyboardLayout` is a
+            // pure function of its arguments and must stay one — reading the dial
+            // inside it made every layout test depend on whatever the App Group
+            // happened to hold.
+            let grouping = controller.groupingLevel
+            let columns = KeyboardLayout.columns(
+                for: controller.language, plane: controller.plane, grouping: grouping)
             // One-handed narrows the grid and pins it to a side. The keys inside
             // are solved against the narrowed width, so nothing has to know: the
             // whole keyboard is simply drawn in a smaller box.
@@ -23,7 +29,8 @@ extension KeyboardView {
                 for: controller.language,
                 plane: controller.plane,
                 showsGlobe: controller.showsGlobeKey,
-                customization: layout
+                customization: layout,
+                grouping: grouping
             )
             // The action row is `cursorRow`. Emoji replaces only what sits above
             // it — the letters (and optional number row, and the 123/space row) —
@@ -196,6 +203,15 @@ extension KeyboardView {
                 // `KeyboardController.isActionKeyDisabled` for why these two are
                 // drawn off rather than left to refuse in the strip.
                 isDisabled: controller.isActionKeyDisabled(key.cap),
+                // The words behind the dim cap, which is the only form the reason
+                // reaches somebody who cannot see it in. There is more than one
+                // reason now: an empty field, and a recording in progress.
+                disabledHint: controller.actionKeyDisabledReason(key.cap),
+                // Only the microphone key, and only it reads this — a recording
+                // reports on the key itself now rather than in a strip above the
+                // candidates. Same shape as `toneAlternates` and `isEmojiOpen`
+                // above: state the `KeySpec` cannot reach on its own.
+                dictationState: key.cap == .dictation ? controller.dictationKeyState : .idle,
                 onPress: { controller.press($0) },
                 // Through `press` rather than straight to `deleteBackward`, so a
                 // held delete clicks on every repeat the way it buzzes on every

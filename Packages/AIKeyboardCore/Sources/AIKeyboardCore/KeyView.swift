@@ -39,6 +39,16 @@ public struct KeyView: View {
     /// `KeyboardController.isActionKeyDisabled` for why this is a disabled control
     /// rather than one that refuses out loud.
     let isDisabled: Bool
+    /// Why this key is off, in words, for the accessibility hint. Empty on a key
+    /// that is not. Passed in rather than written here because there is more than
+    /// one reason a key can be off and only the controller knows which applies —
+    /// see `KeyboardController.actionKeyDisabledReason`.
+    let disabledHint: String
+    /// What the microphone key is showing. `.idle` on every other key, where it is
+    /// not read. Passed in for the same reason `toneAlternates` and `isEmojiOpen`
+    /// are: it is resolved from a recording running in another process, and a
+    /// `KeySpec` is a value that can read none of that. See `DictationKeyState`.
+    let dictationState: DictationKeyState
     let onPress: (KeyCap) -> Void
     let onRepeat: (() -> Void)?
     let onAlternate: ((String) -> Void)?
@@ -76,6 +86,8 @@ public struct KeyView: View {
         usesNeutralActionTint: Bool = false,
         isActionActive: Bool = false,
         isDisabled: Bool = false,
+        disabledHint: String = "",
+        dictationState: DictationKeyState = .idle,
         onPress: @escaping (KeyCap) -> Void,
         onRepeat: (() -> Void)? = nil,
         onAlternate: ((String) -> Void)? = nil,
@@ -94,6 +106,8 @@ public struct KeyView: View {
         self.usesNeutralActionTint = usesNeutralActionTint
         self.isActionActive = isActionActive
         self.isDisabled = isDisabled
+        self.disabledHint = disabledHint
+        self.dictationState = dictationState
         self.onPress = onPress
         self.onRepeat = onRepeat
         self.onAlternate = onAlternate
@@ -153,7 +167,7 @@ public struct KeyView: View {
         // commas on one row from being one `ForEach` identity. See
         // `KeyboardLayout.identifier(for:slot:)`.
         .accessibilityIdentifier("key-\(spec.addressableID)")
-        .accessibilityLabel(spec.cap.accessibilityLabel)
+        .accessibilityLabel(label(for: spec.cap))
         // The whole indication is visual, so without this a VoiceOver user
         // sliding along the space bar is told nothing at all about where they
         // are in the list.
@@ -193,8 +207,20 @@ public struct KeyView: View {
     /// budget, and the build failure it gives ("unable to type-check this
     /// expression in reasonable time") names the `ZStack` rather than the line that
     /// caused it.
+    /// What this key is called.
+    ///
+    /// **`KeyCap` answers for every key but one.** A `KeyCap` is a value and knows
+    /// nothing about a recording running in another process, so the microphone key
+    /// said "Dictate" in all four of its states — including while it was the button
+    /// that stops a live microphone. Its four appearances are visual (a red cap, a
+    /// filled glyph, a caption, a countdown) and were, until this, entirely silent.
+    func label(for cap: KeyCap) -> String {
+        guard cap == .dictation else { return cap.accessibilityLabel }
+        return dictationState.accessibilityLabel
+    }
+
     var hint: String {
-        if isDisabled { return "Type something first" }
+        if isDisabled { return disabledHint }
         guard spec.cap == .space else { return "" }
         return SpaceSwipe.slideHint(languageCount: enabledLanguages.count)
     }

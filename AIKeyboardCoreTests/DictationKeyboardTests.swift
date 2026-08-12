@@ -222,7 +222,6 @@ final class DictationKeyboardTests: XCTestCase {
                 dictationIsLive: controller.dictationAvailability.isLive,
                 dictationTranscript: controller.dictationTranscript,
                 dictationFailure: controller.dictationFailure,
-                dictationIsPaused: controller.dictationIsPaused,
                 isWorking: controller.isWorking,
                 runningAction: controller.runningAction,
                 error: controller.aiError,
@@ -260,6 +259,158 @@ final class DictationKeyboardTests: XCTestCase {
 
         XCTAssertEqual(target.text, "")
         XCTAssertEqual(controller.dictationFailure, "The cloud model couldn't be reached.")
+    }
+
+    // MARK: Streaming
+
+    /// **The whole streaming path, both processes, through the real channel.**
+    ///
+    /// Everything else about streaming is unit-tested against the controller
+    /// directly, which cannot see the half that crosses the App Group: a partial
+    /// written by the recorder, noticed through `DictationState.partialSequence`,
+    /// decoded, matched to this keyboard's own utterance, and put into the field.
+    /// Each reading replaces the last, and the final transcript replaces all of
+    /// them — a build that appended instead would leave the field holding four
+    /// versions of one sentence and would pass any assertion about the last words
+    /// having arrived.
+    func testPartialsLandInTheFieldAndTheTranscriptReplacesThem() throws {
+        let id = beginLiveSession()
+        session.poll()
+        controller.startDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+
+        try recorder.publishPartial(
+            DictationPartialRecord(
+                sessionID: id, utterance: utterance, sequence: 1, text: "hi", seconds: 1.5))
+        session.poll()
+        XCTAssertEqual(target.text, "hi", "the first reading never reached the field")
+
+        try recorder.publishPartial(
+            DictationPartialRecord(
+                sessionID: id, utterance: utterance, sequence: 2, text: "hi mami", seconds: 3.5))
+        session.poll()
+        XCTAssertEqual(target.text, "hi mami", "the second reading was appended to the first")
+
+        controller.stopDictation(insert: true)
+        try recorder.publish(
+            DictationTranscriptRecord(
+                sessionID: id, utterance: utterance, text: "Hi Mami, what's up?",
+                recordedAt: 1, completedAt: 2, seconds: 4))
+        session.poll()
+
+        XCTAssertEqual(target.text, "Hi Mami, what's up?")
+        XCTAssertNil(controller.revertibleEdit)
+    }
+
+    /// **Nothing edits the field while it is still being spoken into.**
+    ///
+    /// Fix over a half-finished message replaces the whole field with a correction
+    /// of it; `streamedDictation` then points at text that is no longer there, the
+    /// transcript that lands a second later cannot find its draft, and the user
+    /// ends up with two versions of one sentence. Reply is in the list too, even
+    /// though it is the action that deliberately needs no text, because it inserts
+    /// at the caret — which is exactly where the next reading is about to go.
+    ///
+    /// The keys are drawn off, which is where the user is told, and `run(_:)`
+    /// guards as well: the register popup and the bar's one-tap button reach it
+    /// without going through a key.
+    func testTheTextActionsAreOffForTheLengthOfARecording() throws {
+        target.text = "hello wrold"
+        beginLiveSession()
+        session.poll()
+        controller.refreshSuggestions()
+        XCTAssertFalse(controller.isActionKeyDisabled(.aiFix), "the state under test is wrong")
+
+        controller.startDictation()
+
+        XCTAssertTrue(controller.isActionKeyDisabled(.aiFix))
+        XCTAssertTrue(controller.isActionKeyDisabled(.quickTone))
+        XCTAssertTrue(
+            controller.isActionKeyDisabled(.aiReply),
+            "a reply would insert at the caret the next reading is about to use")
+        XCTAssertEqual(
+            controller.actionKeyDisabledReason(.aiFix), "Not while you're dictating",
+            "the words behind the dim cap still say to type something first")
+
+        controller.run(.fix)
+        XCTAssertFalse(controller.isWorking, "a route that is not a key started a call anyway")
+
+        // **The one-tap rewrite key does not go through `run(_:)`, and a guard
+        // written only there would have covered two actions while reading as though
+        // it covered three.** `press(.quickTone)` calls `runDefaultTone()` and the
+        // register popup calls `selectTone(named:)`; both reach `runTone(_:)`
+        // instead, which is where the second copy of the guard lives.
+        controller.runDefaultTone()
+        XCTAssertFalse(controller.isWorking, "the one-tap rewrite route is not guarded")
+        controller.selectTone(.shorter)
+        XCTAssertFalse(controller.isWorking, "the register popup is not guarded")
+
+        XCTAssertNil(controller.revertibleEdit)
+        XCTAssertEqual(target.text, "hello wrold")
+
+        controller.stopDictation(insert: false)
+        XCTAssertFalse(controller.isActionKeyDisabled(.aiFix), "the keys never came back")
+    }
+
+    /// **A partial belonging to an utterance this keyboard is not listening to is
+    /// ignored**, which is the same defence `testATranscriptFromAPreviousSessionIsNotInserted`
+    /// makes one level down. A partial is published every couple of seconds rather
+    /// than once, so there are far more chances for one to arrive late.
+    func testAPartialFromAnotherUtteranceIsNotStreamed() throws {
+        let id = beginLiveSession()
+        session.poll()
+        controller.startDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+
+        try recorder.publishPartial(
+            DictationPartialRecord(
+                sessionID: id, utterance: utterance &+ 1, sequence: 1, text: "somebody else",
+                seconds: 2))
+        session.poll()
+
+        XCTAssertEqual(target.text, "")
+    }
+
+    /// **A transcription that fails after the words are already in the field says
+    /// nothing, and it still has to stop the poll.**
+    ///
+    /// Not raising "Nothing to insert" over a sentence the user can see is the easy
+    /// half — the trap is what falls out of it. Leaving `dictationFailure` empty is
+    /// also what makes `stopDictation` return at its own guard, so unless this path
+    /// stops the watch itself nothing ever does, **not even the keyboard being
+    /// dismissed** — and a `RunLoop` timer in a dismissed keyboard goes on
+    /// refreshing `DictationRequest.keyboardAliveAt`, which is exactly the one thing
+    /// that defeats the dead-man's switch holding the microphone open in the other
+    /// process. `.noSession(.notEnded)` is reachable here only through
+    /// `stopWatching()`; the build that skips it leaves `.ready` behind.
+    func testAFailureAfterStreamingIsSilentAndStillStopsTheWatch() throws {
+        let id = beginLiveSession()
+        session.poll()
+        controller.startDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+
+        try recorder.publishPartial(
+            DictationPartialRecord(
+                sessionID: id, utterance: utterance, sequence: 1, text: "hi mami", seconds: 2))
+        session.poll()
+        XCTAssertEqual(target.text, "hi mami", "nothing was streamed, so this proves nothing")
+
+        controller.stopDictation(insert: true)
+        try recorder.publish(
+            DictationTranscriptRecord(
+                sessionID: id, utterance: utterance, outcome: .failed, text: "",
+                detail: "The cloud model couldn't be reached.", recordedAt: 1, completedAt: 2,
+                seconds: 3))
+        session.poll()
+
+        XCTAssertEqual(target.text, "hi mami", "the words the user said were taken away")
+        XCTAssertEqual(
+            controller.dictationFailure, "",
+            "a refusal was raised over a sentence standing in the field")
+        XCTAssertFalse(controller.showsActionBanner)
+        XCTAssertEqual(
+            controller.dictationAvailability, .noSession(.notEnded),
+            "the poll outlived the recording, and it is what keeps the microphone alive")
     }
 
     /// **The second half of the same defence the recorder makes.** A transcript
@@ -402,34 +553,37 @@ final class DictationKeyboardTests: XCTestCase {
         XCTAssertFalse(controller.dictationIsPaused)
     }
 
-    /// **The banner has to tell "paused" and "transcribing" apart even though
-    /// both read `isListening == false`.** `isPaused` is the field that
-    /// carries the difference into the trailing control and the tag.
-    func testTheBannerReadsPauseSeparatelyFromTranscribing() throws {
+    /// **The key has to tell "paused" and "finishing" apart**, and both of them
+    /// from a live microphone.
+    ///
+    /// This used to be a question about the strip, which drew a waveform and a tag
+    /// for all three. The strip is not drawn for a recording any more, so the whole
+    /// distinction lands on one key: `.paused` is lit and not red, `.finishing` is
+    /// lit, not red and captioned Cancel, and only `.recording` paints the cap in
+    /// the one red this product has.
+    func testTheKeyTellsPausedApartFromRecordingAndFromFinishing() throws {
         beginLiveSession()
         session.poll()
         controller.startDictation()
         let utterance = try XCTUnwrap(recorder.request()?.utterance)
+        XCTAssertTrue(controller.dictationKeyState.isRecording)
+
         controller.pauseDictation()
         recorder.setPhase(.paused, utterance: utterance)
         session.poll()
 
-        XCTAssertEqual(
-            BannerState.resolve(
-                isDictating: controller.isDictating,
-                dictationIsLive: controller.dictationAvailability.isLive,
-                dictationTranscript: controller.dictationTranscript,
-                dictationFailure: controller.dictationFailure,
-                dictationIsPaused: controller.dictationIsPaused,
-                isWorking: controller.isWorking,
-                runningAction: controller.runningAction,
-                error: controller.aiError,
-                block: controller.block,
-                options: controller.bannerOptions,
-                index: controller.bannerIndex,
-                screenContext: nil,
-                idleHint: BannerState.defaultHint),
-            .dictating(transcript: "", isListening: false, isPaused: true))
+        XCTAssertEqual(controller.dictationKeyState, .paused)
+        XCTAssertFalse(
+            controller.dictationKeyState.isRecording,
+            "a paused microphone is drawn as a live one")
+        XCTAssertTrue(controller.dictationKeyState.isActive, "the key went dark mid-recording")
+
+        // And the strip stays off through all of it.
+        XCTAssertFalse(controller.showsActionBanner)
+
+        controller.stopDictation(insert: true)
+        XCTAssertEqual(controller.dictationKeyState, .finishing)
+        XCTAssertEqual(controller.dictationKeyState.title, "Cancel")
     }
 
     /// **The microphone key both starts and finishes a recording now.** A tap
@@ -563,7 +717,6 @@ final class DictationKeyboardTests: XCTestCase {
                 dictationIsLive: controller.dictationAvailability.isLive,
                 dictationTranscript: controller.dictationTranscript,
                 dictationFailure: controller.dictationFailure,
-                dictationIsPaused: controller.dictationIsPaused,
                 isWorking: controller.isWorking,
                 runningAction: controller.runningAction,
                 error: controller.aiError,

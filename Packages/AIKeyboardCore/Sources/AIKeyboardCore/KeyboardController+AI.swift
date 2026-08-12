@@ -6,6 +6,24 @@ extension KeyboardController {
     // MARK: AI
 
     public func run(_ action: AIAction) {
+        // **Nothing edits the field while it is still being spoken into.** The
+        // three keys are drawn disabled for the length of a recording
+        // (`isActionKeyDisabled`), which is where the user is told; this is the
+        // backstop behind the two that reach here, Fix and Reply.
+        //
+        // **It is deliberately not the only one, because the one-tap rewrite key
+        // does not come through this function.** `press(.quickTone)` calls
+        // `runDefaultTone()` and the register popup calls `selectTone(named:)`,
+        // both of which reach `runTone(_:)` without passing here — a guard written
+        // only in this function would read like it covered all three actions and
+        // would cover two. `runTone(_:)` carries the same line for the same reason.
+        //
+        // Returning silently is right in both places: the visible statement has
+        // already been made by three dim keys, and a refusal strip opening under
+        // somebody mid-sentence would be the banner coming back for exactly the
+        // case it was taken away for.
+        guard !isDictationActive else { return }
+
         // Reply works on an empty field on purpose: answering a message you have
         // not started writing is the whole point of it.
         if action == .reply {
@@ -153,7 +171,13 @@ extension KeyboardController {
             await MainActor.run { self?.replyContext = context }
             return try await engine.replies(to: context)
         } apply: { controller, replies in
+            // **Straight into the field, like the other two.** `replies` is still
+            // set on the way past for the reason `aiResultText` is in the Fix
+            // branch: it is what `bannerOptions` reads, and an answer this cannot
+            // apply — one that arrives after the caret moved — has to have
+            // somewhere to be offered from.
             controller.replies = replies
+            controller.applyDirectly(replies.first?.text ?? "", for: .reply)
         }
     }
 
@@ -218,8 +242,12 @@ extension KeyboardController {
         }
     }
 
-    /// Accepts an answer the banner is offering, which today is a reply and
-    /// nothing else — Fix and Rewrite apply themselves. See `applyDirectly`.
+    /// Accepts an answer the banner is offering.
+    ///
+    /// **All three actions apply themselves now, so the only answer that ever
+    /// reaches this is one they refused to apply** — an answer to a field that
+    /// moved on while the model was thinking. See `applyDirectly`, which is where
+    /// that decision is taken and where the reasoning for it lives.
     public func applyResult(_ text: String) {
         Feedback.success()
         // **Before the insertion, not after.** A reply lands in a field that may
@@ -236,14 +264,22 @@ extension KeyboardController {
     /// Writes an answer into the field the moment it arrives, and leaves a way
     /// back.
     ///
-    /// **The banner is not the place a correction is read.** Fix and Rewrite used
-    /// to put their answer on a 72pt strip behind a Use button, so the user read
-    /// the corrected sentence *beside* their message, decided about it there, and
-    /// then read it again in the field. One of those two readings is the real one.
+    /// **The banner is not the place a correction is read.** Fix, Rewrite and
+    /// Reply used to put their answer on a strip behind a Use button, so the user
+    /// read the sentence *beside* their message, decided about it there, and then
+    /// read it again in the field. One of those two readings is the real one.
     /// Applying on arrival costs a tap and puts the change where it will actually
     /// be judged — and Fix in particular is a correction of the user's own words
     /// rather than a suggestion of new ones, which is exactly the kind of edit
     /// autocorrect has always made without asking.
+    ///
+    /// **Reply was the last of the three to move, and it is the one that gave up
+    /// the most.** Three answers came back labelled by intent and the strip paged
+    /// through them; now the first is inserted and the other two are reachable only
+    /// if the insert is refused. What is bought is that the whole feature stops
+    /// costing a row of the screen — and a reply the user does not want is one
+    /// keystroke from gone, because the undo is drawn where they are already
+    /// looking.
     ///
     /// **What that buys has to be paid for with an undo**, because the keyboard has
     /// now changed somebody's message on its own: `revertibleEdit` holds what was
@@ -270,15 +306,31 @@ extension KeyboardController {
     /// applying would have written a correction of five words over the whole
     /// message.
     func applyDirectly(_ text: String, for action: AIAction) {
-        // The staleness test on the next line is also what makes this the right
-        // string: past it, `previous` is what was sent to the model *and* what is
-        // standing in the field right now — which is what `replaceTargetText` is
-        // about to take out and what the undo has to put back.
+        // The staleness test below is also what makes this the right string: past
+        // it, `previous` is what was sent to the model *and* what is standing in
+        // the field right now — which is what `replaceTargetText` is about to take
+        // out and what the undo has to put back.
         let previous = aiSourceText
-        guard aiTargetText == previous else { return }
-        // Asked before the replacement, because the replacement is what removes the
-        // selection. See `AIEdit.replacedSelection`.
-        let replacedSelection = selection != nil
+        // **Empty means Reply, and Reply replaces nothing.** `runReply` empties
+        // `aiSourceText` on purpose, because a reply is inserted where the cursor
+        // is rather than over the message — so there is nothing for the staleness
+        // test to compare and nothing for the undo to put back. It is also why a
+        // reply is not stale when the field moves: it was written about what is on
+        // the *screen*, not about what is in the field.
+        let inserts = previous.isEmpty
+        guard inserts || aiTargetText == previous else { return }
+        // Both asked before the replacement, because the replacement is what removes
+        // the selection. See `AIEdit.Undo`.
+        let selected = selection
+        let undo: AIEdit.Undo = (inserts || selected != nil) ? .spanAtCursor : .wholeField
+        // **What the undo puts back, which is not always what was sent to the
+        // model.** For Fix and Rewrite the two are the same string. For a reply
+        // over a *selection* they are not: nothing was sent, so `previous` is
+        // empty, and yet `insertText` on a real proxy replaces the selected words —
+        // so an undo built on `previous` would delete the reply and leave the words
+        // it consumed gone for good. Reply had no undo at all until it started
+        // applying itself, which is why this only matters now.
+        let restored = inserts ? (selected ?? "") : previous
         // Nothing at all: leave it to `BannerState.resolve`'s "Nothing came back".
         guard !text.isEmpty else { return }
         // **Byte-for-byte identical is an answer, not a failure.** It is what
@@ -297,10 +349,13 @@ extension KeyboardController {
             return
         }
         Feedback.success()
+        // **Before the insertion, not after.** A reply lands in a field that may
+        // still be carrying a Fix's way back, and that way back replaces the
+        // *whole* field with what was there before — so reverting after inserting a
+        // reply would delete the reply along with the correction.
+        clearRevertibleEdit()
         replaceTargetText(with: text)
-        revertibleEdit = AIEdit(
-            action: action, previous: previous, applied: text,
-            replacedSelection: replacedSelection)
+        revertibleEdit = AIEdit(action: action, previous: restored, applied: text, undo: undo)
         // **Emptied, because the next action must not inherit it.**
         // `selectTone(_:)` keeps whatever is already in `aiSourceText` — correct
         // when it is reached from an action that has just filled it, and wrong from
@@ -315,7 +370,7 @@ extension KeyboardController {
         clearBannerState()
     }
 
-    /// Puts back what the last Fix or Rewrite replaced.
+    /// Puts back what the last Fix, Rewrite or Reply wrote.
     ///
     /// **Two paths, because the two kinds of edit undo differently and getting it
     /// wrong destroys the message.** A whole-field edit is undone by replacing the
@@ -343,10 +398,10 @@ extension KeyboardController {
         Feedback.modifierPress()
         revertibleEdit = nil
 
-        guard edit.replacedSelection else {
+        guard edit.undo == .spanAtCursor else {
             // `replaceTargetText` refuses on an empty source — that guard is what
-            // makes Reply insert rather than replace — so it is told what is
-            // standing there now, which is exactly what this is taking out.
+            // makes an insertion an insertion — so it is told what is standing
+            // there now, which is exactly what this is taking out.
             aiSourceText = edit.applied
             replaceTargetText(with: edit.previous)
             aiSourceText = ""
@@ -355,8 +410,35 @@ extension KeyboardController {
 
         guard contextBefore.hasSuffix(edit.applied) else { return }
         deleteBackward(utf16Units: edit.applied.utf16.count)
-        target?.insertText(edit.previous)
+        // Empty for a reply, which replaced nothing: `insertText("")` is harmless
+        // and the branch is here to say so rather than to guard against it.
+        if !edit.previous.isEmpty { target?.insertText(edit.previous) }
         refreshSuggestions()
+    }
+
+    /// Drops a model call in flight, and the answer of one that has already
+    /// landed.
+    ///
+    /// **Starting a recording is the one thing that has to do this, and the reason
+    /// is a way to destroy a message.** `run(_:)` refuses while a recording is
+    /// open, but a call started a moment *before* the microphone was tapped keeps
+    /// running: it answers about the sentence as it was, `applyDirectly` correctly
+    /// refuses to apply it because the field has since filled with spoken words,
+    /// and it therefore falls through to the strip — which is suppressed for the
+    /// length of the recording and reappears the instant it ends, offering a Use
+    /// button over a field the user has just dictated into. `aiSourceText` still
+    /// holds the pre-recording sentence at that point, so `replaceTargetText`
+    /// would take the whole-field branch and replace everything that was said with
+    /// a correction of what was typed before it.
+    ///
+    /// `clearBannerState()` alone is not enough: a cancelled `beginWork` returns at
+    /// its own `Task.isCancelled` guard without ever reaching the line that clears
+    /// `isWorking`, so the progress bar would run for ever.
+    func cancelAIWork() {
+        workingTask?.cancel()
+        workingTask = nil
+        aiSourceText = ""
+        clearBannerState()
     }
 
     /// Drops the way back, because the field has moved on.

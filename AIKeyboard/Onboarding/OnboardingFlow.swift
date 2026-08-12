@@ -12,12 +12,20 @@ struct OnboardingFlow: View {
     /// foreground, because that is when the user comes back from Settings.
     @State private var setup = SetupState()
 
-    private let setupStepCount = 6
-    private let stepCount = 6 + OnboardingPracticeStage.allCases.count
+    private let setupStepCount = 7
+
+    /// Computed off `setupStepCount` rather than restating it, because these
+    /// were two spellings of one number and inserting a step in the middle is
+    /// exactly the edit that makes them disagree.
+    private var stepCount: Int { setupStepCount + OnboardingPracticeStage.allCases.count }
 
     /// The step whose footer's primary action is the globe-key confirmation.
     /// Named once here so the footer and the step itself cannot drift apart.
-    private let switchStep = 4
+    private let switchStep = 5
+
+    /// The palette step, named for the same reason: it is the one setup step the
+    /// footer must not offer to skip. See the footer.
+    private let paletteStep = 1
 
     var body: some View {
         ZStack {
@@ -28,11 +36,12 @@ struct OnboardingFlow: View {
 
                 TabView(selection: $step) {
                     WelcomeStep().tag(0)
-                    LanguagesStep(setup: setup).tag(1)
-                    AddKeyboardStep(setup: setup).tag(2)
-                    FullAccessStep(setup: setup).tag(3)
-                    SwitchStep(setup: setup).tag(4)
-                    MicrophoneStep(setup: setup).tag(5)
+                    PaletteStep().tag(1)
+                    LanguagesStep(setup: setup).tag(2)
+                    AddKeyboardStep(setup: setup).tag(3)
+                    FullAccessStep(setup: setup).tag(4)
+                    SwitchStep(setup: setup).tag(5)
+                    MicrophoneStep(setup: setup).tag(6)
                     ForEach(OnboardingPracticeStage.allCases, id: \.rawValue) { practice in
                         TryItStep(setup: setup, stage: practice)
                             .tag(setupStepCount + practice.rawValue)
@@ -40,6 +49,14 @@ struct OnboardingFlow: View {
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(Theme.Motion.quick, value: step)
+                // Same reason as `RootView`'s: `Theme.Brand` is a global and
+                // the steps do not observe it. Here the id sits on the TabView
+                // rather than on the flow, so `step` — which lives one level up
+                // and is therefore not rebuilt — carries the user back to the
+                // page they were standing on. Putting it on the flow instead
+                // would send somebody who picked a colour on step 2 back to
+                // step 1.
+                .id(store.brandPalette)
 
                 footer
             }
@@ -117,7 +134,12 @@ struct OnboardingFlow: View {
                 // the work in Settings but not yet switched to the keyboard has
                 // nothing the app can see. A step that cannot be proven done must not
                 // become a step that cannot be passed.
-                if step > 0 && step < stepCount - 1 {
+                //
+                // The palette step is the exception, and it is the opposite case:
+                // there is nothing there to leave undone. A palette is always set,
+                // orange is the shipped default, and the step opens on it — so Skip
+                // and Continue would be two buttons doing exactly the same thing.
+                if step > 0 && step != paletteStep && step < stepCount - 1 {
                     SecondaryButton(title: "Skip for now") {
                         withAnimation { step += 1 }
                     }

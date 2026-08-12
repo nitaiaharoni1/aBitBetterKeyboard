@@ -10,24 +10,42 @@ extension Theme {
     public enum Metrics {
         public static let suggestionBarHeight: CGFloat = 36
 
+        /// The hairline above the suggestion bar that says a model call is
+        /// running. See `WorkingProgressBar`.
+        ///
+        /// **Its height is spent whether or not anything is running, and that is
+        /// the whole point of it.** A strip that appeared with the call would move
+        /// the three candidates and the whole key grid under the thumb twice per
+        /// tap — which is exactly what the banner did while it carried the
+        /// shimmer, and why it is not carrying it any more.
+        ///
+        /// **The three points came out of the banner rather than out of the
+        /// total.** `FrameReduction.Band.maximumOwnUI` is `368/874`: 368 is the
+        /// measured cliff past which the frame fingerprint stops telling two
+        /// conversations apart, so a row that is added has to be paid for by a row
+        /// that shrinks. See `bannerHeight` below.
+        public static let progressBarHeight: CGFloat = 3
+
         /// The strip above the suggestion bar: what the keyboard is doing, and the
         /// answer when it has one. See `ActionBanner`.
         ///
-        /// **Constant while shown, omitted when idle.** The idle instruction is
-        /// gone — the action row is the affordance — so the host height follows
-        /// `BannerState.isPresented`. The fingerprint crop does not: see
-        /// `KeyboardGeometry.ownUIHeightFraction`, which still reports the tallest
-        /// form so a mid-read resize cannot move the band.
+        /// **Constant while shown, omitted for everything the keys and the
+        /// progress bar can say themselves.** A running call is the bar above; a
+        /// live recording is the microphone key, drawn in record red. What is left
+        /// is a live screen reading, a refusal and a failure — sentences with
+        /// nowhere else to go. See `BannerState.isPresented`. The fingerprint crop
+        /// does not follow it: `KeyboardGeometry.ownUIHeightFraction` still reports
+        /// the tallest form so a mid-read resize cannot move the band.
         ///
-        /// **72, so a title plus three lines of detail fit without an ellipsis.**
-        /// Growing the strip alone would blow past the fingerprint cliff between
-        /// 368 and 370 (`FrameReduction.Band.maximumOwnUI`); the 16 pt comes from
-        /// a 36 pt suggestion bar and 40 pt keys, keeping the total at 368.
+        /// **69, so a title plus three lines of detail still fit without an
+        /// ellipsis.** It was 72 until the progress bar above needed three points;
+        /// the total may not move, because the cliff between 368 and 370
+        /// (`FrameReduction.Band.maximumOwnUI`) is measured rather than chosen.
         ///
         /// The height of this keyboard is a constraint now, not a taste: another
         /// row, or a taller banner, costs a conversation switch on every screen
         /// read.
-        public static let bannerHeight: CGFloat = 72
+        public static let bannerHeight: CGFloat = 69
         public static let keyHeight: CGFloat = 40
         public static let rowSpacing: CGFloat = 12
         public static let keySpacing: CGFloat = 6
@@ -75,14 +93,15 @@ extension Theme {
 
         /// Height the keyboard extension asks the host app for right now.
         ///
-        /// The banner is omitted while idle (`showsBanner: false`), so ordinary
-        /// typing is `bannerHeight` shorter. Presence still follows the strip
-        /// rather than the capture session alone — a Fix answer and a live reading
-        /// both show it, and the idle instruction does not.
+        /// The banner is omitted for everything the keys can say themselves
+        /// (`showsBanner: false`), so ordinary typing — and a running model call,
+        /// and a live recording — is `bannerHeight` shorter. The progress bar is
+        /// in every form of this, running or not: see `progressBarHeight`.
         public static func totalHeight(
             for layout: KeyboardCustomization, showsBanner: Bool
         ) -> CGFloat {
-            (showsBanner ? bannerHeight : 0) + suggestionBarHeight + keyAreaHeight(for: layout)
+            (showsBanner ? bannerHeight : 0) + progressBarHeight + suggestionBarHeight
+                + keyAreaHeight(for: layout)
         }
 
         /// Apple's minimum comfortable target. Anything smaller gets mistapped.

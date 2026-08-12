@@ -92,21 +92,38 @@ public struct AIEdit: Equatable, Sendable {
     /// What the action put there.
     public let applied: String
 
-    /// **Whether the action replaced a selection rather than the whole field, and
-    /// this is not bookkeeping.** The two undo differently and getting it wrong
-    /// destroys the user's message: a Fix over the selected word `wrold` in
-    /// `hello there wrold friend` replaces five characters, and a revert that put
-    /// `previous` back the way a whole-field edit does would leave the field
-    /// holding the single word `wrold`. See `KeyboardController.revertAIEdit`.
-    public let replacedSelection: Bool
+    /// **How to put it back, and this is not bookkeeping.** The two undo
+    /// differently and getting it wrong destroys the user's message: a Fix over
+    /// the selected word `wrold` in `hello there wrold friend` replaces five
+    /// characters, and a revert that put `previous` back the way a whole-field
+    /// edit does would leave the field holding the single word `wrold`. See
+    /// `KeyboardController.revertAIEdit`.
+    public let undo: Undo
 
-    public init(
-        action: AIAction, previous: String, applied: String, replacedSelection: Bool = false
-    ) {
+    /// Which shape of edit this was, from the undo's point of view — which is the
+    /// only point of view that matters by the time it is read.
+    ///
+    /// **It was a `replacedSelection` flag until Reply started applying itself.**
+    /// A reply is inserted at the cursor rather than over anything, so it undoes
+    /// exactly the way a selection edit does — delete what was put in, from where
+    /// it was put in — and calling that "replaced a selection" would be a name
+    /// that lies about two thirds of its callers.
+    public enum Undo: Equatable, Sendable {
+        /// The edit replaced everything the keyboard could see of the field, and
+        /// putting it back means replacing it again. Survives the caret moving.
+        case wholeField
+        /// The edit put `applied` in at the cursor, over a selection or over
+        /// nothing. There is no selection left by the time this is read — the
+        /// replacement is what consumed it — so the undo counts UTF-16 units back
+        /// from where the caret was left.
+        case spanAtCursor
+    }
+
+    public init(action: AIAction, previous: String, applied: String, undo: Undo = .wholeField) {
         self.action = action
         self.previous = previous
         self.applied = applied
-        self.replacedSelection = replacedSelection
+        self.undo = undo
     }
 }
 

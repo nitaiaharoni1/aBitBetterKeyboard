@@ -78,16 +78,15 @@ extension KeyView {
                 .foregroundStyle(labelColor)
 
         case .dictation:
-            // **Outline until it is actually recording, and then filled.** A solid
-            // microphone reads as *recording* — it is the shape the banner uses for
-            // exactly that — so it was wrong on a key that had not started yet, and
-            // it is right on the one key that is now also how a recording is
-            // finished. The word follows it: while a recording is open this key
-            // stops and inserts (`KeyboardController.toggleDictation`), and calling
-            // that "Dictate" would offer to start something that is already running.
+            // **This key is the whole of the recording notice now**, so it has four
+            // appearances rather than two: the strip that used to carry a waveform,
+            // a countdown and a Pause button is not drawn for a recording any more.
+            // The glyph, the word and the record-red cap are all resolved from one
+            // value — see `DictationKeyState` and `KeyView.capKind` — so the key can
+            // never end up filled red while captioned Dictate.
             actionLabel(
-                icon: isActionActive ? "mic.fill" : "mic",
-                title: isActionActive ? "Stop" : "Dictate",
+                icon: dictationState.icon,
+                title: dictationState.title,
                 tint: Theme.Brand.solid,
                 showsCaption: showsActionCaption)
 

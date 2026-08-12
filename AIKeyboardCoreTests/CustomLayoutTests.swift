@@ -327,16 +327,48 @@ final class CustomLayoutTests: XCTestCase {
             Theme.Metrics.keyAreaHeight(for: LayoutPreset.named("compact")!.customization))
     }
 
-    /// The tallest total is the key area plus the two constant rows above it —
+    /// The tallest total is the key area plus the three constant rows above it —
     /// that is what the fingerprint crop and the layout editor's ceiling both
-    /// read. The live host height can omit the banner while idle; see
+    /// read. The live host height can omit the banner; see
     /// `totalHeight(for:showsBanner:)`.
-    func testTheTotalIsTheKeyAreaPlusTheTwoConstantRows() {
+    ///
+    /// **The progress bar is the third, and it is in every form of this.** It was
+    /// two rows until a model call stopped drawing a banner and started drawing a
+    /// three-point line above the candidates instead; that line's height is
+    /// reserved whether or not anything is running, so a call starting cannot move
+    /// the keyboard under a thumb.
+    func testTheTotalIsTheKeyAreaPlusTheThreeConstantRows() {
         XCTAssertEqual(
             Theme.Metrics.totalHeight(for: .default),
             Theme.Metrics.keyAreaHeight(for: .default)
-                + Theme.Metrics.bannerHeight + Theme.Metrics.suggestionBarHeight,
+                + Theme.Metrics.bannerHeight + Theme.Metrics.progressBarHeight
+                + Theme.Metrics.suggestionBarHeight,
             accuracy: 0.001)
+    }
+
+    /// **The shipped keyboard sits exactly on the measured fingerprint cliff, with
+    /// nothing left over, and this is the assertion that says so out loud.**
+    ///
+    /// `FrameReduction.Band.maximumOwnUI` is `368/874`: past 368 points the band
+    /// the capture process fingerprints starts eating the host's own message lines
+    /// and two conversations stop being told apart. `LayoutValidator` warns a
+    /// *user* who builds a layout past it, which is their trade to make — but the
+    /// default is not a choice anybody made in the editor, and it must never cross
+    /// silently.
+    ///
+    /// The margin is zero, which is the point. Adding the three-point progress bar
+    /// meant taking three points off the banner (72 → 69); a future row, a taller
+    /// key or a bigger banner has to be paid for the same way, and this is what
+    /// fails when it is not.
+    func testTheShippedLayoutStillFitsUnderTheFingerprintCliff() {
+        XCTAssertLessThanOrEqual(
+            Theme.Metrics.totalHeight(for: .default),
+            LayoutValidator.screenContextHeightLimit,
+            "the shipped keyboard now costs screen context on every read")
+        XCTAssertFalse(
+            LayoutValidator.issues(in: .default, showsGlobe: true)
+                .contains { $0.kind == .costsScreenContext },
+            "the default layout warns about itself")
     }
 
     /// Omitting the banner shortens the live height by exactly that row.

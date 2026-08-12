@@ -65,12 +65,16 @@ xcrun swift-format --in-place --recursive \
 - Code-switching predictions: Latin words typed inside a Hebrew sentence get
   offered from a loanword list and tagged with the language they came from
 - Emoji panel, nine categories, plain Unicode with no bundled images
-- AI actions: Reply, Fix, Rewrite, Tone, each reporting in the status strip above
-  the keys with a loading state and results you
-  apply with one tap
-- Dictation panel driven by a real recording: a waveform fed by the microphone's
-  actual level, the transcript the cloud returns, and a mixed-language indicator.
-  The microphone is held by the companion app, because a keyboard cannot open
+- AI actions: Reply, Fix, Rewrite, Tone. Each writes its answer straight into the
+  field, with a progress line above the suggestion bar while the model is
+  thinking and an undo button beside the candidates until the next keystroke
+- Dictation driven by a real recording, with the words appearing in the field as
+  they are spoken rather than all at once at the end. The live words come from
+  Apple's own on-device dictation model, free and offline; the cloud transcript
+  replaces them when you stop, because that is the one measured to keep English
+  loanwords in Latin letters inside Hebrew. The microphone key is the whole
+  control: it starts, it turns record red while listening, it stops. The
+  microphone itself is held by the companion app, because a keyboard cannot open
   one — see below
 - Screen-context strip: the capture indicator, the message that was read, and
   one-tap Reply; it also carries "paused" and "stopped unexpectedly, restart it

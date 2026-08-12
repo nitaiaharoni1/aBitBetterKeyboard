@@ -81,29 +81,68 @@ All four run in one sitting, committed under `ablation/`.
 - **The language hint is worth nothing here and ships anyway.** On this corpus it
   is neutral at best. It earns its place in `multilingual/`, below.
 
-## Blocking finding, now routed around: no Apple API can transcribe Hebrew
+## Apple *can* transcribe Hebrew, and the API that can was never checked
 
-Measured on macOS 26.5.1, build 25F80, Swift 6.2.3, by calling the APIs directly,
-and pinned from the simulator by `LegacySpeechRecognizerLanguageTests` and
-`SpeechLanguageTests`:
+This section used to say no Apple API could, and it was wrong because it asked
+two of the three. Measured **2026-08-12 on an iOS 26.2 simulator** by calling the
+APIs directly:
 
 | API | Locales | Hebrew? | On-device Hebrew? |
 | --- | --- | --- | --- |
-| `SpeechTranscriber` (iOS/macOS 26) | 30 | **No** | n/a |
-| `SFSpeechRecognizer` (legacy) | 63 | Yes (`he-IL`) | **No** |
+| `SpeechTranscriber` (iOS 26) | **0** | No | n/a |
+| `DictationTranscriber` (iOS 26) | 43 | **Yes (`he-IL`)** | **Yes**, once the asset installs |
+| `SFSpeechRecognizer` (legacy) | 63 | Yes (`he-IL`) | No — network |
 
-`SpeechTranscriber.supportedLocales` is `de-*, en-*, es-*, fr-*, it-*, ja-JP,
-ko-KR, pt-*, yue-CN, zh-*`. No `he`. Requesting `he-IL` logs `No Assistant asset
-for language he-IL`.
+Two things to take from that table. `SpeechTranscriber` returning **zero** is the
+trap: a list of zero is not "everything except Hebrew", so the earlier macOS
+reading proved nothing either way, and the caveat it carried was the right one.
+And `DictationTranscriber` — the module Apple points `SFSpeechRecognizer` users
+at, running the same model the system keyboard's own dictation uses — lists
+`he-IL`, reports `.supported` through `AssetInventory`, and downloads and
+installs on demand.
 
-So the choice is not "on-device or cloud", it is "cloud or nothing", and
-`CloudDictation` is the consequence. That is a product fact worth saying out
-loud rather than a fallback: **every dictated sentence in this product leaves the
-device**, exactly as every Hebrew screen reading does.
+So the choice is no longer "cloud or nothing". It is "cloud, or a free local
+model that is much worse", and this product runs **both**: Apple's while the user
+is speaking, the cloud when they stop. See `LiveTranscriber`.
 
-**Caveat unchanged:** the table above was measured on macOS, not on an iOS 26
-device. Apple's speech asset catalogs are usually shared across platforms, but a
-device should confirm it before any architecture decision rests on it.
+### What Apple's model actually scores
+
+Measured 2026-08-12 through `harness/run-apple.sh` (iOS 26.2 simulator,
+`DictationTranscriber`, `progressiveLongDictation`, Hebrew clips and code-switched
+clips on `he-IL`, English clips on `en-US` — which is what the app does, because
+the locale comes from the keyboard's active layout). Scored by the same
+`harness/score.py`, into `apple_live_outputs.json`.
+
+| | Hebrew | English | code-switched | all |
+| --- | ---: | ---: | ---: | ---: |
+| word error rate, **Apple** | 24.1% | 13.9% | 56.3% | **31.4%** |
+| word error rate, cloud | 10.7% | 8.5% | 23.5% | **14.2%** |
+| exact, Apple | 0/12 | 4/12 | 0/12 | 4/36 |
+
+Named entities **8/60** against the cloud's 38/60. English words kept in Latin
+letters inside Hebrew sentences: **1/36** against the cloud's 25/36.
+
+**Monolingual it is respectable, code-switched it collapses.** On one Hebrew clip
+it beats the reference on number style, writing `ב-10:30` where the corpus spells
+out `בעשר וחצי` — which is what a keyboard should type. On the mixed clips
+`sync` comes back as `סקין` (skin), `roadmap` as `האירוע` (the event) and `login`
+as `לג׳ינס` (jeans).
+
+That is shipped knowingly. These words are a **draft**: the keyboard shows them
+while somebody speaks and replaces them with the cloud transcript a second or two
+after they stop. What it buys is a live half that is free, offline, instant and
+sends no audio anywhere.
+
+**The number that decides this is not the word error rate.** Plain WER cannot see
+the difference between `sync` and `סקין` — it counts the word as wrong either
+way, and the code-switching literature had to invent transliterated WER precisely
+because of it. So no vendor's published Hebrew WER answers the question this
+product asks, and none of AssemblyAI, Deepgram, Speechmatics, ElevenLabs or Azure
+publishes a Hebrew figure at all. **Read the Latin-script line, not the total.**
+
+**Caveat:** simulator, not a device, and synthetic `say` audio like every other
+number here. The cloud figures above were taken on the same clips, so the
+comparison is fair even though both are optimistic.
 
 ## The traps, and why the gate is not in the prompt
 
