@@ -77,12 +77,8 @@ extension KeyboardController {
             // that matters. A revert replaces the *whole* field with what was there
             // before, so once anything has been spoken into it that undo would
             // delete the sentence — which is why the transcript sinks clear it too.
-            // And the undo and the pause control share a slot in the suggestion
-            // bar: leaving both up for the two seconds before the first reading
-            // arrives squeezes the three candidates by about 106 points, for an
-            // offer nobody could act on. Inside this branch rather than beside the
-            // three resets above it, so a *refused* tap does not quietly take away
-            // an undo the user still has.
+            // Inside this branch rather than beside the resets above it, so a
+            // *refused* tap does not quietly take away an undo the user still has.
             clearRevertibleEdit()
             // And a call that was already running when the microphone was tapped
             // goes with it. `run(_:)` refuses to *start* one during a recording;
@@ -100,39 +96,14 @@ extension KeyboardController {
         }
     }
 
-    /// Whether the open utterance is paused — audio is not being kept, but the
-    /// recording is intact and a resume continues it. Read off the mirrored
-    /// availability rather than a flag of its own, because that is the one place
-    /// the recorder's own confirmation lands; see `DictationPhase.paused` and
-    /// `KeyboardController.dictationAvailability`.
-    public var dictationIsPaused: Bool { dictationAvailability == .paused }
-
-    /// Stops the recorder keeping samples without closing the utterance.
-    ///
-    /// Guarded on `isDictating` rather than pushed down into `DictationSession`
-    /// or `DictationChannelReader`, both of which would happily write the flag
-    /// with no utterance open — pausing a microphone that was never listening
-    /// has nothing to pause.
-    public func pauseDictation() {
-        guard isDictating else { return }
-        Feedback.modifierPress()
-        dictation.pauseUtterance()
-    }
-
-    /// Resumes a paused utterance. Same guard as `pauseDictation`.
-    public func resumeDictation() {
-        guard isDictating else { return }
-        Feedback.modifierPress()
-        dictation.resumeUtterance()
-    }
-
     /// Starts a recording when none is open, finishes the open one, and calls off
     /// a finish that has not landed yet.
     ///
-    /// **The microphone key's whole job, and it is now the only control this
-    /// feature has.** The strip that carried Pause, Resume and Cancel is not drawn
-    /// for a recording any more; pausing moved to the suggestion bar and everything
-    /// else is this key.
+    /// **The microphone key's whole job, and it is the only control this feature
+    /// has.** The strip that carried Pause, Resume and Cancel is not drawn for a
+    /// recording any more, and pause is gone outright: a second tap stops, which
+    /// is what the key's own pause glyph promises. Nothing else on the keyboard
+    /// offers a dictation control.
     ///
     /// The third case is the one worth spelling out. Between the stop tap and the
     /// words arriving, `isDictating` is already false — so the version of this that
@@ -145,7 +116,7 @@ extension KeyboardController {
     /// and cancelling a wait is not a request to delete them.
     public func toggleDictation() {
         switch dictationKeyState {
-        case .recording, .paused: stopDictation(insert: true)
+        case .recording: stopDictation(insert: true)
         case .finishing: stopDictation(insert: false)
         case .idle: startDictation()
         }

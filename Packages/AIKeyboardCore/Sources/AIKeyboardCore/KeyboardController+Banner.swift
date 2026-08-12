@@ -73,9 +73,8 @@ extension KeyboardController {
     ///
     /// **The recording is reported by the key now, and this is where that is
     /// decided.** It used to be a 69pt strip with a waveform in it; the strip is
-    /// gone for a recording, so the four things it said — starting, listening,
-    /// paused, finishing — have to be four appearances of one key. See
-    /// `DictationKeyState`.
+    /// gone for a recording, so the things it said — starting, listening,
+    /// finishing — have to be appearances of one key. See `DictationKeyState`.
     ///
     /// `pendingDictationInsert` is the window in the middle: `isDictating` is
     /// already false and the transcription is still in flight. A key that went
@@ -83,13 +82,6 @@ extension KeyboardController {
     /// answer.
     public var dictationKeyState: DictationKeyState {
         if isDictating {
-            guard !dictationIsPaused else { return .paused }
-            // **Paused outranks the countdown, which is why it is asked first**,
-            // and getting that the wrong way round shipped once: a recording
-            // paused inside the last minute went on counting down while the
-            // microphone was not listening. The countdown is news about the
-            // session; being paused is news about the microphone, and the
-            // microphone is what the user just touched.
             let remaining = dictationRemainingSeconds
             return .recording(secondsLeft: remaining.flatMap { $0 < 60 ? Int($0) : nil })
         }

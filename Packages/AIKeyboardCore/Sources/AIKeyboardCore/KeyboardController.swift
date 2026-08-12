@@ -180,6 +180,24 @@ public final class KeyboardController: ObservableObject {
     /// times a second to redraw the same three characters.
     @Published public private(set) var dictationRemainingSeconds: Double?
 
+    /// The last few loudness readings, oldest first, for the sliver of waveform
+    /// the strip above the candidates draws while somebody is speaking.
+    ///
+    /// **A history rather than the current level, because one number is not a
+    /// wave.** `DictationSession.level` is a single peak per poll; drawing it
+    /// alone gives one bar pumping in place, which reads as a progress indicator
+    /// rather than as sound. Keeping the last `dictationLevelHistory` of them and
+    /// scrolling them leftwards is what makes it look like a voice.
+    ///
+    /// It is short on purpose: three points of height and about thirty bars is all
+    /// the reserved strip has, and the whole point of that strip is that it costs
+    /// nothing when nothing is happening.
+    @Published public private(set) var dictationLevels: [Double] = []
+
+    /// How many readings the sliver keeps. At the session's 10 Hz poll this is
+    /// roughly the last three seconds.
+    public static let dictationLevelHistory = 30
+
     /// The emoji last inserted, most recent first. Seeded from `SharedStore` in
     /// `init` and written back by `insertEmoji`, so the Recent tab survives iOS
     /// tearing the extension down.
@@ -369,6 +387,23 @@ public final class KeyboardController: ObservableObject {
         dictationAvailability = dictation.availability
         dictation.$availability
             .sink { [weak self] availability in self?.dictationAvailability = availability }
+            .store(in: &cancellables)
+        // **Every tick of this one, unlike the countdown above.** It is what the
+        // waveform is *made of*: throttling it to whole seconds would leave three
+        // bars and a pause. It only ticks while a session is being watched, which
+        // is only while somebody is dictating.
+        dictation.$level
+            .sink { [weak self] level in
+                guard let self else { return }
+                guard self.isDictating else {
+                    if !self.dictationLevels.isEmpty { self.dictationLevels = [] }
+                    return
+                }
+                var levels = self.dictationLevels
+                levels.append(level)
+                if levels.count > Self.dictationLevelHistory { levels.removeFirst() }
+                self.dictationLevels = levels
+            }
             .store(in: &cancellables)
         dictation.$remainingSeconds
             .sink { [weak self] seconds in

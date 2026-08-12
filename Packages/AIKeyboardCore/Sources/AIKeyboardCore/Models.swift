@@ -81,10 +81,10 @@ public enum ShiftState: Sendable {
 /// What the microphone key is showing, as one value.
 ///
 /// **The recording used to be reported by a 69pt strip and is reported by the key
-/// itself now**, which means the key has four appearances instead of two and a
+/// itself now**, which means the key has three appearances instead of one and a
 /// `Bool` cannot carry them. It is resolved on `KeyboardController`
-/// (`dictationKeyState`) rather than derived inside `KeyView`, because three of
-/// the four depend on state that lives in another process and reaches the keyboard
+/// (`dictationKeyState`) rather than derived inside `KeyView`, because two of
+/// the three depend on state that lives in another process and reaches the keyboard
 /// through `DictationSession` — a `KeySpec` is a value and can read none of it.
 ///
 /// Resolving it as a value rather than as a chain of `if`s in a `ViewBuilder` is
@@ -105,9 +105,6 @@ public enum DictationKeyState: Equatable, Sendable {
     /// whole session is one the user is invited to watch; a clock that appears is
     /// news.
     case recording(secondsLeft: Int?)
-    /// An utterance is open and the recorder has stopped keeping samples. Still
-    /// lit, and deliberately not red: red means a live microphone.
-    case paused
     /// The recording is closed and the last words are still in flight. A tap here
     /// calls the insert off, which is the only moment that is possible — see
     /// `KeyboardController.toggleDictation`.
@@ -126,45 +123,48 @@ public enum DictationKeyState: Equatable, Sendable {
         return false
     }
 
+    /// **Waves rather than a microphone, and a pause bar rather than a red dot.**
+    /// A microphone is a picture of the hardware; waves are a picture of what the
+    /// key does with it, and they are what the recording state can then animate
+    /// into. While it is running the key shows the *interruption* — a pause bar is
+    /// the shape a thumb goes back to when it wants the thing to stop, and this
+    /// key does stop rather than pause, which is why nothing else on the keyboard
+    /// offers a pause any more.
     public var icon: String {
         switch self {
-        case .idle: return "mic"
-        case .recording, .paused: return "mic.fill"
-        case .finishing: return "waveform"
+        case .idle: return "waveform"
+        case .recording: return "pause.fill"
+        case .finishing: return "xmark"
         }
     }
 
-    /// What a tap does, except while paused, where the key says what *is* rather
-    /// than what would happen — the resume control sits one row up in the
-    /// suggestion bar, and two controls both captioned for the same tap would be
-    /// two answers to one question.
+    /// What a tap does, in the width a nine-point caption has.
     public var title: String {
         switch self {
         case .idle: return "Dictate"
         case .recording(let secondsLeft):
             guard let secondsLeft else { return "Stop" }
             return "\(secondsLeft)s left"
-        case .paused: return "Paused"
         case .finishing: return "Cancel"
         }
     }
 
     /// What a tap does, spelled out for VoiceOver.
     ///
-    /// **The four states were drawn four ways and said one thing.** The key's
-    /// label comes from `KeyCap`, which knows nothing about a recording, so it
-    /// read "Dictate, button" whether the microphone was idle, live, paused or
-    /// finishing — the whole distinction this type exists to draw was silent, and
-    /// the one state where being wrong matters most is the one where a microphone
-    /// is on. The caption above cannot serve: it is nine points of text that says
-    /// `42s left`, and a countdown is not what a tap does.
+    /// **The states were drawn differently and said one thing.** The key's label
+    /// comes from `KeyCap`, which knows nothing about a recording, so it read
+    /// "Dictate, button" whether the microphone was idle, live or finishing — the
+    /// whole distinction this type exists to draw was silent, and the one state
+    /// where being wrong matters most is the one where a microphone is on. The
+    /// caption above cannot serve: it is nine points of text that says `42s left`,
+    /// and a countdown is not what a tap does.
     ///
     /// Longer than the caption on purpose. A caption is read beside a glyph, a red
     /// cap and four neighbouring keys; this is read alone.
     public var accessibilityLabel: String {
         switch self {
         case .idle: return "Dictate"
-        case .recording, .paused: return "Stop recording"
+        case .recording: return "Stop recording"
         case .finishing: return "Cancel transcription"
         }
     }
@@ -177,7 +177,6 @@ public enum DictationKeyState: Equatable, Sendable {
         case .recording(let secondsLeft):
             guard let secondsLeft else { return "Recording" }
             return "Recording, \(secondsLeft) seconds left"
-        case .paused: return "Paused"
         case .finishing: return "Transcribing"
         }
     }

@@ -174,9 +174,11 @@ public struct EmojiPanel: View {
         }
     }
 
-    /// The seam, spelled once: between two sections in the strip, and between the
-    /// last category tab and delete. The two are read together, one directly above
-    /// the other, so a second opinion about the colour would show.
+    /// The seam between two sections in the strip.
+    ///
+    /// The category row used to draw one too, before delete and the tabs stopped
+    /// being the same object — a mark separating two things that already look
+    /// nothing alike is noise. See `EmojiCategoryRow`.
     static let ruleTint = Theme.Keys.secondaryLabel.opacity(0.18)
 
     // MARK: Sections
@@ -276,12 +278,23 @@ struct EmojiScrollOffsetKey: PreferenceKey {
 
 /// The row under the grid: a category per tab, delete pinned at the end.
 ///
-/// **Drawn as keys, because it is a key row.** It takes the keyboard's own key
-/// height, `Theme.Radius.key` corners and the same press treatment every key now
-/// has — a resting cap at rest, the letter-white cap under a finger. The tabs
-/// wear the warm white card against the panel; the selected tab is the row's one
-/// orange moment, the soft brand fill and solid glyph the bar's active edge
-/// button also wears. Delete wears the same soft graphite cap as the real one.
+/// **The tabs are not keys, and drawing them as keys is what made this row
+/// unreadable.** Ten warm-white caps, two shadows each, butted at zero gap and
+/// bleeding into both edges of the panel — on a 402pt phone that is 35.5pt of
+/// card per tab, and the eye reads one slab of chrome rather than ten shortcuts.
+/// **Spacing cannot fix it**: matching the key rows above (3pt inset, 6pt gaps)
+/// leaves each tab 28.3pt, a 19pt glyph inside a shadowed card, which is more
+/// crowded and not less. So the chrome goes instead. A tab is a bare glyph on the
+/// panel, and the row's only fill is the selected one — which is also the point,
+/// because a tinted card standing among nine white cards was the weakest possible
+/// way to say the one thing this row exists to say.
+///
+/// **Delete keeps its cap, and that is now the whole of "this one is
+/// different".** Every other control here scrolls the grid; this one edits the
+/// user's text. That used to be carried by a 1pt hairline, because the tabs and
+/// delete were the same object with different fills — with the tabs bare, being
+/// the row's one keycap says it outright, and the hairline is gone with the
+/// reason for it.
 ///
 /// **There is no `אבג` key here.** The way back to the letters is the Emoji key
 /// in the action row, which says `אבג` while the grid is open — see
@@ -300,16 +313,6 @@ struct EmojiCategoryRow: View {
             ForEach(EmojiCatalog.categories) { category in
                 tab(id: category.id, icon: category.icon)
             }
-
-            // **Delete is not a tab, and the row has to say so.** Every other key
-            // here scrolls the grid; this one edits the user's text, and drawn
-            // flush against the flags tab it is one more icon in a row of icons.
-            // The same hairline the strip above uses for a section boundary, for
-            // the same reason: it separates two things that do different jobs.
-            Rectangle()
-                .fill(EmojiPanel.ruleTint)
-                .frame(width: 1, height: height * 0.5)
-                .padding(.horizontal, Theme.Space.xxs / 2)
 
             // Pinned at the end and never scrolled, exactly as delete is pinned on
             // every letter row. See `.claude/rules/keyboard-layout.md`.
@@ -337,17 +340,30 @@ struct EmojiCategoryRow: View {
                 Image(systemName: "delete.left")
                     .font(Theme.Glyph.font(19))
             }
+            // Air between the last tab and the one key in the row, so the flags
+            // glyph is not standing on delete's cap. This is what the hairline
+            // used to occupy, spent on separation instead of on a mark.
+            .padding(.leading, Theme.Space.xs)
             .accessibilityLabel("Delete")
         }
         .frame(height: height)
+        // **The margin the row never had.** Every other row on this keyboard is
+        // inset from the panel edge and this one ran to the glass on both sides,
+        // which is most of why it read as crowded even before the caps. A gap
+        // rather than `sideInset`, because the tabs are bare: their own glyphs
+        // sit centred in the slot, so the edge to line up with is the rhythm of
+        // the keys above, not their 3pt inset.
+        .padding(.horizontal, Theme.Metrics.keySpacing)
     }
 
     private func tab(id: String, icon: String) -> some View {
         let isSelected = selected == id
         return KeyStyleButton(
             width: nil, height: height, isSelected: isSelected,
-            // The selected tab's glyph goes brand with its fill; the rest keep
-            // the quiet secondary graphite on their warm white cards.
+            // Capless: see the note on the row. The selected tab's glyph goes
+            // brand with its fill; the rest are quiet secondary graphite
+            // straight on the panel.
+            drawsCap: false,
             glyphColor: isSelected ? Theme.Brand.solid : Theme.Keys.secondaryLabel,
             action: { onSelect(id) }
         ) {
@@ -380,7 +396,14 @@ struct KeyStyleButton<Label: View>: View {
     var repeats = false
     /// The press haptic, or nil for a control whose action already fires one.
     var feedback: (() -> Void)? = Feedback.modifierPress
-    /// The cap worn at rest.
+    /// Whether this is drawn as a keycap at all — a fill at rest, and the contact
+    /// line and ambient lift under it. False for the category tabs, which are
+    /// glyphs on the panel: see `EmojiCategoryRow` for the arithmetic that
+    /// decided it. A capless button still answers a finger, with the warm white
+    /// card appearing under it for as long as the touch is down, so the tap is
+    /// confirmed without the button carrying that weight at rest.
+    var drawsCap = true
+    /// The cap worn at rest. Ignored when `drawsCap` is false.
     var restingCap: Color = Theme.Keys.card
     /// Which keycap recipe the depth comes from: the tabs' warm white cards are
     /// `.letter`, delete's soft graphite is `.soft`.
@@ -406,11 +429,11 @@ struct KeyStyleButton<Label: View>: View {
             RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
                 .fill(fill)
                 .shadow(
-                    color: KeyView.contactShadow(for: capKind),
+                    color: drawsCap ? KeyView.contactShadow(for: capKind) : .clear,
                     radius: 0, x: 0, y: isPressed ? 1 : 2
                 )
                 .shadow(
-                    color: KeyView.ambientShadow(for: capKind),
+                    color: drawsCap ? KeyView.ambientShadow(for: capKind) : .clear,
                     radius: isPressed ? 3 : 7, x: 0, y: isPressed ? 2 : 4
                 )
             label()
@@ -456,8 +479,12 @@ struct KeyStyleButton<Label: View>: View {
     }
 
     private var fill: Color {
-        if isPressed { return Theme.Keys.functionPressed }
+        // A capless button has nothing to lighten, so the press is a card
+        // *appearing* rather than a cap going pale — `functionPressed` is
+        // 0xFFFEFA against a 0xF4F3EF panel, a difference small enough on a phone
+        // in daylight to read as no answer at all.
+        if isPressed { return drawsCap ? Theme.Keys.functionPressed : Theme.Keys.card }
         if isSelected { return Theme.Brand.solid.opacity(0.14) }
-        return restingCap
+        return drawsCap ? restingCap : .clear
     }
 }

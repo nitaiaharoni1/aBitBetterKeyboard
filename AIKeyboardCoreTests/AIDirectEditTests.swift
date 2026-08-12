@@ -318,49 +318,6 @@ final class AIDirectEditTests: XCTestCase {
     }
 }
 
-// MARK: - The pause control beside the candidates
-
-/// **What the suggestion bar offers beside a recording, in each of the four
-/// states the microphone key can be in.**
-///
-/// A decision rather than a screenshot, for the reason `SuggestionBar.ToneTap` is
-/// one: a button's action and a `.disabled()` modifier cannot be read back off a
-/// SwiftUI view, so a control that renders and answers nothing looks exactly like
-/// one that works. That is what shipped here once — a live-looking Pause button
-/// drawn over the *transcription*, where `pauseDictation()` returns at its own
-/// guard because no utterance is open.
-///
-/// The control moved out of the strip and into the bar with the strip's deletion,
-/// and the defect did not move with it: `.finishing` is the same state and it
-/// still has to answer nothing.
-final class DictationBarControlTests: XCTestCase {
-
-    func testARunningRecordingOffersPause() {
-        XCTAssertEqual(
-            SuggestionBar.dictationControl(for: .recording(secondsLeft: nil)), .pause)
-        XCTAssertEqual(
-            SuggestionBar.dictationControl(for: .recording(secondsLeft: 12)), .pause,
-            "the countdown changed which control is offered")
-    }
-
-    func testAPausedRecordingOffersResume() {
-        XCTAssertEqual(SuggestionBar.dictationControl(for: .paused), .resume)
-    }
-
-    /// The state between the stop tap and the words arriving: nothing is open, so
-    /// there is nothing to pause. The microphone key is captioned Cancel there,
-    /// which is what calls the pending insert off.
-    func testATranscriptionOffersNothingRatherThanADeadPauseButton() {
-        XCTAssertNil(
-            SuggestionBar.dictationControl(for: .finishing),
-            "the bar draws Pause over a transcription, and the tap does nothing")
-    }
-
-    func testNothingIsOfferedWhenNothingIsRunning() {
-        XCTAssertNil(SuggestionBar.dictationControl(for: .idle))
-    }
-}
-
 // MARK: - The microphone key
 
 /// **What the one control this feature has left is showing.**
@@ -378,7 +335,6 @@ final class DictationKeyStateTests: XCTestCase {
     func testOnlyALiveMicrophoneIsDrawnInRed() {
         XCTAssertTrue(DictationKeyState.recording(secondsLeft: nil).isRecording)
         XCTAssertTrue(DictationKeyState.recording(secondsLeft: 5).isRecording)
-        XCTAssertFalse(DictationKeyState.paused.isRecording, "a paused microphone is not listening")
         XCTAssertFalse(DictationKeyState.finishing.isRecording)
         XCTAssertFalse(DictationKeyState.idle.isRecording)
     }
@@ -389,7 +345,6 @@ final class DictationKeyStateTests: XCTestCase {
     func testTheKeyStaysLitUntilTheWordsHaveLanded() {
         XCTAssertFalse(DictationKeyState.idle.isActive)
         XCTAssertTrue(DictationKeyState.recording(secondsLeft: nil).isActive)
-        XCTAssertTrue(DictationKeyState.paused.isActive)
         XCTAssertTrue(DictationKeyState.finishing.isActive)
     }
 
@@ -400,16 +355,15 @@ final class DictationKeyStateTests: XCTestCase {
     func testTheCaptionNamesTheStateRatherThanTheAction() {
         XCTAssertEqual(DictationKeyState.idle.title, "Dictate")
         XCTAssertEqual(DictationKeyState.recording(secondsLeft: nil).title, "Stop")
-        XCTAssertEqual(DictationKeyState.paused.title, "Paused")
         XCTAssertEqual(DictationKeyState.finishing.title, "Cancel")
     }
 
-    /// **Four appearances, four things said — and it used to be four appearances
-    /// and one.**
+    /// **Three appearances, three things said — and it used to be three
+    /// appearances and one.**
     ///
     /// `KeyView`'s label comes from `KeyCap`, which is a value and cannot know a
     /// recording is running, so this key read "Dictate" to VoiceOver whether the
-    /// microphone was idle, live, paused or finishing. Everything that told the
+    /// microphone was idle, live or finishing. Everything that told the
     /// four apart was a colour, a glyph and a nine-point caption. The one state
     /// where being wrong matters most is the one where a microphone is on.
     ///
@@ -418,7 +372,7 @@ final class DictationKeyStateTests: XCTestCase {
     /// which is why the visible caption cannot serve as the label.
     func testEveryStateSaysSomethingDifferentOutLoud() {
         let states: [DictationKeyState] = [
-            .idle, .recording(secondsLeft: nil), .recording(secondsLeft: 12), .paused, .finishing
+            .idle, .recording(secondsLeft: nil), .recording(secondsLeft: 12), .finishing
         ]
         let spoken = states.map { "\($0.accessibilityLabel)|\($0.accessibilityValue)" }
         XCTAssertEqual(
@@ -429,7 +383,6 @@ final class DictationKeyStateTests: XCTestCase {
         XCTAssertEqual(
             DictationKeyState.recording(secondsLeft: nil).accessibilityLabel, "Stop recording",
             "the button that stops a live microphone offered to start one")
-        XCTAssertEqual(DictationKeyState.paused.accessibilityLabel, "Stop recording")
         XCTAssertEqual(DictationKeyState.finishing.accessibilityLabel, "Cancel transcription")
 
         XCTAssertEqual(DictationKeyState.idle.accessibilityValue, "")
@@ -437,7 +390,6 @@ final class DictationKeyStateTests: XCTestCase {
         XCTAssertEqual(
             DictationKeyState.recording(secondsLeft: 12).accessibilityValue,
             "Recording, 12 seconds left")
-        XCTAssertEqual(DictationKeyState.paused.accessibilityValue, "Paused")
     }
 
     /// **The countdown survived the strip, and it is the one thing in it that had

@@ -122,13 +122,6 @@ public enum DictationPhase: UInt8, Sendable {
     case listening = 1
     /// The recording is closed and the transcriber has it.
     case transcribing = 2
-    /// The utterance the keyboard asked for is still open — `wantsRecording`
-    /// stays true and the buffer is untouched — but the recorder has stopped
-    /// keeping samples. Written by the recorder rather than assumed from the
-    /// request, so the keyboard can tell "asked to pause" from "actually
-    /// paused": `DictationRequest.isPaused` flips the instant the user taps,
-    /// this only flips once `LiveRecording` has confirmed it, one poll later.
-    case paused = 3
 }
 
 /// Why a session is not running. Every case is a different thing for the user to
@@ -192,21 +185,13 @@ public struct DictationRequest: Equatable, Sendable {
     /// whose keyboard has stopped writing this.
     public var keyboardAliveAt: UInt64 = 0
 
-    /// Set while the user has asked to pause the open utterance and cleared on
-    /// resume. **Pausing must never close or drop the utterance** — it is a
-    /// request about what the recorder keeps, not about whether one is open —
-    /// so this plays no part in `wantsRecording` below; only `stopUtterance`
-    /// and `cancelUtterance` do that.
-    ///
-    /// A `UInt8` raw value with explicit trailing padding out to the next
-    /// word, for the reason `DictationState.micAuthorizedRaw` is one rather
-    /// than a `Bool`: this struct is memcpy'd through a shared page, so every
-    /// bit pattern has to be a value rather than a crash, and a `Bool` read
-    /// mid-write is not guaranteed to be `0` or `1`.
-    public var pausedRaw: UInt8 = 0
-    private var padding0: UInt8 = 0
-    private var padding1: UInt16 = 0
-    private var padding2: UInt32 = 0
+    /// **Kept as explicit padding rather than removed**, because this struct is
+    /// memcpy'd through a fixed-size shared page and its layout is the wire
+    /// format two processes agree on. It held `pausedRaw` until pause was taken
+    /// out of the product; leaving the bytes where they were means the page keeps
+    /// the same shape and every field after it keeps the same offset.
+    private var padding0: UInt32 = 0
+    private var padding1: UInt32 = 0
 
     public init() {}
 
@@ -217,14 +202,8 @@ public struct DictationRequest: Equatable, Sendable {
         CaptureClock.elapsed(since: keyboardAliveAt, now: now) <= Self.keyboardWindow
     }
 
-    public var isPaused: Bool { pausedRaw != 0 }
-
     /// Whether the recorder should be capturing right now.
     ///
-    /// **Deliberately blind to `pausedRaw`.** An open utterance wants
-    /// recording whether or not it is paused; pausing changes what
-    /// `LiveRecording` does with the samples it is handed, not whether the
-    /// recorder is still holding the utterance open for a resume.
     public func wantsRecording(now: UInt64 = CaptureClock.now()) -> Bool {
         guard utterance > 0, isKeyboardAlive(now: now) else { return false }
         return stopUtterance < utterance && cancelUtterance < utterance

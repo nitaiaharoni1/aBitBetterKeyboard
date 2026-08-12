@@ -67,22 +67,24 @@ extension SuggestionBar {
         case .quickTone:
             toneButton
         case .dictation:
-            // The bar's copy of the microphone key wears the same four
-            // appearances the key does, record red included — two surfaces
-            // disagreeing about what is happening is D8, and it is worse here
-            // than it was for an empty field, because the disagreement would be
-            // about whether a microphone is on.
+            // The bar's copy of the microphone key wears the same appearances the
+            // key does — filled orange at rest, red while recording — because two
+            // surfaces disagreeing about what is happening is D8, and it is worse
+            // here than it was for an empty field: the disagreement would be about
+            // whether a microphone is on. `isActive: true` unconditionally is what
+            // makes it filled at rest, the same thing `KeyView.capKind` does for
+            // the key.
             edgeButton(
                 systemImage: controller.dictationKeyState.icon,
                 label: SlotAction.dictation.title,
-                // Said out loud, because the four appearances of this control are
-                // a glyph and a cap colour and nothing else. The same words the
-                // key in the action row uses — two copies of one control that
-                // described themselves differently would be D8 with a live
-                // microphone as the stake.
+                // Said out loud, because the appearances of this control are a
+                // glyph and a cap colour and nothing else. The same words the key
+                // in the action row uses — two copies of one control that described
+                // themselves differently would be D8 with a live microphone as the
+                // stake.
                 spokenLabel: controller.dictationKeyState.accessibilityLabel,
                 value: controller.dictationKeyState.accessibilityValue,
-                isActive: controller.isActionKeyActive(.dictation),
+                isActive: true,
                 activeFill: controller.dictationKeyState.isRecording
                     ? Theme.Semantic.record : Theme.Brand.action
             ) {
@@ -138,75 +140,6 @@ extension SuggestionBar {
         .accessibilityIdentifier("bar-\(label.lowercased())")
         .accessibilityLabel(spokenLabel ?? label)
         .accessibilityValue(value)
-    }
-
-    // MARK: Pause and resume
-
-    /// What the bar offers beside the candidates while a recording is open, as a
-    /// decision rather than a chain of `if`s inside a `ViewBuilder`.
-    ///
-    /// **Separate and testable for the reason `SuggestionBar.ToneTap` is**: a
-    /// `.disabled()` modifier and a button's action cannot be read back off a
-    /// SwiftUI view, so a control that renders but answers nothing looks exactly
-    /// like one that works — which shipped here once already, as a Pause button
-    /// drawn over a transcription with nothing to pause.
-    ///
-    /// `nil` is that same state: between the stop tap and the words arriving there
-    /// is no open utterance, `pauseDictation()` would return at its own
-    /// `guard isDictating`, and the microphone key is captioned Cancel because it
-    /// is the last moment the insert can be called off.
-    enum DictationControl: Equatable {
-        case pause
-        case resume
-    }
-
-    static func dictationControl(for state: DictationKeyState) -> DictationControl? {
-        switch state {
-        case .recording: return .pause
-        case .paused: return .resume
-        case .idle, .finishing: return nil
-        }
-    }
-
-    /// Whether the bar is drawing a pause or resume control right now. Its own
-    /// property so `SuggestionBar` reads one thing rather than resolving the
-    /// control twice — once to decide, once to draw.
-    var dictationControl: DictationControl? {
-        Self.dictationControl(for: controller.dictationKeyState)
-    }
-
-    /// Stops the recorder keeping samples without ending the recording.
-    ///
-    /// **It is here rather than on a strip of its own because there is no strip
-    /// left and no height to build one.** Finishing a recording is the microphone
-    /// key; pausing one is a second thing a user may want mid-sentence, and this
-    /// row is the only surface in the keyboard that can hold it for nothing — the
-    /// three candidates have little to say while somebody is speaking, and it
-    /// takes the slot the undo uses, which cannot be live at the same time.
-    ///
-    /// **`record.circle` for resume, not `mic.fill`.** `mic.fill` is what the
-    /// microphone key wears, so reusing it here would read as "open a second
-    /// microphone" rather than "keep going with this one"; a filled red circle is
-    /// what a paused recording resumes to elsewhere on iOS.
-    @ViewBuilder
-    func dictationControlButton(_ control: DictationControl) -> some View {
-        let isPaused = control == .resume
-        Button {
-            isPaused ? controller.resumeDictation() : controller.pauseDictation()
-        } label: {
-            Image(systemName: isPaused ? "record.circle" : "pause.fill")
-                .font(Theme.Glyph.font(17))
-                .foregroundStyle(Theme.Semantic.record)
-                .frame(width: 44, height: 40)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
-                        .fill(Theme.Semantic.record.opacity(0.14))
-                )
-                .contentShape(Rectangle())
-        }
-        .pressable()
-        .accessibilityIdentifier(isPaused ? "bar-resume" : "bar-pause")
-        .accessibilityLabel(isPaused ? "Resume dictation" : "Pause dictation")
     }
 
     // MARK: Undo

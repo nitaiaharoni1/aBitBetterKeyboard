@@ -65,30 +65,6 @@ extension DictationService {
             return
         }
 
-        // **Pausing changes what the recorder keeps, never whether the
-        // utterance is open.** `wantsRecording` stays true throughout — see
-        // `DictationRequest.pausedRaw` — so this only drives `LiveRecording`'s
-        // own paused mode and mirrors the confirmation back through `phase`,
-        // which is what lets the keyboard tell "asked to pause" from
-        // "actually paused" apart. Skipped once a stop has landed: the close
-        // below is about to publish `.transcribing` over whatever this wrote,
-        // and there is no reason to pay for the extra page write in between.
-        if openUtterance > 0, request.stopUtterance < openUtterance {
-            if request.isPaused {
-                recording.pause()
-                if phase != .paused {
-                    phase = .paused
-                    writer.setPhase(.paused, utterance: openUtterance)
-                }
-            } else {
-                recording.resume()
-                if phase == .paused {
-                    phase = .listening
-                    writer.setPhase(.listening, utterance: openUtterance)
-                }
-            }
-        }
-
         if openUtterance > 0, request.stopUtterance >= openUtterance {
             close(utterance: openUtterance)
         }

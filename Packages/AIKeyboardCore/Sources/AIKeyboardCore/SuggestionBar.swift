@@ -62,21 +62,6 @@ public struct SuggestionBar: View {
                 revertButton
             }
 
-            // **The other control that is not configurable, and it is in this row
-            // for the same reason.** A recording reports on the microphone key
-            // now, which leaves pausing one with nowhere to live: the strip that
-            // held Pause is not drawn for a recording any more, and the keyboard
-            // has no height to give it a row. This slot is free while somebody is
-            // speaking — the three candidates are about a word being typed — and
-            // it cannot collide with the undo above, because `startDictation`
-            // clears that as the utterance opens — before this control appears,
-            // rather than when the first words land, so the two never share the row
-            // for the couple of seconds a first reading takes.
-            if let control = dictationControl {
-                separator
-                dictationControlButton(control)
-            }
-
             if !controller.customization.barTrailing.isEmpty { separator }
 
             ForEach(controller.customization.barTrailing) { slot in
@@ -105,11 +90,6 @@ public struct SuggestionBar: View {
         // fades in rather than appearing between two frames beside three candidate
         // slots that emptied in the same moment.
         .animation(Theme.Motion.content, value: controller.revertibleEdit)
-        // The control, not the key state it comes from: `dictationKeyState` carries
-        // the session countdown, so it changes every second inside the last minute
-        // and would open an animation transaction a second for a button that has
-        // not moved.
-        .animation(Theme.Motion.content, value: dictationControl)
     }
 
     // MARK: Candidates

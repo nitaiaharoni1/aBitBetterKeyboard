@@ -167,66 +167,6 @@ final class DictationChannelTests: XCTestCase {
 
     // MARK: Pausing
 
-    /// **Pausing changes what the recorder keeps, never whether the utterance
-    /// is open.** A paused request still asks for recording — the recorder is
-    /// the one that stops accumulating samples, on its own poll, without
-    /// `wantsRecording` ever going false underneath it.
-    func testAPausedUtteranceStillWantsRecording() throws {
-        recorder.begin(seconds: 900, microphoneAuthorized: true)
-        keyboard.beginUtterance()
-
-        keyboard.pauseUtterance()
-        XCTAssertTrue(try XCTUnwrap(recorder.request()).isPaused)
-        XCTAssertTrue(
-            try XCTUnwrap(recorder.request()).wantsRecording(),
-            "pausing closed the utterance instead of only muting it")
-
-        keyboard.resumeUtterance()
-        XCTAssertFalse(try XCTUnwrap(recorder.request()).isPaused)
-        XCTAssertTrue(try XCTUnwrap(recorder.request()).wantsRecording())
-    }
-
-    /// The dead-man's switch has to keep ticking through a pause — a paused
-    /// recording is still one somebody is expected to come back to, and a
-    /// write that forgot to refresh it would drop the utterance within three
-    /// seconds of pausing.
-    func testPausingRefreshesTheDeadMansSwitch() throws {
-        recorder.begin(seconds: 900, microphoneAuthorized: true)
-        keyboard.beginUtterance()
-        let stale = CaptureClock.now() + DictationRequest.keyboardWindow + 1
-
-        keyboard.pauseUtterance(now: stale)
-        XCTAssertTrue(
-            try XCTUnwrap(recorder.request()).isKeyboardAlive(now: stale),
-            "pausing must refresh keyboardAliveAt like every other request write does")
-    }
-
-    /// A fresh utterance never inherits a pause the one before it was left in
-    /// — otherwise a recording opened right after an unresolved pause would
-    /// silently capture nothing until the next tap on pause/resume.
-    func testANewUtteranceIsNeverPausedEvenIfThePreviousOneWas() throws {
-        recorder.begin(seconds: 900, microphoneAuthorized: true)
-        keyboard.beginUtterance()
-        keyboard.pauseUtterance()
-        keyboard.cancelUtterance()
-
-        keyboard.beginUtterance()
-        XCTAssertFalse(
-            try XCTUnwrap(recorder.request()).isPaused,
-            "a stale pause from a withdrawn utterance carried into the next one")
-    }
-
-    /// Cancelling a paused utterance still withdraws it — pausing must not be
-    /// a way to make a recording immune to the ordinary ways out.
-    func testCancellingAPausedUtteranceStillWithdrawsIt() throws {
-        recorder.begin(seconds: 900, microphoneAuthorized: true)
-        keyboard.beginUtterance()
-        keyboard.pauseUtterance()
-
-        keyboard.cancelUtterance()
-        XCTAssertFalse(try XCTUnwrap(recorder.request()).wantsRecording())
-    }
-
     // MARK: The transcript on disk
 
     /// A privacy rule, not tidiness: the shared container is backed up, and a

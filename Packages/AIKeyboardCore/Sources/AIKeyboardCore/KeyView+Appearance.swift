@@ -28,6 +28,14 @@ extension KeyView {
         // is what it is for. It is deliberately off through a pause and off while
         // the last words are transcribed — see `DictationKeyState`.
         if dictationState.isRecording { return .record }
+        // **The microphone is the one key that wears a filled cap at rest**, and
+        // it is orange so that turning red means something. Every other control
+        // here is neutral until it is doing something; this one is the way into a
+        // feature people do not think to look for, and a graphite key with a
+        // waveform on it reads as another arrow or another mode switch. Orange to
+        // red is then one property changing on a cap the eye already knows,
+        // rather than a key appearing out of the background.
+        if spec.cap == .dictation { return .action }
         // **A running action wears the primary cap, whole.** It used to paint a 14%
         // brand wash over whatever cap the key already had, which on the warm-white
         // AI keys is a barely-there tint — on a phone, in daylight, beside four
