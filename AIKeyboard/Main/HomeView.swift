@@ -20,34 +20,37 @@ struct HomeView: View {
 
                 ScrollView {
                     VStack(spacing: Theme.Space.lg) {
-                        if !setup.isReady { setupCard }
-                        featureCard
-                        playgroundCard
-                        if !store.isSubscribed { upgradeCard }
+                        if search.isSearching {
+                            AppSearchResults()
+                        } else {
+                            if !setup.isReady { setupCard }
+                            featureCard
+                            playgroundCard
+                            if !store.isSubscribed { upgradeCard }
+                        }
                     }
                     .padding(.horizontal, Theme.Space.md)
                     .padding(.bottom, Theme.Space.xl)
                 }
+                .scrollDismissesKeyboard(.immediately)
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
-                VStack(alignment: .leading, spacing: 0) {
-                    // The hero voice: heavy SF Pro with tight tracking (the web
-                    // hero's weight-800 / -.055em spec, ≈ -1.4pt at this size).
-                    // Only this line and the onboarding welcome headline carry
-                    // it; every other display line keeps the plain style.
-                    Text("AI Keyboard")
-                        .font(.system(size: 28, weight: .heavy))
-                        .tracking(-1.4)
-                        .foregroundStyle(Theme.Text.primary)
+                AppSearchHeader {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // The hero voice: heavy SF Pro with tight tracking (the web
+                        // hero's weight-800 / -.055em spec, ≈ -1.4pt at this size).
+                        // Only this line and the onboarding welcome headline carry
+                        // it; every other display line keeps the plain style.
+                        Text("AI Keyboard")
+                            .font(.system(size: 28, weight: .heavy))
+                            .tracking(-1.4)
+                            .foregroundStyle(Theme.Text.primary)
 
-                    DoodleSwash()
-                        .frame(width: 140, height: 10)
-                        .offset(x: 3, y: 1)
+                        DoodleSwash()
+                            .frame(width: 140, height: 10)
+                            .offset(x: 3, y: 1)
+                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, Theme.Space.md)
-                .padding(.vertical, Theme.Space.xxs)
-                .background(Theme.Surface.background.opacity(0.96))
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $search.homePush) { push in

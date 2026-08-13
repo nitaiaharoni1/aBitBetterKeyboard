@@ -1,132 +1,122 @@
 import AIKeyboardCore
 import SwiftUI
 
-// MARK: - Idle pill
-
-/// The compact field that floats above the tab bar on every screen. Tapping it
-/// opens the overlay, because a field that lives under the keyboard is a field
-/// the user cannot see what they type into.
-struct AppSearchIdlePill: View {
-    @EnvironmentObject private var search: AppSearch
+/// Title plus the in-flow search field, shared by Home, Languages, and Settings
+/// so the three headers stay one chrome.
+struct AppSearchHeader<Title: View>: View {
+    var searchAccessibilityID: String = "app-search"
+    @ViewBuilder var title: () -> Title
 
     var body: some View {
-        Button {
-            search.present()
-        } label: {
-            HStack(spacing: Theme.Space.xs) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Theme.Text.tertiary)
-
-                Text("Search")
-                    .font(Theme.Fonts.body)
-                    .foregroundStyle(Theme.Text.tertiary)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, Theme.Space.sm)
-            .padding(.vertical, 12)
-            .contentShape(Capsule())
-            .appSearchGlass(in: Capsule())
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
+            title()
+            AppSearchField(fieldIdentifier: searchAccessibilityID)
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("app-search")
-        .accessibilityLabel("Search")
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Theme.Space.md)
+        .padding(.vertical, Theme.Space.xxs)
+        .background(Theme.Surface.background.opacity(0.96))
     }
 }
 
-// MARK: - Overlay
-
-struct AppSearchOverlay: View {
-    @Binding var selection: MainTab
+/// The in-flow search field that sits under each tab's title. Same chrome as
+/// the language catalogue field used to have: a raised rounded rect in the
+/// header, not a pill that floats over the tab bar (and under the keyboard).
+struct AppSearchField: View {
+    var fieldIdentifier: String = "app-search"
     @EnvironmentObject private var search: AppSearch
     @FocusState private var focused: Bool
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Theme.Surface.background.opacity(0.94)
-                .ignoresSafeArea()
-                .onTapGesture(perform: search.dismiss)
-
-            VStack(spacing: Theme.Space.sm) {
-                field
-                if search.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Spacer()
-                } else {
-                    results
-                }
-            }
-            .padding(.horizontal, Theme.Space.md)
-            .padding(.top, Theme.Space.sm)
-        }
-        .onAppear { focused = true }
-    }
-
-    private var field: some View {
         HStack(spacing: Theme.Space.xs) {
-            HStack(spacing: Theme.Space.xs) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Theme.Text.tertiary)
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Theme.Text.tertiary)
 
-                TextField("Screens, settings, languages", text: $search.query)
-                    .font(Theme.Fonts.body)
-                    .foregroundStyle(Theme.Text.primary)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .submitLabel(.search)
-                    .focused($focused)
-                    .accessibilityIdentifier("app-search-field")
-
-                if !search.query.isEmpty {
-                    Button {
-                        search.query = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 15))
-                            .foregroundStyle(Theme.Text.tertiary)
+            TextField("Screens, settings, languages", text: $search.query)
+                .font(Theme.Fonts.body)
+                .foregroundStyle(Theme.Text.primary)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .focused($focused)
+                .accessibilityIdentifier(fieldIdentifier)
+                .onSubmit {
+                    if let first = search.results.first {
+                        search.open(first)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Clear search")
+                }
+
+            if !search.query.isEmpty {
+                Button {
+                    search.dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.Text.tertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, Theme.Space.sm)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.Surface.raised)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Theme.Surface.separator, lineWidth: 1)
+        )
+        .onChange(of: search.stackEpoch) { _, _ in focused = false }
+    }
+}
+
+/// Replaces the tab's scrolling content while a query is in the field.
+struct AppSearchResults: View {
+    var includeLanguages = true
+    var showsEmpty = true
+    @EnvironmentObject private var search: AppSearch
+
+    var body: some View {
+        let hits = filteredHits
+        Group {
+            if hits.isEmpty {
+                if showsEmpty {
+                    Card(padding: Theme.Space.xs) {
+                        Text("Nothing matches \u{201C}\(search.query)\u{201D}.")
+                            .font(Theme.Fonts.callout)
+                            .foregroundStyle(Theme.Text.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(Theme.Space.sm)
+                    }
+                }
+            } else {
+                Card(padding: Theme.Space.xs) {
+                    VStack(spacing: 0) {
+                        ForEach(Array(hits.enumerated()), id: \.element.id) { index, item in
+                            if index > 0 { Divider.themed.padding(.leading, 46) }
+                            resultRow(item)
+                        }
+                    }
                 }
             }
-            .padding(.horizontal, Theme.Space.sm)
-            .padding(.vertical, 12)
-            .appSearchGlass(in: Capsule())
-
-            Button("Cancel", action: search.dismiss)
-                .font(Theme.Fonts.body.weight(.medium))
-                .foregroundStyle(Theme.Brand.solid)
         }
+        .accessibilityIdentifier("app-search-results")
     }
 
-    private var results: some View {
-        let hits = search.results
-        return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                if hits.isEmpty {
-                    Text("Nothing matches \u{201C}\(search.query)\u{201D}.")
-                        .font(Theme.Fonts.callout)
-                        .foregroundStyle(Theme.Text.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(Theme.Space.md)
-                } else {
-                    ForEach(Array(hits.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 { Divider.themed.padding(.leading, 46) }
-                        resultRow(item)
-                    }
-                }
-            }
-            .appSearchGlass(
-                in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-            )
+    private var filteredHits: [AppSearchItem] {
+        guard !includeLanguages else { return search.results }
+        return search.results.filter {
+            if case .language = $0.destination { return false }
+            return true
         }
-        .scrollDismissesKeyboard(.immediately)
     }
 
     private func resultRow(_ item: AppSearchItem) -> some View {
         Button {
-            search.open(item, selection: $selection)
+            search.open(item)
         } label: {
             HStack(spacing: Theme.Space.sm) {
                 if let flag = item.flag {
@@ -149,29 +139,11 @@ struct AppSearchOverlay: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, Theme.Space.sm)
+            .padding(.horizontal, Theme.Space.xs)
             .padding(.vertical, Theme.Space.xs)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("app-search-result-\(item.id)")
-    }
-}
-
-// MARK: - Glass
-
-extension View {
-    /// Liquid Glass on iOS 26, the existing raised-card language everywhere
-    /// else. Chrome, not a brand fill: orange stays on AI moments.
-    @ViewBuilder
-    func appSearchGlass<S: InsettableShape>(in shape: S) -> some View {
-        if #available(iOS 26, *) {
-            self.glassEffect(.regular.interactive(), in: shape)
-        } else {
-            self
-                .background(shape.fill(.ultraThinMaterial))
-                .overlay(shape.strokeBorder(Theme.Surface.separator, lineWidth: 1))
-                .shadow(color: Theme.Depth.color, radius: 16, y: 8)
-        }
     }
 }

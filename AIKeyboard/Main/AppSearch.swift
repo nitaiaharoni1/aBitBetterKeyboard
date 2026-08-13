@@ -1,7 +1,7 @@
 import AIKeyboardCore
 import SwiftUI
 
-/// App-wide jump search: a floating field on every tab that opens the matching
+/// App-wide jump search: a field under each tab's title that opens the matching
 /// screen or lands on the matching settings row.
 ///
 /// Lives on `RootView` rather than `MainTabView` because a palette change
@@ -10,7 +10,6 @@ import SwiftUI
 @MainActor
 final class AppSearch: ObservableObject {
     @Published var query = ""
-    @Published var isPresented = false
     @Published var showsPlayground = false
     @Published var homePush: AppSearchHomePush?
     @Published var settingsPush: AppSearchSettingsPush?
@@ -22,61 +21,77 @@ final class AppSearch: ObservableObject {
     /// behind Layout.
     @Published var stackEpoch = 0
 
+    /// Consumed by `MainTabView`. A `Binding` in the environment defaults to
+    /// `.constant(.home)` and silently eats taps if the key is missing.
+    @Published var pendingTab: MainTab?
+
     var results: [AppSearchItem] { AppSearchItem.matches(for: query) }
 
-    func present() {
-        isPresented = true
+    var isSearching: Bool {
+        !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     func dismiss() {
         query = ""
-        isPresented = false
     }
 
-    func open(_ item: AppSearchItem, selection: Binding<MainTab>) {
+    func open(_ item: AppSearchItem) {
         query = ""
-        isPresented = false
         highlightedRow = nil
         highlightedLanguage = nil
         homePush = nil
         settingsPush = nil
         showsPlayground = false
+        pendingTab = nil
         stackEpoch += 1
+        highlightClear?.cancel()
 
         switch item.destination {
         case .tab(let tab):
-            selection.wrappedValue = tab
+            pendingTab = tab
         case .dictation:
-            selection.wrappedValue = .home
+            pendingTab = .home
             homePush = .dictation
         case .screenContext:
-            selection.wrappedValue = .home
+            pendingTab = .home
             homePush = .screenContext
         case .playground:
-            selection.wrappedValue = .home
+            pendingTab = .home
             showsPlayground = true
         case .subscription:
-            selection.wrappedValue = .settings
+            pendingTab = .settings
             settingsPush = .subscription
         case .dictionary:
-            selection.wrappedValue = .settings
+            pendingTab = .settings
             settingsPush = .dictionary
         case .layout:
-            selection.wrappedValue = .settings
+            pendingTab = .settings
             settingsPush = .layout
         case .cloudModel:
-            selection.wrappedValue = .settings
+            pendingTab = .settings
             settingsPush = .cloudModel
         case .language(let language):
-            selection.wrappedValue = .languages
+            pendingTab = .languages
             highlightedLanguage = language
         case .row(let row):
-            if row == .mixing {
-                selection.wrappedValue = .languages
-            } else {
-                selection.wrappedValue = .settings
-            }
+            pendingTab = row == .mixing ? .languages : .settings
             highlightedRow = row
+        }
+
+        scheduleHighlightClear()
+    }
+
+    private var highlightClear: Task<Void, Never>?
+
+    /// The wash is how you find the row. Leaving it on forever makes the next
+    /// visit look like a search landing.
+    private func scheduleHighlightClear() {
+        guard highlightedRow != nil || highlightedLanguage != nil else { return }
+        highlightClear = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1400))
+            guard !Task.isCancelled else { return }
+            highlightedRow = nil
+            highlightedLanguage = nil
         }
     }
 }

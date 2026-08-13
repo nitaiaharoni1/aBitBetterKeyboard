@@ -1,75 +1,46 @@
 import AIKeyboardCore
 import SwiftUI
 
-/// The "All languages" search field and grouped language list.
+/// The "All languages" list, grouped by script.
 ///
-/// Owns `query` state so the search field is local to this section.
-/// Toggle behaviour is driven through `SharedStore` from the environment.
+/// Filtering is the header search on `LanguagesView`, not a second field:
+/// `RenderedRowOrderTests.enableArabic` types into `language-search` there
+/// and needs the matching toggle to stay on this list.
 struct LanguageCatalogueSection: View {
     @EnvironmentObject private var store: SharedStore
     @EnvironmentObject private var search: AppSearch
-    @State private var query = ""
+    /// When set, this is the header search rather than a second field. The
+    /// Languages UI test types into `language-search` on that header and
+    /// expects the matching toggle to stay on this list.
+    var filter = ""
+    var hideIfEmpty = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            SectionHeader(title: "All languages")
-
-            searchField
-
-            if matches.isEmpty {
-                Card(padding: Theme.Space.xs) {
-                    Text("No language matches \u{201C}\(query)\u{201D}.")
-                        .font(Theme.Fonts.callout)
-                        .foregroundStyle(Theme.Text.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(Theme.Space.sm)
+        let rows = Self.matches(for: filter)
+        Group {
+            if rows.isEmpty {
+                if !hideIfEmpty {
+                    emptyCard
                 }
             } else {
-                ForEach(scriptGroups, id: \.script) { group in
-                    scriptGroup(group)
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    SectionHeader(title: "All languages")
+                    ForEach(scriptGroups(in: rows), id: \.script) { group in
+                        scriptGroup(group)
+                    }
                 }
             }
         }
     }
 
-    // MARK: Search field
-
-    private var searchField: some View {
-        HStack(spacing: Theme.Space.xs) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Theme.Text.tertiary)
-
-            TextField("Search \(KeyboardLanguage.allCases.count) languages", text: $query)
-                .font(Theme.Fonts.body)
-                .foregroundStyle(Theme.Text.primary)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.search)
-                .accessibilityIdentifier("language-search")
-
-            if !query.isEmpty {
-                Button {
-                    query = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Theme.Text.tertiary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
+    private var emptyCard: some View {
+        Card(padding: Theme.Space.xs) {
+            Text("No language matches \u{201C}\(filter)\u{201D}.")
+                .font(Theme.Fonts.callout)
+                .foregroundStyle(Theme.Text.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Theme.Space.sm)
         }
-        .padding(.horizontal, Theme.Space.sm)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Theme.Surface.raised)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Theme.Surface.separator, lineWidth: 1)
-        )
     }
 
     // MARK: Script groups
@@ -85,10 +56,10 @@ struct LanguageCatalogueSection: View {
     /// list raises — Serbian appears twice and the headings are the only thing
     /// that says why — and it costs no reordering, because the groups come out in
     /// catalogue order and English still leads the first of them.
-    private var scriptGroups: [ScriptGroup] {
+    private func scriptGroups(in languages: [KeyboardLanguage]) -> [ScriptGroup] {
         var order: [TextScript] = []
         var byScript: [TextScript: [KeyboardLanguage]] = [:]
-        for language in matches {
+        for language in languages {
             if byScript[language.script] == nil { order.append(language.script) }
             byScript[language.script, default: []].append(language)
         }
@@ -122,7 +93,7 @@ struct LanguageCatalogueSection: View {
 
     /// Matches on the English name, the native name, the language tag and the
     /// script, so "greek", "Ελληνικά", "el" and "cyrillic" all find rows.
-    private var matches: [KeyboardLanguage] {
+    static func matches(for query: String) -> [KeyboardLanguage] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return KeyboardLanguage.allCases }
         return KeyboardLanguage.allCases.filter { language in

@@ -20,10 +20,19 @@ struct LanguagesView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: Theme.Space.lg) {
-                            activeSummary
-                            LanguageCatalogueSection()
-                            LanguageMixingSection()
-                                .searchTarget(.mixing)
+                            if search.isSearching {
+                                AppSearchResults(
+                                    includeLanguages: false,
+                                    showsEmpty: LanguageCatalogueSection.matches(for: search.query)
+                                        .isEmpty)
+                                LanguageCatalogueSection(
+                                    filter: search.query, hideIfEmpty: true)
+                            } else {
+                                activeSummary
+                                LanguageCatalogueSection()
+                                LanguageMixingSection()
+                                    .searchTarget(.mixing)
+                            }
                         }
                         .padding(.horizontal, Theme.Space.md)
                         .padding(.bottom, Theme.Space.xl)
@@ -39,14 +48,12 @@ struct LanguagesView: View {
                 }
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
-                Text("Languages")
-                    .font(Theme.Fonts.display)
-                    .tracking(-0.5)
-                    .foregroundStyle(Theme.Text.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, Theme.Space.md)
-                    .padding(.vertical, Theme.Space.xxs)
-                    .background(Theme.Surface.background.opacity(0.96))
+                AppSearchHeader(searchAccessibilityID: "language-search") {
+                    Text("Languages")
+                        .font(Theme.Fonts.display)
+                        .tracking(-0.5)
+                        .foregroundStyle(Theme.Text.primary)
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
         }

@@ -14,16 +14,21 @@ struct SettingsView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: Theme.Space.lg) {
-                            SettingsTypingSection()
-                            SettingsAISection()
-                            lookSection
-                            feedbackSection
-                            moreSection
-                            footer
+                            if search.isSearching {
+                                AppSearchResults()
+                            } else {
+                                SettingsTypingSection()
+                                SettingsAISection()
+                                lookSection
+                                feedbackSection
+                                moreSection
+                                footer
+                            }
                         }
                         .padding(.horizontal, Theme.Space.md)
                         .padding(.bottom, Theme.Space.xl)
                     }
+                    .scrollDismissesKeyboard(.immediately)
                     .onChange(of: search.highlightedRow) { _, row in
                         guard let row, row != .mixing else { return }
                         scrollToHighlight(proxy)
@@ -32,14 +37,12 @@ struct SettingsView: View {
                 }
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
-                Text("Settings")
-                    .font(Theme.Fonts.display)
-                    .tracking(-0.5)
-                    .foregroundStyle(Theme.Text.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, Theme.Space.md)
-                    .padding(.vertical, Theme.Space.xxs)
-                    .background(Theme.Surface.background.opacity(0.96))
+                AppSearchHeader {
+                    Text("Settings")
+                        .font(Theme.Fonts.display)
+                        .tracking(-0.5)
+                        .foregroundStyle(Theme.Text.primary)
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $search.settingsPush) { push in

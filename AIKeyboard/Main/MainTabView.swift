@@ -25,17 +25,10 @@ struct MainTabView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape.fill") }
                 .tag(MainTab.settings)
         }
-        .safeAreaInset(edge: .bottom, spacing: Theme.Space.xs) {
-            if !search.isPresented {
-                AppSearchIdlePill()
-                    .padding(.horizontal, Theme.Space.md)
-                    .padding(.bottom, Theme.Space.xs)
-            }
-        }
-        .overlay {
-            if search.isPresented {
-                AppSearchOverlay(selection: $selection)
-            }
+        .onChange(of: search.pendingTab) { _, tab in
+            guard let tab else { return }
+            selection = tab
+            search.pendingTab = nil
         }
     }
 }
