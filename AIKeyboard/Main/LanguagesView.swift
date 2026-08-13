@@ -3,6 +3,7 @@ import AIKeyboardCore
 
 struct LanguagesView: View {
     @EnvironmentObject private var store: SharedStore
+    @EnvironmentObject private var search: AppSearch
     @Environment(\.scenePhase) private var scenePhase
 
     /// Measured for one sentence: without Full Access the keyboard cannot read
@@ -16,16 +17,26 @@ struct LanguagesView: View {
             ZStack {
                 AmbientBackground()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Theme.Space.lg) {
-                        activeSummary
-                        LanguageCatalogueSection()
-                        LanguageMixingSection()
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: Theme.Space.lg) {
+                            activeSummary
+                            LanguageCatalogueSection()
+                            LanguageMixingSection()
+                                .searchTarget(.mixing)
+                        }
+                        .padding(.horizontal, Theme.Space.md)
+                        .padding(.bottom, Theme.Space.xl)
                     }
-                    .padding(.horizontal, Theme.Space.md)
-                    .padding(.bottom, Theme.Space.xl)
+                    .scrollDismissesKeyboard(.immediately)
+                    .onChange(of: search.highlightedLanguage) { _, _ in
+                        scrollToSearchHit(proxy)
+                    }
+                    .onChange(of: search.highlightedRow) { _, _ in
+                        scrollToSearchHit(proxy)
+                    }
+                    .onAppear { scrollToSearchHit(proxy) }
                 }
-                .scrollDismissesKeyboard(.immediately)
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
                 Text("Languages")
@@ -108,5 +119,22 @@ struct LanguagesView: View {
         .overlay(Capsule().strokeBorder(Theme.Surface.separator, lineWidth: 1))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(language.displayName), on")
+    }
+
+    private func scrollToSearchHit(_ proxy: ScrollViewProxy) {
+        if let language = search.highlightedLanguage {
+            DispatchQueue.main.async {
+                withAnimation(Theme.Motion.quick) {
+                    proxy.scrollTo(language.id, anchor: .center)
+                }
+            }
+            return
+        }
+        guard search.highlightedRow == .mixing else { return }
+        DispatchQueue.main.async {
+            withAnimation(Theme.Motion.quick) {
+                proxy.scrollTo(AppSearchRow.mixing, anchor: .center)
+            }
+        }
     }
 }

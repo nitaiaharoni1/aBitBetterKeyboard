@@ -3,8 +3,8 @@ import AIKeyboardCore
 
 struct HomeView: View {
     @EnvironmentObject private var store: SharedStore
+    @EnvironmentObject private var search: AppSearch
     @Environment(\.scenePhase) private var scenePhase
-    @State private var showsPlayground = false
 
     /// Measured, never assumed. Two of the three answers come from a file only a
     /// keyboard with Full Access could have written and the third from
@@ -50,10 +50,17 @@ struct HomeView: View {
                 .background(Theme.Surface.background.opacity(0.96))
             }
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showsPlayground) {
+            .navigationDestination(item: $search.homePush) { push in
+                switch push {
+                case .dictation: DictationView()
+                case .screenContext: ScreenContextView()
+                }
+            }
+            .sheet(isPresented: $search.showsPlayground) {
                 PlaygroundView()
             }
         }
+        .id(search.stackEpoch)
         // Both halves of this can change while the app is in the background — the
         // user leaves for Settings, or types on the keyboard in another app —
         // and neither sends a notification, so the answer is re-read every time
@@ -147,7 +154,7 @@ struct HomeView: View {
 
     private var playgroundCard: some View {
         Button {
-            showsPlayground = true
+            search.showsPlayground = true
         } label: {
             HStack(spacing: Theme.Space.md) {
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {

@@ -52,9 +52,11 @@ struct SettingsTypingSection: View {
                     hebrewCapped
                         ? "Measured: English \(measured.english)%. Hebrew stays at three letters "
                             + "(\(GroupedKeys.Level.hebrewCeiling.measuredAccuracy.hebrew)%), because four "
-                            + "commits the wrong word about three times in ten. Hold a key to pick one letter."
+                            + "commits the wrong word about three times in ten. Tap a corner to pick "
+                            + "that letter. Hold a key to pick one letter exactly."
                         : "Measured: the right word is chosen \(measured.english)% of the time in English, "
-                            + "\(measured.hebrew)% in Hebrew. Hold a key to pick one letter exactly."
+                            + "\(measured.hebrew)% in Hebrew. Tap a corner to pick that letter. "
+                            + "Hold a key to pick one letter exactly."
                 )
                 .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Text.secondary)
@@ -106,6 +108,7 @@ struct SettingsTypingSection: View {
                         icon: "text.badge.checkmark",
                         isOn: $store.autocorrect
                     )
+                    .searchTarget(.autocorrect)
                     Divider.themed
                     ToggleRow(
                         title: "Complete on pause",
@@ -113,6 +116,7 @@ struct SettingsTypingSection: View {
                         icon: "text.cursor",
                         isOn: $store.completeOnIdle
                     )
+                    .searchTarget(.completeOnPause)
                     Divider.themed
                     ToggleRow(
                         title: "Space on pause",
@@ -120,9 +124,11 @@ struct SettingsTypingSection: View {
                         icon: "space",
                         isOn: $store.spaceOnIdle
                     )
+                    .searchTarget(.spaceOnPause)
                     if store.completeOnIdle || store.spaceOnIdle {
                         Divider.themed
                         idleDelayRow
+                            .searchTarget(.pauseLength)
                     }
                     Divider.themed
                     ToggleRow(
@@ -130,6 +136,7 @@ struct SettingsTypingSection: View {
                         icon: "textformat",
                         isOn: $store.autocapitalise
                     )
+                    .searchTarget(.autocapitalise)
                     Divider.themed
                     ToggleRow(
                         title: "Predictions",
@@ -137,6 +144,7 @@ struct SettingsTypingSection: View {
                         icon: "lightbulb",
                         isOn: $store.predictions
                     )
+                    .searchTarget(.predictions)
                     Divider.themed
                     ToggleRow(
                         title: "Learn as you type",
@@ -144,6 +152,7 @@ struct SettingsTypingSection: View {
                         icon: "brain",
                         isOn: $store.learnsFromTyping
                     )
+                    .searchTarget(.learnAsYouType)
                     if learnedWordCount > 0 {
                         Divider.themed
                         // Only shown once there is something to clear. A row that
@@ -170,6 +179,7 @@ struct SettingsTypingSection: View {
                     }
                     Divider.themed
                     groupedKeysRow
+                        .searchTarget(.groupedKeys)
                     Divider.themed
                     ToggleRow(
                         title: "Number row",
@@ -177,6 +187,7 @@ struct SettingsTypingSection: View {
                         icon: "textformat.123",
                         isOn: numberRowBinding
                     )
+                    .searchTarget(.numberRow)
                     Divider.themed
                     NavigationRow(
                         title: "Keyboard layout",

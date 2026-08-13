@@ -9,6 +9,7 @@ enum MainTab: Hashable {
 
 struct MainTabView: View {
     @Binding var selection: MainTab
+    @EnvironmentObject private var search: AppSearch
 
     var body: some View {
         TabView(selection: $selection) {
@@ -23,6 +24,18 @@ struct MainTabView: View {
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape.fill") }
                 .tag(MainTab.settings)
+        }
+        .safeAreaInset(edge: .bottom, spacing: Theme.Space.xs) {
+            if !search.isPresented {
+                AppSearchIdlePill()
+                    .padding(.horizontal, Theme.Space.md)
+                    .padding(.bottom, Theme.Space.xs)
+            }
+        }
+        .overlay {
+            if search.isPresented {
+                AppSearchOverlay(selection: $selection)
+            }
         }
     }
 }

@@ -81,12 +81,14 @@ struct AIKeyboardApp: App {
 struct RootView: View {
     @EnvironmentObject private var store: SharedStore
     @Binding var selectedMainTab: MainTab
+    @StateObject private var search = AppSearch()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
             if store.hasCompletedOnboarding {
                 MainTabView(selection: $selectedMainTab)
+                    .environmentObject(search)
                     // **`Theme.Brand` is a global, so somebody has to tell
                     // SwiftUI it moved.** Most of the views that draw an accent
                     // observe nothing and take no parameter that changes with
@@ -101,6 +103,9 @@ struct RootView: View {
                     // above it to lose. Moving the picker behind a
                     // `NavigationRow` would break that and this would start
                     // dismissing the screen the user tapped on.
+                    //
+                    // Search state lives on this view, above the `.id`, so a
+                    // palette change does not wipe the query.
                     .id(store.brandPalette)
             } else {
                 OnboardingFlow()

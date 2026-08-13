@@ -45,6 +45,7 @@ struct SettingsAISection: View {
                         .labelsHidden()
                         .pickerStyle(.menu)
                     }
+                    .searchTarget(.defaultTone)
 
                     if store.prefersCustomTone {
                         customToneField

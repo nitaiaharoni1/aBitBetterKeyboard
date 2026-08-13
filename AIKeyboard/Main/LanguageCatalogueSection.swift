@@ -7,6 +7,7 @@ import SwiftUI
 /// Toggle behaviour is driven through `SharedStore` from the environment.
 struct LanguageCatalogueSection: View {
     @EnvironmentObject private var store: SharedStore
+    @EnvironmentObject private var search: AppSearch
     @State private var query = ""
 
     var body: some View {
@@ -166,6 +167,13 @@ struct LanguageCatalogueSection: View {
         }
         .padding(.vertical, Theme.Space.xs)
         .padding(.horizontal, Theme.Space.xs)
+        .id(language.id)
+        .background {
+            if search.highlightedLanguage == language {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Theme.Brand.solid.opacity(0.12))
+            }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(language.displayName)
     }

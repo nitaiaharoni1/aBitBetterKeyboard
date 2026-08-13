@@ -3,6 +3,7 @@ import AIKeyboardCore
 
 struct SettingsView: View {
     @EnvironmentObject private var store: SharedStore
+    @EnvironmentObject private var search: AppSearch
     @StateObject private var session = ScreenContextSession.shared
 
     var body: some View {
@@ -10,17 +11,24 @@ struct SettingsView: View {
             ZStack {
                 AmbientBackground()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Theme.Space.lg) {
-                        SettingsTypingSection()
-                        SettingsAISection()
-                        lookSection
-                        feedbackSection
-                        moreSection
-                        footer
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: Theme.Space.lg) {
+                            SettingsTypingSection()
+                            SettingsAISection()
+                            lookSection
+                            feedbackSection
+                            moreSection
+                            footer
+                        }
+                        .padding(.horizontal, Theme.Space.md)
+                        .padding(.bottom, Theme.Space.xl)
                     }
-                    .padding(.horizontal, Theme.Space.md)
-                    .padding(.bottom, Theme.Space.xl)
+                    .onChange(of: search.highlightedRow) { _, row in
+                        guard let row, row != .mixing else { return }
+                        scrollToHighlight(proxy)
+                    }
+                    .onAppear { scrollToHighlight(proxy) }
                 }
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
@@ -34,7 +42,16 @@ struct SettingsView: View {
                     .background(Theme.Surface.background.opacity(0.96))
             }
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(item: $search.settingsPush) { push in
+                switch push {
+                case .dictionary: DictionaryView()
+                case .layout: LayoutView()
+                case .subscription: SubscriptionView()
+                case .cloudModel: CloudModelView()
+                }
+            }
         }
+        .id(search.stackEpoch)
     }
 
     // MARK: Look
@@ -47,6 +64,7 @@ struct SettingsView: View {
         section("Look") {
             PalettePicker()
         }
+        .searchTarget(.palette)
     }
 
     // MARK: Feedback
@@ -54,6 +72,7 @@ struct SettingsView: View {
     private var feedbackSection: some View {
         section("Feel") {
             ToggleRow(title: "Haptics", icon: "hand.tap", isOn: $store.haptics)
+                .searchTarget(.haptics)
             Divider.themed
             ToggleRow(
                 title: "Key sounds",
@@ -61,6 +80,7 @@ struct SettingsView: View {
                 icon: "speaker.wave.2",
                 isOn: $store.keySounds
             )
+            .searchTarget(.keySounds)
         }
     }
 
@@ -117,6 +137,7 @@ struct SettingsView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .searchTarget(.replayOnboarding)
         }
     }
 
@@ -142,6 +163,15 @@ struct SettingsView: View {
     }
 
     // MARK: Scaffolding
+
+    private func scrollToHighlight(_ proxy: ScrollViewProxy) {
+        guard let row = search.highlightedRow, row != .mixing else { return }
+        DispatchQueue.main.async {
+            withAnimation(Theme.Motion.quick) {
+                proxy.scrollTo(row, anchor: .center)
+            }
+        }
+    }
 
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
