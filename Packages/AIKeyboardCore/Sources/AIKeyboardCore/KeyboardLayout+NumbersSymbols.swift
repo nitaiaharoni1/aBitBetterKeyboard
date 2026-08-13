@@ -147,8 +147,32 @@ extension KeyboardLayout {
         return KeyRow(id: 3, keys: keys)
     }
 
-    /// The bottom row's punctuation key: a full stop on the cap, the other four
-    /// marks of the script behind a long press.
+    /// The strip a hold on the bottom-row period key draws, left to right.
+    ///
+    /// Separate from `punctuationMarks`, which is the five keys on the numbers
+    /// plane. This list is Apple's own hold order (`! @ # , . ?`) with the
+    /// script's comma and question mark swapped in. @ and # stay off the numbers
+    /// row because those planes already draw them, and two keys with one id is a
+    /// `ForEach` collision.
+    public static func punctuationPopupItems(for language: KeyboardLanguage) -> [String] {
+        let comma: String
+        let question: String
+        switch language.script {
+        case .arabic:
+            comma = "،"
+            question = "؟"
+        case .greek:
+            comma = ","
+            question = ";"
+        default:
+            comma = ","
+            question = "?"
+        }
+        return ["!", "@", "#", comma, ".", question]
+    }
+
+    /// The bottom row's punctuation key: a full stop on the cap, the other marks
+    /// of the hold strip behind a long press.
     ///
     /// **Drawn on every plane, and its identity is its own.** The numbers plane
     /// already carries the same five marks on the row above as `char-.` and
@@ -159,12 +183,13 @@ extension KeyboardLayout {
     /// key for a custom row. A second spelling of it there would be a copy that
     /// loses the alternates the first time somebody changes one of them.
     static func punctuationKey(for language: KeyboardLanguage) -> KeySpec {
-        let marks = punctuationMarks(for: language).map(String.init)
+        let stop = String(punctuationMarks(for: language).prefix(1))
+        let popup = punctuationPopupItems(for: language)
         return KeySpec(
-            .character(marks[0]),
+            .character(stop),
             width: .unit(1.0),
             id: punctuationKeyID,
-            alternates: Array(marks.dropFirst()))
+            alternates: popup.filter { $0 != stop })
     }
 
     /// Read by `KeyView`, which draws this one key's long presses in miniature

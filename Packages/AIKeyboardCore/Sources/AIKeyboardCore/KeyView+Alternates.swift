@@ -4,22 +4,39 @@ extension KeyView {
 
     // MARK: Alternates
 
-    /// What the popup offers: the key's own character first, then its alternates.
+    /// What the popup offers.
     ///
-    /// The character itself leads so that lifting a finger that has not moved
-    /// commits nothing new — a long press that the user did not follow through on
-    /// must not silently swap the letter they already typed.
+    /// A letter offers its own character first, then its accents, so lifting a
+    /// finger that has not moved commits nothing new. The period key is the
+    /// exception: its strip is `! @ # , . ?` (script comma and question swapped
+    /// in), and home is the stop's index rather than zero — see
+    /// `homeAlternateIndex`.
     ///
-    /// A letter offers its own character and then its accents. The one-tap rewrite
-    /// key offers the registers, which arrive already ordered with the default
-    /// first — see `KeyboardController.toneAlternates` for why that order is not
-    /// cosmetic.
+    /// The one-tap rewrite key offers the registers, which arrive already ordered
+    /// with the default first — see `KeyboardController.toneAlternates` for why
+    /// that order is not cosmetic.
     var alternateItems: [String] {
         if spec.cap == .quickTone { return toneAlternates }
         guard case .character(let value) = spec.cap else { return [] }
+        // The period key's strip is not "the stop, then the rest": Apple draws
+        // `! @ # , . ?`, and putting the stop first made bang the far end of a
+        // hold that is supposed to look like that. Home is still the stop — see
+        // `homeAlternateIndex`.
+        if spec.addressableID == KeyboardLayout.punctuationKeyID {
+            return KeyboardLayout.punctuationPopupItems(for: language)
+        }
         let base = shift.isUppercase ? language.uppercased(value) : value
         return [base]
             + spec.alternates.map { shift.isUppercase ? language.uppercased($0) : $0 }
+    }
+
+    /// The item a finger that has not moved is choosing: the character the key
+    /// already inserted. For a letter that is index 0; for the period strip it
+    /// is the stop sitting among `! @ # , . ?`.
+    var homeAlternateIndex: Int {
+        guard case .character(let value) = spec.cap else { return 0 }
+        let needle = shift.isUppercase ? language.uppercased(value) : value
+        return alternateItems.firstIndex(of: needle) ?? 0
     }
 
     /// Whether holding this key offers anything. Most keys have nothing.

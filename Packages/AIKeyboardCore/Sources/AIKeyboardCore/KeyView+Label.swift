@@ -12,7 +12,7 @@ extension KeyView {
             // miniature above the mark it types. Everywhere else the popup is a
             // shortcut to something the user already knows is there — an accent
             // on the letter it belongs to — but this key's whole purpose is the
-            // four marks that are not drawn on it, and a lone full stop is the
+            // marks that are not drawn on it, and a lone full stop is the
             // faintest cap on the keyboard. The hint is what says to hold it.
             // `addressableID`, not `id`: compiled from a custom layout this key is
             // `punctuation#a1b2c3d4`, and against the raw id the miniature marks
