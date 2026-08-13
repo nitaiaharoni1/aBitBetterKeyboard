@@ -100,6 +100,129 @@ final class SparkleReachabilityTests: XCTestCase {
             "the refusal has to say which of the four refusals it is")
     }
 
+    /// The overlay is present *before* the tap, which is the whole change: a
+    /// Reply that only hosts ReplayKit after `run(.reply)` still needs a first
+    /// tap that never reaches the system button.
+    @MainActor
+    func testReplyKeyHostsThePickerWhenABroadcastCouldRun() throws {
+        let restore = preparePickerReadyStore()
+        defer { restore() }
+
+        let controller = KeyboardController(target: MockTextTarget(text: ""))
+        controller.screenContext = .off
+        controller.screenContextSource = .none
+        XCTAssertFalse(controller.hasTextToWorkWith, "the state under test is an empty field")
+        XCTAssertTrue(
+            CaptureChannel.isReachable,
+            "the overlay is withheld without Full Access; this host has no App Group")
+        XCTAssertTrue(
+            BackendTransport.isReady(),
+            "the overlay is withheld without a ready backend")
+        XCTAssertTrue(
+            controller.screenContextPrompt.offersPicker,
+            "Reply would refuse, but the prompt is not offering the picker")
+
+        let prompt = try XCTUnwrap(
+            controller.replyKeyBroadcastPrompt,
+            "the Reply key is not hosting the picker in the state a first tap has to land on it")
+        XCTAssertEqual(prompt, controller.screenContextPrompt)
+        XCTAssertTrue(prompt.offersPicker)
+    }
+
+    @MainActor
+    func testReplyKeyDoesNotHostThePickerWhenASessionIsLive() {
+        let restore = preparePickerReadyStore()
+        defer { restore() }
+
+        let controller = KeyboardController(target: MockTextTarget(text: ""))
+        controller.screenContext = .watching
+        controller.screenContextSource = .capture
+        XCTAssertNil(
+            controller.replyKeyBroadcastPrompt,
+            "a live session still overlays ReplayKit on Reply")
+    }
+
+    @MainActor
+    func testReplyKeyDoesNotHostThePickerWhileDictating() {
+        let restore = preparePickerReadyStore()
+        defer { restore() }
+
+        let controller = KeyboardController(target: MockTextTarget(text: ""))
+        controller.screenContext = .off
+        controller.screenContextSource = .none
+        controller.isDictating = true
+        XCTAssertNil(
+            controller.replyKeyBroadcastPrompt,
+            "the overlay sits outside KeyView's .disabled, so a recording would still start a broadcast")
+    }
+
+    /// Unrestartable ending and no backend are the two `offersPicker == false`
+    /// fixtures this controller can actually enter. Full Access is
+    /// `CaptureChannel.isReachable` and cannot be faked here.
+    @MainActor
+    func testReplyKeyDoesNotHostThePickerWhenThePromptWithholdsIt() {
+        let allowed = SharedStore.shared.screenContextAllowed
+        let token = SharedStore.shared.cloudBackendToken
+        let sessionToken = SharedStore.shared.cloudSessionToken
+        ScreenContextSession.shared.stop()
+        defer {
+            SharedStore.shared.screenContextAllowed = allowed
+            SharedStore.shared.cloudBackendToken = token
+            SharedStore.shared.cloudSessionToken = sessionToken
+        }
+
+        let controller = KeyboardController(target: MockTextTarget(text: ""))
+
+        controller.screenContext = .ended(.notConfigured)
+        XCTAssertFalse(controller.screenContextPrompt.offersPicker)
+        XCTAssertNil(controller.replyKeyBroadcastPrompt)
+
+        controller.screenContext = .off
+        SharedStore.shared.cloudBackendToken = ""
+        SharedStore.shared.cloudSessionToken = ""
+        XCTAssertFalse(controller.screenContextPrompt.offersPicker)
+        XCTAssertNil(
+            controller.replyKeyBroadcastPrompt,
+            "the overlay is still on Reply when the prompt withholds the picker")
+    }
+
+    @MainActor
+    func testAcknowledgingTheReplyBroadcastTapRefusesInTheBanner() {
+        let restore = preparePickerReadyStore()
+        defer { restore() }
+
+        let controller = KeyboardController(target: MockTextTarget(text: ""))
+        controller.screenContext = .off
+        controller.screenContextSource = .none
+        XCTAssertNotNil(
+            controller.replyKeyBroadcastPrompt,
+            "the overlay path is not the one under test")
+
+        controller.acknowledgeReplyBroadcastTap()
+
+        XCTAssertEqual(controller.overlay, .none, "the keys must stay visible")
+        XCTAssertEqual(controller.block?.action, .reply)
+        XCTAssertEqual(controller.block?.remedy, .broadcastPicker)
+        XCTAssertFalse(
+            controller.block?.title.isEmpty ?? true,
+            "the fallback strip has to say which refusal this is")
+    }
+
+    /// Typed token so `ScreenContextPrompt.offersPicker` can be true; restored
+    /// because `SharedStore.shared` is process-wide.
+    @MainActor
+    private func preparePickerReadyStore() -> () -> Void {
+        let store = SharedStore.shared
+        let token = store.cloudBackendToken
+        let sessionToken = store.cloudSessionToken
+        ScreenContextSession.shared.stop()
+        if token.isEmpty { store.cloudBackendToken = "test-token" }
+        return {
+            store.cloudBackendToken = token
+            store.cloudSessionToken = sessionToken
+        }
+    }
+
     /// **A refusal must not hide the next one.**
     ///
     /// `runReply`'s secure-field guard is the only place in the module that sets

@@ -269,9 +269,10 @@ final class AIDirectEditTests: XCTestCase {
 
     /// An answer identical to the message is `EditScope` reporting that the model
     /// named no mistakes. Re-typing it would move the cursor and leave a revert
-    /// button offering to change nothing, and saying nothing at all would end a
-    /// shimmer in silence — so it says so.
-    func testAnUnchangedAnswerChangesNothingAndSaysSo() async {
+    /// button offering to change nothing. The strip that used to say "Nothing to
+    /// change" is the warning this rejects: a Fix that did its job does not need
+    /// a row to announce that.
+    func testAnUnchangedAnswerChangesNothingAndStaysQuiet() async {
         let engine = DirectEditEngine(fixed: "Already right.")
         let controller = makeDirectEditController(text: "Already right.", engine: engine)
 
@@ -280,8 +281,14 @@ final class AIDirectEditTests: XCTestCase {
 
         XCTAssertEqual(controller.contextBefore, "Already right.")
         XCTAssertNil(controller.revertibleEdit, "there is nothing to revert to")
-        XCTAssertNotNil(controller.block, "the shimmer ended in silence")
-        XCTAssertTrue(controller.showsActionBanner)
+        XCTAssertNil(controller.block, "Nothing to change is still on the strip")
+        XCTAssertEqual(
+            controller.aiResultText, "",
+            "the identical answer is still sitting in the strip's source")
+        XCTAssertNil(
+            controller.runningAction,
+            "resolve still has an action and empty text, which is Nothing came back")
+        XCTAssertFalse(controller.showsActionBanner)
     }
 
     // MARK: The two keys that need text

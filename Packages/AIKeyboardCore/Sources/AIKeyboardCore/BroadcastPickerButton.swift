@@ -70,7 +70,9 @@ public struct BroadcastPickerButton: View {
         case chip(size: CGFloat)
         /// Invisible, fills the parent, inner button stretched to the bounds so a
         /// tap on the banner message is a tap on ReplayKit's button.
-        case overlay(label: String, hint: String, identifier: String)
+        case overlay(
+            label: String, hint: String, identifier: String,
+            onActivation: (@MainActor () -> Void)?)
     }
 
     private let presentation: Presentation
@@ -86,11 +88,13 @@ public struct BroadcastPickerButton: View {
 
     /// Hosts the system picker over a parent that already has a sentence, so the
     /// record glyph is not drawn and the inner button fills the parent.
-    public static func overlay(label: String, hint: String, identifier: String)
-        -> BroadcastPickerButton
-    {
+    public static func overlay(
+        label: String, hint: String, identifier: String,
+        onActivation: (@MainActor () -> Void)? = nil
+    ) -> BroadcastPickerButton {
         BroadcastPickerButton(
-            presentation: .overlay(label: label, hint: hint, identifier: identifier))
+            presentation: .overlay(
+                label: label, hint: hint, identifier: identifier, onActivation: onActivation))
     }
 
     private init(presentation: Presentation) {
@@ -131,6 +135,7 @@ private struct BroadcastPickerUIView: UIViewRepresentable {
         case .overlay:
             let overlay = BroadcastPickerOverlayView(frame: .zero)
             overlay.hidesSystemGlyph = true
+            overlay.onActivation = overlayActivation
             picker = overlay
         }
         configure(picker)
@@ -139,6 +144,9 @@ private struct BroadcastPickerUIView: UIViewRepresentable {
     }
 
     func updateUIView(_ picker: RPSystemBroadcastPickerView, context: Context) {
+        if let overlay = picker as? BroadcastPickerOverlayView {
+            overlay.onActivation = overlayActivation
+        }
         applyAccessibility(to: picker)
         picker.setNeedsLayout()
     }
@@ -166,8 +174,13 @@ private struct BroadcastPickerUIView: UIViewRepresentable {
         // line that reads as if it did something.
     }
 
+    private var overlayActivation: (@MainActor () -> Void)? {
+        if case .overlay(_, _, _, let onActivation) = presentation { return onActivation }
+        return nil
+    }
+
     private func applyAccessibility(to picker: RPSystemBroadcastPickerView) {
-        guard case .overlay(let label, let hint, let identifier) = presentation else { return }
+        guard case .overlay(let label, let hint, let identifier, _) = presentation else { return }
         picker.isAccessibilityElement = false
         for case let button as UIButton in picker.subviews {
             button.isAccessibilityElement = true
@@ -192,6 +205,9 @@ private struct BroadcastPickerUIView: UIViewRepresentable {
 final class BroadcastPickerOverlayView: RPSystemBroadcastPickerView {
 
     var hidesSystemGlyph = false
+    var onActivation: (@MainActor () -> Void)? {
+        didSet { setNeedsLayout() }
+    }
 
     override var intrinsicContentSize: CGSize { .zero }
 
@@ -218,6 +234,17 @@ final class BroadcastPickerOverlayView: RPSystemBroadcastPickerView {
             button.frame = bounds
             button.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             button.backgroundColor = .clear
+            // Remove then add: layoutSubviews runs often, and a second target
+            // would fire the fallback twice. After the event, not during it —
+            // growing the banner under a still-down finger misses the lift.
+            // Skip the add when nobody is listening, so the banner overlay
+            // does not put a no-op target on ReplayKit's button.
+            button.removeTarget(
+                self, action: #selector(handleBroadcastActivation), for: .touchUpInside)
+            if onActivation != nil {
+                button.addTarget(
+                    self, action: #selector(handleBroadcastActivation), for: .touchUpInside)
+            }
             guard hidesSystemGlyph else { continue }
             button.setImage(nil, for: .normal)
             button.setImage(nil, for: .highlighted)
@@ -226,6 +253,12 @@ final class BroadcastPickerOverlayView: RPSystemBroadcastPickerView {
                 nested.isHidden = true
                 nested.isUserInteractionEnabled = false
             }
+        }
+    }
+
+    @objc private func handleBroadcastActivation() {
+        DispatchQueue.main.async { [onActivation] in
+            onActivation?()
         }
     }
 }

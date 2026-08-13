@@ -15,6 +15,23 @@ extension KeyboardController {
         screenContextIsPermitted && screenContext.isLive
     }
 
+    /// The same gate `runReply()` takes before it generates.
+    var hasUsableReplyContext: Bool {
+        screenContextIsPermitted
+            && (screenContext.isLive || screenContext.context != nil)
+    }
+
+    /// Non-nil only when the Reply key must become ReplayKit's real button.
+    ///
+    /// Dictation is excluded because the overlay sits *outside* `KeyView`, past
+    /// `.disabled`, so a dim Reply key would still start a broadcast while
+    /// somebody is speaking.
+    var replyKeyBroadcastPrompt: ScreenContextPrompt? {
+        guard !isDictationActive, !hasUsableReplyContext else { return nil }
+        let prompt = screenContextPrompt
+        return prompt.offersPicker ? prompt : nil
+    }
+
     /// The ending on the record, if the last thing that happened was one.
     ///
     /// `.off` is not an ending: it is the ordinary state of a phone that has never

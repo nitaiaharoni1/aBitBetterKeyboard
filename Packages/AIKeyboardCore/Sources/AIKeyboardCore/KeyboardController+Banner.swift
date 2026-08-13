@@ -155,6 +155,7 @@ extension KeyboardController {
         runningAction = nil
         bannerIndex = 0
         block = nil
+        aiResultText = ""
     }
 
     /// Refuses an action the user tapped, and says why in the strip.

@@ -59,7 +59,7 @@ final class BroadcastPickerBannerTests: XCTestCase {
     /// is the chip we just removed, just invisible. The broken build is a
     /// picker whose button is smaller than its own bounds.
     @MainActor
-    func testTheOverlayStretchesTheSystemButtonAcrossTheMessage() {
+    func testTheOverlayStretchesTheSystemButtonAcrossTheMessage() throws {
         let picker = BroadcastPickerOverlayView(
             frame: CGRect(x: 0, y: 0, width: 280, height: 60))
         picker.hidesSystemGlyph = true
@@ -70,9 +70,31 @@ final class BroadcastPickerBannerTests: XCTestCase {
             "ReplayKit no longer vends a UIButton; the overlay has nothing to press")
         XCTAssertEqual(
             button.frame, picker.bounds,
-            "the system button is still inset (\(button.frame) in \(picker.bounds)); a tap on the sentence misses it")
+            "the system button is still inset (\(button.frame) in \(picker.bounds)); a tap on the sentence misses it"
+        )
         XCTAssertTrue(
             button.subviews.allSatisfy(\.isHidden),
             "the record glyph is still drawn over the sentence")
+
+        let installed: ([String]) -> [String] = { actions in
+            actions.filter { $0.contains("handleBroadcastActivation") }
+        }
+        XCTAssertEqual(
+            installed(button.actions(forTarget: picker, forControlEvent: .touchUpInside) ?? [])
+                .count,
+            0,
+            "the banner overlay still installs a no-op target")
+
+        picker.onActivation = {}
+        picker.layoutIfNeeded()
+        XCTAssertEqual(
+            button.frame, picker.bounds,
+            "adding the activation target inset the button (\(button.frame) in \(picker.bounds))")
+        picker.layoutIfNeeded()
+        let after = installed(
+            button.actions(forTarget: picker, forControlEvent: .touchUpInside) ?? [])
+        XCTAssertEqual(
+            after.count, 1,
+            "layoutSubviews stacked extra activation targets: \(after)")
     }
 }

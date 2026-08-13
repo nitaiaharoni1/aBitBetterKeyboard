@@ -109,20 +109,8 @@ extension KeyboardController {
     /// inside `beginWork`, so the panel shimmers through it exactly as it does
     /// through a model call.
     private func runReply() {
-        guard screenContextIsPermitted, screenContext.isLive || screenContext.context != nil else {
-            // No session, so say so, rather than showing an empty result the user
-            // cannot explain — and say it in the strip rather than in a panel over
-            // the keys. `screenContextPrompt` is the single place that decides
-            // *which* refusal this is, and whether starting a broadcast now could
-            // get further than the last one did; only that last case puts the
-            // system picker on the sentence.
-            let prompt = screenContextPrompt
-            refuse(
-                .init(
-                    action: .reply,
-                    title: prompt.title,
-                    detail: prompt.detail,
-                    remedy: prompt.offersPicker ? .broadcastPicker : .none))
+        guard hasUsableReplyContext else {
+            refuseForScreenContext(screenContextPrompt)
             return
         }
 
@@ -180,6 +168,26 @@ extension KeyboardController {
             controller.replies = replies
             controller.applyDirectly(replies.first?.text ?? "", for: .reply)
         }
+    }
+
+    /// The Reply-key overlay steals the gesture, so this path never reaches
+    /// `press(.aiReply)`. Same click and haptic that path already plays.
+    func acknowledgeReplyBroadcastTap() {
+        Feedback.keyClick(KeyCap.aiReply.clickSound)
+        Feedback.actionPress()
+        guard let prompt = replyKeyBroadcastPrompt else { return }
+        refuseForScreenContext(prompt)
+    }
+
+    /// One refusal for `runReply` and the overlay's touch-up, so the two taps
+    /// cannot print different sentences for one prompt.
+    private func refuseForScreenContext(_ prompt: ScreenContextPrompt) {
+        refuse(
+            .init(
+                action: .reply,
+                title: prompt.title,
+                detail: prompt.detail,
+                remedy: prompt.offersPicker ? .broadcastPicker : .none))
     }
 
     /// Runs one model call. The latency here is the model's, not a sleep: the
@@ -334,19 +342,15 @@ extension KeyboardController {
         let restored = inserts ? (selected ?? "") : previous
         // Nothing at all: leave it to `BannerState.resolve`'s "Nothing came back".
         guard !text.isEmpty else { return }
-        // **Byte-for-byte identical is an answer, not a failure.** It is what
+        // **Byte-for-byte identical is an answer, not a warning.** It is what
         // `EditScope.applied` returns when the model named no mistakes, and it is
         // the ordinary outcome of running Fix over a sentence that is already
         // right. Re-typing the same characters would move the cursor and leave a
-        // revert button offering to change nothing, so it says so instead — a
-        // shimmer that ends in silence is the one thing the user cannot read.
+        // revert button offering to change nothing. Telling the user "Nothing to
+        // change" is a 69pt strip for a tap that did its job. The progress bar
+        // ending is the signal; the field is already what they wanted.
         guard text != previous else {
-            refuse(
-                .init(
-                    action: action,
-                    title: "Nothing to change",
-                    detail: "That already reads the way it should.",
-                    remedy: .none))
+            clearBannerState()
             return
         }
         Feedback.success()

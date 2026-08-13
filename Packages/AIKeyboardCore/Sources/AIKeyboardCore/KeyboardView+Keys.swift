@@ -228,6 +228,8 @@ extension KeyboardView {
     ) -> some View {
         if row.keys.indices.contains(index) {
             let key = row.keys[index]
+            let hostsReplyPicker =
+                key.cap == .aiReply && controller.replyKeyBroadcastPrompt != nil
             KeyView(
                 spec: key,
                 width: widths.indices.contains(index) ? widths[index] : unit,
@@ -282,6 +284,22 @@ extension KeyboardView {
                 onAlternate: alternateHandler(for: key),
                 onSpaceTouch: key.cap == .space ? { controller.spaceBarTouch($0) } : nil
             )
+            // The overlay sits outside KeyView so VoiceOver can see ReplayKit's
+            // real button (`.accessibilityElement()` hides descendants). Hits
+            // must not also reach the SwiftUI gesture, or one tap both opens
+            // the picker and runs `press(.aiReply)`.
+            .allowsHitTesting(!hostsReplyPicker)
+            .accessibilityHidden(hostsReplyPicker)
+            .overlay {
+                if hostsReplyPicker {
+                    BroadcastPickerButton.overlay(
+                        label: KeyCap.aiReply.accessibilityLabel,
+                        hint: "Opens the iOS screen broadcast picker.",
+                        identifier: "key-\(key.addressableID)",
+                        onActivation: { controller.acknowledgeReplyBroadcastTap() }
+                    )
+                }
+            }
             .background {
                 GeometryReader { proxy in
                     Color.clear.preference(
