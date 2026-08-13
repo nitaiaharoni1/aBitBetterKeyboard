@@ -137,7 +137,11 @@ public struct KeyView: View {
         // neighbour moves; applied before the overlays, so the callouts stay
         // anchored where the key sits at rest.
         .offset(y: isPressed ? Self.pressTravel : 0)
-        .animation(Theme.Motion.press, value: isPressed)
+        // Instant on the way down: `Motion.press` is 100ms, and a tap is over
+        // before that ease-out finishes, so the pressed fill the tokens specify
+        // was a colour the thumb never saw. The release still eases, so the
+        // flash is the full grey rather than a smear back to white.
+        .animation(isPressed ? nil : Theme.Motion.press, value: isPressed)
         .overlay(alignment: .bottom) { callout }
         .overlay(alignment: .bottom) { alternatesPopup }
         .overlay(alignment: .bottom) { languageCallout }

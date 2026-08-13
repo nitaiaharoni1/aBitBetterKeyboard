@@ -87,8 +87,9 @@ extension KeyView {
             // instead of lightening it like the return key it now matches.
             //
             // Every dark or orange cap lightens to the letter white under a finger,
-            // the way stock iOS inverts its function keys; the white caps darken a
-            // step, the letter-key inversion.
+            // the way stock iOS inverts its function keys; the white caps darken
+            // to `letterPressed`, which has to read around the thumb rather than
+            // as a 1-step fade of the cap.
             return capKind == .letter ? Theme.Keys.letterPressed : Theme.Keys.functionPressed
         }
         return restingCap
@@ -96,12 +97,16 @@ extension KeyView {
 
     /// The glyph's colour, resolved against the fill actually behind it.
     ///
-    /// A pressed fill is light in every appearance, so its glyph is graphite
-    /// whatever the resting cap was. At rest the dark caps take the warm-white
-    /// `labelOnFunction`, and the orange caps — the return key, and whichever
-    /// action is running — take `Text.onBrand`.
+    /// A pressed letter is a mid fill in both appearances, so its glyph is the
+    /// graphite `labelOnLetterPressed` rather than `Keys.label` — cream-on-mid
+    /// in dark is 2.5:1. Function and action caps invert to the letter white
+    /// (or the letter grey in dark) and keep the adaptive label. At rest the
+    /// dark caps take the warm-white `labelOnFunction`, and the orange caps —
+    /// the return key, and whichever action is running — take `Text.onBrand`.
     var labelColor: Color {
-        if isPressed { return Theme.Keys.label }
+        if isPressed {
+            return capKind == .letter ? Theme.Keys.labelOnLetterPressed : Theme.Keys.label
+        }
         if capKind == .action || capKind == .record { return Theme.Text.onBrand }
         return (restsOnDarkCap ? Theme.Keys.labelOnFunction : Theme.Keys.label)
             .opacity(isDisabled ? Self.disabledLabelOpacity : 1)

@@ -161,9 +161,19 @@ public enum Theme {
         /// Label colour for glyphs sitting on `functionStrong` / `functionSoft`.
         public static let labelOnFunction = Color.adaptive(light: 0xFFFEFA, dark: 0xF4F3EF)
         /// Pressed state inverts: letters darken, function keys lighten.
-        /// Darker than the keyboard background so a press reads around the thumb,
-        /// not only as a 1-step fade of the cap.
-        public static let letterPressed = Color.adaptive(light: 0xD4D0C8, dark: 0x7C8082)
+        ///
+        /// **A letter press has to clear the keyboard background, not merely the
+        /// cap.** 0xE4E1DB sat on the same step as `background` (0xE2E4E8), so a
+        /// tap vanished around the thumb. 0xD4D0C8 cleared it by 0.14 luma and
+        /// still read as a tint. This is the original function-key grey's
+        /// visibility kept in the letter caps' warm family, so a press is a grey
+        /// key among white ones rather than a function key that wandered into
+        /// the grid. Dark mode lifts the other way onto a light fill, which is
+        /// why the glyph is `labelOnLetterPressed` rather than `label`.
+        public static let letterPressed = Color.adaptive(light: 0xB8B2A8, dark: 0x989C9E)
+        /// Graphite on `letterPressed`. Not `Keys.label`, which goes cream in
+        /// dark — a pressed letter is a mid fill in both appearances.
+        public static let labelOnLetterPressed = Color(hex: 0x2C3031)
         public static let functionPressed = Color.adaptive(light: 0xFFFEFA, dark: 0x54595B)
         public static let label = Color.adaptive(light: 0x2C3031, dark: 0xF4F3EF)
         public static let secondaryLabel = Color.adaptive(light: 0x626766, dark: 0xC7C7CC)
