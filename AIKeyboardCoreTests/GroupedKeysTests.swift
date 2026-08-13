@@ -301,6 +301,40 @@ final class GroupedKeysTests: XCTestCase {
         XCTAssertEqual(KeyboardLayout.columns(for: .english, plane: .letters, grouping: .l2), 10)
     }
 
+    /// **Hebrew L1 is the screenshot this exists for.** `ו` over `ע` is one
+    /// letter per line; `פ` over `לךף` is one over three; the shift row's `הנ`
+    /// sits beside `מצתץ`. Weighting by span — or by how many letters a cap
+    /// carries — is what made those look like skinny buttons beside fat ones.
+    /// Equal shares keep the caps the same size; the drawing has to fill each
+    /// cap with equal cells or the glyphs still read as different-sized buttons.
+    func testHebrewL1CapsAreEqualEvenWhenLetterCountsDiffer() throws {
+        let rows = KeyboardLayout.rows(for: .hebrew, plane: .letters, grouping: .l1)
+        let band = try XCTUnwrap(rows.first)
+        let vavAyin = try XCTUnwrap(
+            band.keys.first { $0.groupedLetters == ["ו", "ע"] },
+            "the one-letter-per-line band key")
+        let peLeftovers = try XCTUnwrap(
+            band.keys.first { $0.groupedLetters == ["פ", "ל", "ך", "ף"] },
+            "the one-over-three band key")
+        guard case .share(let vavShare) = vavAyin.width,
+            case .share(let peShare) = peLeftovers.width
+        else {
+            return XCTFail("both band caps must be an equal share, not a span-weighted width")
+        }
+        XCTAssertEqual(vavShare, peShare)
+        XCTAssertEqual(vavShare, 1)
+
+        let bottom = rows[1]
+        let heNun = try XCTUnwrap(bottom.keys.first { $0.groupedLetters == ["ה", "נ"] })
+        let memTsadi = try XCTUnwrap(
+            bottom.keys.first { $0.groupedLetters == ["מ", "צ", "ת", "ץ"] })
+        guard case .share(let two) = heNun.width, case .share(let four) = memTsadi.width else {
+            return XCTFail("both shift-row caps must be an equal share")
+        }
+        XCTAssertEqual(two, four)
+        XCTAssertEqual(two, 1)
+    }
+
     // MARK: - Hebrew's clitics
 
     /// The bridge between the two forms: the language-based one has to hand Hebrew

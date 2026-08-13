@@ -52,14 +52,23 @@ extension KeyView {
     /// bottom of a two-line cap. The tracking between letters is paid for out of
     /// the same budget, which is what the 0.72 is: eight tenths of the key, less
     /// the gaps.
+    ///
+    /// **The widest line is at least two.** A one-letter line on an equal-width
+    /// cap must not jump to a larger font than its two-letter neighbour, which is
+    /// what made `ו` look like a different-sized button beside `קר`.
     func groupedFontSize(_ value: String) -> CGFloat {
         let lines = value.split(separator: "\n", omittingEmptySubsequences: false)
-        let widest = CGFloat(max(1, lines.map(\.count).max() ?? 1))
+        let widest = CGFloat(max(2, lines.map(\.count).max() ?? 1))
         return min(
             characterFontSize,
             width * 0.72 / widest,
             height * 0.56 / CGFloat(max(1, lines.count)))
     }
+
+    /// Spacing between letters on a grouped cap. Zero because each letter
+    /// occupies an equal cell that fills the key; a clustered gap left one-letter
+    /// caps looking skinny beside their neighbours.
+    static let groupedLetterSpacing: CGFloat = 0
 }
 
 /// The space bar's own drawing, pulled out of `KeyView` so the sliding highlight

@@ -135,6 +135,23 @@ final class AlternatesPopupTests: XCTestCase {
             "a grouped cap is several letters; a single balloon would name the wrong thing")
     }
 
+    /// **A one-letter line must not jump to a larger font than its two-letter
+    /// neighbour on an equal-width cap.** Sizing by `width / letterCount` made
+    /// `ו` look like a different-sized button beside `קר` even after the width
+    /// solver had already given them the same share.
+    func testGroupedLettersOnEqualCapsShareAFontSize() {
+        let width: CGFloat = 72
+        let one = key(
+            KeySpec(.character("ו\nע"), groupedLetters: ["ו", "ע"]),
+            language: .hebrew, width: width)
+        let two = key(
+            KeySpec(.character("קר\nשד"), groupedLetters: ["ק", "ר", "ש", "ד"]),
+            language: .hebrew, width: width)
+        XCTAssertEqual(
+            one.groupedFontSize("ו\nע"), two.groupedFontSize("קר\nשד"), accuracy: 0.5)
+        XCTAssertEqual(KeyView.groupedLetterSpacing, 0)
+    }
+
     /// The balloon has to be larger than the key it grew out of, or it is not a
     /// preview — it is the same glyph under the thumb.
     func testTheCalloutIsLargerAndHeavierThanTheKeyCap() throws {
