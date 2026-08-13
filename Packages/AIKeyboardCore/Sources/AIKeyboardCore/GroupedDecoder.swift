@@ -15,8 +15,9 @@ import os
 /// is smaller, and when it is absent entirely the decoder falls back to
 /// `SeedLanguageModel` plus whatever the user has taught the keyboard — which
 /// still decodes the common core and quietly will not reach much else.
-/// `SharedStore.groupedLexiconState` reports which of the three it is running on,
-/// so nothing has to guess.
+/// `GroupedKeys.hasBundledLexicon` is what Settings reads, so a missing
+/// list is a sentence on the grouped-keys row rather than a surprise at the
+/// first keystroke.
 public final class GroupedDecoder {
 
     /// Where the words came from, reported rather than assumed — the same rule

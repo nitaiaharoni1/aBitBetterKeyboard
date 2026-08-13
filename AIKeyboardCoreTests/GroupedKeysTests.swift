@@ -1067,4 +1067,21 @@ final class GroupedKeysTests: XCTestCase {
         XCTAssertTrue(GroupedKeys.permitted(secure: false, contentType: .some(nil)))
         XCTAssertTrue(GroupedKeys.permitted(secure: false, contentType: .some(.name)))
     }
+
+    // MARK: Bundled lexicon
+
+    /// Same shape as `EmojiModeTests.testTheCatalogueLoadsOutOfTheResourceBundle`.
+    /// Without this, a missing `resources:` line or a renamed file leaves
+    /// grouped keys on the seed list and Settings is the only thing that says so.
+    func testTheBundledLexiconLoadsOutOfTheResourceBundle() {
+        XCTAssertTrue(
+            GroupedKeys.hasBundledLexicon(for: .english),
+            "GroupedLexicon-en.txt missing from Bundle.module")
+        XCTAssertTrue(
+            GroupedKeys.hasBundledLexicon(for: .hebrew),
+            "GroupedLexicon-he.txt missing from Bundle.module")
+        XCTAssertGreaterThan(GroupedLexiconResource.words(for: .english).count, 10_000)
+        XCTAssertGreaterThan(GroupedLexiconResource.words(for: .hebrew).count, 10_000)
+        XCTAssertEqual(GroupedLexiconResource.words(for: .english).first, "the")
+    }
 }

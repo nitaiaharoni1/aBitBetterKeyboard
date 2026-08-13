@@ -26,9 +26,11 @@ enum GroupedLexiconResource {
 
     /// Whether a real list is bundled for this language. Read by Settings so the
     /// screen can say the feature is running on the fallback instead of letting
-    /// somebody discover it by typing.
+    /// somebody discover it by typing. URL only: loading the list just to
+    /// decide whether to hide a warning is a hitch on a screen that is not typing.
     static func isBundled(_ language: KeyboardLanguage) -> Bool {
-        !words(for: language).isEmpty
+        Bundle.module.url(
+            forResource: "GroupedLexicon-\(language.languageTag)", withExtension: "txt") != nil
     }
 
     private static let cache = OSAllocatedUnfairLock(initialState: [String: [String]]())
