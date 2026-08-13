@@ -56,7 +56,7 @@ extension SuggestionEngine {
         /// `SuggestionEngineTests` after the first reordering. Only ever populated
         /// when the sentence around the word is Hebrew, so it cannot outrank
         /// Apple's ranking inside an English one.
-        case codeSwitch = 4
+        case codeSwitch = 5
         /// A common word one keystroke away from what was typed.
         ///
         /// **Below a completion, because it disagrees with a key that was
@@ -68,16 +68,25 @@ extension SuggestionEngine {
         case neighbour = 2
         /// The bundled seed list.
         case seed = 3
+        /// A word already committed in this field.
+        ///
+        /// **Above the seed list, because the field is a better prior than the
+        /// average message.** Completing `ele` to `electricity` while the sentence
+        /// already contains `elephant` is the seed list ignoring the only evidence
+        /// sitting in front of it. Below code-switch and learned: a word this
+        /// person always types, or a Latin work-word inside a Hebrew sentence, is
+        /// still a stronger claim than "it appeared once above".
+        case document = 4
         /// A word this user types often.
-        case learned = 5
+        case learned = 6
         /// Deterministic orthography: a dropped apostrophe, a Hebrew final form.
-        case orthography = 6
+        case orthography = 7
         /// The user's own dictionary, or `UILexicon`.
-        case personal = 7
+        case personal = 8
         /// The same keys on the other layout, landing on a common word.
-        case layout = 8
+        case layout = 9
         /// Exactly what was keyed. Never ranked — it is pinned to slot zero.
-        case typed = 9
+        case typed = 10
 
         static func < (lhs: Source, rhs: Source) -> Bool { lhs.rawValue < rhs.rawValue }
     }

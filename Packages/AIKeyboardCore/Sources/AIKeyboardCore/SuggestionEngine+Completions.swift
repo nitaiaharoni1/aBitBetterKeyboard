@@ -89,6 +89,9 @@ extension SuggestionEngine {
     ///     half of "context aware": it is what lets `לקבוע תו` reach `תור` instead
     ///     of the four-times-commoner `תודה`, and `See you ` reach `tomorrow`
     ///     instead of the three words that merely follow `you`.
+    ///   - context: everything before the current word, including earlier
+    ///     sentences and lines. `previousWords` stops at a full stop; this does
+    ///     not. It is how a name two sentences back is still completable.
     ///   - typedLanguage: the language the characters are written in.
     ///   - otherLanguage: the other language the user enabled, for wrong-layout
     ///     detection. Nil when they have only one.
@@ -99,6 +102,7 @@ extension SuggestionEngine {
     static func completions(
         for prefix: String,
         previousWords: [String],
+        context: String,
         typedLanguage: KeyboardLanguage,
         otherLanguage: KeyboardLanguage?,
         supplementary: [String],
@@ -217,6 +221,11 @@ extension SuggestionEngine {
                     language: typedLanguage, source: .learned, ordinal: $0.offset)
             }
 
+        // Words already in this field. A name two sentences back is not in the
+        // seed list and is not in `previousWords` once a full stop has landed;
+        // the field itself is the only list that still has it.
+        out += documentCandidates(for: core, in: context, typedLanguage: typedLanguage)
+
         // The bundled seed list, read through every Hebrew reading of the prefix.
         out += seedCandidates(for: core, typedLanguage: typedLanguage, personal: personal)
 
@@ -239,14 +248,18 @@ extension SuggestionEngine {
                 }
         }
 
-        out += checkerCandidates(for: core, typedLanguage: typedLanguage)
+        out += checkerCandidates(for: core, in: context, typedLanguage: typedLanguage)
 
         // The sentence gets its say last, over everything already collected, so a
         // word the previous word is known to be followed by climbs whichever
-        // source it happened to arrive from.
+        // source it happened to arrive from. The field is asked too: a name that
+        // followed this word earlier in the message is context the seed table
+        // has never seen.
         let followers = Set(
             (SeedLanguageModel.followers(after: previousWords, in: typedLanguage)
-                + personal.followers(after: previousWords.last ?? "", in: typedLanguage, limit: 4))
+                + personal.followers(after: previousWords.last ?? "", in: typedLanguage, limit: 4)
+                + documentFollowers(
+                    after: previousWords.last ?? "", in: context, limit: 4))
                 .map(SeedLanguageModel.fold))
         if !followers.isEmpty {
             for index in out.indices where followers.contains(SeedLanguageModel.fold(out[index].text)) {
@@ -255,6 +268,48 @@ extension SuggestionEngine {
         }
 
         return rank(out, limit: 3)
+    }
+
+    /// Completions drawn from words already in this field.
+    ///
+    /// Most recent first, so a name used in the sentence being typed outranks
+    /// the same prefix from a paragraph above. Hebrew clitics are stripped the
+    /// same way `seedCandidates` strips them: `לקוואק` in the field is how
+    /// `קוו` reaches `קוואק`. The document spelling is kept rather than
+    /// recased to the prefix — `Zorblin` stays `Zorblin` even if the user has
+    /// only typed `zor`.
+    private static func documentCandidates(
+        for prefix: String, in context: String, typedLanguage: KeyboardLanguage
+    ) -> [Candidate] {
+        let typed = comparable(prefix)
+        guard !typed.isEmpty else { return [] }
+        var seen = Set<String>()
+        var out: [Candidate] = []
+        for word in documentWords(in: context).reversed() {
+            guard let offered = documentOffer(word, matching: typed, language: typedLanguage)
+            else { continue }
+            let key = comparable(offered)
+            guard key != typed, !seen.contains(key) else { continue }
+            seen.insert(key)
+            out.append(
+                Candidate(
+                    text: offered, language: typedLanguage, source: .document,
+                    ordinal: out.count))
+            if out.count == 3 { break }
+        }
+        return out
+    }
+
+    /// The form of a field word that continues this prefix, if any.
+    private static func documentOffer(
+        _ word: String, matching typed: String, language: KeyboardLanguage
+    ) -> String? {
+        if comparable(word).hasPrefix(typed) { return word }
+        guard language.script == .hebrew else { return nil }
+        for reading in HebrewMorphology.splits(of: word) where !reading.prefix.isEmpty {
+            if comparable(reading.stem).hasPrefix(typed) { return reading.stem }
+        }
+        return nil
     }
 
     /// Seed-list completions, including the ones only reachable by taking a Hebrew
@@ -351,6 +406,14 @@ extension SuggestionEngine {
     /// edge marks once and hands the same string to every source, for the reason
     /// written there.
     ///
+    /// **The surrounding sentence is the string Apple's API is for.** Passing
+    /// only the word in progress made every completion context-free, so
+    /// `completions(forPartialWordRange:in:language:)` could not see `The
+    /// elephant ate. The ele` and had no way to prefer `elephant` over
+    /// `election`. The current word is appended to `context` and the range
+    /// points at it; a split Hebrew stem still asks about the stem alone,
+    /// because that stem is not a span of the document.
+    ///
     /// **Measured, disclosed gap in the correction half.** `recieve` completes to
     /// nothing, so the correction branch fires and `guesses` gives `receive`.
     /// `helo` completes to `helot`/`helots` — real words, so the branch never runs
@@ -361,7 +424,7 @@ extension SuggestionEngine {
     /// than it returns once a frequency prior exists.
     @MainActor
     private static func checkerCandidates(
-        for word: String, typedLanguage: KeyboardLanguage
+        for word: String, in context: String, typedLanguage: KeyboardLanguage
     )
         -> [Candidate]
     {
@@ -372,10 +435,11 @@ extension SuggestionEngine {
         guard let locale = typedLanguage.spellCheckerLocale else { return [] }
         let lower = word.lowercased()
         var out: [Candidate] = []
+        let query = checkerQuery(of: word, in: context)
 
         out +=
-            checkerCompletions(of: word, locale: locale)
-            .prefix(4)
+            checkerCompletions(of: word, locale: locale, query: query)
+            .prefix(8)
             .enumerated()
             .map {
                 Candidate(
@@ -417,16 +481,15 @@ extension SuggestionEngine {
                 }
         }
 
-        guard out.count < 2 else { return out }
+        guard out.count < 2, query.range.length > 0 else { return out }
 
-        let nsWord = word as NSString
-        let range = NSRange(location: 0, length: nsWord.length)
         let misspelled = sharedChecker.rangeOfMisspelledWord(
-            in: word, range: range, startingAt: 0, wrap: false, language: locale)
+            in: query.text, range: query.range, startingAt: query.range.location, wrap: false,
+            language: locale)
         guard misspelled.location != NSNotFound else { return out }
 
         if let corrections = sharedChecker.guesses(
-            forWordRange: range, in: word, language: locale)
+            forWordRange: query.range, in: query.text, language: locale)
         {
             out +=
                 corrections
@@ -442,14 +505,38 @@ extension SuggestionEngine {
         return out
     }
 
+    /// The string and range `UITextChecker` is asked about.
+    ///
+    /// The current word is always the tail, so a second occurrence of the same
+    /// letters earlier in the field cannot steal the range. An empty context
+    /// keeps the isolated-word shape the split-stem path still needs.
+    private struct CheckerQuery {
+        let text: String
+        let range: NSRange
+    }
+
+    private static func checkerQuery(of word: String, in context: String) -> CheckerQuery {
+        let nsWord = word as NSString
+        guard !context.isEmpty else {
+            return CheckerQuery(text: word, range: NSRange(location: 0, length: nsWord.length))
+        }
+        let nsContext = context as NSString
+        return CheckerQuery(
+            text: nsContext.appending(word),
+            range: NSRange(location: nsContext.length, length: nsWord.length))
+    }
+
     @MainActor
-    private static func checkerCompletions(of word: String, locale: String) -> [String] {
+    private static func checkerCompletions(
+        of word: String, locale: String, query: CheckerQuery? = nil
+    ) -> [String] {
         let nsWord = word as NSString
         guard nsWord.length > 0 else { return [] }
-        let range = NSRange(location: 0, length: nsWord.length)
+        let asked = query ?? CheckerQuery(text: word, range: NSRange(location: 0, length: nsWord.length))
         let lower = word.lowercased()
         return
-            (sharedChecker.completions(forPartialWordRange: range, in: word, language: locale)
+            (sharedChecker.completions(
+                forPartialWordRange: asked.range, in: asked.text, language: locale)
             ?? [])
             .filter { $0.lowercased() != lower }
     }

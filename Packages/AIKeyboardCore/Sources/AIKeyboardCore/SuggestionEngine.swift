@@ -55,13 +55,13 @@ import UIKit
 // (`UIDictationController` and its neighbours; there is no public
 // `UITextPredictor` a third-party keyboard can call). So `nextWordSuggestions`
 // is built out of what this keyboard can see for itself: what *this user* writes
-// after a word (`PersonalLanguageModel`), what people generally write after it
-// (`SeedLanguageModel`'s bigrams), and a handful of openers for a field with
-// nothing in it. None of that is a language model and none of it is presented as
-// one. **This paragraph used to end "still a small, fixed table, exactly as it
-// was in the mock", and stayed that way after the table was replaced** — which
-// is the failure mode the rest of this comment block exists to prevent, so it is
-// worth naming.
+// after a word (`PersonalLanguageModel`), what followed that word earlier in
+// this field, what people generally write after it (`SeedLanguageModel`'s
+// bigrams), and a handful of openers for a field with nothing in it. None of
+// that is a language model and none of it is presented as one. **This paragraph
+// used to end "still a small, fixed table, exactly as it was in the mock", and
+// stayed that way after the table was replaced** — which is the failure mode
+// the rest of this comment block exists to prevent, so it is worth naming.
 //
 // **Two other things this file no longer does alone.** `UITextChecker` has no
 // frequency model, so the ranking it implied was wrong often enough to matter —
@@ -222,6 +222,7 @@ public enum SuggestionEngine {
         let results = completions(
             for: trimmedPrefix,
             previousWords: preceding,
+            context: context,
             typedLanguage: typedLanguage,
             // The other layout the user has enabled, for the case where every key
             // was right and the plane was wrong. Nil when they have only one, in
@@ -275,6 +276,48 @@ public enum SuggestionEngine {
             }
             let word = String(token).trimmingCharacters(in: .punctuationCharacters)
             if !word.isEmpty { out.append(word) }
+        }
+        return out
+    }
+
+    /// Every committed word in the field, in order, including across sentences
+    /// and line breaks.
+    ///
+    /// **This is the other half of `previousWords`.** That one stops at a full
+    /// stop because a *prediction from the seed table* must not read across a
+    /// thought the writer closed — `See you\n` is not `See you `. This one is a
+    /// lexicon: a word already in the field is a word this message uses, and
+    /// completing it on the next line is why the line above was typed.
+    /// Punctuation is stripped the same way `wordCore` does, so `Zorblin,` and
+    /// `Zorblin` are one entry.
+    static func documentWords(in context: String) -> [String] {
+        context.split { $0.isWhitespace || $0.isNewline }.compactMap { token in
+            let word = wordCore(String(token))
+            return word.isEmpty ? nil : word
+        }
+    }
+
+    /// Words that follow `word` somewhere in this field, most recent first.
+    ///
+    /// The seed table cannot see past a full stop and does not know the names
+    /// in this message. Walking the field itself is how `I booked Zorblin
+    /// yesterday. I booked ` predicts `Zorblin` rather than falling through to
+    /// the openers.
+    static func documentFollowers(after word: String, in context: String, limit: Int) -> [String] {
+        let folded = comparable(word)
+        guard !folded.isEmpty else { return [] }
+        let tokens = documentWords(in: context)
+        guard tokens.count >= 2 else { return [] }
+        var seen = Set<String>()
+        var out: [String] = []
+        for index in stride(from: tokens.count - 2, through: 0, by: -1) {
+            guard comparable(tokens[index]) == folded else { continue }
+            let next = tokens[index + 1]
+            let key = comparable(next)
+            guard !key.isEmpty, !seen.contains(key) else { continue }
+            seen.insert(key)
+            out.append(next)
+            if out.count == limit { break }
         }
         return out
     }

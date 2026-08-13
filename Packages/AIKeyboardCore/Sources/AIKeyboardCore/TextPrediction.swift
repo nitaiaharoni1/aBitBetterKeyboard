@@ -22,10 +22,9 @@ public protocol TextPrediction: Sendable {
     /// Up to three words that could come next, likeliest first.
     ///
     /// - Parameters:
-    ///   - text: what has been typed so far, trimmed to the tail. Never the whole
-    ///     field: the model is guessing the next word, and a thousand words of
-    ///     earlier conversation buys nothing while costing the context window that
-    ///     Apple's on-device model measures in four thousand tokens.
+    ///   - text: what has been typed so far. The whole field the keyboard can
+    ///     see, not a chopped tail: iOS already windows
+    ///     `documentContextBeforeInput`, and that window is the full typed input.
     ///   - context: the message being replied to, when a screen reading is live.
     ///     This is the part no other keyboard on iOS can do, and it is also the
     ///     part most likely to go wrong — see the reply note in
