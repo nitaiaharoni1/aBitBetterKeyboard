@@ -163,6 +163,12 @@ final class IdleTypingTests: XCTestCase {
         XCTAssertEqual(SharedStore.shared.storedIdleDelayMs, 300)
     }
 
+    /// The picker is 100 ms jumps from 200 to 600. The old list (150, 300, 500,
+    /// 800, 1200) is what this rejects.
+    func testPauseLengthStepsFromTwoHundredToSixHundred() {
+        XCTAssertEqual(SharedStore.idleDelayChoices, [200, 300, 400, 500, 600])
+    }
+
     /// A password field must not be rewritten or spaced by a pause.
     func testIdleTypingDoesNothingInASecureField() {
         SharedStore.shared.completeOnIdle = true
@@ -203,13 +209,13 @@ final class IdleTypingTests: XCTestCase {
     /// later in a word nobody had just keyed.
     func testIdleSpaceDoesNotFireFromARefreshAlone() async {
         SharedStore.shared.spaceOnIdle = true
-        SharedStore.shared.idleDelayMs = 150
+        SharedStore.shared.idleDelayMs = 200
         SharedStore.shared.autocorrect = false
         let target = MockTextTarget(text: "hel")
         let controller = KeyboardController(target: target, language: .english)
 
         controller.refreshSuggestions()
-        try? await Task.sleep(for: .milliseconds(250))
+        try? await Task.sleep(for: .milliseconds(350))
 
         XCTAssertEqual(
             target.text, "hel",
@@ -220,7 +226,7 @@ final class IdleTypingTests: XCTestCase {
     /// would insert a space in the gap between keys.
     func testIdleSpaceDebouncesFromTheLastKeystroke() async {
         SharedStore.shared.spaceOnIdle = true
-        SharedStore.shared.idleDelayMs = 150
+        SharedStore.shared.idleDelayMs = 200
         SharedStore.shared.autocorrect = false
         let target = MockTextTarget(text: "")
         let controller = KeyboardController(target: target, language: .english)
@@ -231,20 +237,20 @@ final class IdleTypingTests: XCTestCase {
         try? await Task.sleep(for: .milliseconds(80))
 
         XCTAssertEqual(
-            target.text, "he",
+            target.text, "He",
             "space on pause fired from the first letter: \(target.text)")
 
-        try? await Task.sleep(for: .milliseconds(250))
+        try? await Task.sleep(for: .milliseconds(350))
 
         XCTAssertEqual(
-            target.text, "he ",
+            target.text, "He ",
             "space on pause never fired after the last letter: \(target.text)")
     }
 
     /// A tap onto a different word is not a pause in typing this one.
     func testIdleSpaceDoesNotFireAfterTheCaretMovesToAnotherWord() async {
         SharedStore.shared.spaceOnIdle = true
-        SharedStore.shared.idleDelayMs = 150
+        SharedStore.shared.idleDelayMs = 200
         SharedStore.shared.autocorrect = false
         let target = MockTextTarget(text: "")
         let controller = KeyboardController(target: target, language: .english)
@@ -253,7 +259,7 @@ final class IdleTypingTests: XCTestCase {
         controller.press(.character("i"))
         target.text = "other"
         controller.refreshSuggestions()
-        try? await Task.sleep(for: .milliseconds(250))
+        try? await Task.sleep(for: .milliseconds(350))
 
         XCTAssertEqual(
             target.text, "other",

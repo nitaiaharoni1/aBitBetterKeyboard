@@ -284,13 +284,14 @@ public final class SharedStore: ObservableObject {
     }
 
     /// How long to wait after the last keystroke before Complete on pause or
-    /// Space on pause fire. 300 ms ships: shorter catches the gap between keys,
-    /// longer waits for a real stop.
+    /// Space on pause fire. 300 ms ships. The picker is 100 ms jumps from 200
+    /// to 600: shorter than 200 catches the gap between keys, longer than 600
+    /// is a wait you feel as the keyboard ignoring you.
     @Published public var idleDelayMs = 300 {
         didSet { defaults.set(idleDelayMs, forKey: Key.idleDelayMs) }
     }
 
-    public static let idleDelayChoices = [150, 300, 500, 800, 1200]
+    public static let idleDelayChoices = Array(stride(from: 200, through: 600, by: 100))
 
     /// Same cross-process rule as `storedAutocorrect`. An unknown stored value
     /// falls back to 300 rather than firing on the next keystroke.
