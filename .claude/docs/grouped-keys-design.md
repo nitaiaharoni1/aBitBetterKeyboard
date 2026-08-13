@@ -30,8 +30,9 @@ its findings are in `Bar/grouped/README.md`. The keyboard is `GroupedKeys.swift`
 > and costs about 3 points against an ungrouped English keyboard. Hebrew L2 commits the
 > wrong word nearly three times in ten. **Banding gained English 1.8 to 4.4 points
 > and cost Hebrew 1.8 to 7.9**, and neither side of that is the reason to do it —
-> the harness cannot see target size at all. Every rate carries a **2-point**
-> spread; read the README before quoting any of them.
+> the perfect-thumb sweep cannot see target size. `harness/miss.py` can: at a fat
+> thumb, English L1 commits 62.9% against ungrouped 38.1%. Every rate carries a
+> **2-point** spread; read the README before quoting any of them.
 
 ## What the win actually is, and what it is not
 
@@ -237,15 +238,14 @@ hand-written.** Same rule `hebrewMarks` follows, and for the same reason: a row
 edit must not be able to orphan a letter. The harness reads the rows from a
 committed JSON export so it does not have to parse Swift.
 
-**Lexicon: `wordfreq`**, which covers both languages (Hebrew from Wikipedia,
-OpenSubtitles, SUBTLEX, Google Books and OSCAR). Used for measurement only in
-Phase A.
+**Lexicon (measurement):** `wordfreq`, which covers both languages (Hebrew from
+Wikipedia, OpenSubtitles, SUBTLEX, Google Books and OSCAR). Used only in
+`Bar/grouped/` and gitignored.
 
-> **Licensing gate before anything ships.** Hspell-derived Hebrew wordlists are
-> GPL and the OpenSubtitles lists are CC BY-SA. Neither suits a closed App Store
-> binary. Whatever Phase B bundles needs its license checked *before* it is
-> bundled, and the chosen source recorded in the resource itself, the way
-> `LanguageModel.json` stamps `source`.
+**Lexicon (shipping):** Leipzig Corpora Collection Wikipedia word lists, CC BY
+4.0. `Scripts/generate-grouped-lexicon.py` writes
+`GroupedLexicon-{en,he}.txt` and `GroupedLexicon-NOTICE.txt`. Without those
+files `GroupedDecoder` reports `.seedOnly` and Settings says so.
 
 **Test text:** everything usable in the repo's four other `Bar/` corpora —
 `typing`, `ai-text`, `dictation` and `screen-context` — which came out at **388
@@ -265,6 +265,13 @@ For each language, each dial level, each word in the test text:
 3. Rank by frequency and by whether the preceding word is known to be followed by
    it.
 4. Record where the true word landed.
+
+The keyboard itself also reads *where* on the key the thumb landed. A tap
+clearly on one letter of the group pins that letter (the same hard filter a
+long press uses). A tap in the middle leaves the decoder to guess. That pin is
+not in the perfect-thumb sweep; `Bar/grouped/harness/miss.py` measures the
+other half: Gaussian misses, so a bigger key can win even when the decoder is
+worse.
 
 ## What it reports
 
@@ -386,8 +393,6 @@ the measurable driver is morphological richness, and no larger corpus fixes it.
 
 ## Risks
 
-- **The lexicon license** may force a weaker source than `wordfreq`. Gate before
-  bundling.
 - **A same-length neighbour replacing a word still being typed** is already an
   open defect in the suggestion bar (2 of 35 Hebrew keystroke moments). Grouping
   makes every keystroke ambiguous, so this gets worse before it gets better.

@@ -41,6 +41,13 @@ class Lexicon:
             payload.get("source", str(path)),
         )
 
+    @classmethod
+    def from_ranked_lines(cls, language: str, path, source: str | None = None) -> "Lexicon":
+        """One word per line, commonest first — the form the keyboard ships."""
+        words = Path(path).read_text(encoding="utf-8").splitlines()
+        ranked = [(word, 1.0 / (index + 1)) for index, word in enumerate(words) if word]
+        return cls(language, ranked, source or str(path))
+
     def __len__(self) -> int:
         return len(self.freq)
 

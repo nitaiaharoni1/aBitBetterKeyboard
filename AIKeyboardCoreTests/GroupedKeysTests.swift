@@ -760,8 +760,8 @@ final class GroupedKeysTests: XCTestCase {
 
     /// The vocabulary the Swift and the Python were cross-checked on, in frequency
     /// order — a lower index is commoner. Passed to the decoder explicitly, because
-    /// `GroupedLexiconResource` is generated and gitignored and a test that leaned on
-    /// it would be asserting about a file that is usually absent.
+    /// a test that leaned on `GroupedLexiconResource` would be asserting about a
+    /// generated file rather than the ranking rule.
     private static let vocabulary = [
         "the", "to", "and", "of", "a", "in", "is", "it", "that", "for",
         "cat", "car", "cab", "bat"

@@ -27,6 +27,10 @@ from grouping import HEBREW_CLITICS, Layout  # noqa: E402
 
 DATA = HERE.parent / "data"
 OUT = HERE.parent / "miss.json"
+SHIPPED = (
+    HERE.parent.parent.parent
+    / "Packages/AIKeyboardCore/Sources/AIKeyboardCore/Resources"
+)
 
 # Noise in ungrouped-key widths. 0.35 is a fat thumb on a ~35pt key; 0.2 is
 # careful; 0.5 is walking. The same sigma is applied to every layout, so a
@@ -45,12 +49,26 @@ def letter_centers(rows: list[str]) -> dict[str, tuple[float, float]]:
 
 
 def key_boxes(layout: Layout, centers: dict[str, tuple[float, float]]):
+    """Axis-aligned boxes in ungrouped-key units.
+
+    A band key is always two rows tall, even when a leftover column only
+    has letters on one of them (`ךף` sits on the lower half with empty
+    glass above). Measuring only the letters would shrink the target the
+    keyboard actually draws.
+    """
     boxes = []
-    for group in layout.groups:
-        pts = [centers[letter] for letter in group if letter in centers]
-        xs = [p[0] for p in pts]
-        ys = [p[1] for p in pts]
-        boxes.append((min(xs) - 0.5, min(ys) - 0.5, max(xs) + 0.5, max(ys) + 0.5))
+    for row_index, row in enumerate(layout.groups_by_row):
+        band = layout.k > 1 and row_index == 0 and len(layout.rows) >= 3
+        for group in row:
+            pts = [centers[letter] for letter in group if letter in centers]
+            xs = [p[0] for p in pts]
+            x0, x1 = min(xs) - 0.5, max(xs) + 0.5
+            if band:
+                y0, y1 = 0.0, 2.0
+            else:
+                ys = [p[1] for p in pts]
+                y0, y1 = min(ys) - 0.5, max(ys) + 0.5
+            boxes.append((x0, y0, x1, y1))
     return boxes
 
 
@@ -72,9 +90,10 @@ def noisy_code(word: str, layout: Layout, centers, boxes, rng: random.Random, si
     true = layout.code(word)
     if true is None:
         return None, 0, 0
+    folded = layout.fold(word) if layout.fold else word
     out = []
     hits = misses = 0
-    for character, intended in zip(word, true):
+    for character, intended in zip(folded, true):
         if character not in centers:
             out.append(intended)
             continue
@@ -131,14 +150,26 @@ def evaluate(entries, layout, decoder, centers, boxes, sigma: float, seed: int) 
     }
 
 
+def load_lexicon(language: str) -> Lexicon:
+    """Measurement JSON if present, else the lists the keyboard ships."""
+    measured = DATA / f"lexicon-{language}.json"
+    if measured.exists():
+        return Lexicon.load(measured)
+    shipped = SHIPPED / f"GroupedLexicon-{language}.txt"
+    if shipped.exists():
+        return Lexicon.from_ranked_lines(language, shipped)
+    sys.exit(
+        f"missing lexicon for {language}\n"
+        "  python3 Scripts/generate-grouped-lexicon.py\n"
+        "  # or Bar/grouped/.venv/bin/python Bar/grouped/make-lexicon.py"
+    )
+
+
 def main() -> None:
-    run.require_data(*run.EVERYTHING)
+    run.require_data("rows.json", "testtext.json")
     rows = json.loads((DATA / "rows.json").read_text(encoding="utf-8"))
     text = json.loads((DATA / "testtext.json").read_text(encoding="utf-8"))
-    lex = {
-        "en": Lexicon.load(DATA / "lexicon-en.json"),
-        "he": Lexicon.load(DATA / "lexicon-he.json"),
-    }
+    lex = {language: load_lexicon(language) for language in ("en", "he")}
     entries = {"en": [], "he": []}
     for entry in text["entries"]:
         entry["tokens"] = run.tokenise(entry["text"])
@@ -185,6 +216,7 @@ def main() -> None:
                 ),
                 "seed": SEED,
                 "sigmas": list(SIGMAS),
+                "lexicon": {language: lex[language].source for language in lex},
                 "results": results,
             },
             ensure_ascii=False,

@@ -307,6 +307,7 @@ Four things fall out, all of them decisions rather than conclusions:
 | `harness/grouping.py` | Banding the top two rows into columns, row splitting, the clitic-avoiding partition, word → key code. |
 | `harness/decode.py` | Lexicon, decoder, leave-one-out bigrams. |
 | `harness/run.py` | The sweep. Writes `results.json`. |
+| `harness/miss.py` | Same data, with Gaussian tap noise. Writes `miss.json`. |
 | `harness/validity.py` | Sample size, Zipf distribution, split-half spread. Writes `validity.json`. |
 | `harness/lexsize.py` | Accuracy against word-list size. Writes `lexsize.json`. |
 | `harness/selftest.py` | Assertions, run before every sweep. |
@@ -329,7 +330,7 @@ It compiles the real `GroupedKeys.swift` and `GroupedDecoder.swift` against a
 small shim, feeds both sides the rows out of `data/rows.json`, and compares
 **structurally** rather than as text, because the two JSON writers disagree about
 key order and whitespace and a `diff` would report formatting as a defect.
-Currently: **8 grouping conditions and 272 decode answers agree exactly.**
+Currently: **8 grouping conditions, 272 decode answers and 9 tap pins agree exactly.**
 
 Two things it does differently from `run.sh`, both on purpose. It builds for the
 **host**, not the simulator — `Bar/typing` needs the simulator because
@@ -395,22 +396,55 @@ It is 2.8% of English tokens and **7.3% of Hebrew ones**. Whatever grouped keys
 do to the cost of switching layouts mid-sentence is unmeasured here and worth its
 own experiment before shipping.
 
-### The lexicon cannot be shipped as it stands
+### The measurement lexicon stays gitignored; the keyboard ships Leipzig
 
 `wordfreq`'s Hebrew data is built from Wikipedia, OpenSubtitles, SUBTLEX, Google
-Books and OSCAR, which is exactly right for measuring and unresolved for
-bundling. Its *code* is Apache 2.0; its *data* is not uniformly licensed.
-Whatever Phase B ships needs its license settled **before** it is bundled, and
-the source stamped into the resource the way `LanguageModel.json` stamps
-`source`.
-
+Books and OSCAR, which is right for measuring and unresolved for bundling. Its
+*code* is Apache 2.0; its *data* is not uniformly licensed.
 `data/lexicon-*.json` is **gitignored** for that reason and because it is 11.7 MB
-that `make-lexicon.py` reproduces exactly from a frozen `wordfreq` release. A
-fresh checkout is therefore *expected* to be missing it, so all three entry points
-call `run.require_data` and exit with the command that fixes it rather than a
-traceback. Everything that is actually a *finding* — `results.json`,
-`validity.json`, `lexsize.json`, `data/testtext.json`, `data/rows.json` — is
-committed.
+that `make-lexicon.py` reproduces exactly from a frozen `wordfreq` release.
+
+The lists the keyboard actually loads are Leipzig Corpora Collection Wikipedia
+word frequencies (CC BY 4.0), written by `Scripts/generate-grouped-lexicon.py`
+into `GroupedLexicon-{en,he}.txt` with attribution in `GroupedLexicon-NOTICE.txt`.
+`miss.py` will use those if the wordfreq files are absent.
+
+A fresh checkout is therefore *expected* to be missing `data/lexicon-*.json`, so
+the sweep entry points call `run.require_data` and exit with the command that
+fixes it rather than a traceback. Everything that is actually a *finding* —
+`results.json`, `validity.json`, `lexsize.json`, `miss.json`,
+`data/testtext.json`, `data/rows.json` — is committed.
+
+### Missed taps
+
+`run.py` assumes every tap hits the intended key. That is the decoder's ceiling,
+and it cannot see the reason grouped keys exist: a bigger target.
+
+`harness/miss.py` adds Gaussian noise, in ungrouped-key widths, and asks which
+*drawn* key contains the noisy point. Seed `20260813`. Not a user study. This
+run used the same 200k wordfreq lists as `run.py` (it falls back to the shipped
+Leipzig 50k when those files are missing). Do not mix Leipzig commit rates with
+the table below.
+
+| layout | σ | hit key | commit |
+|---|---:|---:|---:|
+| en ungrouped | 0.20 | 97.9% | 91.3% |
+| en L1 | 0.20 | 99.2% | 89.3% |
+| en ungrouped | 0.35 | 77.8% | 38.1% |
+| en L1 | 0.35 | 91.1% | 62.9% |
+| en ungrouped | 0.50 | 56.3% | 15.0% |
+| en L1 | 0.50 | 81.2% | 41.1% |
+| he ungrouped | 0.20 | 97.8% | 91.6% |
+| he L1 | 0.20 | 99.0% | 79.7% |
+| he ungrouped | 0.35 | 76.6% | 37.2% |
+| he L1 | 0.35 | 88.1% | 50.4% |
+| he ungrouped | 0.50 | 54.6% | 12.7% |
+| he L1 | 0.50 | 75.2% | 28.3% |
+
+A careful thumb (σ = 0.20) still prefers ungrouped on commit, because the
+decoder is guessing. A fat thumb (σ = 0.35) prefers L1 by a wide margin:
+English 62.9% vs 38.1%, Hebrew 50.4% vs 37.2%. That is the case grouped keys
+were for. Full dump in `miss.json`.
 
 ### `tapsPerWord` is a made-up weighting
 

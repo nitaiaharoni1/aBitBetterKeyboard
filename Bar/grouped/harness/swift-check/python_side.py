@@ -23,7 +23,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 from decode import Decoder, Lexicon  # noqa: E402
-from grouping import HEBREW_CLITICS, Layout  # noqa: E402
+from grouping import HEBREW_CLITICS, Layout, letter_at  # noqa: E402
 
 LEVELS = [2, 3, 4, 5]
 
@@ -31,6 +31,19 @@ VOCABULARY = {
     "en": ["the", "to", "and", "of", "a", "in", "is", "it", "that", "for", "cat", "car", "cab", "bat"],
     "he": ["את", "של", "לא", "על", "זה", "הוא", "אני", "כל", "שלום", "תודה", "מה", "בסדר"],
 }
+
+# Same cases `GroupedKeys.letter(atX:y:in:)` is tested on. Empty string means nil.
+TAP_CASES = [
+    {"lines": [["q", "w"], ["a", "s"]], "x": 0.2, "y": 0.2, "letter": "q"},
+    {"lines": [["q", "w"], ["a", "s"]], "x": 0.8, "y": 0.2, "letter": "w"},
+    {"lines": [["q", "w"], ["a", "s"]], "x": 0.2, "y": 0.8, "letter": "a"},
+    {"lines": [["q", "w"], ["a", "s"]], "x": 0.8, "y": 0.8, "letter": "s"},
+    {"lines": [["q", "w"], ["a", "s"]], "x": 0.5, "y": 0.5, "letter": ""},
+    {"lines": [["q", "w"], ["a", "s"]], "x": 0.5, "y": 0.2, "letter": ""},
+    {"lines": [[], ["ך", "ף"]], "x": 0.5, "y": 0.2, "letter": ""},
+    {"lines": [[], ["ך", "ף"]], "x": 0.2, "y": 0.8, "letter": "ך"},
+    {"lines": [[], ["ך", "ף"]], "x": 0.8, "y": 0.8, "letter": "ף"},
+]
 
 
 def clitics(tag: str) -> set:
@@ -96,7 +109,11 @@ def build(rows_path: Path) -> dict:
             per_level_decode.append({"k": k, "codes": codes, "candidates": candidates})
         grouping[tag] = per_level_groups
         decoding[tag] = per_level_decode
-    return {"grouping": grouping, "decoding": decoding}
+    taps = []
+    for case in TAP_CASES:
+        named = letter_at(case["x"], case["y"], case["lines"])
+        taps.append({**case, "letter": named or ""})
+    return {"grouping": grouping, "decoding": decoding, "taps": taps}
 
 
 def compare(path: list, python_side, swift_side, problems: list) -> None:
@@ -138,8 +155,8 @@ def main() -> None:
         len(level["candidates"]) for block in python_side["decoding"].values() for level in block
     )
     print(
-        f"swift-check: identical — {groups} grouping conditions and "
-        f"{answers} decode answers agree exactly"
+        f"swift-check: identical — {groups} grouping conditions, "
+        f"{answers} decode answers and {len(python_side['taps'])} tap pins agree exactly"
     )
 
 

@@ -1,0 +1,13 @@
+Grouped key word lists
+=======================
+
+English: Leipzig Corpora Collection, eng_wikipedia_2016_300K
+Hebrew:  Leipzig Corpora Collection, heb_wikipedia_2021_300K
+
+Source: https://wortschatz.uni-leipzig.de/
+Licence: Creative Commons Attribution 4.0 (CC BY 4.0)
+         https://creativecommons.org/licenses/by/4.0/
+
+These files are frequency-ranked word forms extracted from the corpora's
+*_words.txt lists, filtered to letters this keyboard can type. They are not
+the original Leipzig archives.

@@ -112,7 +112,30 @@ for (tag, words) in vocabulary {
     decoded[tag] = perLevel
 }
 
-let output: [String: Any] = ["grouping": report, "decoding": decoded]
+// MARK: Tap location as a soft pin, the same cases Python `letter_at` answers
+
+let tapCases: [(lines: [[String]], x: Double, y: Double)] = [
+    ([["q", "w"], ["a", "s"]], 0.2, 0.2),
+    ([["q", "w"], ["a", "s"]], 0.8, 0.2),
+    ([["q", "w"], ["a", "s"]], 0.2, 0.8),
+    ([["q", "w"], ["a", "s"]], 0.8, 0.8),
+    ([["q", "w"], ["a", "s"]], 0.5, 0.5),
+    ([["q", "w"], ["a", "s"]], 0.5, 0.2),
+    ([[], ["ך", "ף"]], 0.5, 0.2),
+    ([[], ["ך", "ף"]], 0.2, 0.8),
+    ([[], ["ך", "ף"]], 0.8, 0.8)
+]
+var taps: [[String: Any]] = []
+for tap in tapCases {
+    taps.append([
+        "lines": tap.lines,
+        "x": tap.x,
+        "y": tap.y,
+        "letter": GroupedKeys.letter(atX: tap.x, y: tap.y, in: tap.lines) ?? ""
+    ])
+}
+
+let output: [String: Any] = ["grouping": report, "decoding": decoded, "taps": taps]
 let json = try! JSONSerialization.data(
     withJSONObject: output, options: [.sortedKeys, .prettyPrinted])
 FileHandle.standardOutput.write(json)
