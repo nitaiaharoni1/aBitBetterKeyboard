@@ -30,5 +30,13 @@ struct MainTabView: View {
             selection = tab
             search.pendingTab = nil
         }
+        .onChange(of: selection) { _, _ in
+            // Filtering Arabic on Languages must not follow you to Home as a
+            // results list that hides the playground card. Jumps already
+            // cleared the query in `open()`.
+            if search.pendingTab == nil {
+                search.dismiss()
+            }
+        }
     }
 }

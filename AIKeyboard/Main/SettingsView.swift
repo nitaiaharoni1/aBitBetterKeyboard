@@ -37,7 +37,7 @@ struct SettingsView: View {
                 }
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
-                AppSearchHeader {
+                AppSearchHeader(searchAccessibilityID: "app-search-settings") {
                     Text("Settings")
                         .font(Theme.Fonts.display)
                         .tracking(-0.5)
@@ -169,7 +169,7 @@ struct SettingsView: View {
 
     private func scrollToHighlight(_ proxy: ScrollViewProxy) {
         guard let row = search.highlightedRow, row != .mixing else { return }
-        DispatchQueue.main.async {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             withAnimation(Theme.Motion.quick) {
                 proxy.scrollTo(row, anchor: .center)
             }

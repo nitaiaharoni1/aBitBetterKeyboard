@@ -41,11 +41,8 @@ struct AppSearchField: View {
                 .submitLabel(.search)
                 .focused($focused)
                 .accessibilityIdentifier(fieldIdentifier)
-                .onSubmit {
-                    if let first = search.results.first {
-                        search.open(first)
-                    }
-                }
+                .accessibilityLabel("Search")
+                .onSubmit { focused = false }
 
             if !search.query.isEmpty {
                 Button {
@@ -70,6 +67,7 @@ struct AppSearchField: View {
                 .strokeBorder(Theme.Surface.separator, lineWidth: 1)
         )
         .onChange(of: search.stackEpoch) { _, _ in focused = false }
+        .onChange(of: search.resignFocus) { _, _ in focused = false }
     }
 }
 

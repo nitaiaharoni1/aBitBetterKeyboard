@@ -145,6 +145,7 @@ struct LanguageCatalogueSection: View {
                     .fill(Theme.Brand.solid.opacity(0.12))
             }
         }
+        .animation(Theme.Motion.quick, value: search.highlightedLanguage)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(language.displayName)
     }

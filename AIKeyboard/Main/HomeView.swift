@@ -35,7 +35,7 @@ struct HomeView: View {
                 .scrollDismissesKeyboard(.immediately)
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
-                AppSearchHeader {
+                AppSearchHeader(searchAccessibilityID: "app-search") {
                     VStack(alignment: .leading, spacing: 0) {
                         // The hero voice: heavy SF Pro with tight tracking (the web
                         // hero's weight-800 / -.055em spec, ≈ -1.4pt at this size).

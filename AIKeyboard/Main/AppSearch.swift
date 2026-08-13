@@ -20,9 +20,11 @@ final class AppSearch: ObservableObject {
     /// the two kinds of push on one stack is how you end up on Dictionary
     /// behind Layout.
     @Published var stackEpoch = 0
+    @Published var resignFocus = 0
 
-    /// Consumed by `MainTabView`. A `Binding` in the environment defaults to
-    /// `.constant(.home)` and silently eats taps if the key is missing.
+    /// Consumed by `MainTabView`. Search jumps set this instead of writing the
+    /// tab binding from a nested view, which is how a missing environment key
+    /// used to swallow the tap.
     @Published var pendingTab: MainTab?
 
     var results: [AppSearchItem] { AppSearchItem.matches(for: query) }
@@ -33,6 +35,7 @@ final class AppSearch: ObservableObject {
 
     func dismiss() {
         query = ""
+        resignFocus += 1
     }
 
     func open(_ item: AppSearchItem) {
@@ -43,39 +46,61 @@ final class AppSearch: ObservableObject {
         settingsPush = nil
         showsPlayground = false
         pendingTab = nil
-        stackEpoch += 1
         highlightClear?.cancel()
+        stackEpoch += 1
+
+        var nextHome: AppSearchHomePush?
+        var nextSettings: AppSearchSettingsPush?
+        var nextTab: MainTab?
+        var nextRow: AppSearchRow?
+        var nextLanguage: KeyboardLanguage?
+        var nextPlayground = false
 
         switch item.destination {
         case .tab(let tab):
-            pendingTab = tab
+            nextTab = tab
         case .dictation:
-            pendingTab = .home
-            homePush = .dictation
+            nextTab = .home
+            nextHome = .dictation
         case .screenContext:
-            pendingTab = .home
-            homePush = .screenContext
+            nextTab = .home
+            nextHome = .screenContext
         case .playground:
-            pendingTab = .home
-            showsPlayground = true
+            nextTab = .home
+            nextPlayground = true
         case .subscription:
-            pendingTab = .settings
-            settingsPush = .subscription
+            nextTab = .settings
+            nextSettings = .subscription
         case .dictionary:
-            pendingTab = .settings
-            settingsPush = .dictionary
+            nextTab = .settings
+            nextSettings = .dictionary
         case .layout:
-            pendingTab = .settings
-            settingsPush = .layout
+            nextTab = .settings
+            nextSettings = .layout
         case .cloudModel:
-            pendingTab = .settings
-            settingsPush = .cloudModel
+            nextTab = .settings
+            nextSettings = .cloudModel
         case .language(let language):
-            pendingTab = .languages
-            highlightedLanguage = language
+            nextTab = .languages
+            nextLanguage = language
         case .row(let row):
-            pendingTab = row == .mixing ? .languages : .settings
-            highlightedRow = row
+            nextTab = row == .mixing ? .languages : .settings
+            nextRow = row
+        }
+
+        pendingTab = nextTab
+        highlightedRow = nextRow
+        highlightedLanguage = nextLanguage
+        showsPlayground = nextPlayground
+
+        // The stacks are rebuilt by `stackEpoch`. Setting the push in the same
+        // turn is a binding that never *changes* on the new stack, so
+        // `navigationDestination(item:)` does not fire. Next turn it does.
+        if nextHome != nil || nextSettings != nil {
+            DispatchQueue.main.async {
+                self.homePush = nextHome
+                self.settingsPush = nextSettings
+            }
         }
 
         scheduleHighlightClear()
@@ -88,7 +113,7 @@ final class AppSearch: ObservableObject {
     private func scheduleHighlightClear() {
         guard highlightedRow != nil || highlightedLanguage != nil else { return }
         highlightClear = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(1400))
+            try? await Task.sleep(for: .milliseconds(1800))
             guard !Task.isCancelled else { return }
             highlightedRow = nil
             highlightedLanguage = nil
@@ -341,5 +366,6 @@ private struct SearchTargetModifier: ViewModifier {
                         .fill(Theme.Brand.solid.opacity(0.12))
                 }
             }
+            .animation(Theme.Motion.quick, value: search.highlightedRow)
     }
 }

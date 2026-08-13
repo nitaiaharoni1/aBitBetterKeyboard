@@ -129,18 +129,16 @@ struct LanguagesView: View {
     }
 
     private func scrollToSearchHit(_ proxy: ScrollViewProxy) {
-        if let language = search.highlightedLanguage {
-            DispatchQueue.main.async {
-                withAnimation(Theme.Motion.quick) {
-                    proxy.scrollTo(language.id, anchor: .center)
-                }
-            }
-            return
-        }
-        guard search.highlightedRow == .mixing else { return }
-        DispatchQueue.main.async {
+        let language = search.highlightedLanguage
+        let mixing = search.highlightedRow == .mixing
+        guard language != nil || mixing else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             withAnimation(Theme.Motion.quick) {
-                proxy.scrollTo(AppSearchRow.mixing, anchor: .center)
+                if let language {
+                    proxy.scrollTo(language.id, anchor: .center)
+                } else {
+                    proxy.scrollTo(AppSearchRow.mixing, anchor: .center)
+                }
             }
         }
     }
