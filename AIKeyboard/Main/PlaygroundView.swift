@@ -153,6 +153,7 @@ struct PlaygroundView: View {
                 .foregroundStyle(target.text.isEmpty ? Theme.Text.tertiary : Theme.Text.primary)
                 .lineLimit(1...4)
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .environment(\.layoutDirection, controller.hostLanguage.layoutDirection)
                 .padding(.horizontal, Theme.Space.sm)
                 .padding(.vertical, Theme.Space.xs)
                 .background(Theme.Surface.raised)

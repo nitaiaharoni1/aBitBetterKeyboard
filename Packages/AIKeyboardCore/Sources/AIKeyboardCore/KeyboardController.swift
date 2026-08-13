@@ -32,7 +32,13 @@ public final class KeyboardController: ObservableObject {
 
     // MARK: Published state
 
-    @Published public var language: KeyboardLanguage
+    @Published public var language: KeyboardLanguage {
+        didSet { hostLanguage = language }
+    }
+    /// The language the host field is told. Usually the keys. Dictation and Reply
+    /// can insert Hebrew while the keys are still English, and WhatsApp follows
+    /// this, not the keys.
+    @Published public private(set) var hostLanguage: KeyboardLanguage
     @Published public var plane: KeyboardPlane = .letters
     @Published public var shift: ShiftState = .on
     @Published public var overlay: KeyboardOverlay = .none
@@ -152,8 +158,9 @@ public final class KeyboardController: ObservableObject {
     /// **Nothing draws this today, and it is kept on purpose rather than by
     /// oversight.** Its reader was the deleted strip, which laid a transcript out
     /// in its own direction while it sat above the keys; the words go straight into
-    /// the field now, and a text field decides its own direction. What stops it
-    /// being deleted is the chain underneath: it is the only consumer of
+    /// the field now, and `hostLanguage` is what tells that field which way to
+    /// read. What stops it being deleted is the chain underneath: it is the only
+    /// consumer of
     /// `DictationSession.transcriptLanguages`, which is the only consumer of
     /// `DictationTranscriptRecord.languages` and `DictationPartialRecord.languages`
     /// — real data crossing the App Group that the transcriber went to the trouble
@@ -381,6 +388,7 @@ public final class KeyboardController: ObservableObject {
         self.target = target
         self.store = store
         self.language = language
+        self.hostLanguage = language
         self.dictation = dictation
         self.personal = isSystemKeyboard ? .shared : PersonalLanguageModel(url: nil)
         // This build ships pointing at a deployed backend
@@ -515,6 +523,27 @@ public final class KeyboardController: ObservableObject {
             return
         }
         customization = repaired
+    }
+
+    /// Called when the keyboard comes up over a field.
+    ///
+    /// An empty field follows the keys. A field that already contains Hebrew
+    /// (Arabic, …) keeps telling the host that, even if the keys are English —
+    /// resetting unconditionally is how dismissing and reopening flipped a
+    /// WhatsApp draft onto the left.
+    public func prepareForNewDocument() {
+        if documentHasText,
+            let rtl = SuggestionEngine.languages(in: contextBefore + contextAfter)
+                .first(where: { $0.isRightToLeft })
+        {
+            hostLanguage = rtl
+            return
+        }
+        hostLanguage = language
+    }
+
+    func announceHostLanguage(_ language: KeyboardLanguage) {
+        hostLanguage = language
     }
 
     /// Re-reads the layout from the shared store.

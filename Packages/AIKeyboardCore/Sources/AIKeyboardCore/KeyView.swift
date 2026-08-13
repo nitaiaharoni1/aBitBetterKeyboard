@@ -244,8 +244,12 @@ public struct KeyView: View {
         // only the layout that built it knows that is four letters rather than a
         // snippet. See `KeySpec.spokenLabel`.
         if let spoken = spec.spokenLabel { return spoken }
-        guard cap == .dictation else { return cap.accessibilityLabel }
-        return dictationState.accessibilityLabel
+        switch cap {
+        case .dictation:
+            return dictationState.accessibilityLabel
+        default:
+            return cap.accessibilityLabel(isRightToLeft: language.isRightToLeft)
+        }
     }
 
     var hint: String {

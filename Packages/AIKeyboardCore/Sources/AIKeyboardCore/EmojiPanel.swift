@@ -84,6 +84,7 @@ public struct EmojiPanel: View {
                 EmojiCategoryRow(
                     selected: selectedCategory,
                     height: keyHeight,
+                    isRightToLeft: controller.language.isRightToLeft,
                     // The section's *first cell*, not the section. `ForEach(sections)`
                     // gives the loop its identity but puts no view on screen with
                     // the category's own id, so `scrollTo("Food")` addressed
@@ -408,6 +409,7 @@ struct EmojiCategoryRow: View {
 
     let selected: String
     let height: CGFloat
+    let isRightToLeft: Bool
     let onSelect: (String) -> Void
     let onDelete: () -> Void
     let onDeleteRepeat: () -> Void
@@ -443,7 +445,7 @@ struct EmojiCategoryRow: View {
                 glyphColor: Theme.Keys.labelOnFunction,
                 action: onDelete
             ) {
-                Image(systemName: "delete.left")
+                Image(systemName: KeyCap.backspaceSymbol(isRightToLeft: isRightToLeft))
                     .font(Theme.Glyph.font(19))
             }
             // Air between the last tab and the one key in the row, so the flags

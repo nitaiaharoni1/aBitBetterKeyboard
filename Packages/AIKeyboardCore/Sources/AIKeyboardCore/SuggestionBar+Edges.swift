@@ -96,8 +96,13 @@ extension SuggestionBar {
             // space into the user's message rather than drawing nothing.
             if let cap = action.keyCap(language: controller.language) {
                 edgeButton(
-                    systemImage: action.glyph ?? "questionmark",
+                    systemImage: action.glyph(
+                        isRightToLeft: controller.language.isRightToLeft) ?? "questionmark",
                     label: action.title,
+                    spokenLabel: (cap == .cursorLeft || cap == .cursorRight)
+                        ? cap.accessibilityLabel(
+                            isRightToLeft: controller.language.isRightToLeft)
+                        : nil,
                     isActive: controller.isActionKeyActive(cap)
                 ) {
                     controller.press(cap)

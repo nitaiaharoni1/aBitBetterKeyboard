@@ -258,6 +258,12 @@ public final class DictationSession: ObservableObject {
             partial.utterance == utterance, partial.sequence > lastAppliedPartialSequence
         {
             lastAppliedPartialSequence = partial.sequence
+            // Before the text. The insert sink reads `transcriptLanguages` on
+            // this same turn, and a mixed Hebrew partial with empty languages
+            // here is counted as Latin: `בוא נעשה sync על ה-roadmap`.
+            if !partial.languages.isEmpty {
+                transcriptLanguages = partial.languages
+            }
             partialTranscript = partial.text
         }
 

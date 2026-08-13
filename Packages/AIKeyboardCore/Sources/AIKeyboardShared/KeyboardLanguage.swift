@@ -62,9 +62,18 @@ public struct KeyboardLanguage: RawRepresentable, Hashable, Identifiable, Codabl
 
     public var flag: String { definition.flag }
 
-    /// BCP-47. Used to look this language up in Apple's own tables rather than to
-    /// route anything.
+    /// BCP-47. Used to look this language up in Apple's own tables.
     public var languageTag: String { definition.tag }
+
+    /// What the host text field is told (`UIInputViewController.primaryLanguage`).
+    ///
+    /// Apple's Hebrew keyboard reports `he-IL`, not `he`. Hosts that switch
+    /// writing direction off the input mode match that spelling. The spell-checker
+    /// locale is the same Apple identifier with an underscore; hyphenating it is
+    /// the BCP-47 form. Languages Apple has no checker for keep `languageTag`.
+    public var inputModeTag: String {
+        spellCheckerLocale?.replacingOccurrences(of: "_", with: "-") ?? languageTag
+    }
 
     /// The catalogue language for a BCP-47 tag, or nil.
     ///

@@ -164,6 +164,11 @@ final class DictationKeyboardTests: XCTestCase {
 
         XCTAssertEqual(target.text, "בוא נעשה sync על ה-roadmap")
         XCTAssertEqual(controller.overlay, .none, "the panel should close once the words are in")
+        XCTAssertEqual(controller.language, .english, "the keys did not move")
+        XCTAssertEqual(
+            controller.hostLanguage, .hebrew,
+            "WhatsApp follows hostLanguage, not the keys. Leaving it English is a mixed Hebrew sentence stuck on the left."
+        )
         // Not incidental: this exact sentence has ten Hebrew letters and eleven
         // Latin ones, so a direction decided by counting letters lays it out
         // left to right. See `KeyboardController.isRightToLeft`.
@@ -267,6 +272,7 @@ final class DictationKeyboardTests: XCTestCase {
                 sessionID: id, utterance: utterance, sequence: 1, text: "hi", seconds: 1.5))
         session.poll()
         XCTAssertEqual(target.text, "hi", "the first reading never reached the field")
+        XCTAssertEqual(controller.hostLanguage, .english)
 
         try recorder.publishPartial(
             DictationPartialRecord(
@@ -283,6 +289,30 @@ final class DictationKeyboardTests: XCTestCase {
 
         XCTAssertEqual(target.text, "Hi Mami, what's up?")
         XCTAssertNil(controller.revertibleEdit)
+    }
+
+    /// The first partial is what WhatsApp lays out. Languages have to be on
+    /// `transcriptLanguages` before that text is published: counting letters in
+    /// this sentence says Latin, and a host that is still English parks it on
+    /// the left until the final transcript arrives.
+    func testAMixedHebrewPartialTellsTheHostBeforeTheWordsLand() throws {
+        let id = beginLiveSession()
+        session.poll()
+        controller.startDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+
+        try recorder.publishPartial(
+            DictationPartialRecord(
+                sessionID: id, utterance: utterance, sequence: 1,
+                text: "בוא נעשה sync על ה-roadmap", languages: "he,en", seconds: 1.5))
+        session.poll()
+
+        XCTAssertEqual(target.text, "בוא נעשה sync על ה-roadmap")
+        XCTAssertEqual(controller.language, .english, "the keys did not move")
+        XCTAssertEqual(
+            controller.hostLanguage, .hebrew,
+            "the first partial is what the host lays out, and letter-counting this sentence is English")
+        XCTAssertTrue(controller.dictationIsRightToLeft)
     }
 
     /// **Nothing edits the field while it is still being spoken into.**

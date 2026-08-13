@@ -7,10 +7,11 @@ import XCTest
 ///
 /// **The gesture cannot be driven from here**, the way `ToneAlternatesTests`
 /// says of the same popup, so what these measure is the arithmetic underneath
-/// it: `alternatesDelay` decides how long the hold that opens it is,
-/// `alternateIndex(at:)` maps a point to an item, and `hasSlid` decides whether
-/// the point is worth reading at all. A `KeyView` is a value, so it can be
-/// built and asked without ever being rendered.
+/// it: `alternatesHoldDelay` decides how long the hold that opens it is
+/// (200ms on a letter, 50ms on punctuation), `alternateIndex(at:)` maps a
+/// point to an item, and `hasSlid` decides whether the point is worth reading
+/// at all. A `KeyView` is a value, so it can be built and asked without ever
+/// being rendered.
 final class AlternatesPopupTests: XCTestCase {
 
     /// A key the way `KeyboardView` builds one, at the width a ten-column
@@ -161,7 +162,7 @@ final class AlternatesPopupTests: XCTestCase {
         XCTAssertGreaterThan(KeyView.calloutNeckHeight, 0)
     }
 
-    /// And the hold is one number, never zero: a popup that opened on
+    /// Letters still wait 200ms, never zero: a popup that opened on
     /// finger-down would be on screen for the length of every keystroke.
     func testTheHoldIsShortAndIsNotInstant() {
         XCTAssertEqual(KeyView.alternatesDelay, .milliseconds(200))
@@ -388,6 +389,21 @@ final class AlternatesPopupTests: XCTestCase {
             KeyboardLayout.bottomRow(for: language, plane: .letters, showsGlobe: true).keys
                 .first { $0.addressableID == KeyboardLayout.punctuationKeyID })
         return key(spec, language: language)
+    }
+
+    /// Punctuation opens after 50ms; a letter still waits 200ms. Asserting both
+    /// and that they differ is what rejects collapsing them back to one number.
+    func testThePunctuationHoldIsShorterThanALetterHold() throws {
+        XCTAssertEqual(KeyView.punctuationAlternatesDelay, .milliseconds(50))
+        let punctuation = try punctuationKeyView()
+        let letter = try letterKey("ח", in: .hebrew)
+        XCTAssertEqual(punctuation.alternatesHoldDelay, .milliseconds(50))
+        XCTAssertEqual(letter.alternatesHoldDelay, .milliseconds(200))
+        XCTAssertEqual(punctuation.alternatesHoldDelay, KeyView.punctuationAlternatesDelay)
+        XCTAssertEqual(letter.alternatesHoldDelay, KeyView.alternatesDelay)
+        XCTAssertNotEqual(
+            punctuation.alternatesHoldDelay, letter.alternatesHoldDelay,
+            "punctuation 50ms and letters 200ms must stay two waits")
     }
 
     /// SwiftKey's order, not `. , ? ! '`. The numbers row still prints those

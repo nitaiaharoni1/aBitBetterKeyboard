@@ -73,8 +73,14 @@ extension KeyboardController {
     /// `replaceTargetText` — `applyDirectly` records the edit *after* that call
     /// returns, so this can never delete the edit that is being made.
     public func refreshDocumentState() {
+        let hadText = documentHasText
         documentHasText = hasTextToWorkWith
         if revertibleEdit != nil, !documentHasText { revertibleEdit = nil }
+        // Send, or switching to an empty chat, with the keyboard still up.
+        // Appear is not guaranteed. Only the *transition* onto empty, because
+        // `insertText` then immediately reading the proxy can still look empty,
+        // and resetting there would undo the Hebrew we just announced.
+        if hadText, !documentHasText { announceHostLanguage(language) }
         adoptOpenWord()
     }
 

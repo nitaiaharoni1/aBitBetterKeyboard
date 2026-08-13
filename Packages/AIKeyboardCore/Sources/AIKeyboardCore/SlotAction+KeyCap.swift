@@ -41,11 +41,12 @@ public extension SlotAction {
 
     /// The SF Symbol the editor's drawer draws beside the name. A `.text` action
     /// and the two plane keys draw their own characters instead, which is why
-    /// this is optional.
-    var glyph: String? {
+    /// this is optional. Cursor and delete names follow `isRightToLeft`; the
+    /// editor defaults false.
+    func glyph(isRightToLeft: Bool = false) -> String? {
         switch self {
         case .shift: return "shift"
-        case .backspace: return "delete.left"
+        case .backspace: return KeyCap.backspaceSymbol(isRightToLeft: isRightToLeft)
         case .numbersPlane, .symbolsPlane: return nil
         case .globe: return "globe"
         case .settings: return "gearshape"
@@ -57,9 +58,9 @@ public extension SlotAction {
         // Each action's own icon, so the key and the banner's label draw one thing.
         case .reply: return AIAction.reply.icon
         case .fix: return AIAction.fix.icon
-        case .cursorLeft: return "arrow.left"
-        case .cursorRight: return "arrow.right"
-        case .deleteForward: return "delete.right"
+        case .cursorLeft: return KeyCap.cursorLeftSymbol(isRightToLeft: isRightToLeft)
+        case .cursorRight: return KeyCap.cursorRightSymbol(isRightToLeft: isRightToLeft)
+        case .deleteForward: return KeyCap.deleteForwardSymbol(isRightToLeft: isRightToLeft)
         case .hideKeyboard: return "keyboard.chevron.compact.down"
         case .punctuation, .text: return nil
         }

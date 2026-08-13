@@ -60,6 +60,29 @@ final class KeyboardLanguageIdentityTests: XCTestCase {
         XCTAssertFalse(KeyboardLanguage.tamil.isRightToLeft)
     }
 
+    /// `KeyboardViewController.publishInputLanguage` hands this to the host as
+    /// `primaryLanguage`. WhatsApp and Notes pick writing direction from it, so
+    /// a tag Apple does not treat as right-to-left is a Hebrew keyboard whose
+    /// letters sit on the left. Apple's own Hebrew keyboard reports `he-IL`.
+    func testTheHostInputModeTagIsWhatApplesKeyboardReports() {
+        XCTAssertEqual(KeyboardLanguage.hebrew.inputModeTag, "he-IL")
+        XCTAssertEqual(KeyboardLanguage.english.inputModeTag, "en-US")
+        XCTAssertEqual(KeyboardLanguage.arabic.inputModeTag, "ar")
+        XCTAssertEqual(KeyboardLanguage.persian.inputModeTag, "fa")
+        XCTAssertEqual(KeyboardLanguage.dhivehi.inputModeTag, "dv")
+        XCTAssertEqual(KeyboardLanguage.urdu.inputModeTag, "ur")
+        XCTAssertEqual(KeyboardLanguage.pashto.inputModeTag, "ps")
+    }
+
+    func testAppleTreatsEveryRightToLeftInputModeTagAsRightToLeft() {
+        for language in KeyboardLanguage.allCases where language.isRightToLeft {
+            XCTAssertEqual(
+                Locale.Language(identifier: language.inputModeTag).characterDirection,
+                .rightToLeft,
+                "\(language.displayName) publishes \(language.inputModeTag)")
+        }
+    }
+
     /// A `SharedStore` written by this build and read by the one before it must
     /// lose the new languages and keep the old, not fail the whole decode.
     func testEveryIdentifierAddedSinceTheFirstFourteenIsStillAPlainString() throws {

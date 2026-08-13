@@ -92,19 +92,37 @@ extension KeyView {
         onAlternate?(item)
     }
 
-    /// How long the finger stays down before the popup opens.
-    ///
-    /// **One number for every key that has a popup.** The press callout now
-    /// fills the wait — letters preview on finger-down even when they have
-    /// alternates — so this is no longer covering a blank space above the key.
-    /// 200ms is still under the quarter second a pause becomes visible at, and
-    /// still well over the 60–120ms a deliberate tap lasts.
+    /// How long a letter or rewrite finger stays down before the popup opens.
     ///
     /// **Not zero, and that is the whole reason there is a number at all.**
     /// Opening on finger-down puts the popup on screen for the length of every
     /// ordinary keystroke, which is what showing Hebrew's two-item popup from the
     /// press looked like before it was pulled.
+    ///
+    /// The press callout now fills the wait — letters preview on finger-down
+    /// even when they have alternates — so this is no longer covering a blank
+    /// space above the key. 200ms is still under the quarter second a pause
+    /// becomes visible at, and still well over the 60–120ms a deliberate tap
+    /// lasts. Punctuation waits a different number; see `alternatesHoldDelay`.
     static let alternatesDelay: Duration = .milliseconds(200)
+
+    /// How long the bottom-row punctuation key waits before its strip opens.
+    ///
+    /// **The key already wears its marks, it skips the callout, and a 200ms wait
+    /// is the two-step open that was pulled.** Previewing a lone period for the
+    /// letter delay looked like the strip arriving after a beat. 50ms is under a
+    /// typical tap (60–120ms), so a period tap may flash the strip; that is
+    /// accepted. Letters stay at `alternatesDelay` so a tap on `ח` does not
+    /// flash Hebrew's geresh strip.
+    static let punctuationAlternatesDelay: Duration = .milliseconds(50)
+
+    /// The wait this key actually sleeps. Punctuation is the 50ms case; every
+    /// other popup (letters, rewrite) is `alternatesDelay`.
+    var alternatesHoldDelay: Duration {
+        spec.addressableID == KeyboardLayout.punctuationKeyID
+            ? Self.punctuationAlternatesDelay
+            : Self.alternatesDelay
+    }
 
     /// **Words stack, glyphs run along a row.** Seven registers at a readable size
     /// is about 1,000 points of width on a 393-point screen, so the strip that

@@ -259,6 +259,11 @@ extension KeyboardController {
         // field with what was there before — so reverting after inserting a reply
         // would delete the reply along with the correction.
         clearRevertibleEdit()
+        let preferred =
+            bannerOptions.indices.contains(bannerIndex)
+            ? bannerOptions[bannerIndex].language : nil
+        announceHostLanguage(
+            preferred ?? Self.languageForHost(reported: "", text: text) ?? language)
         replaceTargetText(with: text)
         dismissOverlay()
     }
@@ -354,6 +359,9 @@ extension KeyboardController {
         // *whole* field with what was there before — so reverting after inserting a
         // reply would delete the reply along with the correction.
         clearRevertibleEdit()
+        announceHostLanguage(
+            (action == .reply ? replyContext?.language : nil)
+                ?? Self.language(of: text, fallback: language))
         replaceTargetText(with: text)
         revertibleEdit = AIEdit(action: action, previous: restored, applied: text, undo: undo)
         // **Emptied, because the next action must not inherit it.**

@@ -304,6 +304,8 @@ extension KeyboardController {
     /// partial path never gets this far; `streamDictation` asks
     /// `canReplaceStreamedDictation(with:)` first and gives up instead.
     func replaceStreamedDictation(with text: String) {
+        announceHostLanguage(
+            Self.languageForHost(reported: dictation.transcriptLanguages, text: text) ?? language)
         endGroupedWord()
         guard !streamedDictation.isEmpty else {
             insertStreamedDictation(text)
@@ -346,13 +348,17 @@ extension KeyboardController {
         refreshDocumentState()
     }
 
-    static func isRightToLeft(reported: String, text: String) -> Bool {
+    static func languageForHost(reported: String, text: String) -> KeyboardLanguage? {
         if let tag = reported.split(separator: ",").first,
             let language = KeyboardLanguage(languageTag: String(tag))
         {
-            return language.isRightToLeft
+            return language
         }
-        return SuggestionEngine.languages(in: text).first?.isRightToLeft == true
+        return SuggestionEngine.languages(in: text).first
+    }
+
+    static func isRightToLeft(reported: String, text: String) -> Bool {
+        languageForHost(reported: reported, text: text)?.isRightToLeft == true
     }
 
     func observeDictation() {

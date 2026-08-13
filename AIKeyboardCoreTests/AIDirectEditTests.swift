@@ -167,6 +167,66 @@ final class AIDirectEditTests: XCTestCase {
         XCTAssertEqual(controller.contextBefore, "see you ")
     }
 
+    /// Reply can write Hebrew while the keys are still English. WhatsApp follows
+    /// `hostLanguage`, not the keys, so leaving it English is a reply stuck on
+    /// the left. The screen-context language is what we tell the host: counting
+    /// letters in the reply would get the same mixed-sentence trap dictation
+    /// already had.
+    func testAHebrewReplyTellsTheHostEvenWhenTheKeysAreEnglish() {
+        let controller = makeDirectEditController(text: "", engine: DirectEditEngine())
+        XCTAssertEqual(controller.language, .english)
+        controller.replyContext = ScreenContext(
+            appName: "WhatsApp", appIcon: "message", sender: "Yaeli",
+            message: "מה המצב", language: .hebrew)
+        controller.aiSourceText = ""
+        controller.applyDirectly("בוא נעשה sync על ה-roadmap", for: .reply)
+
+        XCTAssertEqual(controller.language, .english, "the keys stay on English")
+        XCTAssertEqual(controller.hostLanguage, .hebrew)
+        controller.prepareForNewDocument()
+        XCTAssertEqual(
+            controller.hostLanguage, .hebrew,
+            "reopening over the draft must not flip it onto the left")
+    }
+
+    /// The Use button is the path `applyDirectly` refused. Leaving hostLanguage
+    /// English here is the same stuck-on-the-left reply, one tap later.
+    func testAHebrewReplyOnTheUseButtonTellsTheHostToo() {
+        let controller = makeDirectEditController(text: "", engine: DirectEditEngine())
+        controller.replyContext = ScreenContext(
+            appName: "WhatsApp", appIcon: "message", sender: "Yaeli",
+            message: "מה המצב", language: .hebrew)
+        controller.replies = [
+            ReplyOption(
+                intent: "Warm", icon: "heart", text: "בוא נעשה sync על ה-roadmap")
+        ]
+        controller.useBannerOption()
+
+        XCTAssertEqual(controller.language, .english, "the keys stay on English")
+        XCTAssertEqual(controller.hostLanguage, .hebrew)
+        XCTAssertEqual(controller.contextBefore, "בוא נעשה sync על ה-roadmap")
+    }
+
+    /// Send, or a new empty chat, with the keyboard still up. Appear is not
+    /// guaranteed, and Hebrew left on the host would put the next English
+    /// message on the right.
+    func testEmptyingTheFieldGivesTheHostBackToTheKeys() {
+        let target = MockTextTarget(text: "")
+        let controller = KeyboardController(
+            target: target, engine: RoutedIntelligence(onDevice: DirectEditEngine(), cloud: nil))
+        controller.replyContext = ScreenContext(
+            appName: "WhatsApp", appIcon: "message", sender: "Yaeli",
+            message: "מה המצב", language: .hebrew)
+        controller.aiSourceText = ""
+        controller.applyDirectly("בוא נעשה sync על ה-roadmap", for: .reply)
+        XCTAssertEqual(controller.hostLanguage, .hebrew)
+
+        target.text = ""
+        controller.refreshDocumentState()
+        XCTAssertEqual(controller.hostLanguage, .english)
+        XCTAssertEqual(controller.language, .english)
+    }
+
     /// **The host emptying the field is the one clearing path the user does not
     /// make**, and nothing else covers it: they tap Send in the other app, the
     /// field goes blank, `textDidChange` brings the news, and no key on this

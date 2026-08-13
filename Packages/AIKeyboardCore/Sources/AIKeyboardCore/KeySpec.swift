@@ -74,6 +74,39 @@ public enum KeyCap: Equatable, Sendable {
         case .aiFix: return AIAction.fix.title
         }
     }
+
+    // In RTL the caret sits on the left of typed text, so backspace removes the
+    // character to its right; the arrow must point at what it deletes. Rows stay
+    // LTR; only the glyph flips.
+    public static func backspaceSymbol(isRightToLeft: Bool) -> String {
+        isRightToLeft ? "delete.right" : "delete.left"
+    }
+
+    public static func deleteForwardSymbol(isRightToLeft: Bool) -> String {
+        isRightToLeft ? "delete.left" : "delete.right"
+    }
+
+    // `arrow.left` / `arrow.right` ARE in Apple's auto-mirroring list
+    // (`legacy_flippable.plist`); `delete.left` is not. Key rows are pinned
+    // `.leftToRight`, so we pick the name from `isRightToLeft` rather than
+    // setting an RTL environment on the Image (that would also flip the cursor
+    // arrows a second time, and would flip them in the editor by accident).
+    public static func cursorLeftSymbol(isRightToLeft: Bool) -> String {
+        isRightToLeft ? "arrow.right" : "arrow.left"
+    }
+
+    public static func cursorRightSymbol(isRightToLeft: Bool) -> String {
+        isRightToLeft ? "arrow.left" : "arrow.right"
+    }
+
+    /// VoiceOver follows the glyph. Identifiers stay `cursor-left` / `cursor-right`.
+    func accessibilityLabel(isRightToLeft: Bool) -> String {
+        switch self {
+        case .cursorLeft where isRightToLeft: return KeyCap.cursorRight.accessibilityLabel
+        case .cursorRight where isRightToLeft: return KeyCap.cursorLeft.accessibilityLabel
+        default: return accessibilityLabel
+        }
+    }
 }
 
 /// How wide a key is, in multiples of the standard letter key.

@@ -40,7 +40,7 @@ struct SlotGlyphView: View {
     let action: SlotAction
 
     var body: some View {
-        if let glyph = action.glyph {
+        if let glyph = action.glyph() {
             Image(systemName: glyph)
                 .font(.system(size: 15))
                 .foregroundStyle(Theme.Text.secondary)

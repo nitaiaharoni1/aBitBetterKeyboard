@@ -121,6 +121,16 @@ final class KeyboardViewController: UIInputViewController {
             .sink { [weak self] _ in self?.updateKeyboardHeight() }
             .store(in: &cancellables)
 
+        // The value in the sink is the new host language. `@Published` emits from
+        // `willSet`, so reading `controller.hostLanguage` here would still be the
+        // old one. Dictation and Reply write this without moving the keys.
+        // Synchronous on purpose: `.receive(on: RunLoop.main)` defers even when
+        // we are already on main, and the insert would land in a field that still
+        // thought it was English.
+        controller.$hostLanguage
+            .sink { [weak self] language in self?.publishInputLanguage(language) }
+            .store(in: &cancellables)
+
         // Names and text replacements the user already has, so `SuggestionEngine`
         // can offer "Nitai" without waiting for it to appear in a sentence
         // first. "Will not provide a complete repository of a language's
@@ -213,6 +223,11 @@ final class KeyboardViewController: UIInputViewController {
         // clock, and paying for a model call every time the keyboard appears, for
         // a word nobody has started typing, is not what this line is for.
         controller?.refreshDocumentState()
+        // Empty field: follow the keys, so Notes does not inherit Hebrew from
+        // a WhatsApp reply. Field that already has Hebrew: keep telling the
+        // host that — resetting here flipped an in-progress draft LTR.
+        controller?.prepareForNewDocument()
+        publishInputLanguage()
         updateKeyboardHeight()
     }
 
@@ -329,6 +344,23 @@ final class KeyboardViewController: UIInputViewController {
         // iOS tears a keyboard extension down without warning and there is no
         // callback that reliably fires when it does.
         PersonalLanguageModel.shared.save()
+    }
+
+    /// How WhatsApp, Notes and every other host decide writing direction.
+    ///
+    /// The extension's Info.plist is `PrimaryLanguage=en-US` and
+    /// `PrefersRightToLeft=false` because this keyboard is bilingual, and those
+    /// keys cannot change at runtime. `primaryLanguage` can, and it supersedes
+    /// them. Leaving it unset is a Hebrew (Arabic, Persian, …) keyboard whose
+    /// letters go into a left-aligned field: the host never learned the language
+    /// moved.
+    ///
+    /// Pass the language when you have it. `$hostLanguage` fires from `willSet`,
+    /// so the sink must use the emitted value. Appear calls
+    /// `prepareForNewDocument` first, then publishes `hostLanguage`.
+    private func publishInputLanguage(_ language: KeyboardLanguage? = nil) {
+        guard let language = language ?? controller?.hostLanguage else { return }
+        primaryLanguage = language.inputModeTag
     }
 
     /// The host app decides how tall the keyboard is only if we tell it. The

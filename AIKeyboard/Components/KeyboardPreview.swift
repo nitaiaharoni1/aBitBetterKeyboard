@@ -83,6 +83,7 @@ struct KeyboardPreview: View {
                 .font(Theme.Fonts.body)
                 .foregroundStyle(target.text.isEmpty ? Theme.Text.tertiary : Theme.Text.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .environment(\.layoutDirection, controller.hostLanguage.layoutDirection)
                 .padding(Theme.Space.sm)
                 .background(
                     RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)

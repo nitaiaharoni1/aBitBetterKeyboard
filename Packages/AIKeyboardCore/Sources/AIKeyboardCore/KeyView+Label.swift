@@ -45,12 +45,12 @@ extension KeyView {
                 .foregroundStyle(labelColor)
 
         case .backspace:
-            Image(systemName: "delete.left")
+            Image(systemName: KeyCap.backspaceSymbol(isRightToLeft: language.isRightToLeft))
                 .font(Theme.Glyph.font(19))
                 .foregroundStyle(labelColor)
 
         case .deleteForward:
-            Image(systemName: "delete.right")
+            Image(systemName: KeyCap.deleteForwardSymbol(isRightToLeft: language.isRightToLeft))
                 .font(Theme.Glyph.font(19))
                 .foregroundStyle(labelColor)
 
@@ -149,12 +149,12 @@ extension KeyView {
                 tint: Theme.Brand.solid)
 
         case .cursorLeft:
-            Image(systemName: "arrow.left")
+            Image(systemName: KeyCap.cursorLeftSymbol(isRightToLeft: language.isRightToLeft))
                 .font(Theme.Glyph.font(17))
                 .foregroundStyle(labelColor)
 
         case .cursorRight:
-            Image(systemName: "arrow.right")
+            Image(systemName: KeyCap.cursorRightSymbol(isRightToLeft: language.isRightToLeft))
                 .font(Theme.Glyph.font(17))
                 .foregroundStyle(labelColor)
 

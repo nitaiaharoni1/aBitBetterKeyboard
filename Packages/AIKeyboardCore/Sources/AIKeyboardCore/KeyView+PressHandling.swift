@@ -215,9 +215,9 @@ extension KeyView {
         alternatesTask?.cancel()
         alternatesTask = Task { @MainActor in
             // Never zero: opening on finger-down flashes the popup on every
-            // deliberate tap. `alternatesDelay` carries why the wait is not one
-            // number.
-            try? await Task.sleep(for: Self.alternatesDelay)
+            // deliberate tap. `alternatesHoldDelay` carries why the wait is not
+            // one number.
+            try? await Task.sleep(for: alternatesHoldDelay)
             guard !Task.isCancelled else { return }
             Feedback.modifierPress()
             withAnimation(Theme.Motion.quick) { showsAlternates = true }
