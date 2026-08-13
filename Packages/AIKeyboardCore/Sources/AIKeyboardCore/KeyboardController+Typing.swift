@@ -43,7 +43,13 @@ extension KeyboardController {
         // language or writes text this keyboard did not decode retires it —
         // otherwise the next grouped press rewrites whatever now sits there.
         // Letters, delete and shift are the three that continue it.
-        if grouped.isTyping, GroupedInput.interrupts(cap) { endGroupedWord() }
+        if grouped.isTyping, GroupedInput.interrupts(cap) {
+            if cap == .space || cap == .ret {
+                closeGroupedIfCurrentWord()
+            } else {
+                endGroupedWord()
+            }
+        }
 
         switch cap {
         case .character(let value):
@@ -68,7 +74,7 @@ extension KeyboardController {
             // Before the newline: `previousWords` reads only the last line, so
             // learning after `\n` would see an empty line and skip the word
             // Return just finished. Chat Send is often this key.
-            learnWordJustCommitted()
+            if !consumeGroupedSkipLearn() { learnWordJustCommitted() }
             target?.insertText("\n")
             lastLearnedFolded = nil
             // The line is finished, so any word on it was finished with it — the
@@ -162,7 +168,14 @@ extension KeyboardController {
             return
         }
         if isGroupedTyping, pinGroupedLetter(value) { return }
-        if isGroupedTyping { endGroupedWord() }
+        // A full stop is a commit, the same as space. Closing without the flag
+        // would teach the decoder's guess; a letter that is not a grouped cap
+        // just ends the claim.
+        if grouped.isTyping, Self.finishesWord(value) {
+            closeGroupedIfCurrentWord()
+        } else if isGroupedTyping {
+            endGroupedWord()
+        }
         // **Only the refusal, never the whole banner.** "Type something first" stops
         // being true the moment they type something. An *answer* has to survive the
         // same keystroke, because fixing a typo before accepting a rewrite is
@@ -186,7 +199,9 @@ extension KeyboardController {
         // once the mark is in the field, `learnWordJustCommitted` will refuse so
         // a later space does not count the same word twice. Apostrophe, hyphen
         // and Hebrew geresh stay inside the word.
-        if Self.finishesWord(output) { learnWordJustCommitted() }
+        if Self.finishesWord(output), !consumeGroupedSkipLearn() {
+            learnWordJustCommitted()
+        }
         target?.insertText(output.replacingOccurrences(of: "\n", with: ""))
         if shift == .on { shift = .off }
         refreshSuggestions()
@@ -215,7 +230,10 @@ extension KeyboardController {
         // anything under the cursor. Everything below — including committing the
         // bold suggestion — then runs exactly as it does with grouping off, on the
         // text the decoder already wrote into the field.
-        endGroupedWord()
+        //
+        // `press` already closed a matching grouped word on `.space`. Idle
+        // space-on-pause, and a caret that moved, still have to decide here.
+        closeGroupedIfCurrentWord()
 
         // Two spaces in quick succession become a full stop, as on the system keyboard.
         let now = Date()
@@ -228,6 +246,7 @@ extension KeyboardController {
             target?.insertText(". ")
             lastSpaceTapAt = nil
             shift = store.storedAutocapitalise ? .on : .off
+            _ = consumeGroupedSkipLearn()
             refreshSuggestions()
             return
         }
@@ -257,8 +276,9 @@ extension KeyboardController {
         }
 
         // After any correction, so what gets remembered is the word that ended up
-        // in the field rather than the keystrokes that were replaced.
-        learnWordJustCommitted()
+        // in the field rather than the keystrokes that were replaced. A grouped
+        // guess the user did not pin is not a word they typed.
+        if !consumeGroupedSkipLearn() { learnWordJustCommitted() }
         target?.insertText(" ")
         lastLearnedFolded = nil
         // The repair is over: this word is committed and the next one is nobody's
@@ -340,7 +360,8 @@ extension KeyboardController {
         // Picked from the grid rather than pressed as a `KeyCap`, so this is the
         // one insertion `press(_:)` never speaks for. It still put text in.
         Feedback.keyClick(.tock)
-        learnWordJustCommitted()
+        closeGroupedIfCurrentWord()
+        if !consumeGroupedSkipLearn() { learnWordJustCommitted() }
         target?.insertText(emoji)
         recentEmoji.removeAll { $0 == emoji }
         recentEmoji.insert(emoji, at: 0)

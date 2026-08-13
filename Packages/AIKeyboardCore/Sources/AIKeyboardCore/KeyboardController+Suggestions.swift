@@ -10,6 +10,12 @@ extension KeyboardController {
         // bar off. This function is the one thing every document change already
         // goes through, including the host's own `textDidChange`.
         refreshDocumentState()
+        // The field already holds the decoder's guess. Scoring that as typed
+        // text replaces the grouped bar and lets space commit a third word.
+        if grouped.isTyping {
+            dropIdleTypingIfStale()
+            return
+        }
         guard store.storedPredictions else {
             suggestions = []
             dropIdleTypingIfStale()
@@ -79,6 +85,13 @@ extension KeyboardController {
     /// A delete that erases the whole word is the other empty, and must not
     /// count: `deletedWordPrefix` is `""` then, not nil.
     func adoptOpenWord() {
+        // The field holds a decoder guess, not a word the user typed. Stashing
+        // it here is how Chat Send and the space after `textDidChange` taught
+        // the guess even when skip-learn ran.
+        if grouped.isTyping, !grouped.allLettersPinned {
+            openWord = ""
+            return
+        }
         let raw = currentWordPrefix
         let word = SuggestionEngine.wordCore(raw)
         if word.isEmpty {
@@ -205,8 +218,9 @@ extension KeyboardController {
             guard self.idleTypedAt == typedAt else { return }
             // A tap in the host field moved the caret onto a different word
             // without a key. The pause belonged to `armedPrefix`.
-            guard SuggestionEngine.comparable(self.currentWordPrefix)
-                == SuggestionEngine.comparable(armedPrefix)
+            guard
+                SuggestionEngine.comparable(self.currentWordPrefix)
+                    == SuggestionEngine.comparable(armedPrefix)
             else { return }
             self.performIdleTyping()
         }
@@ -229,6 +243,7 @@ extension KeyboardController {
                 Feedback.keyPress()
                 Feedback.keyClick(.tock)
                 clearRevertibleEdit()
+                endGroupedWord()
                 replaceCurrentWord(with: candidate.text)
                 recordCommittedWord(SuggestionEngine.wordCore(candidate.text))
                 deletedWordPrefix = nil
@@ -260,7 +275,9 @@ extension KeyboardController {
     /// A credential field, a recording, a hand repair, a selection, or the
     /// emoji panel: none of those is a pause in ordinary typing.
     private var idleTypingMayRun: Bool {
-        guard overlay == .none, !isDictating, !isCorrectingWordByHand, selection == nil else {
+        guard overlay == .none, !isDictating, !grouped.isTyping, !isCorrectingWordByHand,
+            selection == nil
+        else {
             return false
         }
         return SecureField.permitsRead(
@@ -289,6 +306,7 @@ extension KeyboardController {
         // one insertion that reaches the document without a `KeyCap` behind it,
         // and `press(_:)` is where every other one gets its click.
         Feedback.keyClick(.tock)
+        endGroupedWord()
         replaceCurrentWord(with: suggestion.text)
         // The candidate may already carry a mark (`hello,`). The space-bar path
         // skips a word that is already terminated so `hello.` + space does not

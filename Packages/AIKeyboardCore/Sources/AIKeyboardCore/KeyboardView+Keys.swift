@@ -312,17 +312,22 @@ extension KeyboardView {
 
     /// What lifting a finger on the second or later item of a key's popup does.
     ///
-    /// Two kinds of key have one and they mean opposite things. A letter has
-    /// *already inserted* its character on finger-down, so picking an accent is a
-    /// replacement — delete, then type the alternate. The one-tap rewrite key has
-    /// deliberately run nothing yet (see `KeyView.runsOnLift`), so picking a
-    /// register is the whole action and there is nothing to undo first.
+    /// A letter has already inserted its character on finger-down, so picking an
+    /// accent is a replacement: delete, then type the alternate. A grouped key
+    /// has already appended a stroke, so picking a letter pins that stroke. The
+    /// one-tap rewrite key has deliberately run nothing yet (see
+    /// `KeyView.runsOnLift`), so picking a register is the whole action.
     func alternateHandler(for key: KeySpec) -> ((String) -> Void)? {
         if key.cap == .quickTone {
             return controller.toneAlternates.count > 1
                 ? { controller.selectTone(named: $0) } : nil
         }
         guard !key.alternates.isEmpty else { return nil }
+        // Finger-down already appended a grouped stroke. Delete-then-retype
+        // would pin the previous key or end the word.
+        if key.groupedLetters != nil {
+            return { letter in _ = controller.pinGroupedLetter(letter) }
+        }
         return { alternate in
             controller.deleteBackward()
             controller.press(.character(alternate))

@@ -145,6 +145,7 @@ extension KeyboardController {
     }
 
     func replaceTargetText(with replacement: String) {
+        endGroupedWord()
         guard !aiSourceText.isEmpty else {
             target?.insertText(replacement)
             // **The one branch here that used to skip this, and the only one that

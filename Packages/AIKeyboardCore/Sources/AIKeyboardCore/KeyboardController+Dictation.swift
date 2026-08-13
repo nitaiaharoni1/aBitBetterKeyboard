@@ -297,6 +297,7 @@ extension KeyboardController {
     /// partial path never gets this far; `streamDictation` asks
     /// `canReplaceStreamedDictation(with:)` first and gives up instead.
     func replaceStreamedDictation(with text: String) {
+        endGroupedWord()
         guard !streamedDictation.isEmpty else {
             insertStreamedDictation(text)
             return
@@ -324,6 +325,7 @@ extension KeyboardController {
 
     /// Writes a reading into a field this recording has nothing standing in.
     private func insertStreamedDictation(_ text: String) {
+        endGroupedWord()
         // Asked of the field as it is now, which after an abandoned draft includes
         // that draft: this is a question about what the text is landing next to.
         let before = contextBefore

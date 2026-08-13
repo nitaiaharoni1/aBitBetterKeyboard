@@ -38,6 +38,7 @@ extension KeyboardController {
             plane = .letters
         }
         announceLanguage(destination, in: enabled, pending: false, step: places)
+        endGroupedWord()
         refreshSuggestions()
         reportInteraction(.languageSwitch)
     }

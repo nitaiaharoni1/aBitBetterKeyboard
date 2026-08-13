@@ -1118,4 +1118,200 @@ final class GroupedKeysTests: XCTestCase {
         XCTAssertGreaterThan(GroupedLexiconResource.words(for: .hebrew).count, 10_000)
         XCTAssertEqual(GroupedLexiconResource.words(for: .english).first, "the")
     }
+
+    // MARK: Session ownership
+
+    /// The claim lives on the type. A prefix that no longer matches lastWritten
+    /// is a caret move, not a key, and the strokes must die there.
+    func testAStalePrefixAbandonsTheSession() {
+        let input = GroupedInput()
+        input.append(cap: "qw\nas")
+        input.lastWritten = "as"
+        XCTAssertFalse(input.abandonIfStale(prefix: "as"))
+        XCTAssertTrue(input.isTyping)
+        XCTAssertTrue(input.abandonIfStale(prefix: "other"))
+        XCTAssertFalse(input.isTyping)
+        XCTAssertTrue(input.abandonIfStale(prefix: "other"))
+    }
+
+    /// Space learns only when every letter was pinned. The flag has to survive
+    /// `clear`, because `press` ends the session before `learnWordJustCommitted`.
+    func testClosingAnUnpinnedWordSkipsTheNextLearn() {
+        let input = GroupedInput()
+        input.append(cap: "qw\nas")
+        input.closeForKeyCommit()
+        XCTAssertFalse(input.isTyping)
+        XCTAssertTrue(input.consumeSkipLearn())
+        XCTAssertFalse(input.consumeSkipLearn())
+    }
+
+    func testClosingAFullyPinnedWordDoesNotSkipLearn() {
+        let input = GroupedInput()
+        input.append(cap: "qw\nas", pin: "q")
+        XCTAssertTrue(input.allLettersPinned)
+        input.closeForKeyCommit()
+        XCTAssertFalse(input.consumeSkipLearn())
+    }
+
+    /// Delete-then-retype on the second key pinned the first key or ended the
+    /// word. Pinning must keep both strokes and mark the one just pressed.
+    @MainActor
+    func testPinningTheSecondKeyKeepsTheWordOpen() {
+        SharedStore.shared.groupedLevel = .l1
+        defer { SharedStore.shared.groupedLevel = .off }
+        let target = MockTextTarget()
+        let controller = KeyboardController(target: target, language: .english)
+        controller.pressGroupedKey("qw\nas")
+        controller.pressGroupedKey("er\ndf")
+        XCTAssertTrue(controller.pinGroupedLetter("e"))
+        XCTAssertTrue(controller.grouped.isTyping)
+        XCTAssertEqual(controller.grouped.strokes.count, 2)
+        XCTAssertEqual(controller.grouped.pins[1], "e")
+        XCTAssertFalse(target.text == "e", "the old path typed a lone e and closed")
+    }
+
+    /// The shipping popup path, not the controller method. The old handler
+    /// deleted the stroke it was supposed to pin.
+    @MainActor
+    func testTheAlternateHandlerPinsTheGroupedStrokeItDoesNotDeleteIt() throws {
+        SharedStore.shared.groupedLevel = .l1
+        defer { SharedStore.shared.groupedLevel = .off }
+        let target = MockTextTarget()
+        let controller = KeyboardController(target: target, language: .english)
+        let view = KeyboardView(controller: controller)
+        let band = KeyboardLayout.rows(for: .english, plane: .letters, grouping: .l1)[0]
+        let second = try XCTUnwrap(
+            band.keys.first { $0.groupedLetters == ["e", "r", "d", "f"] })
+        let handler = try XCTUnwrap(view.alternateHandler(for: second))
+
+        controller.pressGroupedKey("qw\nas")
+        controller.pressGroupedKey("er\ndf")
+        handler("e")
+
+        XCTAssertTrue(controller.grouped.isTyping)
+        XCTAssertEqual(controller.grouped.strokes.count, 2)
+        XCTAssertEqual(controller.grouped.pins[1], "e")
+    }
+
+    /// `textDidChange` always calls `refreshSuggestions`. The ordinary engine
+    /// then treats the guess as typed letters. The grouped bar must survive.
+    @MainActor
+    func testRefreshSuggestionsDoesNotReplaceTheGroupedBar() {
+        SharedStore.shared.groupedLevel = .l1
+        defer { SharedStore.shared.groupedLevel = .off }
+        let controller = KeyboardController(target: MockTextTarget(), language: .english)
+        controller.pressGroupedKey("qw\nas")
+        let before = controller.suggestions.map(\.text)
+        XCTAssertFalse(before.isEmpty, "grouped press must fill the bar")
+        controller.refreshSuggestions()
+        XCTAssertEqual(controller.suggestions.map(\.text), before)
+    }
+
+    /// A bar tap used to leave the strokes live. The next delete then
+    /// re-decoded and inserted a shorter guess after the space.
+    @MainActor
+    func testApplyingASuggestionEndsTheGroupedSession() {
+        SharedStore.shared.groupedLevel = .l1
+        defer { SharedStore.shared.groupedLevel = .off }
+        let target = MockTextTarget()
+        let controller = KeyboardController(target: target, language: .english)
+        controller.pressGroupedKey("qw\nas")
+        controller.pressGroupedKey("er\ndf")
+        let pick = Suggestion(text: "we", language: .english)
+        controller.apply(pick)
+        XCTAssertFalse(controller.grouped.isTyping)
+        XCTAssertEqual(target.text, "we ")
+        controller.deleteBackward()
+        XCTAssertEqual(target.text, "we")
+    }
+
+    /// A caret move does not go through a key. Backspace must fall through to
+    /// ordinary delete rather than rewrite the word now under the cursor.
+    @MainActor
+    func testBackspaceAfterACaretMoveDoesNotRewriteTheNewWord() {
+        SharedStore.shared.groupedLevel = .l1
+        defer { SharedStore.shared.groupedLevel = .off }
+        let target = MockTextTarget()
+        let controller = KeyboardController(target: target, language: .english)
+        controller.pressGroupedKey("qw\nas")
+        XCTAssertTrue(controller.grouped.isTyping)
+        target.text = "hello"
+        XCTAssertFalse(controller.deleteGroupedStroke())
+        XCTAssertFalse(controller.grouped.isTyping)
+        XCTAssertEqual(target.text, "hello")
+    }
+
+    /// The decoder wrote the field. Learning that guess made the next collision
+    /// prefer it over the corpus.
+    @MainActor
+    func testSpaceDoesNotLearnAnUnpinnedGroupedGuess() {
+        SharedStore.shared.groupedLevel = .l1
+        defer { SharedStore.shared.groupedLevel = .off }
+        let target = MockTextTarget()
+        let controller = KeyboardController(target: target, language: .english)
+        controller.pressGroupedKey("qw\nas")
+        controller.pressGroupedKey("er\ndf")
+        // The host fires `textDidChange` after every rewrite. That is what
+        // puts the guess in `openWord`; skip-learn alone does not close that door.
+        controller.refreshSuggestions()
+        let guess = target.text
+        XCTAssertGreaterThanOrEqual(guess.count, 2)
+        controller.insertSpace()
+        XCTAssertEqual(controller.personal.count(of: guess, in: .english), 0)
+    }
+
+    /// Every letter named is a word the user typed.
+    @MainActor
+    func testSpaceLearnsAFullyPinnedGroupedWord() {
+        SharedStore.shared.groupedLevel = .l1
+        defer { SharedStore.shared.groupedLevel = .off }
+        let target = MockTextTarget()
+        let controller = KeyboardController(target: target, language: .english)
+        controller.shift = .off
+        controller.pressGroupedKey("qw\nas")
+        XCTAssertTrue(controller.pinGroupedLetter("w"))
+        controller.pressGroupedKey("er\ndf")
+        XCTAssertTrue(controller.pinGroupedLetter("e"))
+        XCTAssertEqual(target.text, "we")
+        controller.refreshSuggestions()
+        controller.insertSpace()
+        XCTAssertEqual(controller.personal.count(of: "we", in: .english), 1)
+    }
+
+    /// A full stop commits the word the same way space does. The old path
+    /// closed the session and then learned the guess.
+    @MainActor
+    func testPeriodDoesNotLearnAnUnpinnedGroupedGuess() {
+        SharedStore.shared.groupedLevel = .l1
+        defer { SharedStore.shared.groupedLevel = .off }
+        let target = MockTextTarget()
+        let controller = KeyboardController(target: target, language: .english)
+        controller.pressGroupedKey("qw\nas")
+        controller.pressGroupedKey("er\ndf")
+        controller.refreshSuggestions()
+        let guess = target.text
+        XCTAssertGreaterThanOrEqual(guess.count, 2)
+        controller.press(.character("."))
+        XCTAssertEqual(controller.personal.count(of: guess, in: .english), 0)
+        XCTAssertFalse(controller.grouped.isTyping)
+    }
+
+    /// Space after a caret move used to close the old session against the new
+    /// word, so skip-learn attached to `hello`.
+    @MainActor
+    func testSpaceAfterACaretMoveDoesNotSkipLearnOnTheNewWord() {
+        SharedStore.shared.groupedLevel = .l1
+        defer { SharedStore.shared.groupedLevel = .off }
+        let target = MockTextTarget()
+        let controller = KeyboardController(target: target, language: .english)
+        controller.pressGroupedKey("qw\nas")
+        controller.pressGroupedKey("er\ndf")
+        controller.refreshSuggestions()
+        let guess = target.text
+        target.text = "hello"
+        controller.insertSpace()
+        XCTAssertEqual(controller.personal.count(of: "hello", in: .english), 1)
+        XCTAssertEqual(controller.personal.count(of: guess, in: .english), 0)
+        XCTAssertFalse(controller.grouped.isTyping)
+    }
 }

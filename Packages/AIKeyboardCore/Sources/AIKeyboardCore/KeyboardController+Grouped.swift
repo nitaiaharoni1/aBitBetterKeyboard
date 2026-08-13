@@ -158,6 +158,45 @@ public final class GroupedInput {
 
     func removeLast() { if !strokes.isEmpty { strokes.removeLast() } }
 
+    /// True when the user named every letter. Space may then learn the word.
+    var allLettersPinned: Bool {
+        !strokes.isEmpty && strokes.allSatisfy { $0.pinned != nil }
+    }
+
+    /// The letters the user named, in keystroke order. Only complete when
+    /// `allLettersPinned`.
+    var pinnedWord: String {
+        strokes.compactMap(\.pinned).joined()
+    }
+
+    /// Set when a commit closes a word the decoder guessed. Consumed by the
+    /// commit path so `press` can end the session before `learnWordJustCommitted`
+    /// runs, without losing the answer. Must survive `clear`.
+    private(set) var skipLearnOnNextCommit = false
+
+    /// Drop the session if `prefix` is no longer what we last wrote.
+    /// Returns true when there is no live session afterwards.
+    @discardableResult
+    func abandonIfStale(prefix: String) -> Bool {
+        guard isTyping else { return true }
+        guard prefix != lastWritten else { return false }
+        clear()
+        return true
+    }
+
+    /// Close on a commit (space, return, emoji, a full stop). Remember whether
+    /// the decoder guessed, so the caller can skip learn after `clear`.
+    func closeForKeyCommit() {
+        skipLearnOnNextCommit = isTyping && !allLettersPinned
+        clear()
+    }
+
+    func consumeSkipLearn() -> Bool {
+        let skip = skipLearnOnNextCommit
+        skipLearnOnNextCommit = false
+        return skip
+    }
+
     func clear() {
         strokes = []
         startedShifted = false
@@ -261,9 +300,7 @@ extension KeyboardController {
         // at which point the next press rewrites whatever word is now there. So
         // the claim is checked rather than trusted: if the field no longer holds
         // what was last written into it, the word starts here.
-        if grouped.isTyping, currentWordPrefix != grouped.lastWritten {
-            grouped.clear()
-        }
+        grouped.abandonIfStale(prefix: currentWordPrefix)
         // Shift is read once, at the first key. Reading it per keystroke made the
         // capital vanish on the second one: `applyGroupedGuess` consumes a
         // one-shot shift, so `The` decoded as `The`, then `the`.
@@ -277,7 +314,6 @@ extension KeyboardController {
         }
         grouped.append(cap: cap, pin: pin)
         applyGroupedGuess()
-        noteTypedInput()
     }
 
     /// Re-decode and rewrite the word in progress.
@@ -289,11 +325,22 @@ extension KeyboardController {
         let code = grouped.code(language: language, level: level)
         let pins = grouped.pins
         let candidates = decoder.candidates(startingWith: code, pinnedTo: pins, limit: 3)
-        let guess = grouped.cased(candidates.first ?? grouped.literal, in: language)
+        // Prefix completions are for a word still being typed. Once every
+        // keystroke has a letter, that string is the word; offering "were" over
+        // pinned "we" would learn a word nobody typed.
+        let raw =
+            grouped.allLettersPinned
+            ? grouped.pinnedWord
+            : (candidates.first ?? grouped.literal)
+        let guess = grouped.cased(raw, in: language)
         replaceCurrentWord(with: guess)
         grouped.lastWritten = guess
         if shift == .on { shift = .off }
-        showGroupedCandidates(candidates.map { grouped.cased($0, in: language) })
+        let bar =
+            grouped.allLettersPinned
+            ? [guess]
+            : candidates.map { grouped.cased($0, in: language) }
+        showGroupedCandidates(bar)
     }
 
     /// The bar, while a grouped word is in progress.
@@ -326,7 +373,7 @@ extension KeyboardController {
     /// longer matches what is on screen. Returns false when no grouped word is in
     /// progress, so ordinary deletion carries on.
     func deleteGroupedStroke() -> Bool {
-        guard grouped.isTyping else { return false }
+        if grouped.abandonIfStale(prefix: currentWordPrefix) { return false }
         grouped.removeLast()
         if grouped.isTyping {
             applyGroupedGuess()
@@ -343,12 +390,12 @@ extension KeyboardController {
     }
 
     /// A long press picked one letter out of the group just pressed.
-    /// Returns false if it was an ordinary alternate, which the caller then
-    /// handles the old way.
+    /// Returns false if the letter is not in the last group, or the session
+    /// was already stale.
     func pinGroupedLetter(_ letter: String) -> Bool {
-        guard grouped.isTyping, grouped.pinLast(to: letter) else { return false }
+        if grouped.abandonIfStale(prefix: currentWordPrefix) { return false }
+        guard grouped.pinLast(to: letter) else { return false }
         applyGroupedGuess()
-        noteTypedInput()
         return true
     }
 
@@ -356,6 +403,22 @@ extension KeyboardController {
     /// moving — closes the grouped session, because the strokes no longer
     /// describe the word under the cursor.
     func endGroupedWord() { grouped.clear() }
+
+    /// Commit the word under the cursor, or drop the session if the caret moved.
+    /// Skip-learn must not attach to a different word.
+    func closeGroupedIfCurrentWord() {
+        if grouped.abandonIfStale(prefix: currentWordPrefix) { return }
+        grouped.closeForKeyCommit()
+    }
+
+    /// Forget a decoder guess we decided not to learn. `openWord` is the other
+    /// door into `recordCommittedWord`: the host's `textDidChange` stores the
+    /// guess there, and the next empty prefix would write it anyway.
+    func consumeGroupedSkipLearn() -> Bool {
+        let skip = grouped.consumeSkipLearn()
+        if skip { openWord = "" }
+        return skip
+    }
 
     /// Words the decoder should rank above the corpus: the user's own dictionary
     /// and what the keyboard has learned. The same precedence
