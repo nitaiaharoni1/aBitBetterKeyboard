@@ -428,12 +428,14 @@ final class LanguageCatalogueTests: LanguageCatalogueTestFixture {
     }
 
     /// Catalan's `l` carries the punt volat, which is a letter's mark the same
-    /// way the geresh is and was reachable on no plane at all.
+    /// way the geresh is.
     ///
     /// `l·l` is a different sound from `ll` — `col·legi`, `paral·lel` — so
     /// spelling it `ll` is an error rather than a shortcut. It arrives attached
     /// to its letter, because picking an alternate *replaces* the character the
-    /// key already typed: a bare `·` would eat the `l` in front of it.
+    /// key already typed: a bare `·` *alternate* would eat the `l` in front of
+    /// it. SwiftKey's symbols page now offers a bare `·` as its own key, which
+    /// is a second tap and does not replace that rule.
     func testCatalanCanTypeThePuntVolat() {
         let l = KeyboardLayout.rows(for: .catalan, plane: .letters)
             .flatMap(\.keys)
@@ -442,8 +444,11 @@ final class LanguageCatalogueTests: LanguageCatalogueTestFixture {
         XCTAssertFalse(
             l?.alternates.contains("·") ?? true,
             "a bare interpunt would replace the l it belongs to")
-        // Nowhere else offers it, which is why it had to go on the letter.
-        XCTAssertFalse(reachablePunctuation(.catalan).contains("·"))
+        // SwiftKey puts a bare · on the symbols page. That is a second tap,
+        // not an alternate: a bare · *alternate* would still eat the l.
+        XCTAssertTrue(
+            reachablePunctuation(.catalan).contains("·"),
+            "SwiftKey's symbols page lost the interpunt")
         XCTAssertTrue(reachablePunctuation(.greek).contains("·"), "Greek's is its ano teleia")
     }
 

@@ -29,7 +29,7 @@ final class NumbersSymbolsLayoutTests: LanguageCatalogueTestFixture {
         XCTAssertEqual(rows.count, 4, "the old symbols plane was three rows and had no digits")
         XCTAssertEqual(characters(in: rows[0]), KeyboardLanguage.english.digits)
         XCTAssertEqual(characters(in: rows[1]), Self.brackets)
-        XCTAssertEqual(characters(in: rows[2]), "_\\|~<>$€¥•")
+        XCTAssertEqual(characters(in: rows[2]), "_\\|~<>$€£·")
         assertPunctuationRow(rows[3], planeLabel: "123", language: .english)
     }
 
@@ -50,6 +50,22 @@ final class NumbersSymbolsLayoutTests: LanguageCatalogueTestFixture {
             XCTAssertEqual(
                 characters(in: symbols[0]), language.digits, "\(language.displayName) symbols")
         }
+    }
+
+    /// ¥ and • used to occupy the two slots SwiftKey gives to £ and ·. A layout
+    /// that dropped them without a long press would make yen and the bullet
+    /// untypeable. Welsh's currency *is* £, so the long press has to sit on
+    /// that leading key, not only on the extras list.
+    func testTheDisplacedMarksStayReachableAsLongPresses() {
+        let english = KeyboardLayout.rows(for: .english, plane: .symbols).flatMap(\.keys)
+        XCTAssertEqual(english.first { $0.cap == .character("£") }?.alternates, ["¥"])
+        XCTAssertEqual(english.first { $0.cap == .character("·") }?.alternates, ["•"])
+        XCTAssertNil(english.first { $0.cap == .character("¥") })
+        XCTAssertNil(english.first { $0.cap == .character("•") })
+
+        let welsh = KeyboardLayout.rows(for: .welsh, plane: .symbols).flatMap(\.keys)
+        XCTAssertEqual(welsh.first { $0.cap == .character("£") }?.alternates, ["¥"])
+        XCTAssertEqual(characters(in: KeyboardLayout.rows(for: .welsh, plane: .symbols)[2]), "_\\|~<>£$€·")
     }
 
     /// Hebrew still earns ₪ on the connectors row. Replacing that row with the
