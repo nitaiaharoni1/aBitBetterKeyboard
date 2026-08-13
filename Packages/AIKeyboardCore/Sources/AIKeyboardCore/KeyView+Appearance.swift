@@ -197,14 +197,19 @@ extension KeyView {
     /// The balloon that pops above a letter while the finger is down, so the
     /// glyph stays readable under the thumb.
     ///
-    /// Grows out of the key rather than fading in: a fade is a caption appearing,
-    /// a scale from the bottom is the key itself lifting so the letter can be
-    /// read. Reduce Motion keeps the fade. The popup takes this seat the moment
-    /// it opens — `drawsCharacterCallout(popupIsVisible:)` is what keeps the two
-    /// from stacking.
+    /// **Tracks `isTouching`, not `isPressed`.** `isPressed` is set in
+    /// `DragGesture.onChanged`, which can lag the touch. `@GestureState`
+    /// updates in `.updating` on finger-down, which is when the system
+    /// keyboard's preview appears. Insertion is identity rather than
+    /// `Motion.pop`: that scale sat outside the cap's `animation(nil)` and
+    /// SwiftUI's default insertion spent a third of a second growing from
+    /// 0.6, so a tap was over before the letter was readable. The strip
+    /// still uses `pop` when it takes this seat —
+    /// `drawsCharacterCallout(popupIsVisible:)` is what keeps the two from
+    /// stacking.
     @ViewBuilder
     var callout: some View {
-        if isPressed, showsCharacterCallout, case .character(let value) = spec.cap {
+        if isTouching, showsCharacterCallout, case .character(let value) = spec.cap {
             let glyph = shift.isUppercase ? language.uppercased(value) : value
             Text(displayLabel(glyph))
                 .font(.system(size: calloutFontSize, weight: .medium))
@@ -223,7 +228,7 @@ extension KeyView {
                 .fixedSize()
                 .offset(y: -height + Self.calloutOverlap)
                 .allowsHitTesting(false)
-                .transition(Theme.Motion.pop(reduceMotion: reduceMotion))
+                .transition(.identity)
         }
     }
 

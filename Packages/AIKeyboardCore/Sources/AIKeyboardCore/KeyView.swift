@@ -137,17 +137,22 @@ public struct KeyView: View {
         // neighbour moves; applied before the overlays, so the callouts stay
         // anchored where the key sits at rest.
         .offset(y: isPressed ? Self.pressTravel : 0)
+        .overlay(alignment: .bottom) { callout }
+        // The balloon follows `isTouching`, which changes a beat before
+        // `isPressed`. Without this, that insertion is SwiftUI's default
+        // animation, and a tap is over before the letter is readable.
+        .animation(nil, value: isTouching)
+        .overlay(alignment: .bottom) { alternatesPopup }
+        .overlay(alignment: .bottom) { languageCallout }
         // Instant on the way down: `Motion.press` is 100ms, and a tap is over
         // before that ease-out finishes, so the pressed fill the tokens specify
         // was a colour the thumb never saw. The release still eases, so the
-        // flash is the full grey rather than a smear back to white.
+        // flash is the full grey rather than a smear back to white. After the
+        // overlays so a hold that opens the strip is in the same transaction.
         .animation(isPressed ? nil : Theme.Motion.press, value: isPressed)
-        .overlay(alignment: .bottom) { callout }
-        .overlay(alignment: .bottom) { alternatesPopup }
-        .overlay(alignment: .bottom) { languageCallout }
         // High enough that a balloon wider than the key sits above every
         // neighbour, not only the ones SwiftUI happened to draw first.
-        .zIndex(isPressed ? 10 : 0)
+        .zIndex((isTouching || isPressed) ? 10 : 0)
         .contentShape(Rectangle())
         .gesture(pressGesture)
         // **The whole key, not the gesture alone.** `.disabled` takes the touch out
