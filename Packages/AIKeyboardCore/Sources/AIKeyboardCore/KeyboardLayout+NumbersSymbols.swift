@@ -7,7 +7,9 @@ extension KeyboardLayout {
 
     static func numbers(for language: KeyboardLanguage) -> [KeyRow] {
         [
-            KeyRow(id: 0, keys: chars(language.digits)),
+            KeyRow(
+                id: 0, keys: chars(language.digits),
+                heightBias: -Theme.Metrics.rowHeightBias),
             KeyRow(
                 id: 1,
                 keys: chars(connectors(for: language))
@@ -29,7 +31,9 @@ extension KeyboardLayout {
         // `ForEach` with duplicate identity.
         let others = ["$", "€", "¥", "•"].filter { $0 != language.currency }.prefix(3)
         return [
-            KeyRow(id: 0, keys: chars("[]{}#%^*+=")),
+            KeyRow(
+                id: 0, keys: chars("[]{}#%^*+="),
+                heightBias: -Theme.Metrics.rowHeightBias),
             KeyRow(
                 id: 1,
                 keys: chars("_\\|~<>") + [KeySpec(.character(language.currency))]
@@ -144,7 +148,10 @@ extension KeyboardLayout {
         keys.append(punctuationKey(for: language))
         // Match Backspace in the row above. Both are trailing function keys.
         keys.append(KeySpec(.ret, width: .unit(functionKeyUnits)))
-        return KeyRow(id: 3, keys: keys)
+        return KeyRow(
+            id: 3, keys: keys,
+            heightBias: Theme.Metrics.spaceRowHeightBias(
+                plane: plane, showsNumberRow: false))
     }
 
     /// The bottom row's punctuation key: a full stop on the cap, the other four

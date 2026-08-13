@@ -157,9 +157,10 @@ extension KeyboardView {
                     // grouping cannot change the keyboard's height.** The band is
                     // two key-heights *plus* the one row gap that used to sit
                     // between the two rows it merged; take that gap away and the
-                    // whole keyboard comes up short by it.
-                    height: height * CGFloat(row.heightUnits)
-                        + rowSpacing * CGFloat(row.heightUnits - 1))
+                    // whole keyboard comes up short by it. `heightBias` is the
+                    // other height that must net to zero: the numbers row gives
+                    // three points to the space row, and those two cancel.
+                    height: row.drawnHeight(keyHeight: height, rowSpacing: rowSpacing))
             }
         }
     }

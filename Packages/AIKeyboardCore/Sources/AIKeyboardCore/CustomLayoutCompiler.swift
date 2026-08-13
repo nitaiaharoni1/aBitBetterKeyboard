@@ -51,7 +51,9 @@ extension KeyboardLayout {
         rows.append(
             compile(
                 customization.bottomRow, id: RowID.bottom, language: language, plane: plane,
-                showsGlobe: showsGlobe))
+                showsGlobe: showsGlobe,
+                heightBias: Theme.Metrics.spaceRowHeightBias(
+                    plane: plane, showsNumberRow: customization.showsNumberRow)))
 
         if !customization.cursorRow.isEmpty {
             rows.append(
@@ -72,7 +74,8 @@ extension KeyboardLayout {
             // Centred the way a short letter row is, so a twelve-column layout does
             // not stretch ten digits across the whole width and break the columns
             // the rest of the keyboard lines up on.
-            sideInsetUnits: max(0, (CGFloat(columns) - CGFloat(digits.count)) / 2))
+            sideInsetUnits: max(0, (CGFloat(columns) - CGFloat(digits.count)) / 2),
+            heightBias: -Theme.Metrics.rowHeightBias)
     }
 
     /// One editable row.
@@ -88,7 +91,8 @@ extension KeyboardLayout {
         id: Int,
         language: KeyboardLanguage,
         plane: KeyboardPlane,
-        showsGlobe: Bool
+        showsGlobe: Bool,
+        heightBias: CGFloat = 0
     ) -> KeyRow {
         let keys: [KeySpec] = slots.compactMap { slot in
             // iOS owns this one. The layout stores it, the system decides whether
@@ -116,7 +120,7 @@ extension KeyboardLayout {
             }
             return KeySpec(cap, width: keyWidth(slot.width), id: identifier(for: cap, slot: slot))
         }
-        return KeyRow(id: id, keys: keys, sideInsetUnits: 0)
+        return KeyRow(id: id, keys: keys, sideInsetUnits: 0, heightBias: heightBias)
     }
 
     /// **Two parts, and both are load-bearing.**
