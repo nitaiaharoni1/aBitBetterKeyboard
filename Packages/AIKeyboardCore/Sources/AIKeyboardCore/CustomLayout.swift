@@ -148,14 +148,14 @@ public struct LayoutGeometry: Codable, Equatable, Sendable {
     public var reach: Reach
 
     /// **36pt is the floor, not `Theme.Metrics.minTouchTarget`'s 44.** The
-    /// keyboard already ships at 42, so a rail set at Apple's comfortable minimum
+    /// keyboard already ships at 41, so a rail set at Apple's comfortable minimum
     /// would fire on the untouched default, and a rail that fires on the default
     /// is noise rather than a rail.
     public static let keyHeightRange: ClosedRange<CGFloat> = 36...56
     public static let rowSpacingRange: ClosedRange<CGFloat> = 8...16
 
     /// Today's `Theme.Metrics` values, so the shipped default is a no-op.
-    public static let `default` = LayoutGeometry(keyHeight: 40, rowSpacing: 12, reach: .full)
+    public static let `default` = LayoutGeometry(keyHeight: 41, rowSpacing: 11, reach: .full)
 
     public init(keyHeight: CGFloat, rowSpacing: CGFloat, reach: Reach) {
         self.keyHeight = keyHeight
