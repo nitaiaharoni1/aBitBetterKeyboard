@@ -20,7 +20,7 @@ import os
 // the same 561145187.** An app in the background cannot *begin* recording; an
 // app whose recording session is already active keeps it across a switch under
 // the `audio` background mode. So the shape is forced: the user starts a session
-// in AI Keyboard, switches to WhatsApp, and the keyboard's microphone button
+// in aBitBetterKeyboard, switches to WhatsApp, and the keyboard's microphone button
 // then opens and closes utterances inside a session that is already live. There
 // is no supported way for a keyboard extension to launch its own app —
 // `UIApplication` is unavailable to extensions and the responder-chain `openURL`

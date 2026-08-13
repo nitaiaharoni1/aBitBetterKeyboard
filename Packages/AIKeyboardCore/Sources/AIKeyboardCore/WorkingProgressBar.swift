@@ -87,10 +87,16 @@ public struct WorkingProgressBar: View {
         return max(full * 0.12, full * CGFloat(visual * freq))
     }
 
-    /// Height this view occupies right now. The hairline while idle or working;
-    /// the waveform while a microphone is open. See `Theme.Metrics.recordingWaveformHeight`.
+    /// Height this view occupies right now.
+    ///
+    /// **The waveform slot is reserved whenever the banner is down.** Growing it
+    /// only while the microphone is open moved every key at start and again at
+    /// stop. Under a banner the three-point hairline stays, because that form
+    /// is already the fingerprint ceiling. See `Theme.Metrics.recordingWaveformHeight`.
     var barHeight: CGFloat {
-        isRecording ? Theme.Metrics.recordingWaveformHeight : Theme.Metrics.progressBarHeight
+        controller.showsActionBanner
+            ? Theme.Metrics.progressBarHeight
+            : Theme.Metrics.recordingWaveformHeight
     }
 
     /// The indeterminate sweep a model call draws.
@@ -123,11 +129,12 @@ public struct WorkingProgressBar: View {
                 waveform(width: geo.size.width)
             } else {
                 sweep(width: geo.size.width)
+                    .frame(maxHeight: .infinity, alignment: .center)
             }
         }
         .frame(height: barHeight)
-        // Reserved at three points while idle, taller while recording. See
-        // `Theme.Metrics.recordingWaveformHeight`.
+        // Reserved at `recordingWaveformHeight` while the banner is down, so a
+        // recording cannot move the keys. See `Theme.Metrics.recordingWaveformHeight`.
         .opacity(controller.isWorking || isRecording ? 1 : 0)
         .padding(.horizontal, Theme.Space.sm)
         // Pinned like every other control row in this keyboard: a slide along the
@@ -136,6 +143,7 @@ public struct WorkingProgressBar: View {
         // See `.claude/rules/keyboard-layout.md`.
         .environment(\.layoutDirection, .leftToRight)
         .animation(Theme.Motion.quick, value: controller.isWorking)
+        .animation(Theme.Motion.quick, value: controller.showsActionBanner)
         .animation(Theme.Motion.press, value: isRecording)
         .animation(.easeOut(duration: 0.08), value: controller.dictationLevels)
         // **The one thing a VoiceOver user lost with the strip.** The banner said

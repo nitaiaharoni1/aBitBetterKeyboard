@@ -111,8 +111,8 @@ final class BannerStateTests: XCTestCase {
     private let noSession = BannerState.Block(
         action: .reply,
         title: "Screen context is off",
-        detail: "Tap to pick AI Keyboard, then Start Broadcast.",
-        remedy: .broadcastPicker)
+        detail: "Start it in aBitBetterKeyboard — swipe back to continue.",
+        remedy: .openApp(SharedStore.screenContextURL))
 
     /// **A recording outranks a refusal**, for the reason it outranks everything else
     /// here: it is running in another process. A refusal is a sentence about a tap

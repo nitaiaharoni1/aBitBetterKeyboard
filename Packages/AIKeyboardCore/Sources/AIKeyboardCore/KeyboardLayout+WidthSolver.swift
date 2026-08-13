@@ -9,9 +9,10 @@ extension KeyboardLayout {
     /// The top row of equal keys sets the unit; everything else is expressed
     /// in that unit so the columns line up down the whole keyboard.
     ///
-    /// **Three widths, resolved in that order: pinned, then unit, then flexible.**
+    /// **Pinned, then unit and slot (fixed), then flexible.**
     /// A pinned key is answered first and never moves, a unit key is a multiple of
-    /// the language's own letter key, and a flexible key takes whatever is left.
+    /// the language's own letter key, a slot is one of N equal parts of the whole
+    /// row, and a flexible key takes whatever is left.
     /// The last step is the one that pays for the first: when the pinned keys plus
     /// the letters do not fit, **everything that is not pinned shrinks together**
     /// rather than the pinned key giving ground. Hebrew is the layout that shows
@@ -59,39 +60,35 @@ extension KeyboardLayout {
         // degenerate width cannot produce a negative frame.
         let room = max(0, available - pinnedTotal)
 
+        func slotWidth(_ count: Int) -> CGFloat {
+            Self.unitWidth(
+                totalWidth: totalWidth, spacing: spacing, sideInset: 0, columns: count)
+        }
+
         let fixedTotal = row.keys.reduce(CGFloat(0)) { partial, key in
             switch key.width {
             case .unit(let multiple): return partial + unit * multiple
-            case .share, .flexible, .pinned: return partial
+            case .slot(let count): return partial + slotWidth(count)
+            case .flexible, .pinned: return partial
             }
         }
 
-        // **Shares take the room the gutters would have wasted**, which is what
-        // makes a grouped key exactly as wide as the keys it merged plus the gaps
-        // between them. Resolved before `.flexible` so the two can coexist without
-        // either having to know about the other; no shipped row uses both.
-        let shareWeights = row.keys.reduce(CGFloat(0)) { partial, key in
-            if case .share(let weight) = key.width { return partial + max(0, weight) }
-            return partial
-        }
-        let shareRoom = shareWeights > 0 ? max(0, room - fixedTotal) : 0
-        let widthPerShare = shareWeights > 0 ? shareRoom / shareWeights : 0
-
         let flexibleCount = row.keys.filter { $0.width == .flexible }.count
         let flexibleWidth =
-            flexibleCount > 0 ? max(0, room - fixedTotal - shareRoom) / CGFloat(flexibleCount) : 0
+            flexibleCount > 0 ? max(0, room - fixedTotal) / CGFloat(flexibleCount) : 0
 
-        // A row with a flexible or shared key has already absorbed the difference
-        // into it, so this only bites on rows of fixed keys: the three letter rows
-        // and the punctuation row of the numbers and symbols planes.
-        let unpinnedTotal = fixedTotal + flexibleWidth * CGFloat(flexibleCount) + shareRoom
+        // A row with a flexible key has already absorbed the difference into it,
+        // so this only bites on rows of fixed keys: the three letter rows and
+        // the punctuation row of the numbers and symbols planes. `.slot` is
+        // fixed (like `.unit`), then scaled if the row overflows.
+        let unpinnedTotal = fixedTotal + flexibleWidth * CGFloat(flexibleCount)
         let scale = unpinnedTotal > room && unpinnedTotal > 0 ? room / unpinnedTotal : 1
 
         return row.keys.map { key in
             switch key.width {
             case .pinned: return pinned
             case .unit(let multiple): return unit * multiple * scale
-            case .share(let weight): return widthPerShare * max(0, weight) * scale
+            case .slot(let count): return slotWidth(count) * scale
             case .flexible: return flexibleWidth * scale
             }
         }

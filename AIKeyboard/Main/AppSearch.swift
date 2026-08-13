@@ -12,6 +12,8 @@ final class AppSearch: ObservableObject {
     @Published var query = ""
     @Published var showsPlayground = false
     @Published var homePush: AppSearchHomePush?
+    @Published var languagesPush: AppSearchLanguagesPush?
+    @Published var keysPush: AppSearchKeysPush?
     @Published var settingsPush: AppSearchSettingsPush?
     @Published var highlightedRow: AppSearchRow?
     @Published var highlightedLanguage: KeyboardLanguage?
@@ -43,6 +45,8 @@ final class AppSearch: ObservableObject {
         highlightedRow = nil
         highlightedLanguage = nil
         homePush = nil
+        languagesPush = nil
+        keysPush = nil
         settingsPush = nil
         showsPlayground = false
         pendingTab = nil
@@ -50,45 +54,37 @@ final class AppSearch: ObservableObject {
         stackEpoch += 1
 
         var nextHome: AppSearchHomePush?
+        var nextLanguages: AppSearchLanguagesPush?
+        var nextKeys: AppSearchKeysPush?
         var nextSettings: AppSearchSettingsPush?
-        var nextTab: MainTab?
         var nextRow: AppSearchRow?
         var nextLanguage: KeyboardLanguage?
         var nextPlayground = false
 
         switch item.destination {
-        case .tab(let tab):
-            nextTab = tab
+        case .tab(_):
+            break
         case .dictation:
-            nextTab = .home
             nextHome = .dictation
         case .screenContext:
-            nextTab = .home
             nextHome = .screenContext
         case .playground:
-            nextTab = .home
             nextPlayground = true
         case .subscription:
-            nextTab = .settings
             nextSettings = .subscription
         case .dictionary:
-            nextTab = .settings
-            nextSettings = .dictionary
+            nextLanguages = .dictionary
         case .layout:
-            nextTab = .settings
-            nextSettings = .layout
+            nextKeys = .layout
         case .cloudModel:
-            nextTab = .settings
             nextSettings = .cloudModel
         case .language(let language):
-            nextTab = .languages
             nextLanguage = language
         case .row(let row):
-            nextTab = row == .mixing ? .languages : .settings
             nextRow = row
         }
 
-        pendingTab = nextTab
+        pendingTab = item.destination.tab
         highlightedRow = nextRow
         highlightedLanguage = nextLanguage
         showsPlayground = nextPlayground
@@ -96,14 +92,64 @@ final class AppSearch: ObservableObject {
         // The stacks are rebuilt by `stackEpoch`. Setting the push in the same
         // turn is a binding that never *changes* on the new stack, so
         // `navigationDestination(item:)` does not fire. Next turn it does.
-        if nextHome != nil || nextSettings != nil {
+        if nextHome != nil || nextLanguages != nil || nextKeys != nil || nextSettings != nil {
             DispatchQueue.main.async {
                 self.homePush = nextHome
+                self.languagesPush = nextLanguages
+                self.keysPush = nextKeys
                 self.settingsPush = nextSettings
             }
         }
 
         scheduleHighlightClear()
+    }
+
+    /// Deep link landing. Same navigation as `open(_:)` for `.screenContext`,
+    /// without searching the catalog: Home's subtitle also contains those words.
+    func openScreenContext() {
+        query = ""
+        highlightedRow = nil
+        highlightedLanguage = nil
+        homePush = nil
+        languagesPush = nil
+        keysPush = nil
+        settingsPush = nil
+        showsPlayground = false
+        pendingTab = nil
+        highlightClear?.cancel()
+        stackEpoch += 1
+
+        pendingTab = .home
+        DispatchQueue.main.async {
+            self.homePush = .screenContext
+            self.languagesPush = nil
+            self.keysPush = nil
+            self.settingsPush = nil
+        }
+    }
+
+    /// Deep link landing. Same navigation as `open(_:)` for `.dictation`,
+    /// without searching the catalog: Home's subtitle also contains those words.
+    func openDictation() {
+        query = ""
+        highlightedRow = nil
+        highlightedLanguage = nil
+        homePush = nil
+        languagesPush = nil
+        keysPush = nil
+        settingsPush = nil
+        showsPlayground = false
+        pendingTab = nil
+        highlightClear?.cancel()
+        stackEpoch += 1
+
+        pendingTab = .home
+        DispatchQueue.main.async {
+            self.homePush = .dictation
+            self.languagesPush = nil
+            self.keysPush = nil
+            self.settingsPush = nil
+        }
     }
 
     private var highlightClear: Task<Void, Never>?
@@ -129,16 +175,24 @@ enum AppSearchHomePush: String, Identifiable {
     var id: String { rawValue }
 }
 
-enum AppSearchSettingsPush: String, Identifiable {
+enum AppSearchLanguagesPush: String, Identifiable {
     case dictionary
+    var id: String { rawValue }
+}
+
+enum AppSearchKeysPush: String, Identifiable {
     case layout
+    var id: String { rawValue }
+}
+
+enum AppSearchSettingsPush: String, Identifiable {
     case subscription
     case cloudModel
     var id: String { rawValue }
 }
 
-/// A settings (or Languages) row that has no screen of its own. Search scrolls
-/// to it rather than pushing.
+/// A Languages, Keys, or Settings row that has no screen of its own. Search
+/// scrolls to it rather than pushing.
 enum AppSearchRow: String, Hashable {
     case autocorrect
     case completeOnPause
@@ -155,6 +209,19 @@ enum AppSearchRow: String, Hashable {
     case keySounds
     case replayOnboarding
     case mixing
+
+    var tab: MainTab {
+        switch self {
+        case .mixing:
+            return .languages
+        case .groupedKeys, .numberRow, .palette, .haptics, .keySounds:
+            return .keys
+        case .autocorrect, .completeOnPause, .spaceOnPause, .pauseLength,
+            .autocapitalise, .predictions, .learnAsYouType, .defaultTone,
+            .replayOnboarding:
+            return .settings
+        }
+    }
 }
 
 enum AppSearchDestination: Hashable {
@@ -168,6 +235,19 @@ enum AppSearchDestination: Hashable {
     case cloudModel
     case language(KeyboardLanguage)
     case row(AppSearchRow)
+
+    /// `MainTab` owns which tab a destination lives on. Search jumps read this
+    /// instead of picking a tab with leftover special cases.
+    var tab: MainTab {
+        switch self {
+        case .tab(let tab): return tab
+        case .dictation, .screenContext, .playground: return .home
+        case .subscription, .cloudModel: return .settings
+        case .language, .dictionary: return .languages
+        case .layout: return .keys
+        case .row(let row): return row.tab
+        }
+    }
 }
 
 // MARK: - Catalog
@@ -204,19 +284,24 @@ struct AppSearchItem: Identifiable {
                 keywords: ["setup", "full access", "add keyboard"],
                 .tab(.home)),
             item(
+                "Dictation", "Start a session to dictate from the keyboard", icon: "mic.fill",
+                keywords: ["microphone", "speech", "voice"],
+                .dictation),
+            item(
                 "Languages", "Which layouts the globe key cycles", icon: "globe",
+                keywords: ["languages", "globe"],
                 .tab(.languages)),
             item(
-                "Settings", "Typing, AI, look, and feel", icon: "gearshape.fill",
+                "Keys", "Layout, colour, and how keys feel", icon: "keyboard.fill",
+                keywords: ["layout", "look", "feel", "palette", "haptics"],
+                .tab(.keys)),
+            item(
+                "Settings", "Typing, AI, and account", icon: "gearshape.fill",
                 .tab(.settings)),
             item(
                 "Screen Context", "Reply to what's on screen", icon: "eye",
                 keywords: ["capture", "broadcast", "reply"],
                 .screenContext),
-            item(
-                "Dictation", "Start a session to dictate from the keyboard", icon: "mic",
-                keywords: ["microphone", "speech", "voice"],
-                .dictation),
             item(
                 "Try the keyboard", "Type here without leaving the app", icon: "keyboard",
                 keywords: ["playground"],
@@ -224,7 +309,7 @@ struct AppSearchItem: Identifiable {
             item(
                 "Personal dictionary", "Names and words we should never correct",
                 icon: "character.book.closed",
-                keywords: ["words", "names"],
+                keywords: ["words", "names", "your words"],
                 .dictionary),
             item(
                 "Keyboard layout", "Presets, key size, and what each key does",
@@ -232,7 +317,7 @@ struct AppSearchItem: Identifiable {
                 keywords: ["keys", "custom", "preset"],
                 .layout),
             item(
-                "AI Keyboard Pro", "Subscription", icon: "sparkles",
+                "aBitBetterKeyboard Pro", "Subscription", icon: "sparkles",
                 keywords: ["upgrade", "paywall", "pro"],
                 .subscription)
         ]

@@ -74,15 +74,11 @@ struct WelcomeStep: View {
                     .graphiteTopHighlight(cornerRadius: Theme.Radius.sheet)
                     .ambientDepth()
 
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Theme.Brand.action)
-                    .frame(width: 56, height: 56)
-
-                // Not `SparkleMark`: that component always draws the brand
-                // gradient, which would be invisible over the orange chip.
-                Image(systemName: "sparkles")
-                    .font(.system(size: 26, weight: .medium))
-                    .foregroundStyle(Theme.Text.onBrand)
+                Image("BrandMark")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 72, height: 72)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
                 Text("א")
                     .font(.system(size: 24, weight: .bold))

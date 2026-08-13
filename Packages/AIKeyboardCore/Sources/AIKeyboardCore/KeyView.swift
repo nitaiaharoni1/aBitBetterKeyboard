@@ -59,6 +59,7 @@ public struct KeyView: View {
 
     @State var isPressed = false
     @State var repeater = KeyRepeater()
+    @State var wordRepeater = KeyRepeater.wordDelete()
     @State var alternatesTask: Task<Void, Never>?
     @State var showsAlternates = false
     @State var selectedAlternate = 0
@@ -74,6 +75,7 @@ public struct KeyView: View {
     @GestureState var isTouching = false
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.keyboardCanvasWidth) var keyboardCanvasWidth
+    @Environment(\.keyboardCanvasOriginX) var keyboardCanvasOriginX
 
     public init(
         spec: KeySpec,
@@ -177,7 +179,7 @@ public struct KeyView: View {
         .onDisappear { endPress() }
         .background {
             GeometryReader { proxy in
-                let minX = proxy.frame(in: .named(KeyboardView.frameSpace)).minX
+                let minX = proxy.frame(in: .global).minX - keyboardCanvasOriginX
                 Color.clear
                     .onAppear { keyMinXInCanvas = minX }
                     .onChange(of: minX) { _, x in keyMinXInCanvas = x }

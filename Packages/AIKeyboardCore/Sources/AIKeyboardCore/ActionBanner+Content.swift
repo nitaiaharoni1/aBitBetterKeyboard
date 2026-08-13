@@ -150,15 +150,14 @@ extension ActionBanner {
         Text(text)
             .font(.system(size: 11))
             .foregroundStyle(Theme.Keys.secondaryLabel)
-            // **Three lines, and the strip is 69 pt so they fit.** Two lines in a
-            // 48–56 pt strip is what put an ellipsis on "Reading a screen needs
-            // the cloud model…" — a refusal the user has to act on, truncated
-            // before the recovery. Scale a hair before truncating; past three
-            // lines the honest mitigation is still the accessibility label.
-            .lineLimit(3)
+            // **Two lines, and `Theme.Metrics.bannerHeight` is why they fit.** The
+            // strip paid 11pt to grow the letter keys (69 → 58). Three 11pt lines
+            // plus the title overflow that frame and paint the suggestion bar.
+            // Scale a hair before truncating; past two lines the honest mitigation
+            // is still the accessibility label.
+            .lineLimit(2)
             .minimumScaleFactor(0.85)
             .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 

@@ -86,7 +86,7 @@ extension KeyCap {
         switch self {
         case .character, .space, .ret:
             return .tock
-        case .backspace:
+        case .backspace, .deleteForward:
             return .delete
         case .shift, .plane, .globe, .settings, .dictation, .emoji, .quickTone,
             .cursorLeft, .cursorRight, .hideKeyboard, .aiReply, .aiFix:

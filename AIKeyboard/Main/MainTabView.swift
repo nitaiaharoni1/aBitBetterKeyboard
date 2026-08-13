@@ -4,6 +4,7 @@ import AIKeyboardCore
 enum MainTab: Hashable {
     case home
     case languages
+    case keys
     case settings
 }
 
@@ -20,6 +21,10 @@ struct MainTabView: View {
             LanguagesView()
                 .tabItem { Label("Languages", systemImage: "globe") }
                 .tag(MainTab.languages)
+
+            KeysView()
+                .tabItem { Label("Keys", systemImage: "keyboard.fill") }
+                .tag(MainTab.keys)
 
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape.fill") }

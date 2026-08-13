@@ -156,6 +156,7 @@ extension KeyboardView {
             .padding(.top, Theme.Metrics.topInset)
             .padding(.bottom, Theme.Metrics.bottomInset)
             .environment(\.keyboardCanvasWidth, geo.size.width)
+            .environment(\.keyboardCanvasOriginX, geo.frame(in: .global).minX)
         }
     }
 
@@ -229,8 +230,6 @@ extension KeyboardView {
     ) -> some View {
         if row.keys.indices.contains(index) {
             let key = row.keys[index]
-            let hostsReplyPicker =
-                key.cap == .aiReply && controller.replyKeyBroadcastPrompt != nil
             KeyView(
                 spec: key,
                 width: widths.indices.contains(index) ? widths[index] : unit,
@@ -276,31 +275,17 @@ extension KeyboardView {
                 // above: state the `KeySpec` cannot reach on its own.
                 dictationState: key.cap == .dictation ? controller.dictationKeyState : .idle,
                 onPress: { controller.press($0, at: $1) },
-                // Through `press` rather than straight to `deleteBackward`, so a
-                // held delete clicks on every repeat the way it buzzes on every
-                // repeat — and so a repeat inside the emoji search box eats the
-                // query rather than the user's message, which the direct call did
-                // not: `consumeForEmojiSearch` is reached from `press` alone.
-                onRepeat: key.cap == .backspace ? { controller.press(.backspace) } : nil,
+                // Held backspace deletes words through `deletePreviousWord`, which
+                // still clicks and still intercepts emoji search. Forward-delete
+                // hold stays one character. Finger-down is still `press`.
+                onRepeat: key.cap == .backspace
+                    ? { controller.deletePreviousWord() }
+                    : key.cap == .deleteForward
+                        ? { controller.press(.deleteForward) }
+                        : nil,
                 onAlternate: alternateHandler(for: key),
                 onSpaceTouch: key.cap == .space ? { controller.spaceBarTouch($0) } : nil
             )
-            // The overlay sits outside KeyView so VoiceOver can see ReplayKit's
-            // real button (`.accessibilityElement()` hides descendants). Hits
-            // must not also reach the SwiftUI gesture, or one tap both opens
-            // the picker and runs `press(.aiReply)`.
-            .allowsHitTesting(!hostsReplyPicker)
-            .accessibilityHidden(hostsReplyPicker)
-            .overlay {
-                if hostsReplyPicker {
-                    BroadcastPickerButton.overlay(
-                        label: KeyCap.aiReply.accessibilityLabel,
-                        hint: "Opens the iOS screen broadcast picker.",
-                        identifier: "key-\(key.addressableID)",
-                        onActivation: { controller.acknowledgeReplyBroadcastTap() }
-                    )
-                }
-            }
             .background {
                 GeometryReader { proxy in
                     Color.clear.preference(

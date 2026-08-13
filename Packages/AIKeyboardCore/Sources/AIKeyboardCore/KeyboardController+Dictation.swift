@@ -136,7 +136,7 @@ extension KeyboardController {
             let why =
                 reason == .notEnded || reason == .stoppedByUser ? "" : reason.explanation + "\n"
             return
-                "\(why)Dictation starts automatically in AI Keyboard — swipe back to continue."
+                "\(why)Dictation starts automatically in aBitBetterKeyboard — swipe back to continue."
         default:
             return ""
         }
@@ -162,6 +162,13 @@ extension KeyboardController {
     /// consume on cold launch.
     func recordDictationHandoff() {
         store.recordDictationHandoff()
+    }
+
+    /// The Open chip is shared. Only the dictation URL auto-starts a session
+    /// on appear, so only that URL may write the timestamp.
+    func recordDictationHandoffIfNeeded(for url: URL) {
+        guard url == SharedStore.dictationStartURL else { return }
+        recordDictationHandoff()
     }
 
     public func stopDictation(insert: Bool) {

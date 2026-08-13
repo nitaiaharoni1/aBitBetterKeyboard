@@ -3,9 +3,35 @@
   width: 100%;
   margin: 0;
   padding: clamp(16px, 2.4vw, 22px);
+  overflow: visible;
   border: 1px solid var(--line);
   border-radius: 28px;
   background: var(--white);
+}
+
+.doodleArrow {
+  position: absolute;
+  top: -34px;
+  inset-inline-start: -56px;
+  z-index: 1;
+  width: 92px;
+  overflow: visible;
+  pointer-events: none;
+  transform: rotate(8deg);
+}
+
+.doodleStar {
+  position: absolute;
+  inset-inline-end: -8px;
+  bottom: -12px;
+  z-index: 1;
+  width: 44px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+[dir="rtl"] .doodleArrow {
+  transform: rotate(-8deg) scaleX(-1);
 }
 
 .scene {
@@ -167,6 +193,17 @@
 }
 
 @media (max-width: 640px) {
+  .doodleArrow {
+    top: -22px;
+    inset-inline-start: -10px;
+    width: 68px;
+  }
+
+  .doodleStar {
+    inset-inline-end: -2px;
+    width: 34px;
+  }
+
   .keyboard {
     padding: 8px 5px 6px;
     border-radius: 18px;

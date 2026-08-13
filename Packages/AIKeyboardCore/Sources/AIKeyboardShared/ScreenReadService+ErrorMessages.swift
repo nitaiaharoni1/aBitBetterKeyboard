@@ -35,7 +35,7 @@ extension ScreenReadService {
     /// wrote has expired. The app reconnects itself for both.
     ///
     /// **Interpolates `setUpRecovery` rather than carrying its own copy of it**,
-    /// which is what let this sentence keep saying "Open AI Keyboard once to
+    /// which is what let this sentence keep saying "Open aBitBetterKeyboard once to
     /// reconnect" for a whole change whose entire point was to stop saying that.
     /// `CloudModelSettingNameTests` covers the four messages that already shared
     /// the constant and could not have caught this one.
@@ -45,7 +45,7 @@ extension ScreenReadService {
     /// A non-200 the backend did not describe: usually a 404, i.e. a host that
     /// exists and is not running this service.
     public static let addressNotAServer =
-        "That address answered, but not like the screen reading server. Check the address in AI Keyboard › Screen Context."
+        "That address answered, but not like the screen reading server. Check the address in aBitBetterKeyboard › Screen Context."
 
     /// Whether a published failure describes the **setup** rather than this
     /// moment, and will therefore fail identically on the next tap.

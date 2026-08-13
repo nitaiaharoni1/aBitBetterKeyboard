@@ -198,8 +198,12 @@ final class KeyboardTypesIntoHostTests: KeyboardExtensionTestCase {
     /// banner to be fully on screen and hittable, then dismiss it.
     ///
     /// Height check: `app.keyboards.firstMatch` is the UIKit keyboard window the
-    /// extension occupies. The banner is 69 pt; we assert growth of at least 60 pt
-    /// (generous threshold for simulator timing and coordinate-space rounding).
+    /// extension occupies. Appearing the banner also swaps the reserved waveform
+    /// slot (24 pt) for the three-point hairline, so net growth is 37 pt
+    /// (`bannerHeight + progressBarHeight - recordingWaveformHeight`). Assert
+    /// that number with a few points of simulator rounding, not a lower bound:
+    /// a missed idle keyboard reports height 0 and would pass any `> 30` check
+    /// against a real after-height, and the old 58 pt growth would pass it too.
     func testARefusalGrowsTheRealExtensionToFitTheBanner() throws {
         _ = try standExtensionOverARealTextField()
 
@@ -208,9 +212,14 @@ final class KeyboardTypesIntoHostTests: KeyboardExtensionTestCase {
             throw XCTSkip("The current layout has no Fix key")
         }
 
-        // Capture the keyboard height while idle (banner absent).
         let keyboard = app.keyboards.firstMatch
-        let beforeHeight = keyboard.exists ? keyboard.frame.height : 0
+        XCTAssertTrue(
+            keyboard.waitForExistence(timeout: 5),
+            "the extension keyboard window was not on screen before the refusal")
+        let beforeHeight = keyboard.frame.height
+        XCTAssertGreaterThan(
+            beforeHeight, 200,
+            "idle keyboard height \(beforeHeight) is too small to be the real extension")
 
         fix.tap()
 
@@ -219,15 +228,13 @@ final class KeyboardTypesIntoHostTests: KeyboardExtensionTestCase {
             banner.waitForExistence(timeout: 5) && banner.isHittable,
             "the refusal banner was clipped because the extension kept its idle height")
 
-        // The banner adds 69 pt; require at least 60 pt of growth so the
-        // assertion still passes under sub-point simulator rounding.
         let afterHeight = keyboard.frame.height
-        XCTAssertGreaterThan(
-            afterHeight - beforeHeight, 60,
+        XCTAssertEqual(
+            afterHeight - beforeHeight, CGFloat(37), accuracy: 8,
             """
             Extension grew \(afterHeight - beforeHeight) pt after the banner appeared; \
-            expected > 60 pt (banner is 69 pt). The height-constraint wiring in \
-            KeyboardViewController may not be reaching the host.
+            expected ~37 pt. The height-constraint wiring in KeyboardViewController \
+            may not be reaching the host.
             """)
 
         let dismiss = app.descendants(matching: .any)
@@ -237,6 +244,51 @@ final class KeyboardTypesIntoHostTests: KeyboardExtensionTestCase {
         XCTAssertTrue(
             waitUntil { !banner.exists },
             "dismissing the refusal left the dynamic banner row on screen")
+        XCTAssertEqual(
+            keyboard.frame.height, beforeHeight, accuracy: 8,
+            "dismissing the banner did not restore the idle host height")
+    }
+
+    /// Swipe down on the suggestion strip hides the real extension. The in-app
+    /// playground cannot prove this: `onDismissKeyboard` is nil there, so the
+    /// same gesture no-ops on purpose, the way the Hide key does.
+    func testSwipingDownTheSuggestionChromeHidesTheKeyboard() throws {
+        _ = try standExtensionOverARealTextField()
+
+        let space = app.descendants(matching: .any).matching(identifier: "key-space").firstMatch
+        XCTAssertTrue(
+            space.waitForExistence(timeout: 10),
+            "the extension never drew; nothing to dismiss")
+
+        let field = app.textFields["Add a word or name"]
+        let chip = app.descendants(matching: .any)
+            .matching(identifier: "suggestion-1").firstMatch
+        if chip.waitForExistence(timeout: 3), chip.isHittable {
+            let before = fieldText(field)
+            chip.tap()
+            XCTAssertTrue(
+                waitUntil { self.fieldText(field) != before },
+                "a tap on a candidate did nothing; the dismiss gesture stole it")
+        }
+
+        var handle = app.descendants(matching: .any)
+            .matching(identifier: "keyboard-dismiss-chrome").firstMatch
+        if !handle.waitForExistence(timeout: 2) {
+            handle =
+                app.descendants(matching: .any)
+                .matching(identifier: "suggestion-1").firstMatch
+        }
+        XCTAssertTrue(
+            handle.waitForExistence(timeout: 5),
+            "the suggestion chrome was not on screen to pull")
+
+        let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+        let end = start.withOffset(CGVector(dx: 0, dy: 90))
+        start.press(forDuration: 0.05, thenDragTo: end)
+
+        XCTAssertTrue(
+            space.waitForNonExistence(timeout: 4),
+            "swiped down on the suggestion strip and the keyboard stayed up")
     }
 
     // MARK: Steps

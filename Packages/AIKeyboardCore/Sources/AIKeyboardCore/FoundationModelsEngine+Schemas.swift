@@ -20,7 +20,7 @@ import FoundationModels
 struct FixDraft {
     @Guide(
         description:
-            "The message with spelling and grammar corrected, in the same language and script it arrived in. Correct only what is wrong: a word that is already right, a slang spelling, an abbreviation and a contraction stay as they are."
+            "The whole message with spelling and grammar corrected, in the same language and script it arrived in. Return every sentence, never a fragment. A missing apostrophe is a typo (`dont -> don't`). A word that is already right, slang, an abbreviation, and an already-correct contraction stay as they are."
     )
     var text: String
 }

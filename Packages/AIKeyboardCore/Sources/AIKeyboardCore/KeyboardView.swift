@@ -46,11 +46,16 @@ public struct KeyboardView: View {
             }
 
             // Between the banner and the candidates, and present in every state:
-            // three points reserved so a call starting cannot move the keys, and
-            // a taller waveform while the microphone is open. See `WorkingProgressBar`.
-            WorkingProgressBar(controller: controller)
+            // the waveform slot reserved whenever the banner is down, so a call
+            // or a recording starting cannot move the keys. See `WorkingProgressBar`.
+            VStack(spacing: 0) {
+                WorkingProgressBar(controller: controller)
 
-            SuggestionBar(controller: controller)
+                SuggestionBar(controller: controller)
+            }
+            .contentShape(Rectangle())
+            .drawerDismiss { controller.press(.hideKeyboard) }
+            .accessibilityIdentifier("keyboard-dismiss-chrome")
 
             // **Nothing covers the whole key area any more.** This was a `ZStack`
             // with a `fullKeyAreaPanel` over it, and the three panels that used it —
@@ -81,8 +86,19 @@ public struct KeyboardView: View {
     }
 }
 
-/// Width of `KeyboardView` in `frameSpace`, so a long-press strip can stay on screen.
+/// Width of the key grid, so a long-press strip can stay on screen.
+///
+/// Paired with `keyboardCanvasOriginX`. Both come from the same
+/// `GeometryReader` in screen coordinates, not `frameSpace`. Hebrew sets
+/// `layoutDirection` on `KeyboardView`, and a named space on that view can
+/// report the punctuation key as `minX == 0` (its leading edge). The clamp
+/// then treats a right-edge key as a left-edge one and shifts the strip off
+/// the screen.
 private struct KeyboardCanvasWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+private struct KeyboardCanvasOriginXKey: EnvironmentKey {
     static let defaultValue: CGFloat = 0
 }
 
@@ -90,6 +106,11 @@ extension EnvironmentValues {
     var keyboardCanvasWidth: CGFloat {
         get { self[KeyboardCanvasWidthKey.self] }
         set { self[KeyboardCanvasWidthKey.self] = newValue }
+    }
+
+    var keyboardCanvasOriginX: CGFloat {
+        get { self[KeyboardCanvasOriginXKey.self] }
+        set { self[KeyboardCanvasOriginXKey.self] = newValue }
     }
 }
 

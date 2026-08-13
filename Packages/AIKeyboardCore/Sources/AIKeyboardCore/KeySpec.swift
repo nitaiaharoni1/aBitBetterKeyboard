@@ -15,7 +15,7 @@ public enum KeyCap: Equatable, Sendable {
     case ret
     case dictation
     /// The three controls that used to exist only as chrome in the suggestion
-    /// bar, plus the three the layout editor adds.
+    /// bar, plus the four the layout editor adds.
     ///
     /// They are caps rather than special-cased views because the point of the
     /// editor is that a user can move them into the grid, and a grid key is a
@@ -25,6 +25,7 @@ public enum KeyCap: Equatable, Sendable {
     case quickTone
     case cursorLeft
     case cursorRight
+    case deleteForward
     case hideKeyboard
     /// Reply and Fix, run straight from a key.
     ///
@@ -66,6 +67,7 @@ public enum KeyCap: Equatable, Sendable {
         case .quickTone: return "One-tap rewrite"
         case .cursorLeft: return "Cursor left"
         case .cursorRight: return "Cursor right"
+        case .deleteForward: return "Forward delete"
         case .hideKeyboard: return "Hide keyboard"
         // The action's own title, so the key and the row label cannot drift.
         case .aiReply: return AIAction.reply.title
@@ -79,19 +81,14 @@ public enum KeyWidth: Equatable, Sendable {
     case unit(CGFloat)
     /// Splits whatever is left over in the row between all keys marked flexible.
     case flexible
-    /// Takes this many parts of whatever the row has left, split between every
-    /// key marked this way in proportion to its number.
+    /// One of `count` equal parts of the whole row, gutters included:
+    /// `(totalWidth - spacing * (count - 1)) / count`.
     ///
-    /// **A key that swallowed several keys has to swallow the gaps between them
-    /// too, and `.unit` cannot express that.** A unit is a key width and knows
-    /// nothing about the spacing beside it, so a grouped key declared `.unit(2)`
-    /// came out two keys wide *minus* the gutter it covered — five of them left
-    /// 27pt of the row unused and the band drew visibly narrower than the row
-    /// under it. A share is the same proportion expressed as "of what is actually
-    /// there", so the gutters land inside the keys. Grouped letter keys all take
-    /// `.share(1)`, so they fill the row as equal buttons; weighting by span left
-    /// leftover columns on skinny keys beside fat ones.
-    case share(CGFloat)
+    /// The row is the basis, not this row's leftover after pinned keys, so a
+    /// band key and a third-row letter key stamped with the same `count` draw
+    /// the same width. `.unit` cannot: it ignores the gutter a merged key
+    /// swallowed, so five two-unit keys came out one spacing short of the row.
+    case slot(of: Int)
     /// A fixed width in points, the same on every plane and in all sixty-four
     /// languages. Shift, delete and the plane switch that brackets the third row.
     /// See `KeyboardLayout.widths(for:totalWidth:unitWidth:spacing:)`.
@@ -183,6 +180,7 @@ public struct KeySpec: Identifiable, Equatable, Sendable {
         case .quickTone: return "quick-tone"
         case .cursorLeft: return "cursor-left"
         case .cursorRight: return "cursor-right"
+        case .deleteForward: return "delete-forward"
         case .hideKeyboard: return "hide-keyboard"
         // Kebab-case like their neighbours, because these reach a UI test and a
         // screen reader through `addressableID`: `key-ai-reply` is what a test

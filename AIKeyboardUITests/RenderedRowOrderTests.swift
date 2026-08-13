@@ -254,7 +254,7 @@ final class RenderedRowOrderTests: XCTestCase {
         XCTAssertTrue(element(key).exists, "the globe never reached \(key)")
     }
 
-    /// Turns Arabic on through the Languages screen, then comes back to Home.
+    /// Turns Arabic on through the Languages tab, then comes back to Home.
     /// Searching first is what makes the row reachable: the catalogue is
     /// sixty-four rows grouped by script and Arabic is a long scroll down.
     private func enableArabic() throws {

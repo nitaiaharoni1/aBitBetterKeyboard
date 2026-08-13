@@ -4,7 +4,7 @@ import SwiftUI
 /// The four accent choices, as a list of rows.
 ///
 /// One implementation for both places the choice is offered — the second
-/// onboarding step and Settings › Look — because two pickers for one setting is
+/// onboarding step and Keys › Look — because two pickers for one setting is
 /// two things to keep agreeing about which palettes exist.
 ///
 /// The caller supplies the container. Both current callers wrap this in a

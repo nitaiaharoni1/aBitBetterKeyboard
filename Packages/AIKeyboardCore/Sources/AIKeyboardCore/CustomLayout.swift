@@ -23,6 +23,7 @@ public enum SlotAction: Codable, Hashable, Sendable {
     case quickTone
     case cursorLeft
     case cursorRight
+    case deleteForward
     case hideKeyboard
     /// The two AI actions that need no further choice once tapped, so they can be
     /// keys rather than rows in a menu. See `KeyCap.aiReply` for why Rewrite is
@@ -61,6 +62,7 @@ public enum SlotAction: Codable, Hashable, Sendable {
         case .quickTone: return "One-tap rewrite"
         case .cursorLeft: return "Cursor left"
         case .cursorRight: return "Cursor right"
+        case .deleteForward: return "Forward delete"
         case .hideKeyboard: return "Hide keyboard"
         case .reply: return AIAction.reply.title
         case .fix: return AIAction.fix.title
@@ -76,7 +78,7 @@ public enum SlotAction: Codable, Hashable, Sendable {
     public static let catalogue: [SlotAction] = [
         .backspace, .ret, .shift, .numbersPlane, .symbolsPlane, .globe, .settings,
         .dictation, .emoji, .reply, .fix, .quickTone, .punctuation,
-        .cursorLeft, .cursorRight, .hideKeyboard,
+        .cursorLeft, .cursorRight, .deleteForward, .hideKeyboard,
         .text(","), .text("?"), .text("!"), .text("@"), .text(".com")
     ]
 }
@@ -148,14 +150,14 @@ public struct LayoutGeometry: Codable, Equatable, Sendable {
     public var reach: Reach
 
     /// **36pt is the floor, not `Theme.Metrics.minTouchTarget`'s 44.** The
-    /// keyboard already ships at 41, so a rail set at Apple's comfortable minimum
+    /// keyboard already ships at 43, so a rail set at Apple's comfortable minimum
     /// would fire on the untouched default, and a rail that fires on the default
     /// is noise rather than a rail.
     public static let keyHeightRange: ClosedRange<CGFloat> = 36...56
     public static let rowSpacingRange: ClosedRange<CGFloat> = 8...16
 
     /// Today's `Theme.Metrics` values, so the shipped default is a no-op.
-    public static let `default` = LayoutGeometry(keyHeight: 41, rowSpacing: 11, reach: .full)
+    public static let `default` = LayoutGeometry(keyHeight: 43, rowSpacing: 12, reach: .full)
 
     public init(keyHeight: CGFloat, rowSpacing: CGFloat, reach: Reach) {
         self.keyHeight = keyHeight

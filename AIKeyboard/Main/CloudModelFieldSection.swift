@@ -1,7 +1,7 @@
 import AIKeyboardCore
 import SwiftUI
 
-/// The "Where AI Keyboard sends its work" card: server URL field, token field,
+/// The "Where aBitBetterKeyboard sends its work" card: server URL field, token field,
 /// status line and Save button.
 ///
 /// **Validated exactly as `BackendTransport.configured` validates** — parses as
@@ -30,7 +30,7 @@ struct CloudModelFieldSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            SectionHeader(title: "Where AI Keyboard sends its work")
+            SectionHeader(title: "Where aBitBetterKeyboard sends its work")
 
             Card {
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {
@@ -42,14 +42,14 @@ struct CloudModelFieldSection: View {
                     // bearer — a shipping install has nothing left to paste in.
                     #if DEBUG
                     Text(
-                        "AI Keyboard comes pointing at our server, already filled in below. It needs the access token before it will answer: paste yours in, or replace both with your own server."
+                        "aBitBetterKeyboard comes pointing at our server, already filled in below. It needs the access token before it will answer: paste yours in, or replace both with your own server."
                     )
                     .font(Theme.Fonts.caption)
                     .foregroundStyle(Theme.Text.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     #else
                     Text(
-                        "AI Keyboard comes pointing at our server, already filled in below, and connects to it on its own. Replace the address to point it at a server of your own instead."
+                        "aBitBetterKeyboard comes pointing at our server, already filled in below, and connects to it on its own. Replace the address to point it at a server of your own instead."
                     )
                     .font(Theme.Fonts.caption)
                     .foregroundStyle(Theme.Text.secondary)
@@ -121,7 +121,7 @@ struct CloudModelFieldSection: View {
                     // is not in the Keychain yet. Somebody choosing what to paste
                     // in here is entitled to know that before they paste it.
                     Text(
-                        "The token is kept in AI Keyboard's shared settings, which are included in your device backup. Use one you can revoke."
+                        "The token is kept in aBitBetterKeyboard's shared settings, which are included in your device backup. Use one you can revoke."
                     )
                     .font(Theme.Fonts.micro)
                     .foregroundStyle(Theme.Text.tertiary)
@@ -132,7 +132,7 @@ struct CloudModelFieldSection: View {
                     // this screen never said.** `AppAttestation` fills the
                     // bearer, it runs unattended at launch, and every failure
                     // used to go into a `try?` — so an install where it failed
-                    // read "Open AI Keyboard once to connect it" here *and* on
+                    // read "Open aBitBetterKeyboard once to connect it" here *and* on
                     // every AI action in the keyboard, which is advice to do the
                     // thing that had just silently not worked. There was no
                     // third screen to go to and no reason recorded anywhere on
@@ -224,7 +224,7 @@ struct CloudModelFieldSection: View {
         // keyboard that is in fact still sending. Saving an empty field is how you
         // get the built-in server back after typing over it.
         if typedURL.isEmpty {
-            return "Empty. Tap Save to go back to the server AI Keyboard ships with."
+            return "Empty. Tap Save to go back to the server aBitBetterKeyboard ships with."
         }
         guard isUsable else {
             return "That is not a web address. It has to begin with http:// or https://."
@@ -244,8 +244,8 @@ struct CloudModelFieldSection: View {
         // fills the bearer at launch, so the only honest report is whether
         // that attempt has succeeded, not whether a field is filled in.
         //
-        // **"Open AI Keyboard once to connect it" was being read by somebody
-        // standing in AI Keyboard.** It is the right sentence in the keyboard,
+        // **"Open aBitBetterKeyboard once to connect it" was being read by somebody
+        // standing in aBitBetterKeyboard.** It is the right sentence in the keyboard,
         // where the app is somewhere else; here it is an instruction to do the
         // thing you are already doing. The line under it says why, and the
         // button under that is the action.

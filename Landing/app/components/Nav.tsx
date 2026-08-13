@@ -12,6 +12,7 @@ export default function Nav({
     <header id="top" className={styles.header}>
       <nav className={`wrap ${styles.nav}`} aria-label="Main">
         <a className={styles.wordmark} href="#top">
+          <img src="/mark.png" alt="" width={28} height={28} />
           {t.wordmark}
         </a>
         <div className={styles.tools}>

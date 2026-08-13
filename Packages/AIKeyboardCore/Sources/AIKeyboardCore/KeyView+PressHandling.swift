@@ -175,6 +175,7 @@ extension KeyView {
         isPressed = false
         showsAlternates = false
         repeater.stop()
+        wordRepeater.stop()
         alternatesTask?.cancel()
         alternatesTask = nil
         if wasPressed, slidesForLanguage { onSpaceTouch?(.cancelled) }
@@ -182,8 +183,14 @@ extension KeyView {
 
     /// Delete accelerates while held, the way every other keyboard behaves.
     private func startRepeatIfNeeded() {
-        guard acceptsTouches, let onRepeat, spec.cap == .backspace else { return }
-        repeater.start(onRepeat)
+        guard acceptsTouches, let onRepeat,
+            spec.cap == .backspace || spec.cap == .deleteForward
+        else { return }
+        if spec.cap == .backspace {
+            wordRepeater.start(onRepeat)
+        } else {
+            repeater.start(onRepeat)
+        }
     }
 
     /// Holding a key with alternates opens them, the way it does on the system

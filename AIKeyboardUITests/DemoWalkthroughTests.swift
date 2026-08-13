@@ -283,19 +283,27 @@ final class DemoWalkthroughTests: XCTestCase {
         app.launch()
         skipOnboardingIfPresent()
 
+        tap(element("home-dictation"), "Dictation row")
+        settle()
+        capture("dictation")
+
         tap(app.tabBars.buttons["Languages"], "Languages tab")
         settle()
         capture("languages")
-
-        tap(app.tabBars.buttons["Settings"], "Settings tab")
-        settle()
-        capture("settings")
 
         tap(element("row-Personal dictionary"), "dictionary row", timeout: 4)
         settle()
         capture("dictionary")
         tap(app.navigationBars.buttons.element(boundBy: 0), "back from dictionary")
         settle()
+
+        tap(app.tabBars.buttons["Keys"], "Keys tab")
+        settle()
+        capture("keys")
+
+        tap(app.tabBars.buttons["Settings"], "Settings tab")
+        settle()
+        capture("settings")
 
         tap(element("row-Upgrade to Pro"), "subscription row", timeout: 4)
         settle()

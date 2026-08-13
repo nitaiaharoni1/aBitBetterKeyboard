@@ -18,7 +18,7 @@ struct MicrophoneStep: View {
             eyebrow: "Dictation",
             title: "About dictation",
             subtitle:
-                "iOS does not let a keyboard open the microphone, so AI Keyboard holds it for you. Start a session on the Dictation screen, switch to whatever you are writing in, and the mic key on the keyboard works until the session closes."
+                "iOS does not let a keyboard open the microphone, so aBitBetterKeyboard holds it for you. Start a session on the Dictation screen, switch to whatever you are writing in, and the mic key on the keyboard works until the session closes."
         ) {
             Card {
                 StatusRow(

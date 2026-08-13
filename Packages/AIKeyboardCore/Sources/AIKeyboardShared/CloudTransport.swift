@@ -290,7 +290,7 @@ public struct BackendTransport: CloudTransport {
     ///
     /// **Not an instruction, and every version of it until now was one.** First
     /// "Finish setting it up under \(settingsPath)", which pointed at a token
-    /// field that has since left the shipping app. Then "Open AI Keyboard once to
+    /// field that has since left the shipping app. Then "Open aBitBetterKeyboard once to
     /// reconnect", which is a chore handed to somebody who does not know this
     /// product has a cloud model, cannot see one, and did not ask for one. There
     /// is no setting behind either sentence: `AppAttestation` fills the bearer, at
@@ -303,7 +303,7 @@ public struct BackendTransport: CloudTransport {
     /// (`unsupportedLanguage`, `cloudNotConfigured`, `deviceNotSupported`) and
     /// standing alone as `ScreenContextEndReason.notConfigured.recovery`, which is
     /// why it names the app rather than saying "it".
-    public static let setUpRecovery = "AI Keyboard is reconnecting. Try again in a moment."
+    public static let setUpRecovery = "aBitBetterKeyboard is reconnecting. Try again in a moment."
 
     // send, encoded, mapped, and decode are in BackendTransport+Send.swift.
 }

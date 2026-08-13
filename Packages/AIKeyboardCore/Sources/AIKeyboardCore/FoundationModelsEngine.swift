@@ -142,9 +142,11 @@ public struct FoundationModelsEngine: TextIntelligence {
             source: source
         )
         let corrected = clean(draft.text)
-        // A blank or wildly truncated answer is worse than no answer: the
-        // panel would offer to replace the user's sentence with a fragment.
-        guard !corrected.isEmpty else { throw AIEngineError.empty }
+        // A blank or leftover-scrap answer is worse than no answer: either one
+        // would replace the whole field with a fragment of it.
+        guard !corrected.isEmpty, !EditScope.isFragment(corrected, of: source) else {
+            throw AIEngineError.empty
+        }
         // No list of corrections is asked for on this path — see `EditScope` for
         // what asking cost — so only the changes that are always wrong go back.
         return EditScope.repaired(corrected, to: source)

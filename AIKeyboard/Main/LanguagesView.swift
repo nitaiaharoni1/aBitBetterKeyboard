@@ -29,6 +29,7 @@ struct LanguagesView: View {
                                     filter: search.query, hideIfEmpty: true)
                             } else {
                                 activeSummary
+                                dictionaryRow
                                 LanguageCatalogueSection()
                                 LanguageMixingSection()
                                     .searchTarget(.mixing)
@@ -48,15 +49,16 @@ struct LanguagesView: View {
                 }
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
-                AppSearchHeader(searchAccessibilityID: "language-search") {
-                    Text("Languages")
-                        .font(Theme.Fonts.display)
-                        .tracking(-0.5)
-                        .foregroundStyle(Theme.Text.primary)
-                }
+                AppSearchHeader(title: "Languages", searchAccessibilityID: "language-search")
             }
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(item: $search.languagesPush) { push in
+                switch push {
+                case .dictionary: DictionaryView()
+                }
+            }
         }
+        .id(search.stackEpoch)
         .onAppear { setup = .current(store: store) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { setup = .current(store: store) }
@@ -108,6 +110,21 @@ struct LanguagesView: View {
                 }
                 .foregroundStyle(Theme.Text.tertiary)
                 .padding(.horizontal, Theme.Space.xxs)
+            }
+        }
+    }
+
+    /// Words belong with languages: the dictionary is the list of names this
+    /// keyboard should never correct, not a typing behaviour toggle.
+    private var dictionaryRow: some View {
+        Card {
+            NavigationRow(
+                title: "Personal dictionary",
+                subtitle: "Names and words we should never correct",
+                icon: "character.book.closed",
+                badge: "\(store.personalDictionary.count)"
+            ) {
+                DictionaryView()
             }
         }
     }

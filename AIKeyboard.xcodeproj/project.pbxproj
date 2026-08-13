@@ -525,8 +525,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AIKeyboard/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "AI Keyboard";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AI Keyboard uses the microphone so you can dictate instead of typing.";
+				INFOPLIST_KEY_CFBundleDisplayName = "aBitBetterKeyboard";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "aBitBetterKeyboard uses the microphone so you can dictate instead of typing.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition turns what you say into text you can insert anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -558,8 +558,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AIKeyboard/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "AI Keyboard";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AI Keyboard uses the microphone so you can dictate instead of typing.";
+				INFOPLIST_KEY_CFBundleDisplayName = "aBitBetterKeyboard";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "aBitBetterKeyboard uses the microphone so you can dictate instead of typing.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition turns what you say into text you can insert anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -588,7 +588,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AIKeyboardExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "AI Keyboard";
+				INFOPLIST_KEY_CFBundleDisplayName = "aBitBetterKeyboard";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -613,7 +613,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AIKeyboardExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "AI Keyboard";
+				INFOPLIST_KEY_CFBundleDisplayName = "aBitBetterKeyboard";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

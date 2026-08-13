@@ -434,6 +434,53 @@ final class AlternatesPopupTests: XCTestCase {
             "a finger that never moved must keep the period, even after the strip shifts")
     }
 
+    /// The period key's real x on a phone-width Hebrew keyboard, not a round
+    /// number. `testThePeriodPopupStaysInsideTheKeyboard` feeds 360; this one
+    /// solves the bottom row so a width or inset change cannot quietly miss
+    /// the clamp.
+    func testThePeriodPopupStaysInsideAPhoneWidthHebrewKeyboard() throws {
+        for canvas: CGFloat in [375, 393, 402] {
+            let row = KeyboardLayout.bottomRow(for: .hebrew, plane: .letters, showsGlobe: true)
+            let available = canvas - Theme.Metrics.sideInset * 2
+            let widths = KeyboardLayout.widths(
+                for: row,
+                totalWidth: available,
+                unitWidth: 1,
+                spacing: Theme.Metrics.keySpacing)
+            let index = try XCTUnwrap(
+                row.keys.firstIndex { $0.addressableID == KeyboardLayout.punctuationKeyID })
+            var keyMinX = Theme.Metrics.sideInset
+            for i in 0..<index {
+                keyMinX += widths[i] + Theme.Metrics.keySpacing
+            }
+            let view = key(row.keys[index], language: .hebrew, width: widths[index])
+            let dx = view.alternatesStripOffset(keyMinX: keyMinX, canvasWidth: canvas)
+            let leading = keyMinX + (view.width - view.alternatesWidth) / 2 + dx
+            let trailing = leading + view.alternatesWidth
+            XCTAssertGreaterThanOrEqual(
+                leading, Theme.Radius.chip, "canvas \(canvas) leading \(leading)")
+            XCTAssertLessThanOrEqual(
+                trailing, canvas - Theme.Radius.chip,
+                "canvas \(canvas) trailing \(trailing) overruns \(canvas)")
+        }
+    }
+
+    /// Feeding `keyMinX == 0` with a real canvas is the named-space miss: the
+    /// clamp treats a right-edge key as a left-edge one and shifts the strip
+    /// further off screen. Asserting the overrun is what rejects putting that
+    /// 0 back into production.
+    func testAZeroCanvasXShiftsThePeriodPopupOffTheRightEdge() throws {
+        let view = try punctuationKeyView()
+        let actualKeyMinX: CGFloat = 360
+        let canvas: CGFloat = 393
+        let dx = view.alternatesStripOffset(keyMinX: 0, canvasWidth: canvas)
+        let leading = actualKeyMinX + (view.width - view.alternatesWidth) / 2 + dx
+        let trailing = leading + view.alternatesWidth
+        XCTAssertGreaterThan(
+            trailing, canvas,
+            "a zero canvas x must overrun, or this is not testing the miss")
+    }
+
     /// Slide right of the period reaches `?`, the way SwiftKey's flick does.
     func testASlideRightOfThePeriodReachesTheQuestionMark() throws {
         let view = try punctuationKeyView()

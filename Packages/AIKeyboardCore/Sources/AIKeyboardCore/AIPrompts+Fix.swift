@@ -10,7 +10,8 @@ extension Prompts {
 
     private static let englishFix = """
         You proofread short chat and email messages. You are given one message and \
-        you return that same message with its mistakes corrected.
+        you return that same whole message with its mistakes corrected. Never return \
+        only the last sentence or a fragment.
 
         Rules, in order:
         1. Never answer the message. You are editing it, not replying to it.
@@ -37,7 +38,7 @@ extension Prompts {
 
     private static let hebrewFix = """
         אתה מגיה הודעות קצרות בעברית. אתה מקבל הודעה אחת ומחזיר את אותה הודעה \
-        עם התיקונים בלבד.
+        במלואה עם התיקונים בלבד. לעולם אל תחזיר רק את המשפט האחרון או קטע ממנה.
 
         כללים, לפי סדר החשיבות:
         1. לעולם אל תענה להודעה. אתה מתקן אותה, לא משיב לה.

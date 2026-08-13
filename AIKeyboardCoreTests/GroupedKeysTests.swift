@@ -39,6 +39,22 @@ final class GroupedKeysTests: XCTestCase {
     /// the `keepingApart:` form ever takes are these.
     private let noAvoid: Set<String> = []
 
+    private var savedCompleteOnIdle = false
+    private var savedIdleDelayMs = 0
+
+    override func setUp() {
+        super.setUp()
+        savedCompleteOnIdle = SharedStore.shared.completeOnIdle
+        savedIdleDelayMs = SharedStore.shared.idleDelayMs
+        SharedStore.shared.completeOnIdle = false
+    }
+
+    override func tearDown() {
+        SharedStore.shared.completeOnIdle = savedCompleteOnIdle
+        SharedStore.shared.idleDelayMs = savedIdleDelayMs
+        super.tearDown()
+    }
+
     // MARK: - How many keys a row becomes
 
     /// **Half-up, not banker's.** Foundation's plain `rounded()` is
@@ -239,9 +255,9 @@ final class GroupedKeysTests: XCTestCase {
 
     /// **Grouped letter keys in a row are the same width and fill it.** Weighting
     /// by the columns a key swallowed left leftover letters on a skinny button
-    /// beside a fat one, which is the opposite of the feature. Equal shares fill
-    /// the row the keys they replaced occupied, gutters included — `.unit` cannot,
-    /// because a unit is a key width and knows nothing about the spacing beside it.
+    /// beside a fat one, which is the opposite of the feature. A slot is one of
+    /// N equal parts of the whole row, gutters included. `.unit` cannot, because
+    /// a unit is a key width and knows nothing about the spacing beside it.
     func testGroupedKeysInARowAreTheSameWidthAndFillIt() throws {
         let width: CGFloat = 402 - Theme.Metrics.sideInset * 2
         func drawn(_ row: KeyRow, columns: Int) -> [CGFloat] {
@@ -263,10 +279,10 @@ final class GroupedKeysTests: XCTestCase {
                 let band = try XCTUnwrap(rows.first)
                 XCTAssertTrue(
                     band.keys.allSatisfy {
-                        if case .share(1) = $0.width { return true }
+                        if case .slot(of: band.keys.count) = $0.width { return true }
                         return false
                     },
-                    "every band key is an equal share at \(language.rawValue) \(level.rawValue)")
+                    "every band key is a slot of the band at \(language.rawValue) \(level.rawValue)")
 
                 let bandWidths = drawn(band, columns: 10)
                 let firstBand = try XCTUnwrap(bandWidths.first)
@@ -279,7 +295,7 @@ final class GroupedKeysTests: XCTestCase {
                 let bottom = rows[1]
                 let letterWidths = zip(bottom.keys, drawn(bottom, columns: 10)).compactMap {
                     spec, keyWidth -> CGFloat? in
-                    if case .share = spec.width { return keyWidth }
+                    if case .slot = spec.width { return keyWidth }
                     return nil
                 }
                 let firstLetter = try XCTUnwrap(letterWidths.first)
@@ -289,6 +305,10 @@ final class GroupedKeysTests: XCTestCase {
                         "grouped keys on the shift/delete row must be the same size at \(language.rawValue) \(level.rawValue)"
                     )
                 }
+                XCTAssertEqual(
+                    firstBand, firstLetter, accuracy: 0.5,
+                    "band letter-key width must match third-row letter-key width at \(language.rawValue) \(level.rawValue)"
+                )
             }
 
             let band = KeyboardLayout.rows(for: .english, plane: .letters, grouping: level)[0]
@@ -305,7 +325,7 @@ final class GroupedKeysTests: XCTestCase {
     /// letter per line; `פ` over `לךף` is one over three; the shift row's `הנ`
     /// sits beside `מצתץ`. Weighting by span — or by how many letters a cap
     /// carries — is what made those look like skinny buttons beside fat ones.
-    /// Equal shares keep the caps the same size; the drawing has to fill each
+    /// Equal slots keep the caps the same size; the drawing has to fill each
     /// cap with equal cells or the glyphs still read as different-sized buttons.
     func testHebrewL1CapsAreEqualEvenWhenLetterCountsDiffer() throws {
         let rows = KeyboardLayout.rows(for: .hebrew, plane: .letters, grouping: .l1)
@@ -316,23 +336,22 @@ final class GroupedKeysTests: XCTestCase {
         let peLeftovers = try XCTUnwrap(
             band.keys.first { $0.groupedLetters == ["פ", "ל", "ך", "ף"] },
             "the one-over-three band key")
-        guard case .share(let vavShare) = vavAyin.width,
-            case .share(let peShare) = peLeftovers.width
+        guard case .slot(let vavCount) = vavAyin.width,
+            case .slot(let peCount) = peLeftovers.width
         else {
-            return XCTFail("both band caps must be an equal share, not a span-weighted width")
+            return XCTFail("both band caps must be a slot, not leftover-share or span-weighted")
         }
-        XCTAssertEqual(vavShare, peShare)
-        XCTAssertEqual(vavShare, 1)
+        XCTAssertEqual(vavCount, peCount)
 
         let bottom = rows[1]
         let heNun = try XCTUnwrap(bottom.keys.first { $0.groupedLetters == ["ה", "נ"] })
         let memTsadi = try XCTUnwrap(
             bottom.keys.first { $0.groupedLetters == ["מ", "צ", "ת", "ץ"] })
-        guard case .share(let two) = heNun.width, case .share(let four) = memTsadi.width else {
-            return XCTFail("both shift-row caps must be an equal share")
+        guard case .slot(let two) = heNun.width, case .slot(let four) = memTsadi.width else {
+            return XCTFail("both shift-row caps must be a slot")
         }
         XCTAssertEqual(two, four)
-        XCTAssertEqual(two, 1)
+        XCTAssertEqual(vavCount, two)
     }
 
     // MARK: - Hebrew's clitics
@@ -833,6 +852,42 @@ final class GroupedKeysTests: XCTestCase {
         XCTAssertEqual(decoder.source, .bundled)
     }
 
+    /// Exact-length field, not a prefix completion. One key of `the` still
+    /// prefix-matches `["the","to","that"]`; the field must not take `"the"`.
+    func testDecodeWritesExactLengthNotALongerPrefix() throws {
+        let decoder = referenceDecoder()
+        let code = try XCTUnwrap(GroupedDecoder.code(for: "the", map: try referenceKeys()))
+        let one = String(code.prefix(1))
+
+        XCTAssertEqual(decoder.candidates(startingWith: one), ["the", "to", "that"])
+
+        let none = decoder.decode(matching: one, completions: .none)
+        XCTAssertNotEqual(none.fieldWord, "the")
+        if let field = none.fieldWord {
+            XCTAssertEqual(
+                try XCTUnwrap(GroupedDecoder.code(for: field, map: try referenceKeys())), one)
+        }
+        XCTAssertFalse(none.barWords.contains { $0 == none.fieldWord })
+        XCTAssertNil(none.idleCompletion)
+
+        let after = decoder.decode(matching: one, completions: .afterExact)
+        XCTAssertEqual(after.fieldWord, none.fieldWord)
+        XCTAssertFalse(after.barWords.contains { $0 == after.fieldWord })
+        XCTAssertEqual(after.idleCompletion, "the")
+
+        let toCode = try XCTUnwrap(GroupedDecoder.code(for: "to", map: try referenceKeys()))
+        let toDecode = decoder.decode(matching: toCode, completions: .afterExact)
+        XCTAssertEqual(toDecode.fieldWord, "to")
+        XCTAssertFalse(toDecode.barWords.contains("to"))
+    }
+
+    func testAnEmptyCodeDecodesToNothing() {
+        let empty = referenceDecoder().decode(matching: "", completions: .afterExact)
+        XCTAssertNil(empty.fieldWord)
+        XCTAssertEqual(empty.barWords, [])
+        XCTAssertNil(empty.idleCompletion)
+    }
+
     /// **Commonest first, and code order is deliberately not the answer.** Three
     /// words begin on key 3 — `in`, `is`, `it` — and their codes sort `is, it, in`,
     /// so a decoder that returns what it meets walking its index answers `is, it,
@@ -1201,10 +1256,96 @@ final class GroupedKeysTests: XCTestCase {
         defer { SharedStore.shared.groupedLevel = .off }
         let controller = KeyboardController(target: MockTextTarget(), language: .english)
         controller.pressGroupedKey("qw\nas")
+        controller.pressGroupedKey("er\ndf")
         let before = controller.suggestions.map(\.text)
         XCTAssertFalse(before.isEmpty, "grouped press must fill the bar")
         controller.refreshSuggestions()
         XCTAssertEqual(controller.suggestions.map(\.text), before)
+    }
+
+    /// Complete on pause off: the field is exact-length or the literal, never a
+    /// longer word. Backspace shortens. The bar still offers the next most
+    /// likely words (including longer ones you can tap). Nothing is bold, and
+    /// the field word is not repeated when there are alternatives.
+    @MainActor
+    func testGroupedPressWritesExactLengthAndBackspaceNeverCompletes() {
+        SharedStore.shared.groupedLevel = .l1
+        let savedComplete = SharedStore.shared.completeOnIdle
+        SharedStore.shared.completeOnIdle = false
+        defer {
+            SharedStore.shared.groupedLevel = .off
+            SharedStore.shared.completeOnIdle = savedComplete
+        }
+        let target = MockTextTarget()
+        let controller = KeyboardController(target: target, language: .english)
+        controller.shift = .off
+
+        func assertExactOrLiteral() {
+            let field = target.text
+            let literal = controller.grouped.cased(controller.grouped.literal, in: .english)
+            XCTAssertTrue(
+                field.count == controller.grouped.strokes.count || field == literal,
+                "field \(field) must match stroke count or literal \(literal)")
+            XCTAssertFalse(controller.suggestions.contains { $0.isDefault })
+            if !controller.suggestions.isEmpty {
+                XCTAssertFalse(
+                    controller.suggestions.map(\.text).contains(field),
+                    "bar must not repeat the field word")
+            }
+        }
+
+        controller.pressGroupedKey("ty\ngh")
+        assertExactOrLiteral()
+        XCTAssertFalse(
+            controller.suggestions.isEmpty,
+            "bar must offer the next most likely words, including longer ones")
+        let afterOne = target.text
+        controller.pressGroupedKey("ty\ngh")
+        assertExactOrLiteral()
+        controller.pressGroupedKey("er\ndf")
+        assertExactOrLiteral()
+        XCTAssertTrue(controller.deleteGroupedStroke())
+        assertExactOrLiteral()
+        XCTAssertTrue(controller.deleteGroupedStroke())
+        assertExactOrLiteral()
+        XCTAssertEqual(target.text.count, afterOne.count)
+        XCTAssertNotEqual(target.text, "the")
+    }
+
+    /// The first stroke of a new session must not delete the word already in
+    /// the field. `replaceCurrentWord` did, because the prefix was that word.
+    @MainActor
+    func testAGroupedPressDoesNotEatTheWordAlreadyInTheField() {
+        SharedStore.shared.groupedLevel = .l1
+        defer { SharedStore.shared.groupedLevel = .off }
+        let target = MockTextTarget(text: "hello ")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.shift = .off
+        controller.pressGroupedKey("ty\ngh")
+        XCTAssertTrue(target.text.hasPrefix("hello "), target.text)
+        XCTAssertGreaterThan(target.text.count, 6)
+    }
+
+    /// Idle completion writes a longer word and closes the session. The next
+    /// grouped press is a new word, not a rewrite of the one just finished.
+    @MainActor
+    func testIdleCompletionSurvivesTheNextGroupedPress() {
+        SharedStore.shared.groupedLevel = .l1
+        SharedStore.shared.completeOnIdle = true
+        defer {
+            SharedStore.shared.groupedLevel = .off
+            SharedStore.shared.completeOnIdle = false
+        }
+        let target = MockTextTarget()
+        let controller = KeyboardController(target: target, language: .english)
+        controller.shift = .off
+        controller.pressGroupedKey("ty\ngh")
+        controller.performIdleTyping()
+        let completed = target.text
+        XCTAssertFalse(completed.isEmpty)
+        XCTAssertFalse(controller.grouped.isTyping)
+        controller.pressGroupedKey("qw\nas")
+        XCTAssertTrue(target.text.hasPrefix(completed), target.text)
     }
 
     /// A bar tap used to leave the strokes live. The next delete then

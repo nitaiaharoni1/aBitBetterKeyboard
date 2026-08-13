@@ -3,9 +3,9 @@ import SwiftUI
 
 /// The "All languages" list, grouped by script.
 ///
-/// Filtering is the header search on `LanguagesView`, not a second field:
-/// `RenderedRowOrderTests.enableArabic` types into `language-search` there
-/// and needs the matching toggle to stay on this list.
+/// Filtering is the header search on `LanguagesView` (the Languages tab), not a
+/// second field: `RenderedRowOrderTests.enableArabic` types into
+/// `language-search` there and needs the matching toggle to stay on this list.
 struct LanguageCatalogueSection: View {
     @EnvironmentObject private var store: SharedStore
     @EnvironmentObject private var search: AppSearch

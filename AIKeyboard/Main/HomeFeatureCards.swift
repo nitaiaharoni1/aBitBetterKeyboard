@@ -115,7 +115,7 @@ struct HomeScreenContextCard: View {
 /// Navigation card linking to `DictationView`. Shows LIVE while a dictation
 /// session is running in the app.
 struct HomeDictationCard: View {
-    @StateObject private var dictation = DictationService.shared
+    @ObservedObject private var dictation = DictationService.shared
 
     var body: some View {
         HomeFeatureCard(

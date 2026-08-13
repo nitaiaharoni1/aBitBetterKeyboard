@@ -9,9 +9,26 @@
 }
 
 .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   font-size: 17px;
   font-weight: 750;
   letter-spacing: -0.02em;
+}
+
+.wordmark img {
+  display: block;
+  flex-shrink: 0;
+  border-radius: 6px;
+}
+
+@media (max-width: 420px) {
+  .wordmark {
+    font-size: 14px;
+    gap: 6px;
+  }
 }
 
 .cta {

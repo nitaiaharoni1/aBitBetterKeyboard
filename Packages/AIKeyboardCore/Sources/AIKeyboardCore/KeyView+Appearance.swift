@@ -182,8 +182,8 @@ extension KeyView {
     static let calloutNeckHeight: CGFloat = 12
     static let calloutOverlap: CGFloat = 3
 
-    /// The circle the glyph sits in: wider than the key, or it is not a preview.
-    var calloutBubbleSize: CGFloat { max(width * 1.65, height * 1.35, 52) }
+    /// The rounded rect the glyph sits in: wider than the key, or it is not a preview.
+    var calloutBubbleSize: CGFloat { max(width * 1.4, height * 1.15, 44) }
 
     /// Heavier and larger than the cap, so the letter is readable under a thumb.
     var calloutFontSize: CGFloat {
@@ -272,38 +272,41 @@ extension KeyView {
     }
 }
 
-/// The press balloon: a circle for the glyph, tapering down to the key.
+/// The press balloon: the same rounded rectangle as a key, tapering down to the cap.
 ///
-/// One path rather than a circle stacked on a triangle, so the contact shadow
-/// is a single silhouette. The neck starts inside the circle so the fill does
-/// not leave a seam where they meet.
+/// One path rather than a rounded rect stacked on a triangle, so the contact
+/// shadow is a single silhouette. The neck starts inside the bubble so the
+/// fill does not leave a seam where they meet.
 struct CharacterCalloutShape: Shape {
     var neckWidth: CGFloat
 
     func path(in rect: CGRect) -> Path {
         let neckHeight = min(KeyView.calloutNeckHeight, rect.height * 0.28)
-        let diameter = min(rect.width, rect.height - neckHeight)
-        let radius = diameter / 2
-        let center = CGPoint(x: rect.midX, y: radius)
-        let neckTop = diameter * 0.62
-        let neckTopWidth = min(diameter * 0.46, max(neckWidth, 1) * 1.35)
+        let bubble = CGRect(
+            x: rect.minX,
+            y: rect.minY,
+            width: rect.width,
+            height: rect.height - neckHeight)
+        let corner = Theme.Radius.key
+        let neckTop = bubble.maxY - KeyView.calloutOverlap
+        let neckTopWidth = min(bubble.width * 0.46, max(neckWidth, 1) * 1.35)
 
         var path = Path()
-        path.addEllipse(
-            in: CGRect(
-                x: center.x - radius, y: center.y - radius,
-                width: diameter, height: diameter))
+        path.addRoundedRect(
+            in: bubble,
+            cornerSize: CGSize(width: corner, height: corner),
+            style: .continuous)
 
         var neck = Path()
-        neck.move(to: CGPoint(x: center.x - neckTopWidth / 2, y: neckTop))
-        neck.addLine(to: CGPoint(x: center.x + neckTopWidth / 2, y: neckTop))
+        neck.move(to: CGPoint(x: rect.midX - neckTopWidth / 2, y: neckTop))
+        neck.addLine(to: CGPoint(x: rect.midX + neckTopWidth / 2, y: neckTop))
         neck.addQuadCurve(
-            to: CGPoint(x: center.x + neckWidth / 2, y: rect.maxY),
-            control: CGPoint(x: center.x + neckWidth / 2, y: diameter + neckHeight * 0.15))
-        neck.addLine(to: CGPoint(x: center.x - neckWidth / 2, y: rect.maxY))
+            to: CGPoint(x: rect.midX + neckWidth / 2, y: rect.maxY),
+            control: CGPoint(x: rect.midX + neckWidth / 2, y: bubble.maxY + neckHeight * 0.15))
+        neck.addLine(to: CGPoint(x: rect.midX - neckWidth / 2, y: rect.maxY))
         neck.addQuadCurve(
-            to: CGPoint(x: center.x - neckTopWidth / 2, y: neckTop),
-            control: CGPoint(x: center.x - neckWidth / 2, y: diameter + neckHeight * 0.15))
+            to: CGPoint(x: rect.midX - neckTopWidth / 2, y: neckTop),
+            control: CGPoint(x: rect.midX - neckWidth / 2, y: bubble.maxY + neckHeight * 0.15))
         path.addPath(neck)
         return path
     }

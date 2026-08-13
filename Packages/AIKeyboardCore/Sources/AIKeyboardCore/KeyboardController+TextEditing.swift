@@ -18,6 +18,20 @@ extension KeyboardController {
         return String(before.reversed().prefix { !$0.isWhitespace }.reversed())
     }
 
+    /// Trailing whitespace plus the non-whitespace run in front of it.
+    ///
+    /// **A hold has to take the spaces with the word, or it stalls.** One
+    /// character at a time, `"hello "` spends a tick on the space. Punctuation
+    /// stays inside the word, matching `currentWordPrefix`, so `"world!"` is
+    /// one delete. The caller measures UTF-16, because that is what
+    /// `deleteBackward(utf16Units:)` consumes.
+    static func previousWordSuffix(in before: String) -> String {
+        let reversed = before.reversed()
+        let whitespace = reversed.prefix { $0.isWhitespace }
+        let word = reversed.drop(while: { $0.isWhitespace }).prefix { !$0.isWhitespace }
+        return String(word.reversed()) + String(whitespace.reversed())
+    }
+
     /// What the AI actions operate on: the selection if there is one, otherwise
     /// **everything in the field**.
     ///

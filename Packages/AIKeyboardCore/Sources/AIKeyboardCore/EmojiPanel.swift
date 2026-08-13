@@ -95,7 +95,8 @@ public struct EmojiPanel: View {
                     },
                     // `press` rather than `deleteBackward`, for the sound: this is
                     // a key the user pressed, and only `press` speaks for one.
-                    onDelete: { controller.press(.backspace) }
+                    onDelete: { controller.press(.backspace) },
+                    onDeleteRepeat: { controller.deletePreviousWord() }
                 )
             }
         }
@@ -409,6 +410,7 @@ struct EmojiCategoryRow: View {
     let height: CGFloat
     let onSelect: (String) -> Void
     let onDelete: () -> Void
+    let onDeleteRepeat: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -429,6 +431,7 @@ struct EmojiCategoryRow: View {
             // would be the whole of deleting for as long as the grid is open.
             KeyStyleButton(
                 width: 42, height: height, repeats: true,
+                repeatAction: onDeleteRepeat,
                 // No `Feedback` call of its own: `deleteBackward` already fires
                 // one per character, and the button's own press haptic on top of
                 // it made a single tap buzz twice.
@@ -507,6 +510,9 @@ struct KeyStyleButton<Label: View>: View {
     var isSelected = false
     /// Whether holding it keeps firing. Only delete does.
     var repeats = false
+    /// The hold tick, when it is not the tap. Delete uses this so a hold
+    /// removes a word while a tap still removes a character.
+    var repeatAction: (() -> Void)? = nil
     /// The press haptic, or nil for a control whose action already fires one.
     var feedback: (() -> Void)? = Feedback.modifierPress
     /// Whether this is drawn as a keycap at all — a fill at rest, and the contact
@@ -528,7 +534,7 @@ struct KeyStyleButton<Label: View>: View {
     @ViewBuilder let label: () -> Label
 
     @State private var isPressed = false
-    @State private var repeater = KeyRepeater()
+    @State private var repeater = KeyRepeater.wordDelete()
 
     /// True for as long as a touch is on this key, and **the only signal that
     /// survives a cancelled gesture** — SwiftUI does not call `onEnded` when a
@@ -588,7 +594,7 @@ struct KeyStyleButton<Label: View>: View {
                 isPressed = true
                 feedback?()
                 action()
-                if repeats { repeater.start(action) }
+                if repeats { repeater.start(repeatAction ?? action) }
             }
             .onEnded { _ in endPress() }
     }

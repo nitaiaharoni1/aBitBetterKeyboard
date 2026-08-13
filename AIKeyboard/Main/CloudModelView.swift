@@ -43,6 +43,7 @@ struct CloudModelView: View {
         }
         .navigationTitle("Cloud model")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 }
 

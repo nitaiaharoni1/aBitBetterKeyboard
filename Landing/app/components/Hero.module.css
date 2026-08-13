@@ -5,6 +5,7 @@
   gap: clamp(40px, 6vw, 76px);
   min-height: min(70dvh, 620px);
   padding: clamp(36px, 5vw, 56px) 0;
+  overflow: visible;
 }
 
 .copy {
@@ -52,6 +53,7 @@
 
 .visual {
   min-width: 0;
+  overflow: visible;
 }
 
 .primary,

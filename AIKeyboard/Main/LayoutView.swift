@@ -27,11 +27,11 @@ struct LayoutView: View {
     /// `_model`/`_canvas` inside `init` is not: it runs whenever the initialiser
     /// runs. This view is a `NavigationRow` destination inside a `ScrollView`
     /// rather than a `List`, so SwiftUI builds every destination eagerly on every
-    /// `SettingsView` body evaluation. Constructing a `KeyboardController` there
+    /// Keys tab body evaluation. Constructing a `KeyboardController` there
     /// meant a fresh Combine subscription to `ScreenContextSession.shared` and a
     /// full `UITextChecker` pass through `refreshSuggestions()` on every render of
-    /// the Settings screen — and tapping Done writes to the store, which
-    /// re-renders Settings, which builds another one. The app hung hard enough
+    /// the Keys tab — and tapping Done writes to the store, which
+    /// re-renders that tab, which builds another one. The app hung hard enough
     /// that four UI tests timed out without leaving a crash report.
     @StateObject private var model = LayoutEditorModel(layout: .default)
     @StateObject private var canvas = KeyboardController(
@@ -49,7 +49,7 @@ struct LayoutView: View {
     ///
     /// It used to be `LayoutView(layout: store.keyboardLayout)`. A
     /// `NavigationLink` destination inside a `ScrollView` is rebuilt on every
-    /// `SettingsView` body evaluation, and reading the store there made the
+    /// Keys tab body evaluation, and reading the store there made the
     /// *pushed* view a function of the store — so tapping Done, which writes the
     /// store, rebuilt the screen the user was standing on while it was dismissing
     /// itself. The app wedged at 100% CPU with an empty accessibility tree, which
@@ -84,6 +84,7 @@ struct LayoutView: View {
         }
         .navigationTitle("Keyboard layout")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button {

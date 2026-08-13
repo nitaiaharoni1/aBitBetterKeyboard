@@ -26,6 +26,7 @@ struct DictionaryView: View {
         }
         .navigationTitle("Personal dictionary")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 
     private var addField: some View {
@@ -66,7 +67,7 @@ struct DictionaryView: View {
 
     private var wordList: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            statHeader
+            wordsHeader
 
             Card(padding: Theme.Space.xs) {
                 VStack(spacing: 0) {
@@ -97,24 +98,11 @@ struct DictionaryView: View {
         }
     }
 
-    /// The count as the screen's one big number: what the keyboard has been told
-    /// to leave alone, stated plainly rather than sold.
-    private var statHeader: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.xs) {
-            Text("\(store.personalDictionary.count)")
-                .font(Theme.Fonts.display)
-                .tracking(-0.5)
-                .foregroundStyle(Theme.Text.primary)
-            Text(
-                store.personalDictionary.count == 1
-                    ? "word autocorrect leaves alone" : "words autocorrect leaves alone"
-            )
+    private var wordsHeader: some View {
+        Text("Your words (\(store.personalDictionary.count))")
             .font(Theme.Fonts.callout)
             .foregroundStyle(Theme.Text.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, Theme.Space.xxs)
-        .accessibilityElement(children: .combine)
+            .padding(.horizontal, Theme.Space.xxs)
     }
 
     private var emptyState: some View {

@@ -35,7 +35,7 @@ anybody spoke, and `CloudDictation` transcribes; `MockDictation` is deleted.
   `ProxyTextTarget` wraps the real `UITextDocumentProxy` in the extension,
   `MockTextTarget` is an in-memory string used by the app's playground and
   onboarding.
-- AI actions read `aiTargetText` (the selection, else the current sentence), run
+- AI actions read `aiTargetText` (the selection, else the whole field), run
   `RoutedIntelligence` through `beginWork`, and write back by deleting exactly
   the characters that were sent before inserting the replacement. `MockAI` is
   gone; the engine behind `beginWork` is real.

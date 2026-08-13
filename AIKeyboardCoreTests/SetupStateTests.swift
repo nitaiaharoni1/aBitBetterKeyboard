@@ -252,7 +252,7 @@ final class SetupStateTests: XCTestCase {
             detail.localizedCaseInsensitiveContains("globe"),
             "the unconfirmed state never says what to do: \(detail)")
         XCTAssertTrue(
-            detail.contains("AI Keyboard"),
+            detail.contains("aBitBetterKeyboard"),
             "and never says which keyboard to pick: \(detail)")
     }
 

@@ -4,6 +4,7 @@ import AIKeyboardCore
 /// The real keyboard, typing into an in-memory document. Used in onboarding and
 /// in the playground so the product can be felt before it is installed.
 struct KeyboardPreview: View {
+    @Environment(\.openURL) private var openURL
     @StateObject private var target = MockTextTarget()
     @StateObject private var controller: KeyboardController
 
@@ -44,6 +45,11 @@ struct KeyboardPreview: View {
         // when it stops applying, so a modifier attached to it is gone before it
         // could animate anything.
         .animation(Theme.Motion.quick, value: showsHint)
+        .onAppear {
+            // Same callback the extension host wires. Without it, Reply in the
+            // playground shows "Screen context is off" and never leaves.
+            controller.onOpenContainingApp = { openURL($0) }
+        }
         .onChange(of: target.text) { _, _ in
             controller.refreshSuggestions()
         }

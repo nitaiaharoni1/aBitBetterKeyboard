@@ -158,7 +158,10 @@ extension KeyView {
     /// than leaving it on the left of a centred strip. Every horizontal popup is
     /// then clamped so its rounded corners stay inside the keyboard. Hit-testing
     /// uses this same value; a visual shift that `alternateIndex` does not know
-    /// about is how a lift on `.` used to pick `,`.
+    /// about is how a lift on `.` used to pick `,`. `keyMinX` is the key's
+    /// left edge in the same space as `canvasWidth` (screen x minus the grid's
+    /// origin). A named-space x of 0 is how a Hebrew period key used to shove
+    /// this strip off the right edge.
     func alternatesStripOffset(keyMinX: CGFloat, canvasWidth: CGFloat) -> CGFloat {
         guard !alternatesAreStacked else { return 0 }
         var dx: CGFloat = 0

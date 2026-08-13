@@ -149,9 +149,9 @@ public enum DictationEndReason: UInt8, Sendable, Equatable {
         case .stoppedByUser: return "Dictation is off."
         case .interrupted: return "Something else took the microphone."
         case .expired: return "The dictation session timed out."
-        case .microphoneDenied: return "AI Keyboard doesn't have microphone access."
+        case .microphoneDenied: return "aBitBetterKeyboard doesn't have microphone access."
         case .audioFailed: return "The microphone stopped working."
-        case .lost: return "The AI Keyboard app stopped running in the background."
+        case .lost: return "The aBitBetterKeyboard app stopped running in the background."
         }
     }
 }

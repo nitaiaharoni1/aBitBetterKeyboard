@@ -173,4 +173,51 @@ public enum ToneStyle: String, CaseIterable, Identifiable, Codable, Sendable {
         case .friendly: return "hand.wave"
         }
     }
+
+    /// One row per register. Lives on the type so Settings cannot invent a
+    /// seventh sample that the prompts do not describe.
+    public var previewCaption: String { preview.caption }
+    public var previewEnglish: String { preview.english }
+    public var previewHebrew: String { preview.hebrew }
+
+    private var preview: (caption: String, english: String, hebrew: String) {
+        switch self {
+        case .clearer:
+            return (
+                "Cuts filler. Keeps the ask.",
+                "Are you free for lunch tomorrow at 12?",
+                "אתה פנוי לצהריים מחר ב-12?"
+            )
+        case .shorter:
+            return (
+                "Fewer words. Same facts.",
+                "Lunch tomorrow at 12?",
+                "צהריים מחר ב-12?"
+            )
+        case .professional:
+            return (
+                "Full sentences. A request as a question.",
+                "Would you be available for lunch tomorrow at 12?",
+                "האם תהיה פנוי לארוחת צהריים מחר בשעה 12?"
+            )
+        case .casual:
+            return (
+                "Plain words, no formality.",
+                "Wanna grab lunch tomorrow at 12?",
+                "יש לך צהריים מחר ב-12?"
+            )
+        case .confident:
+            return (
+                "Direct. No hedging.",
+                "Free for lunch tomorrow at 12?",
+                "פנוי לצהריים מחר ב-12?"
+            )
+        case .friendly:
+            return (
+                "Warmer. No emoji.",
+                "Want to have lunch tomorrow at 12?",
+                "בא לך צהריים מחר ב-12?"
+            )
+        }
+    }
 }

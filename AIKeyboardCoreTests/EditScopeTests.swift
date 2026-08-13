@@ -258,6 +258,40 @@ final class EditScopeTests: XCTestCase {
         )
     }
 
+    // MARK: A leftover scrap
+
+    /// The model sometimes answers with only the last clause. Applying that
+    /// would delete the rest of the field, which is the opposite of Fix.
+    func testALastClauseIsAFragmentOfTheMessage() {
+        XCTAssertTrue(
+            EditScope.isFragment(
+                "it doesn't make sense.",
+                of: "i dont think we should do it because its not make sense"))
+        XCTAssertFalse(
+            EditScope.isFragment(
+                "I don't think we should do it because it doesn't make sense.",
+                of: "i dont think we should do it because its not make sense"))
+    }
+
+    func testAShortMessageIsNeverTreatedAsAFragmentOfItself() {
+        XCTAssertFalse(EditScope.isFragment("thanks", of: "thx u"))
+        XCTAssertFalse(EditScope.isFragment("אני אבדוק את זה", of: "אני יבדוק את זה"))
+    }
+
+    /// The playground seed, with the grammar named the way the cloud field now
+    /// asks for it. A list that only mentioned `dont` used to put `its not make
+    /// sense` back, so tapping Fix looked like it had ignored the sentence.
+    func testThePlaygroundSeedKeepsItsGrammarWhenTheListNamesThePhrase() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "I don't think we should do it because it doesn't make sense.",
+                to: "i dont think we should do it because its not make sense",
+                corrections: "dont -> don't, its not -> it doesn't"
+            ),
+            "I don't think we should do it because it doesn't make sense."
+        )
+    }
+
     // MARK: Without a list
 
     /// The on-device model is not asked what it corrected, because asking made it

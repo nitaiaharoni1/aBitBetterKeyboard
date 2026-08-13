@@ -54,7 +54,7 @@ struct AddKeyboardStep: View {
                     ExplainerStepRow(
                         number: 3,
                         title: "Tap Add New Keyboard…",
-                        detail: "AI Keyboard is listed under Third-Party Keyboards."
+                        detail: "aBitBetterKeyboard is listed under Third-Party Keyboards."
                     )
                     .padding(.vertical, Theme.Space.sm)
 
@@ -62,7 +62,7 @@ struct AddKeyboardStep: View {
 
                     ExplainerStepRow(
                         number: 4,
-                        title: "Choose AI Keyboard",
+                        title: "Choose aBitBetterKeyboard",
                         detail: "Then come back to this app."
                     )
                     .padding(.vertical, Theme.Space.sm)

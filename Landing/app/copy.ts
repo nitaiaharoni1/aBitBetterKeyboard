@@ -3,7 +3,7 @@ export type Locale = "en" | "he";
 export const copy = {
   en: {
     skip: "Skip to content",
-    wordmark: "AIKeyboard",
+    wordmark: "aBitBetterKeyboard",
     localeName: "עברית",
     localeSwitch: "Switch to Hebrew",
     navCta: "Get the keyboard",
@@ -83,23 +83,23 @@ export const copy = {
     downloadTitle: "Add it. Type anywhere.",
     downloadSub: "Free on iPhone. After you install the app, add the keyboard in Settings.",
     step1Title: "Install the app",
-    step1Body: "Get AI Keyboard on your iPhone, then open it once.",
+    step1Body: "Get aBitBetterKeyboard on your iPhone, then open it once.",
     step2Title: "Add the keyboard",
     step2Body:
-      "Settings, General, Keyboard, Keyboards, Add New Keyboard, AI Keyboard.",
+      "Settings, General, Keyboard, Keyboards, Add New Keyboard, aBitBetterKeyboard.",
     step3Title: "Allow Full Access",
     step3Body:
       "Reply, Rewrite, and cloud dictation need it. Typing works without it.",
     footerStore: "Get the keyboard",
     footerPrivacy: "Privacy",
-    footerCopy: "© 2026 AIKeyboard",
+    footerCopy: "© 2026 aBitBetterKeyboard",
     privacyPageTitle: "Privacy",
     privacyPageLead:
-      "AI Keyboard is an iOS keyboard. This page is what the product does with what you type.",
+      "aBitBetterKeyboard is an iOS keyboard. This page is what the product does with what you type.",
   },
   he: {
     skip: "דלג לתוכן",
-    wordmark: "AIKeyboard",
+    wordmark: "aBitBetterKeyboard",
     localeName: "English",
     localeSwitch: "מעבר לאנגלית",
     navCta: "להורדה",
@@ -168,17 +168,17 @@ export const copy = {
     downloadTitle: "מוסיפים. כותבים מכל מקום.",
     downloadSub: "חינם באייפון. אחרי התקנת האפליקציה, מוסיפים את המקלדת בהגדרות.",
     step1Title: "מתקינים את האפליקציה",
-    step1Body: "מורידים את AI Keyboard לאייפון, ופותחים פעם אחת.",
+    step1Body: "מורידים את aBitBetterKeyboard לאייפון, ופותחים פעם אחת.",
     step2Title: "מוסיפים את המקלדת",
-    step2Body: "הגדרות, כללי, מקלדת, מקלדות, הוספת מקלדת חדשה, AI Keyboard.",
+    step2Body: "הגדרות, כללי, מקלדת, מקלדות, הוספת מקלדת חדשה, aBitBetterKeyboard.",
     step3Title: "מאפשרים גישה מלאה",
     step3Body: "תשובה, ניסוח והכתבה בענן צריכים אותה. הקלדה רגילה עובדת בלעדיה.",
     footerStore: "להורדה",
     footerPrivacy: "פרטיות",
-    footerCopy: "© 2026 AIKeyboard",
+    footerCopy: "© 2026 aBitBetterKeyboard",
     privacyPageTitle: "פרטיות",
     privacyPageLead:
-      "AI Keyboard היא מקלדת לאייפון. כאן כתוב מה המוצר עושה עם מה שכותבים.",
+      "aBitBetterKeyboard היא מקלדת לאייפון. כאן כתוב מה המוצר עושה עם מה שכותבים.",
   },
 } as const;
 

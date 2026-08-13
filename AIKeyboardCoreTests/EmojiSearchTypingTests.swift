@@ -67,6 +67,15 @@ final class EmojiSearchTypingTests: XCTestCase {
         XCTAssertEqual(target.text, "hello", "backspace fell through to the document")
     }
 
+    func testForwardDeleteDoesNotTouchTheDocumentOrCloseSearch() {
+        let (controller, target) = controller("hello")
+        controller.show(.emojiSearch)
+        controller.press(.deleteForward)
+        XCTAssertEqual(controller.overlay, .emojiSearch)
+        XCTAssertEqual(controller.emojiQuery, "")
+        XCTAssertEqual(target.text, "hello")
+    }
+
     /// Shift, the plane switch and the globe are deliberately *not* taken. The
     /// whole reason search hands the letters back is that the words being searched
     /// for are Hebrew or English, and a user who cannot reach the other alphabet

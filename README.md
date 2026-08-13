@@ -1,4 +1,4 @@
-# AI Keyboard
+# aBitBetterKeyboard
 
 A Hebrew/English iOS keyboard with AI text actions, dictation, and screen-context
 replies.
@@ -38,7 +38,7 @@ open AIKeyboard.xcodeproj      # ⌘R, iPhone 17 Pro simulator
 ```
 
 To use it as an actual keyboard, install the app, then Settings → General →
-Keyboard → Keyboards → Add New Keyboard → AI Keyboard. Everything except the
+Keyboard → Keyboards → Add New Keyboard → aBitBetterKeyboard. Everything except the
 system key-click works without Full Access.
 
 The fastest way to see it is Home → **Try the keyboard**, which runs the same
@@ -80,7 +80,7 @@ xcrun swift-format --in-place --recursive \
   one — see below
 - Screen-context strip: the capture indicator, the message that was read, and
   one-tap Reply; it also carries "paused" and "stopped unexpectedly, restart it
-  in AI Keyboard"
+  in aBitBetterKeyboard"
 
 **Companion app**
 - Six-step onboarding ending in a working keyboard
@@ -145,7 +145,7 @@ the same shape screen context already uses, and the same shape Wispr Flow ships.
 The same error code shapes the interaction, and it is the part users notice. An
 app in the *background* cannot begin recording either; an app whose session is
 already active keeps it across an app switch under the `audio` background mode.
-So dictation is a **session**: start it in AI Keyboard, switch to WhatsApp, and
+So dictation is a **session**: start it in aBitBetterKeyboard, switch to WhatsApp, and
 the keyboard's microphone key works until the session closes itself. Nothing in
 an extension can launch its containing app — `UIApplication` is unavailable
 there and the responder-chain `openURL` workaround is explicitly disallowed — so

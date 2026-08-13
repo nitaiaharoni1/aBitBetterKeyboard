@@ -322,7 +322,7 @@ reuses:
 
 | Piece | Reuses |
 |---|---|
-| Grouped letter rows | `KeyboardLayout.rows(for:plane:showsGlobe:customization:)` compiles them into the same `KeySpec`/`KeyRow` everything else already renders. Three things had to be added and only three: `KeyRow.heightUnits`, `KeyWidth.share` so a merged key collects the gutters it covered, and a `KeyView` label that draws a grouped cap one letter at a time — as a single string, bidi mirrors every Hebrew cap |
+| Grouped letter rows | `KeyboardLayout.rows(for:plane:showsGlobe:customization:)` compiles them into the same `KeySpec`/`KeyRow` everything else already renders. Three things had to be added and only three: `KeyRow.heightUnits`, `KeyWidth.slot(of:)` so every grouped letter key is 1/N of the whole row (gutters included), and a `KeyView` label that draws a grouped cap one letter at a time — as a single string, bidi mirrors every Hebrew cap |
 | Decoder candidates | A new `SuggestionEngine.Source` tier, scored by the existing `score(_:)` alongside checker, seed, learned and personal |
 | Hebrew | `HebrewMorphology.splits`, `SeedLanguageModel.shapeFolded` |
 | Precise entry | `KeyView` alternates popup |

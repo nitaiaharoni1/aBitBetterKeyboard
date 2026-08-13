@@ -111,8 +111,8 @@ public enum GroupedKeys {
 
         /// How many of the ungrouped keyboard's key positions this one covers.
         /// Used to keep the column budget at ten so the band still fills the row
-        /// it replaced; drawn width is an equal share of that row, not this span,
-        /// so a leftover column cannot sit on a skinny key beside a fat one.
+        /// it replaced; drawn width is `.slot(of: bandCount)`, not this span, so
+        /// a leftover column cannot sit on a skinny key beside a fat one.
         public let span: Int
 
         public init(lines: [[String]], span: Int) {

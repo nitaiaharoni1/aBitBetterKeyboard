@@ -55,9 +55,9 @@ public enum KeyboardLayout {
         // because a grouped key is still measured in the positions it swallowed.**
         // The band adds up to the same ten columns the rows it replaced did, so
         // holding it to ten does not centre a handful of keys in a wide grid.
-        // Drawn width is an equal share of the row rather than `.share(span)`:
-        // a leftover column used to sit on a one-unit key beside a two-unit
-        // neighbour, which is a skinny button on a feature whose point is size.
+        // Drawn width is `.slot(of: bandCount)` rather than leftover-share or
+        // `.unit(span)`: a leftover column used to sit on a skinny key beside a
+        // fat neighbour, which is the opposite of the feature.
         return max(10, needed.max() ?? 10)
     }
 
@@ -226,6 +226,7 @@ public enum KeyboardLayout {
         let alternates = GroupedKeys.alternates(for: planned, base: base)
         let columns = CGFloat(columns(for: language, plane: .letters, grouping: level))
         let deleteRow = deleteRow(of: planned)
+        let bandCount = planned[0].groups.count
 
         // Delete closes a strictly shortest top row; otherwise it stays on the
         // bottom row. Hebrew is currently the only layout with that shape, and
@@ -241,12 +242,7 @@ public enum KeyboardLayout {
                 let letters = group.letters
                 return KeySpec(
                     .character(group.cap),
-                    // `.share(1)` while grouped, `.unit(1)` while not. Equal shares
-                    // fill the row and keep every grouped button the same size;
-                    // weighting by `span` left leftover columns on skinny keys.
-                    // Ungrouped stays `.unit(1)` so this path cannot move a
-                    // keyboard that nobody grouped.
-                    width: level == .off ? .unit(1) : .share(1),
+                    width: level == .off ? .unit(1) : .slot(of: bandCount),
                     alternates: alternates[group.cap] ?? [],
                     // Only when there is more than one, so an ordinary key stays
                     // an ordinary key: this is what makes the cap draw letter by
@@ -260,7 +256,10 @@ public enum KeyboardLayout {
                 // The delete row carries no side inset: with pinned ends, an
                 // inset only shrinks the letters between them and used to leave
                 // Arabic's delete inland while Hebrew's sat on the edge.
-                sideInsetUnits: index == deleteRow
+                // Grouped letter rows are also zero: a slot is measured against
+                // the whole row, so an inset on one row and not the other would
+                // make band keys and third-row buckets disagree.
+                sideInsetUnits: level != .off || index == deleteRow
                     ? 0
                     : max(0, (columns - CGFloat(planned[index].span)) / 2),
                 heightUnits: planned[index].heightUnits)

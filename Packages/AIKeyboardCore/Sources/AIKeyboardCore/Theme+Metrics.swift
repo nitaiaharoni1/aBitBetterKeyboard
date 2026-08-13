@@ -31,10 +31,16 @@ extension Theme {
         /// **The hairline above cannot show loudness.** Three points with a floor
         /// is a dashed line; speech needs vertical room or every frame looks the
         /// same. 24 is the `WaveformView` in the companion app at a size that
-        /// still fits under the fingerprint cliff: a live recording draws no
-        /// banner, so this replaces 3 points with 24 and the total stays 48
-        /// points under `bannerHeight + progressBarHeight`. Paid only while the
-        /// microphone is on — a model call keeps the three-point sweep.
+        /// still fits under the fingerprint cliff.
+        ///
+        /// **Spent whenever the banner is down, not only while the microphone is
+        /// on.** Swapping 3 for 24 at the start of a recording moved every key
+        /// under the thumb, and swapping back at stop moved them again. The
+        /// banner-off live height therefore always includes this slot; a model
+        /// call keeps the three-point sweep centred inside it. The fingerprint
+        /// crop still reads the tallest form (banner on, three-point hairline),
+        /// which this reserved slot does not exceed: 24 sits 37 points under
+        /// `bannerHeight + progressBarHeight`.
         public static let recordingWaveformHeight: CGFloat = 24
 
         /// The strip above the suggestion bar: what the keyboard is doing, and the
@@ -48,16 +54,16 @@ extension Theme {
         /// does not follow it: `KeyboardGeometry.ownUIHeightFraction` still reports
         /// the tallest form so a mid-read resize cannot move the band.
         ///
-        /// **69, so a title plus three lines of detail still fit without an
-        /// ellipsis.** It was 72 until the progress bar above needed three points;
-        /// the total may not move, because the cliff between 368 and 370
-        /// (`FrameReduction.Band.maximumOwnUI`) is measured rather than chosen.
+        /// **58, paid down from 69 so the letter keys could grow.** Title plus
+        /// two lines of detail still fit. The total may not move, because the
+        /// cliff between 368 and 370 (`FrameReduction.Band.maximumOwnUI`) is
+        /// measured rather than chosen.
         ///
         /// The height of this keyboard is a constraint now, not a taste: another
         /// row, or a taller banner, costs a conversation switch on every screen
         /// read.
-        public static let bannerHeight: CGFloat = 69
-        public static let keyHeight: CGFloat = 41
+        public static let bannerHeight: CGFloat = 58
+        public static let keyHeight: CGFloat = 43
         /// Points the numbers row gives the space row.
         ///
         /// **A transfer, not a growth.** The shipped total sits on the 368 pt
@@ -75,15 +81,14 @@ extension Theme {
             (plane != .letters || showsNumberRow) ? rowHeightBias : 0
         }
 
-        public static let rowSpacing: CGFloat = 11
-        /// Gap between keys in a row. Tightened from 6 so the leftover width
-        /// lands in the caps (~0.9pt each on a ten-key 402pt row). Do not drop
-        /// further without re-checking
+        public static let rowSpacing: CGFloat = 12
+        /// Gap between keys in a row. Raised from 5 so the caps breathe. Do not
+        /// raise further without re-checking
         /// `LanguageCatalogueTests.testNoRowOverflowsTheKeyboard` on 320pt —
         /// Bulgarian's thirteen columns are the ones that run out first.
-        public static let keySpacing: CGFloat = 5
+        public static let keySpacing: CGFloat = 6
         public static let sideInset: CGFloat = 3
-        public static let topInset: CGFloat = 7
+        public static let topInset: CGFloat = 4
         public static let bottomInset: CGFloat = 4
 
         /// Height of the four key rows plus their insets, at the shipped size.
@@ -129,17 +134,16 @@ extension Theme {
         /// Height the keyboard extension asks the host app for right now.
         ///
         /// The banner is omitted for everything the keys can say themselves
-        /// (`showsBanner: false`), so ordinary typing — and a running model call —
-        /// is `bannerHeight` shorter. The progress bar is in every form of this,
-        /// running or not: see `progressBarHeight`. A live recording is the one
-        /// exception: it swaps that hairline for `recordingWaveformHeight` so
-        /// loudness has vertical room. The fingerprint crop still reads the
-        /// tallest form (banner on, hairline), which a recording-without-banner
-        /// does not exceed.
+        /// (`showsBanner: false`). Ordinary typing, a running model call, and a
+        /// live recording all use that form. The progress slot is in every form
+        /// of this: `progressBarHeight` under a banner, and
+        /// `recordingWaveformHeight` whenever the banner is down, recording or
+        /// not, so opening the microphone cannot move the keys. The fingerprint
+        /// crop still reads the tallest form (banner on, hairline).
         public static func totalHeight(
-            for layout: KeyboardCustomization, showsBanner: Bool, isRecording: Bool = false
+            for layout: KeyboardCustomization, showsBanner: Bool
         ) -> CGFloat {
-            let progress = isRecording ? recordingWaveformHeight : progressBarHeight
+            let progress = showsBanner ? progressBarHeight : recordingWaveformHeight
             return (showsBanner ? bannerHeight : 0) + progress + suggestionBarHeight
                 + keyAreaHeight(for: layout)
         }
@@ -153,7 +157,7 @@ extension Theme {
         /// SwiftKey's numbers and symbols pages are four rows. The letters plane
         /// is three, and `KeyboardCustomization.rowCount` follows the letters
         /// plane so the host height — and the 368 pt fingerprint cliff — does
-        /// not move when the user taps 123. Four rows at the shipped 41 pt would
+        /// not move when the user taps 123. Four rows at the shipped 43 pt would
         /// be that move. This squeezes the extra row into the same block three
         /// letter rows already occupy; a layout that already turned the number
         /// row on has paid for the fourth slot and is left alone.

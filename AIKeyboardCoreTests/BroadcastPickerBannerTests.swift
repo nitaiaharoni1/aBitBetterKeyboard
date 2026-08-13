@@ -4,21 +4,20 @@ import XCTest
 
 @testable import AIKeyboardCore
 
-/// Reply with no session used to print a sentence and park Apple's record-dot
-/// chip on the trailing edge. Tapping the sentence did nothing; tapping the chip
-/// was the only way in, and the glyph reads as "already recording".
+/// The overlay stretch is load-bearing for the app's `BroadcastPickerButton`:
+/// `RPSystemBroadcastPickerView` cannot be pressed from SwiftUI, so the system
+/// `UIButton` has to fill the host bounds. Asserting "a picker is offered"
+/// would pass against a 10-pt-smaller chip.
 ///
-/// The load-bearing half is the overlay: `RPSystemBroadcastPickerView` cannot be
-/// pressed from SwiftUI, so the message is tappable only if the *system*
-/// `UIButton` is stretched over it. Asserting "the refusal still offers a picker"
-/// would pass against the chip.
+/// Reply with no session now opens the app (`.openApp`). `.broadcastPicker`
+/// remains for that overlay type.
 final class BroadcastPickerBannerTests: XCTestCase {
 
     private let noSession = BannerState.Block(
         action: .reply,
         title: "Screen context is off",
-        detail: "Tap to pick AI Keyboard, then Start Broadcast.",
-        remedy: .broadcastPicker)
+        detail: "Start it in aBitBetterKeyboard — swipe back to continue.",
+        remedy: .openApp(SharedStore.screenContextURL))
 
     private let needsAccess = BannerState.Block(
         action: .reply,
@@ -26,22 +25,35 @@ final class BroadcastPickerBannerTests: XCTestCase {
         detail: "Turn on Full Access.",
         remedy: .none)
 
-    /// The old trailing chip. A refusal that offers a broadcast must dismiss
-    /// with × and put the picker on the sentence; `.openApp` still needs both
-    /// × and its chip, which is why this is not "every refusal is ×".
+    private let broadcastPicker = BannerState.Block(
+        action: .reply,
+        title: "Screen context is off",
+        detail: "Tap to pick aBitBetterKeyboard, then Start Broadcast.",
+        remedy: .broadcastPicker)
+
+    /// Reply with no session opens the app. Trailing is × plus the Open chip.
+    /// `.broadcastPicker` still exists for the app's overlay and still dismisses
+    /// with × only, which is why this is not "every refusal is × plus Open".
     func testABroadcastRefusalDismissesWithXRatherThanTheRecordChip() {
-        XCTAssertEqual(
-            ActionBanner.blockedTrailing(for: noSession.remedy),
-            .dismiss,
-            "the record-dot chip is still the trailing control")
-        XCTAssertTrue(
+        guard case .dismissAndOpenApp(let url) = ActionBanner.blockedTrailing(for: noSession.remedy)
+        else { return XCTFail("the open-app chip was dropped for screen context") }
+        XCTAssertEqual(url, SharedStore.screenContextURL)
+        XCTAssertFalse(
             noSession.startsBroadcastFromMessage,
-            "the sentence is still inert; only the chip started a broadcast")
+            "the no-session sentence still hosts ReplayKit")
 
         XCTAssertEqual(ActionBanner.blockedTrailing(for: needsAccess.remedy), .dismiss)
         XCTAssertFalse(
             needsAccess.startsBroadcastFromMessage,
             "a refusal that must not start a recording still hosts the picker")
+
+        XCTAssertEqual(
+            ActionBanner.blockedTrailing(for: broadcastPicker.remedy),
+            .dismiss,
+            "the record-dot chip is still the trailing control")
+        XCTAssertTrue(
+            broadcastPicker.startsBroadcastFromMessage,
+            "the sentence is still inert; only the chip started a broadcast")
 
         let openApp = BannerState.Block(
             action: nil,

@@ -1,8 +1,8 @@
 <!-- Single source of project instructions. Claude Code reads it via .claude/CLAUDE.md; Cursor, Codex and Copilot read this file directly. Keep it under ~150 lines: it loads into every session. Area-specific detail belongs in .claude/rules/, which loads only when a matching file is opened. -->
 
-# AIKeyboard
+# aBitBetterKeyboard
 
-A Hebrew/English iOS keyboard with AI text actions, dictation, and screen-context replies. Swift, SwiftUI, UIKit and a local Swift package; no third-party dependencies.
+The name people see. Xcode targets, folders and bundle IDs stay `AIKeyboard` / `com.nitai.aikeyboard`. A Hebrew/English iOS keyboard with AI text actions, dictation, and screen-context replies. Swift, SwiftUI, UIKit and a local Swift package; no third-party dependencies.
 
 ## Commands
 

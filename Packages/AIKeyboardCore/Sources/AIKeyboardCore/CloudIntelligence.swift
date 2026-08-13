@@ -37,17 +37,24 @@ public struct CloudIntelligence: TextIntelligence {
             fields: [
                 CloudField(
                     "corrections",
-                    "Every mistake in the message, as `wrong -> right`, comma separated. Only real mistakes: a correctly spelled word, an alternative accepted spelling, slang, an abbreviation, a contraction, a deliberate lowercase and a missing full stop are not mistakes. 'none' when nothing is wrong."
+                    "Every spelling and grammar mistake in the whole message, as `wrong -> right`, comma separated. Multi-word grammar counts as one: `dont -> don't`, `its not -> it doesn't`. Not mistakes: a correctly spelled word, an alternative accepted Hebrew spelling, slang, an abbreviation, an already-correct contraction, a deliberate lowercase, and a missing full stop. A missing apostrophe is a mistake. 'none' when nothing is wrong."
                 ),
                 CloudField(
                     "text",
-                    "The message with exactly those corrections applied and nothing else changed, in its original language and script."
+                    "The whole message with exactly those corrections applied and nothing else changed, in its original language and script. Never return only the last sentence or a fragment."
                 )
             ]
         )
+        let corrections = fields["corrections"]?.trimmed ?? ""
         guard let corrected = fields["text"]?.trimmed, !corrected.isEmpty else { throw AIEngineError.empty }
-        return EditScope.applied(
-            corrected, to: source, corrections: fields["corrections"]?.trimmed ?? "")
+        // A leftover last sentence used to replace the whole field. Empty is the
+        // existing "nothing usable" failure, so the document is left alone.
+        // Skip that when the model named no mistakes: `applied` returns the
+        // source anyway, and failing here would turn "nothing to fix" into an
+        // error banner.
+        guard EditScope.declaresNothing(corrections) || !EditScope.isFragment(corrected, of: source)
+        else { throw AIEngineError.empty }
+        return EditScope.applied(corrected, to: source, corrections: corrections)
     }
 
     /// The engine that can honour a user-authored register, because the cloud

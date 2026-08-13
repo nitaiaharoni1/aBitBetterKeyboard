@@ -12,22 +12,16 @@ import SwiftUI
 /// does too, down to the swipe back.
 ///
 /// **The keyboard can now hand off here directly.** When the user taps the mic
-/// key with no session running, the banner shows an "Open AI Keyboard" button.
+/// key with no session running, the banner shows an Open app chip.
 /// `KeyboardViewController` wires `onOpenContainingApp` to try
 /// `extensionContext?.open(_:)` first, with a responder-chain fallback.
-/// Home is what appears when that deep link lands, and the session starts
-/// automatically so the user can swipe back.
+/// Home's Dictation screen is what appears when that deep link lands, and the
+/// session starts automatically so the user can swipe back.
 struct DictationView: View {
 
-    @EnvironmentObject private var store: SharedStore
-    @StateObject private var service = DictationService.shared
-    @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var service = DictationService.shared
 
-    @State private var setup = SetupState()
     @State private var starting = false
-    @State private var now = Date()
-
-    private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
@@ -36,14 +30,6 @@ struct DictationView: View {
             ScrollView {
                 VStack(spacing: Theme.Space.md) {
                     sessionCard
-                    if !service.isRunning {
-                        DictationHowItWorksSection(sessionMinutes: store.dictationSessionMinutes)
-                    }
-                    DictationLengthSection(
-                        sessionMinutes: $store.dictationSessionMinutes,
-                        isRunning: service.isRunning
-                    )
-                    if !setup.cloudConfigured { DictationCloudSection() }
                 }
                 .padding(.horizontal, Theme.Space.md)
                 .padding(.bottom, Theme.Space.xl)
@@ -52,11 +38,7 @@ struct DictationView: View {
         }
         .navigationTitle("Dictation")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { setup = .current(store: store) }
-        .onReceive(tick) { now = $0 }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { setup = .current(store: store) }
-        }
+        .toolbar(.visible, for: .navigationBar)
     }
 
     // MARK: The session
@@ -135,8 +117,7 @@ struct DictationView: View {
                     ) {
                         starting = true
                         Task {
-                            await service.start(minutes: store.dictationSessionMinutes)
-                            setup = .current(store: store)
+                            await service.start(minutes: 0)
                             starting = false
                         }
                     }
@@ -155,9 +136,7 @@ struct DictationView: View {
 
     private var statusDetail: String {
         if service.isRunning {
-            guard let expiresAt = service.expiresAt else { return "The keyboard can dictate now" }
-            let left = max(0, Int(expiresAt.timeIntervalSince(now)))
-            return "The keyboard can dictate now: \(left / 60)m \(left % 60)s left"
+            return "The keyboard can dictate now"
         }
         switch service.endReason {
         case .notEnded: return "Start one here, then switch to the app you're writing in"

@@ -62,6 +62,7 @@ struct SubscriptionView: View {
         }
         .navigationTitle("Pro")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 
     // MARK: Hero
@@ -74,7 +75,7 @@ struct SubscriptionView: View {
                 .accessibilityHidden(true)
                 .padding(.top, Theme.Space.sm)
 
-            Text("AI Keyboard Pro")
+            Text("aBitBetterKeyboard Pro")
                 .font(Theme.Fonts.display)
                 .tracking(-0.5)
                 .foregroundStyle(Theme.Text.primary)

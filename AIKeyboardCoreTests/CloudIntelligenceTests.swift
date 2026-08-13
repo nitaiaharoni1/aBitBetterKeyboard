@@ -45,6 +45,73 @@ final class CloudIntelligenceTests: XCTestCase {
         XCTAssertEqual(result, "I don't think we should do it.")
     }
 
+    /// The composer seed is one message. A model that only rewrote the last
+    /// clause used to put that clause in place of the whole field.
+    func testFixKeepsTheWholePlaygroundSeed() async throws {
+        let transport = StubTransport(
+            reply: [
+                "corrections": "dont -> don't, its not -> it doesn't",
+                "text": "I don't think we should do it because it doesn't make sense."
+            ])
+        let result = try await CloudIntelligence(transport: transport).fix(
+            "i dont think we should do it because its not make sense")
+
+        XCTAssertEqual(result, "I don't think we should do it because it doesn't make sense.")
+    }
+
+    /// `corrections: none` means leave the message. A scrap in `text` used to
+    /// fail the fragment guard first and show "nothing came back" instead.
+    func testFixKeepsTheMessageWhenTheModelSaidNoneEvenIfTheTextIsAScrap() async throws {
+        let source = "omg that meeting was sooo long yesterday im gonna need coffee later"
+        XCTAssertTrue(EditScope.isFragment("all good.", of: source))
+        let transport = StubTransport(reply: ["corrections": "none", "text": "all good."])
+
+        let result = try await CloudIntelligence(transport: transport).fix(source)
+
+        XCTAssertEqual(result, source)
+    }
+
+    func testFixRefusesAFragmentInsteadOfReplacingTheFieldWithIt() async {
+        let transport = StubTransport(
+            reply: [
+                "corrections": "its not -> it doesn't",
+                "text": "it doesn't make sense."
+            ])
+        do {
+            _ = try await CloudIntelligence(transport: transport).fix(
+                "i dont think we should do it because its not make sense")
+            XCTFail("expected .empty")
+        } catch let error as AIEngineError {
+            XCTAssertEqual(error, .empty)
+        } catch {
+            XCTFail("unexpected error \(error)")
+        }
+    }
+
+    /// The list is filled before the text, so a description that called a missing
+    /// apostrophe "not a mistake" made the model write `none` and EditScope threw
+    /// the real correction away.
+    func testFixAsksTheModelToNameGrammarAndMissingApostrophes() async throws {
+        let transport = StubTransport(
+            reply: ["corrections": "dont -> don't", "text": "I don't think we should do it."])
+        _ = try await CloudIntelligence(transport: transport).fix("I dont think we should do it")
+
+        let corrections = try XCTUnwrap(transport.lastRequest?.fields.first { $0.name == "corrections" })
+        XCTAssertTrue(
+            corrections.description.contains("its not -> it doesn't"),
+            "the field no longer shows a grammar phrase, so the model will not name one")
+        XCTAssertTrue(
+            corrections.description.contains("missing apostrophe"),
+            "the field no longer says a missing apostrophe is a mistake")
+        XCTAssertFalse(
+            corrections.description.contains("a contraction, a deliberate lowercase"),
+            "the old wording told the model that `dont` was not a mistake")
+        let text = try XCTUnwrap(transport.lastRequest?.fields.first { $0.name == "text" })
+        XCTAssertTrue(
+            text.description.contains("whole message"),
+            "the text field no longer asks for the whole message")
+    }
+
     /// The corrections the model names are what the corrected message is held to,
     /// so an answer that reports none has to come back as the user typed it —
     /// full stop and all. See `EditScope`.

@@ -236,6 +236,40 @@ extension KeyboardController {
         let space = store.storedSpaceOnIdle
         guard complete || space else { return }
 
+        if grouped.isTyping, complete {
+            let level = groupingLevel
+            let decoder = grouped.decoder(
+                language: language, level: level, personal: personalWordsForDecoding)
+            let decoded = decoder.decode(
+                matching: grouped.code(language: language, level: level),
+                pinnedTo: grouped.pins,
+                completions: .afterExact)
+            if let longer = decoded.idleCompletion {
+                let guess = grouped.cased(longer, in: language)
+                Feedback.keyPress()
+                Feedback.keyClick(.tock)
+                clearRevertibleEdit()
+                writeGroupedGuess(guess)
+                closeGroupedIfCurrentWord()
+                if !consumeGroupedSkipLearn() {
+                    recordCommittedWord(SuggestionEngine.wordCore(guess))
+                }
+                if space {
+                    target?.insertText(" ")
+                    lastLearnedFolded = nil
+                }
+                deletedWordPrefix = nil
+                refreshSuggestions()
+                idleTypingTask?.cancel()
+                idleTypingTask = nil
+                idleTypedAt = nil
+                reportInteraction(.suggestion)
+                return
+            }
+            if space { insertSpace() }
+            return
+        }
+
         if complete, !isCorrectingWordByHand, store.storedPredictions,
             let candidate = idleCompletion(for: prefix)
         {
@@ -274,16 +308,16 @@ extension KeyboardController {
         return suggestions.first { SuggestionEngine.comparable($0.text) != typed }
     }
 
-    /// A credential field, a recording, a grouped word, a selection, or the
-    /// emoji panel: none of those is a pause in ordinary typing.
+    /// A credential field, a recording, a selection, or the emoji panel: none
+    /// of those is a pause in ordinary typing. Grouped typing is allowed only
+    /// when Complete on pause is on; space-on-idle alone does not arm it.
     ///
     /// A hand repair is not in this list. Space on pause has to fire after
     /// backspace; `performIdleTyping` skips completing the word, and
     /// `insertSpace` already skips autocorrect, so the letters they kept stay.
     private var idleTypingMayRun: Bool {
-        guard overlay == .none, !isDictating, !grouped.isTyping, selection == nil else {
-            return false
-        }
+        guard overlay == .none, !isDictating, selection == nil else { return false }
+        if grouped.isTyping, !store.storedCompleteOnIdle { return false }
         return SecureField.permitsRead(
             secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
     }

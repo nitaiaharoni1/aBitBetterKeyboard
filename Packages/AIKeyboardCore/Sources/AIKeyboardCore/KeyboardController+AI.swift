@@ -56,9 +56,7 @@ extension KeyboardController {
             // usable while the call runs — the user can see the sentence being
             // corrected, which is the one thing the panel that used to cover them
             // hid. The screen-context setup screen was the last case argued to need
-            // a panel, because it holds `BroadcastPickerButton`, a real `UIView`;
-            // that view now sits on the banner's sentence so a tap starts the
-            // picker, and trailing is dismiss.
+            // a panel, because it holds `BroadcastPickerButton`, a real `UIView`.
             beginWork(.fix, showing: .none) { [engine] in
                 try await engine.fix(source)
             } apply: { controller, text in
@@ -170,24 +168,21 @@ extension KeyboardController {
         }
     }
 
-    /// The Reply-key overlay steals the gesture, so this path never reaches
-    /// `press(.aiReply)`. Same click and haptic that path already plays.
-    func acknowledgeReplyBroadcastTap() {
-        Feedback.keyClick(KeyCap.aiReply.clickSound)
-        Feedback.actionPress()
-        guard let prompt = replyKeyBroadcastPrompt else { return }
-        refuseForScreenContext(prompt)
-    }
-
-    /// One refusal for `runReply` and the overlay's touch-up, so the two taps
-    /// cannot print different sentences for one prompt.
+    /// `offersPicker` still means a session started now could get somewhere.
+    /// The consumer is open-app, not the in-keyboard ReplayKit overlay: that
+    /// picker does not present over a keyboard.
     private func refuseForScreenContext(_ prompt: ScreenContextPrompt) {
+        let remedy: BannerState.Block.Remedy =
+            prompt.offersPicker ? .openApp(SharedStore.screenContextURL) : .none
         refuse(
             .init(
                 action: .reply,
                 title: prompt.title,
                 detail: prompt.detail,
-                remedy: prompt.offersPicker ? .broadcastPicker : .none))
+                remedy: remedy))
+        if case .openApp(let url) = remedy {
+            onOpenContainingApp?(url)
+        }
     }
 
     /// Runs one model call. The latency here is the model's, not a sleep: the

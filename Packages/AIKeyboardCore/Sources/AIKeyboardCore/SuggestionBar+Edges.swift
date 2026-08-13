@@ -8,10 +8,10 @@ extension SuggestionBar {
     ///
     /// A subset of `SlotAction.catalogue`, and the exclusions are the point. A
     /// space bar or a shift key 46 points tall above the letters is not a layout
-    /// anybody meant to build. Delete is out for a subtler reason: it is the one
-    /// key with an accelerating repeat, and the repeat is wired in `KeyView`,
-    /// which does not draw this bar — an edge button would delete once per tap and
-    /// look broken beside the real one.
+    /// anybody meant to build. Delete and forward delete are out for a subtler
+    /// reason: they are the keys with an accelerating repeat, and the repeat is
+    /// wired in `KeyView`, which does not draw this bar — an edge button would
+    /// delete once per tap and look broken beside the real one.
     public static let barCatalogue: [SlotAction] = [
         .emoji, .quickTone, .dictation, .cursorLeft, .cursorRight,
         .hideKeyboard, .globe

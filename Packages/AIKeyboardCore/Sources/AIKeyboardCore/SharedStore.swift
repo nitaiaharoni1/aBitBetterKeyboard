@@ -164,7 +164,7 @@ public final class SharedStore: ObservableObject {
     // MARK: Look
 
     /// The accent both processes wear. Picked on the second onboarding step and
-    /// changeable afterwards in Settings › Look.
+    /// changeable afterwards in Keys › Look.
     /// **Writes `Theme.palette` as well as the store, and the order matters.**
     /// `didSet` runs before `objectWillChange` reaches SwiftUI, so by the time a
     /// view rebuilds in response to this the global the colours read is already
@@ -414,7 +414,7 @@ public final class SharedStore: ObservableObject {
     /// forgetting.
     ///
     /// **Default is 5 minutes, not 15.** Most dictation sessions are short: the
-    /// keyboard handoff sends the user back to AI Keyboard, they tap Start, and
+    /// keyboard handoff sends the user back to aBitBetterKeyboard, they tap Start, and
     /// they are back in their app within seconds. A 15-minute open microphone is
     /// more than most users will ever use and more than most should leave running.
     /// 5 is the choice that covers the session without leaving the microphone
@@ -433,6 +433,11 @@ public final class SharedStore: ObservableObject {
 
     /// Opens the containing app directly on its Settings tab.
     public static let settingsURL = URL(string: "aikeyboard://settings")!
+
+    /// Opens the containing app on the Screen Context screen, where the user
+    /// can tap Apple's Start Broadcast button. The keyboard cannot present
+    /// that picker over itself.
+    public static let screenContextURL = URL(string: "aikeyboard://screen-context")!
 
     /// Records a timestamped intent for the app to start a dictation session.
     ///

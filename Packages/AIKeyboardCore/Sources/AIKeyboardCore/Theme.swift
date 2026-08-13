@@ -217,6 +217,8 @@ public enum Theme {
         /// voice is SF Pro Display at heavy weights with tight tracking — the
         /// web hero uses the same stack at 800 / -.055em.
         public static let display = Font.system(size: 28, weight: .bold)
+        /// Tab chrome titles (Home, Languages, Keys, Settings).
+        public static let page = Font.system(size: 20, weight: .bold)
         /// Card and section titles.
         public static let title = Font.system(size: 20, weight: .semibold)
         /// Row titles, button labels, emphasized body.

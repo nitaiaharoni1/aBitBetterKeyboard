@@ -4,18 +4,18 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Privacy",
   description:
-    "What AI Keyboard does with what you type: on-device first, cloud only when you ask, never sold.",
+    "What aBitBetterKeyboard does with what you type: on-device first, cloud only when you ask, never sold.",
 };
 
 export default function PrivacyPage() {
   return (
     <main className="wrap privacy-page">
       <p>
-        <Link href="/">AIKeyboard</Link>
+        <Link href="/">aBitBetterKeyboard</Link>
       </p>
       <h1>Privacy</h1>
       <p>
-        AI Keyboard is an iOS keyboard. This page is what the product does with
+        aBitBetterKeyboard is an iOS keyboard. This page is what the product does with
         what you type.
       </p>
       <h2>On the phone first</h2>

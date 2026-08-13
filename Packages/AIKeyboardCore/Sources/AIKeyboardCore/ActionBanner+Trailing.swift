@@ -30,7 +30,8 @@ extension ActionBanner {
                 }
             case .dismissAndOpenApp(let url):
                 // Compact HStack: the X lets the user decline the handoff;
-                // the chip opens the app with a fresh timestamp on tap.
+                // the chip opens the app. Dictation refreshes its timestamp
+                // on tap; screen context does not auto-start.
                 HStack(spacing: Theme.Space.xxs) {
                     dismissButton(identifier: "banner-blocked-dismiss") {
                         controller.clearBanner()
@@ -109,13 +110,14 @@ extension ActionBanner {
     /// A tappable chip that opens the containing app via a SwiftUI `Link`.
     ///
     /// This is the secondary, user-tapped path: the primary open was already
-    /// attempted automatically when the dictation key was tapped. The
-    /// `simultaneousGesture` refreshes the handoff timestamp before the URL
-    /// opens, so a user who waited more than 30 seconds since the initial tap
-    /// still lands a fresh request for the app to consume on cold launch.
+    /// attempted automatically when the key was tapped. Dictation refreshes
+    /// its handoff timestamp here so a wait longer than 30 seconds still
+    /// auto-starts the mic. Screen context must not write that timestamp.
+    /// The visible label is short on purpose: the product name ate the
+    /// refusal sentence on a 320pt phone. VoiceOver still speaks the full name.
     func openAppChip(_ url: URL) -> some View {
         Link(destination: url) {
-            Text("Open AI Keyboard")
+            Text("Open app")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Theme.Text.onBrand)
                 .lineLimit(1)
@@ -129,10 +131,11 @@ extension ActionBanner {
         }
         .pressable()
         .simultaneousGesture(
-            TapGesture().onEnded { controller.recordDictationHandoff() }
+            TapGesture().onEnded { controller.recordDictationHandoffIfNeeded(for: url) }
         )
+        .accessibilityLabel("Open aBitBetterKeyboard")
         .accessibilityIdentifier("banner-open-app")
-        .accessibilityHint("Opens AI Keyboard. After it starts, swipe back to continue.")
+        .accessibilityHint("Opens aBitBetterKeyboard. After it starts, swipe back to continue.")
     }
 
     /// `LinearGradient?` rather than a generic `ShapeStyle`, because the one

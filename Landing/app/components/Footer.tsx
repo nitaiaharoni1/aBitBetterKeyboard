@@ -5,7 +5,10 @@ export default function Footer({ t }: { t: Copy }) {
   return (
     <footer className={styles.footer}>
       <div className={`wrap ${styles.inner}`}>
-        <span className={styles.wordmark}>{t.wordmark}</span>
+        <span className={styles.wordmark}>
+          <img src="/mark.png" alt="" width={22} height={22} />
+          {t.wordmark}
+        </span>
         <nav className={styles.links} aria-label="Footer">
           <a className={styles.link} href="#download">
             {t.footerStore}

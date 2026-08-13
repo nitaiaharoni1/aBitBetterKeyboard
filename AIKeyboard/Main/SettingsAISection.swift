@@ -50,10 +50,28 @@ struct SettingsAISection: View {
                     if store.prefersCustomTone {
                         customToneField
                     }
+
+                    tonePreview
+
+                    settingsNoteText
+
+                    Divider.themed
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Where text goes")
+                            .font(Theme.Fonts.body)
+                            .foregroundStyle(Theme.Text.primary)
+                        LearnMoreDisclosure(detail: Self.cloudRewriteDetail)
+                    }
                 }
             }
         }
     }
+
+    /// Production users never see `CloudModelRow`. This is the door that names
+    /// what actually leaves the device, matching `RoutedIntelligence` and
+    /// `CloudScreenReader` rather than a privacy-policy claim.
+    private static let cloudRewriteDetail =
+        "Fix, Rewrite, Tone and Reply send the current text to a server when Apple's on-device model cannot run them. That includes Hebrew. Languages Apple lists can stay on the device. Screen context sends one screenshot per Reply tap and gets back the sender, the message and its language. The picture is not saved."
 
     /// The picker's seventh option. `nil` is the user's own tone rather than a
     /// seventh `ToneStyle`, because `ToneStyle`'s raw values are the persisted
@@ -78,30 +96,91 @@ struct SettingsAISection: View {
     /// Deliberately a single-line field with a hard cap: this text is handed to a
     /// model as its register, and a paragraph stops being a register.
     private var customToneField: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            TextField(
-                "Short and blunt, no pleasantries",
-                text: Binding(get: { store.customTone }, set: { store.customTone = $0 })
-            )
-            .font(Theme.Fonts.body)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .padding(.horizontal, Theme.Space.sm)
-            .frame(height: 44)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Theme.Surface.background)
-            )
-            .accessibilityIdentifier("row-custom-tone")
-            .accessibilityLabel("Your own tone")
+        TextField(
+            "Short and blunt, no pleasantries",
+            text: Binding(get: { store.customTone }, set: { store.customTone = $0 })
+        )
+        .font(Theme.Fonts.body)
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
+        .padding(.horizontal, Theme.Space.sm)
+        .frame(height: 44)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.Surface.background)
+        )
+        .accessibilityIdentifier("row-custom-tone")
+        .accessibilityLabel("Your own tone")
+    }
 
-            // The sentence lives on `ToneSetting`, not here: it names a control,
-            // it named the wrong one (a ✦ button nothing draws), and the app
-            // target has no test host to catch that. See `ToneSetting.settingsNote`.
-            Text(store.toneSetting.settingsNote)
-                .font(Theme.Fonts.caption)
-                .foregroundStyle(Theme.Text.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+    private var settingsNoteText: some View {
+        Text(store.toneSetting.settingsNote)
+            .font(Theme.Fonts.caption)
+            .foregroundStyle(Theme.Text.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var tonePreview: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            if !previewCaption.isEmpty {
+                Text(previewCaption)
+                    .font(Theme.Fonts.caption)
+                    .foregroundStyle(Theme.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack {
+                previewBubble
+                Spacer(minLength: 0)
+            }
         }
+    }
+
+    private var previewCaption: String {
+        if store.prefersCustomTone {
+            return customLine.isEmpty ? "" : "Rewrites in the line you wrote."
+        }
+        return store.defaultTone.previewCaption
+    }
+
+    private var customLine: String {
+        store.customTone.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var previewBubble: some View {
+        let quotesCustom = store.prefersCustomTone && !customLine.isEmpty
+        return Group {
+            if quotesCustom {
+                bubbleLine(customLine)
+            } else {
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    bubbleLine(store.defaultTone.previewEnglish)
+                    bubbleLine(store.defaultTone.previewHebrew)
+                }
+            }
+        }
+        .padding(.horizontal, Theme.Space.sm)
+        .padding(.vertical, Theme.Space.xs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.Brand.action)
+        .clipShape(
+            UnevenRoundedRectangle(
+                topLeadingRadius: Theme.Radius.card,
+                bottomLeadingRadius: Theme.Radius.card,
+                bottomTrailingRadius: 4,
+                topTrailingRadius: Theme.Radius.card,
+                style: .continuous
+            )
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            quotesCustom ? "Your tone" : "Sample rewrite in \(store.defaultTone.title)")
+    }
+
+    private func bubbleLine(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.Fonts.body)
+            .foregroundStyle(Theme.Text.onBrand)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

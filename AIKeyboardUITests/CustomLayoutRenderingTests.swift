@@ -36,11 +36,11 @@ final class CustomLayoutRenderingTests: XCTestCase {
     /// crash and leaves no crash report — four UI tests below timed out against
     /// it and only the one that never tapped Done passed. Cheap, and first,
     /// because everything after it depends on saving working.
-    func testSavingALayoutReturnsToSettings() throws {
+    func testSavingALayoutReturnsToKeys() throws {
         try selectPreset("compact")
         XCTAssertTrue(
-            element("row-Keyboard layout").waitForExistence(timeout: 10),
-            "Done did not return to Settings")
+            element("row-Layout").waitForExistence(timeout: 10),
+            "Done did not return to Keys")
     }
 
     /// The stored order is the drawn order, in a right-to-left language.
@@ -143,10 +143,10 @@ final class CustomLayoutRenderingTests: XCTestCase {
     // MARK: Driving the editor
 
     private func openLayoutEditor() throws {
-        app.tabBars.buttons["Settings"].tap()
-        let row = element("row-Keyboard layout")
+        app.tabBars.buttons["Keys"].tap()
+        let row = element("row-Layout")
         guard row.waitForExistence(timeout: 10) else {
-            throw XCTSkip("the Keyboard layout row never appeared")
+            throw XCTSkip("the Layout row never appeared")
         }
         row.tap()
         guard element("preset-default").waitForExistence(timeout: 10) else {
@@ -267,11 +267,11 @@ final class CustomLayoutTypesIntoHostTests: KeyboardExtensionTestCase {
     }
 
     private func selectPowerPreset() throws {
-        app.tabBars.buttons["Settings"].tap()
+        app.tabBars.buttons["Keys"].tap()
         let row = app.descendants(matching: .any)
-            .matching(identifier: "row-Keyboard layout").firstMatch
+            .matching(identifier: "row-Layout").firstMatch
         guard row.waitForExistence(timeout: 10) else {
-            throw XCTSkip("the Keyboard layout row never appeared")
+            throw XCTSkip("the Layout row never appeared")
         }
         row.tap()
 

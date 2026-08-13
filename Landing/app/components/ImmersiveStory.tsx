@@ -410,6 +410,9 @@ export default function ImmersiveStory({
                   </span>
                 </div>
               </div>
+              <div className={styles.contextChip} data-el="context-chip">
+                {t.storyChip}
+              </div>
               <svg className={styles.doodle} viewBox="0 0 110 120" fill="none">
                 <path
                   data-el="doodle-path"
@@ -422,22 +425,19 @@ export default function ImmersiveStory({
                 />
                 <path
                   data-el="doodle-head"
-                  d="M28 112 L46 104"
+                  d="M28 112 L14 97"
                   stroke="#ee7442"
                   strokeWidth="4"
                   strokeLinecap="round"
                 />
                 <path
                   data-el="doodle-head"
-                  d="M28 112 L34 128"
+                  d="M28 112 L46 104"
                   stroke="#ee7442"
                   strokeWidth="4"
                   strokeLinecap="round"
                 />
               </svg>
-              <div className={styles.contextChip} data-el="context-chip">
-                {t.storyChip}
-              </div>
               <div className={styles.composer} dir={hebrewLayout ? "rtl" : "ltr"} data-el="composer">
                 <p className={styles.draft} data-el="draft">
                   <span className={styles.draftStack}>

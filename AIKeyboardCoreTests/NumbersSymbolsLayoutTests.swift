@@ -78,14 +78,14 @@ final class NumbersSymbolsLayoutTests: LanguageCatalogueTestFixture {
 
     /// Four sliding rows have to occupy the same height as three letter rows.
     /// Growing the keyboard to fit them crosses the 368 pt fingerprint cliff;
-    /// leaving them at 41 pt each is that growth.
+    /// leaving them at the shipped letter height each is that growth.
     func testFourSymbolRowsFitInThreeLetterRowsOfHeight() {
         let keyHeight = Theme.Metrics.keyHeight
         let spacing = Theme.Metrics.rowSpacing
         let fitted = Theme.Metrics.fittedKeyHeight(
             slidingRows: 4, referenceRows: 3, keyHeight: keyHeight, rowSpacing: spacing)
 
-        XCTAssertEqual(fitted, 28, accuracy: 0.001)
+        XCTAssertEqual(fitted, (3 * keyHeight - spacing) / 4, accuracy: 0.001)
         XCTAssertEqual(
             4 * fitted + 3 * spacing,
             3 * keyHeight + 2 * spacing,

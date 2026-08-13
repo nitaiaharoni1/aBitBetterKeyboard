@@ -49,6 +49,11 @@ extension KeyView {
                 .font(Theme.Glyph.font(19))
                 .foregroundStyle(labelColor)
 
+        case .deleteForward:
+            Image(systemName: "delete.right")
+                .font(Theme.Glyph.font(19))
+                .foregroundStyle(labelColor)
+
         case .plane(_, let text):
             Text(text)
                 .font(.system(size: 16, weight: .light))
@@ -184,7 +189,7 @@ extension KeyView {
     /// **Each letter occupies an equal cell that fills the key.** A clustered
     /// HStack (`spacing: size * 0.34` around intrinsically sized glyphs) left
     /// `ו` looking like a skinny button beside `קר` on caps the width solver had
-    /// already made equal — the same shape as weighting `.share` by span, in the
+    /// already made equal, the same shape as weighting a slot by span, in the
     /// one place that test cannot see, because it reads the solved widths. Hit
     /// testing already splits the cap into equal cells; the drawing has to match.
     @ViewBuilder

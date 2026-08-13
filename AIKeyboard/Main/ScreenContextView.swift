@@ -42,6 +42,7 @@ struct ScreenContextView: View {
         }
         .navigationTitle("Screen Context")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 
     // MARK: The backend

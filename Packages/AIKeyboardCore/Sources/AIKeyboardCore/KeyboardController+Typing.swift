@@ -145,6 +145,15 @@ extension KeyboardController {
             deletedWordPrefix = nil
             target?.adjustTextPosition(byCharacterOffset: 1)
             refreshSuggestions()
+        case .deleteForward:
+            if selection != nil {
+                deleteBackward()
+                return
+            }
+            // Empty after-context: a move-then-delete would erase the character behind the cursor.
+            guard let first = contextAfter.first else { return }
+            target?.adjustTextPosition(byCharacterOffset: String(first).utf16.count)
+            deleteBackward()
         case .hideKeyboard:
             Feedback.modifierPress()
             onDismissKeyboard?()
@@ -309,6 +318,47 @@ extension KeyboardController {
         noteTypedInput()
     }
 
+    /// Held backspace. Each tick removes a word, including the spaces that
+    /// would otherwise stall the hold. Finger-down is still `press(.backspace)`
+    /// and still one character; this is only the repeater.
+    ///
+    /// **The click lives here, not in `press`,** because a hold must not
+    /// re-enter the one-character path. Emoji search is intercepted here for
+    /// the same reason `press` intercepts it: a delete pointed at the query
+    /// must never eat the message.
+    public func deletePreviousWord() {
+        Feedback.keyClick(KeyCap.backspace.clickSound)
+        if overlay == .emojiSearch {
+            if emojiQuery.isEmpty {
+                show(.emoji)
+            } else {
+                let suffix = Self.previousWordSuffix(in: emojiQuery)
+                setEmojiQuery(String(emojiQuery.dropLast(suffix.count)))
+            }
+            return
+        }
+
+        Feedback.keyPress()
+        block = nil
+        clearRevertibleEdit()
+        if grouped.isTyping {
+            endGroupedWord()
+            replaceCurrentWord(with: "")
+        } else if selection != nil {
+            target?.deleteBackward()
+        } else {
+            let units = Self.previousWordSuffix(in: contextBefore).utf16.count
+            if units > 0 {
+                deleteBackward(utf16Units: units)
+            }
+        }
+        // Always the prefix now in the field, including `""` after the last
+        // word. Nil would look like "nobody has deleted" to `adoptOpenWord`.
+        deletedWordPrefix = currentWordPrefix
+        refreshSuggestions()
+        noteTypedInput()
+    }
+
     /// Whether the word under the cursor is one the user has backspaced into.
     ///
     /// **A word somebody is deleting from is a word they are correcting on
@@ -384,12 +434,13 @@ extension KeyboardController {
 
     /// Whether this key belonged to the search box rather than to the document.
     ///
-    /// **Only the four keys that edit a query are taken.** Shift, the plane
-    /// switch and Settings fall through on purpose: the whole reason search needs
-    /// the letters back is that the words being searched for are Hebrew *or*
-    /// English, and a user who cannot reach the other alphabet can only search in
-    /// one of them. Everything else falls through too, so a control the user put
-    /// in the suggestion bar behaves the same here as it does anywhere.
+    /// **Query keys are taken.** Shift, the plane switch and Settings fall through
+    /// on purpose: the whole reason search needs the letters back is that the
+    /// words being searched for are Hebrew *or* English, and a user who cannot
+    /// reach the other alphabet can only search in one of them. Forward delete is
+    /// swallowed so it cannot reach the document. Everything else falls through
+    /// too, so a control the user put in the suggestion bar behaves the same here
+    /// as it does anywhere.
     func consumeForEmojiSearch(_ cap: KeyCap) -> Bool {
         switch cap {
         case .character(let value):
@@ -411,6 +462,8 @@ extension KeyboardController {
             } else {
                 setEmojiQuery(String(emojiQuery.dropLast()))
             }
+            return true
+        case .deleteForward:
             return true
         case .ret:
             show(.emoji)

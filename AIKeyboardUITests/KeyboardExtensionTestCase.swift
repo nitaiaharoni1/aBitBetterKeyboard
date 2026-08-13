@@ -62,18 +62,18 @@ class KeyboardExtensionTestCase: XCTestCase {
         try tapCell(settings, "Keyboard")
         try tapCell(settings, "Keyboards")
 
-        if !settings.cells.staticTexts["AI Keyboard"].waitForExistence(timeout: 3) {
+        if !settings.cells.staticTexts["aBitBetterKeyboard"].waitForExistence(timeout: 3) {
             settings.cells["AddNewKeyboard"].tap()
-            let offered = settings.cells.staticTexts["AI Keyboard"]
+            let offered = settings.cells.staticTexts["aBitBetterKeyboard"]
             guard offered.waitForExistence(timeout: 10) else {
-                throw XCTSkip("iOS is not offering AI Keyboard; the extension is not installed")
+                throw XCTSkip("iOS is not offering aBitBetterKeyboard; the extension is not installed")
             }
             offered.tap()
         }
 
-        let row = settings.cells.staticTexts["AI Keyboard"]
+        let row = settings.cells.staticTexts["aBitBetterKeyboard"]
         guard row.waitForExistence(timeout: 10) else {
-            throw XCTSkip("AI Keyboard is not in the keyboards list")
+            throw XCTSkip("aBitBetterKeyboard is not in the keyboards list")
         }
         row.tap()
 
@@ -111,7 +111,7 @@ class KeyboardExtensionTestCase: XCTestCase {
     /// extension. The in-app playground renders the keyboard in-process and
     /// would prove nothing.
     func openPersonalDictionaryAndFocusTextField() {
-        app.tabBars.buttons["Settings"].tap()
+        app.tabBars.buttons["Languages"].tap()
 
         let row = app.descendants(matching: .any)
             .matching(identifier: "row-Personal dictionary").firstMatch
@@ -139,9 +139,9 @@ class KeyboardExtensionTestCase: XCTestCase {
         let globe = app.coordinate(withNormalizedOffset: globeOffset)
         globe.press(forDuration: 1.4)
 
-        let entry = app.staticTexts["AI Keyboard"]
+        let entry = app.staticTexts["aBitBetterKeyboard"]
         guard entry.waitForExistence(timeout: 8) else {
-            throw XCTSkip("iOS did not offer AI Keyboard in the keyboard switcher")
+            throw XCTSkip("iOS did not offer aBitBetterKeyboard in the keyboard switcher")
         }
         entry.tap()
         Thread.sleep(forTimeInterval: 4.0)

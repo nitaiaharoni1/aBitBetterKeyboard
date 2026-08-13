@@ -118,6 +118,20 @@ public enum EditScope {
         return withoutAnAddedHebrewFullStop(joined(kept), source: source)
     }
 
+    /// Whether `candidate` is a leftover scrap of `source` rather than a
+    /// correction of it.
+    ///
+    /// Fix used to replace the whole field with whatever the model wrote. When
+    /// that was only the last sentence, the rest of the message disappeared.
+    /// Short messages are left alone: two or three words can legitimately shrink
+    /// (`thx` → `thanks` is not a fragment).
+    public static func isFragment(_ candidate: String, of source: String) -> Bool {
+        let original = split(source)
+        let corrected = split(candidate)
+        guard original.count >= 6, !corrected.isEmpty else { return false }
+        return corrected.count * 2 < original.count
+    }
+
     /// Whether the model reported no mistakes. The field is required, so a model
     /// with nothing to report writes a placeholder rather than leaving it blank.
     public static func declaresNothing(_ corrections: String) -> Bool {

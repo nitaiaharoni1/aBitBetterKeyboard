@@ -44,7 +44,7 @@ public struct BannerOption: Identifiable, Equatable, Sendable {
 /// somebody happened to write the `if`s in.
 ///
 /// **Two of the states it used to carry are no longer sentences.** A model call in
-/// flight is `WorkingProgressBar`, three reserved points above the candidates, and
+/// flight is `WorkingProgressBar`, the reserved slot above the candidates, and
 /// a live recording is the microphone key itself in record red — both say what
 /// they were saying without spending a 69pt row that appears and leaves. They are
 /// still *resolved* here, because the order these questions are asked in is the

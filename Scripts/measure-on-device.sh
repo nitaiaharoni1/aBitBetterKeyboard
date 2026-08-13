@@ -155,7 +155,7 @@ cat <<EOF
 
 $(printf '\033[1m4. Now drive the phone. %ss of log is being captured.\033[0m' "$DURATION")
 
-  a. Open AI Keyboard once, and finish onboarding (this grants Full Access,
+  a. Open aBitBetterKeyboard once, and finish onboarding (this grants Full Access,
      without which the keyboard has neither network nor the App Group).
   b. Open WhatsApp or Messages and put the cursor in the compose field so
      the AI keyboard is showing.

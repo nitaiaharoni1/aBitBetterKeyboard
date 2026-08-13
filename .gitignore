@@ -27,6 +27,7 @@ Bar/typing/engine_outputs.json
 
 # Brainstorm/design session artifacts
 .superpowers/
+.impeccable/
 
 # wordfreq venv for Bar/grouped/make-lexicon.py (54 MB of data files)
 Bar/grouped/.venv/

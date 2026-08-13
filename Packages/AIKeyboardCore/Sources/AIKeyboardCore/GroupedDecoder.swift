@@ -1,6 +1,19 @@
 import Foundation
 import os
 
+/// Whether longer prefix completions may join the ranking, always after every
+/// exact-length hit. Either way, `fieldWord` is exact-length or missing.
+public enum GroupedCompletionPolicy: Equatable, Sendable {
+    case none
+    case afterExact
+}
+
+public struct GroupedDecode: Equatable, Sendable {
+    public let fieldWord: String?
+    public let barWords: [String]
+    public let idleCompletion: String?
+}
+
 /// Turns a sequence of grouped key presses back into words.
 ///
 /// **Why this needs a bundled word list at all.** `UITextChecker` answers "is
@@ -157,12 +170,55 @@ public final class GroupedDecoder {
     public func candidates(
         startingWith code: String, pinnedTo pins: [Int: String] = [:], limit: Int = 3
     ) -> [String] {
-        guard !code.isEmpty, !codes.isEmpty else { return [] }
+        ranked(matching: code, pinnedTo: pins, keeping: { _ in true }, limit: limit)
+    }
+
+    /// Exact-length first (frequency order), then longer prefixes if policy
+    /// allows. Exact means `codes[position] == code`, not `word.count`.
+    public func decode(
+        matching code: String,
+        pinnedTo pins: [Int: String] = [:],
+        completions: GroupedCompletionPolicy,
+        barLimit: Int = 3
+    ) -> GroupedDecode {
+        let empty = GroupedDecode(fieldWord: nil, barWords: [], idleCompletion: nil)
+        guard !code.isEmpty else { return empty }
+        let exact = ranked(
+            matching: code, pinnedTo: pins, keeping: { $0 == code }, limit: barLimit + 1)
+        let longer =
+            completions == .afterExact
+            ? ranked(
+                matching: code, pinnedTo: pins, keeping: { $0 != code },
+                limit: max(1, barLimit))
+            : []
+        let fieldWord = exact.first
+        var barWords: [String] = []
+        var seen = Set<String>()
+        if let fieldWord { seen.insert(fieldWord) }
+        for word in exact.dropFirst() + longer {
+            guard seen.insert(word).inserted else { continue }
+            barWords.append(word)
+            if barWords.count == barLimit { break }
+        }
+        return GroupedDecode(
+            fieldWord: fieldWord,
+            barWords: barWords,
+            idleCompletion: completions == .afterExact ? longer.first : nil)
+    }
+
+    private func ranked(
+        matching code: String,
+        pinnedTo pins: [Int: String],
+        keeping accept: (String) -> Bool,
+        limit: Int
+    ) -> [String] {
+        guard !code.isEmpty, !codes.isEmpty, limit > 0 else { return [] }
         var best: [(rank: Int, word: String)] = []
         var scanned = 0
         for position in range(startingWith: code) {
             scanned += 1
             if scanned > GroupedDecoder.scanLimit { break }
+            if !accept(codes[position]) { continue }
             let rank = order[position]
             if !pins.isEmpty, !GroupedDecoder.honours(pins, words[rank]) { continue }
             if best.count < limit {

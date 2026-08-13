@@ -11,11 +11,10 @@ import XCTest
 
 /// D8: "we should have a quick button to share screen context in the keyboard".
 ///
-/// The affordance is Apple's own broadcast picker. It used to live in the Reply
-/// panel, reachable only through the sparkle; that panel and that key are both
-/// deleted, and the picker is the banner message when
-/// `ScreenContextPrompt.offersPicker` is true. What has not changed is the state
-/// the defect is about, which is why this file still exists: an empty field with no
+/// The start lives in the app. Reply with no session used to overlay ReplayKit
+/// on the key; that picker does not present over a keyboard, so the tap now
+/// hands off the way dictation does. What has not changed is the state the
+/// defect is about, which is why this file still exists: an empty field with no
 /// session must leave a route open. The sparkle was enabled by `hasTextToWorkWith || canReply`, which is
 /// false on an empty field with no session: open WhatsApp, tap the compose box,
 /// tap the AI button to answer the message on screen, and nothing happens under a
@@ -74,9 +73,9 @@ final class SparkleReachabilityTests: XCTestCase {
         }
     }
 
-    /// Tapping Reply on an empty field with nothing running reaches the panel that
-    /// explains screen context and, when a broadcast could get somewhere, hosts the
-    /// picker. This is the other end of the same route, and it is what makes the
+    /// Tapping Reply on an empty field with nothing running reaches the banner that
+    /// explains screen context and, when a session could start, opens the app.
+    /// This is the other end of the same route, and it is what makes the
     /// assertions above more than a statement about a boolean: there really is
     /// something behind that button in the state it was shut in.
     @MainActor
@@ -100,11 +99,11 @@ final class SparkleReachabilityTests: XCTestCase {
             "the refusal has to say which of the four refusals it is")
     }
 
-    /// The overlay is present *before* the tap, which is the whole change: a
-    /// Reply that only hosts ReplayKit after `run(.reply)` still needs a first
-    /// tap that never reaches the system button.
+    /// **The host callback fires on the first no-session tap**, not only when the
+    /// banner button is tapped. The Reply key no longer overlays ReplayKit; the
+    /// tap reaches `run(.reply)` and hands off the way dictation does.
     @MainActor
-    func testReplyKeyHostsThePickerWhenABroadcastCouldRun() throws {
+    func testReplyWithNoSessionOpensTheContainingApp() {
         let restore = preparePickerReadyStore()
         defer { restore() }
 
@@ -114,36 +113,43 @@ final class SparkleReachabilityTests: XCTestCase {
         XCTAssertFalse(controller.hasTextToWorkWith, "the state under test is an empty field")
         XCTAssertTrue(
             CaptureChannel.isReachable,
-            "the overlay is withheld without Full Access; this host has no App Group")
+            "the start is withheld without Full Access; this host has no App Group")
         XCTAssertTrue(
             BackendTransport.isReady(),
-            "the overlay is withheld without a ready backend")
+            "the start is withheld without a ready backend")
         XCTAssertTrue(
             controller.screenContextPrompt.offersPicker,
-            "Reply would refuse, but the prompt is not offering the picker")
+            "Reply would refuse, but the prompt is not offering a start")
 
-        let prompt = try XCTUnwrap(
-            controller.replyKeyBroadcastPrompt,
-            "the Reply key is not hosting the picker in the state a first tap has to land on it")
-        XCTAssertEqual(prompt, controller.screenContextPrompt)
-        XCTAssertTrue(prompt.offersPicker)
+        var openedURLs: [URL] = []
+        controller.onOpenContainingApp = { openedURLs.append($0) }
+        _ = SharedStore.shared.consumeDictationHandoff()
+
+        controller.run(.reply)
+
+        XCTAssertEqual(controller.overlay, .none, "the keys must stay visible")
+        XCTAssertEqual(controller.block?.action, .reply)
+        XCTAssertEqual(controller.block?.title, "Screen context is off")
+        if case .openApp(let url) = controller.block?.remedy {
+            XCTAssertEqual(url, SharedStore.screenContextURL, "remedy must carry the screen-context URL")
+        } else {
+            XCTFail(
+                "expected .openApp remedy, got \(String(describing: controller.block?.remedy))")
+        }
+        XCTAssertEqual(openedURLs.count, 1, "exactly one open request on the first no-session tap")
+        XCTAssertEqual(
+            openedURLs.first, SharedStore.screenContextURL,
+            "the URL must be the stable screen-context deep link")
+        XCTAssertFalse(
+            SharedStore.shared.consumeDictationHandoff(),
+            "Reply wrote a dictation handoff, which would start the microphone")
     }
 
+    /// Reply during dictation used to still start a broadcast because the overlay
+    /// sat outside `KeyView`'s `.disabled`. The overlay is gone; the tap must not
+    /// open the app either.
     @MainActor
-    func testReplyKeyDoesNotHostThePickerWhenASessionIsLive() {
-        let restore = preparePickerReadyStore()
-        defer { restore() }
-
-        let controller = KeyboardController(target: MockTextTarget(text: ""))
-        controller.screenContext = .watching
-        controller.screenContextSource = .capture
-        XCTAssertNil(
-            controller.replyKeyBroadcastPrompt,
-            "a live session still overlays ReplayKit on Reply")
-    }
-
-    @MainActor
-    func testReplyKeyDoesNotHostThePickerWhileDictating() {
+    func testReplyDoesNotOpenTheAppWhileDictating() {
         let restore = preparePickerReadyStore()
         defer { restore() }
 
@@ -151,16 +157,20 @@ final class SparkleReachabilityTests: XCTestCase {
         controller.screenContext = .off
         controller.screenContextSource = .none
         controller.isDictating = true
-        XCTAssertNil(
-            controller.replyKeyBroadcastPrompt,
-            "the overlay sits outside KeyView's .disabled, so a recording would still start a broadcast")
+        var openedURLs: [URL] = []
+        controller.onOpenContainingApp = { openedURLs.append($0) }
+
+        controller.run(.reply)
+
+        XCTAssertTrue(openedURLs.isEmpty, "Reply opened the app over a live recording")
+        XCTAssertNil(controller.block)
     }
 
     /// Unrestartable ending and no backend are the two `offersPicker == false`
     /// fixtures this controller can actually enter. Full Access is
     /// `CaptureChannel.isReachable` and cannot be faked here.
     @MainActor
-    func testReplyKeyDoesNotHostThePickerWhenThePromptWithholdsIt() {
+    func testReplyDoesNotOpenTheAppWhenThePromptWithholdsTheStart() {
         let allowed = SharedStore.shared.screenContextAllowed
         let token = SharedStore.shared.cloudBackendToken
         let sessionToken = SharedStore.shared.cloudSessionToken
@@ -172,47 +182,54 @@ final class SparkleReachabilityTests: XCTestCase {
         }
 
         let controller = KeyboardController(target: MockTextTarget(text: ""))
+        var openedURLs: [URL] = []
+        controller.onOpenContainingApp = { openedURLs.append($0) }
 
         controller.screenContext = .ended(.notConfigured)
         XCTAssertFalse(controller.screenContextPrompt.offersPicker)
-        XCTAssertNil(controller.replyKeyBroadcastPrompt)
+        controller.run(.reply)
+        XCTAssertEqual(controller.block?.remedy, .none)
+        XCTAssertTrue(openedURLs.isEmpty, "an unrestartable ending still opened the app")
 
+        openedURLs.removeAll()
         controller.screenContext = .off
         SharedStore.shared.cloudBackendToken = ""
         SharedStore.shared.cloudSessionToken = ""
         XCTAssertFalse(controller.screenContextPrompt.offersPicker)
-        XCTAssertNil(
-            controller.replyKeyBroadcastPrompt,
-            "the overlay is still on Reply when the prompt withholds the picker")
+        controller.run(.reply)
+        XCTAssertEqual(
+            controller.block?.remedy, .none,
+            "no-cloud still offers a start")
+        XCTAssertTrue(openedURLs.isEmpty, "no-cloud still opened the app")
     }
 
+    /// The Open chip is shared with dictation. Tapping it for screen context
+    /// must not write the timestamp that auto-starts the microphone.
     @MainActor
-    func testAcknowledgingTheReplyBroadcastTapRefusesInTheBanner() {
-        let restore = preparePickerReadyStore()
-        defer { restore() }
-
+    func testOpenAppChipDoesNotRecordADictationHandoffForScreenContext() {
+        _ = SharedStore.shared.consumeDictationHandoff()
         let controller = KeyboardController(target: MockTextTarget(text: ""))
-        controller.screenContext = .off
-        controller.screenContextSource = .none
-        XCTAssertNotNil(
-            controller.replyKeyBroadcastPrompt,
-            "the overlay path is not the one under test")
 
-        controller.acknowledgeReplyBroadcastTap()
-
-        XCTAssertEqual(controller.overlay, .none, "the keys must stay visible")
-        XCTAssertEqual(controller.block?.action, .reply)
-        XCTAssertEqual(controller.block?.remedy, .broadcastPicker)
+        controller.recordDictationHandoffIfNeeded(for: SharedStore.screenContextURL)
         XCTAssertFalse(
-            controller.block?.title.isEmpty ?? true,
-            "the fallback strip has to say which refusal this is")
+            SharedStore.shared.consumeDictationHandoff(),
+            "Open for screen context wrote a dictation handoff")
+
+        controller.recordDictationHandoffIfNeeded(for: SharedStore.settingsURL)
+        XCTAssertFalse(
+            SharedStore.shared.consumeDictationHandoff(),
+            "Open for settings wrote a dictation handoff")
+
+        controller.recordDictationHandoffIfNeeded(for: SharedStore.dictationStartURL)
+        XCTAssertTrue(
+            SharedStore.shared.consumeDictationHandoff(),
+            "dictation Open must still write a handoff")
     }
 
-    /// The overlay tap always refuses, because whether Control Center appears
-    /// over a keyboard is unmeasured. The session becoming live is what proves
-    /// the picker worked, and `BannerState.resolve` prefers `block` over a
-    /// reading, so leaving the refusal up would keep printing "Screen context
-    /// is off" on a Reply that is about to generate.
+    /// The session becoming live is what proves a start worked, and
+    /// `BannerState.resolve` prefers `block` over a reading, so leaving the
+    /// refusal up would keep printing "Screen context is off" on a Reply that
+    /// is about to generate.
     @MainActor
     func testTheBroadcastRefusalLeavesOnceASessionIsLive() {
         let restore = preparePickerReadyStore()
@@ -221,10 +238,10 @@ final class SparkleReachabilityTests: XCTestCase {
         let controller = KeyboardController(target: MockTextTarget(text: ""))
         controller.screenContext = .off
         controller.screenContextSource = .none
-        controller.acknowledgeReplyBroadcastTap()
+        controller.run(.reply)
         XCTAssertEqual(
-            controller.block?.remedy, .broadcastPicker,
-            "the state under test is the fallback strip")
+            controller.block?.remedy, .openApp(SharedStore.screenContextURL),
+            "the state under test is the open-app strip")
 
         controller.screenContext = .starting
         XCTAssertNil(

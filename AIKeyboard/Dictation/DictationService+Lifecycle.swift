@@ -21,7 +21,7 @@ extension DictationService {
 
         guard let writer = DictationChannelWriter() else {
             lastError =
-                "AI Keyboard can't reach its shared storage, so the keyboard would never see the transcript."
+                "aBitBetterKeyboard can't reach its shared storage, so the keyboard would never see the transcript."
             return false
         }
         self.writer = writer

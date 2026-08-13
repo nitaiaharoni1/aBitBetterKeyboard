@@ -17,7 +17,7 @@ struct SwitchStep: View {
             eyebrow: "Setup",
             title: setup.switchAcknowledged ? "You're on the keyboard" : "Switch to it once",
             subtitle:
-                "Open any app with a text field and tap the globe key until AI Keyboard appears. iOS never tells us which keyboard is showing, so this one is yours to confirm."
+                "Open any app with a text field and tap the globe key until aBitBetterKeyboard appears. iOS never tells us which keyboard is showing, so this one is yours to confirm."
         ) {
             Card {
                 StatusRow(
@@ -41,7 +41,7 @@ struct SwitchStep: View {
                     ExplainerStepRow(
                         number: 2,
                         title: "Tap the globe key",
-                        detail: "Keep tapping until AI Keyboard appears."
+                        detail: "Keep tapping until aBitBetterKeyboard appears."
                     )
                     .padding(.vertical, Theme.Space.sm)
 

@@ -15,8 +15,10 @@ final class RecordingTextTarget: TextTarget {
     var inserted: [String] = []
     var deletions = 0
 
+    var after = ""
+
     var documentContextBeforeInput: String? { "" }
-    var documentContextAfterInput: String? { "" }
+    var documentContextAfterInput: String? { after }
     var selectedText: String? { nil }
     var isSecureTextEntry: Bool? { false }
     var textContentType: UITextContentType?? { .some(.none) }
@@ -37,6 +39,16 @@ final class CustomKeyActionTests: XCTestCase {
         return (controller, target)
     }
 
+    private func cursorController(
+        before: String, selecting: String? = nil, after: String = ""
+    ) -> (KeyboardController, CursorTextTarget) {
+        let target = CursorTextTarget(before: before, selecting: selecting, after: after)
+        let controller = KeyboardController(target: target, language: .english)
+        controller.showsGlobeKey = true
+        controller.apply(.default)
+        return (controller, target)
+    }
+
     func testCursorKeysMoveTheInsertionPointAndTypeNothing() {
         let (controller, target) = controller()
         controller.press(.cursorLeft)
@@ -44,6 +56,46 @@ final class CustomKeyActionTests: XCTestCase {
         XCTAssertEqual(target.offsets, [-1, 1])
         XCTAssertEqual(target.inserted, [], "a cursor key must not type anything")
         XCTAssertEqual(target.deletions, 0)
+    }
+
+    func testForwardDeleteRemovesTheCharacterInFront() {
+        let (controller, target) = cursorController(before: "hello", after: "world")
+        controller.press(.deleteForward)
+        XCTAssertEqual(target.document, "helloorld")
+    }
+
+    func testForwardDeleteAtEndDoesNothing() {
+        // Naive move-then-delete with empty after-context erases the previous character.
+        let (controller, target) = cursorController(before: "hello")
+        controller.press(.deleteForward)
+        XCTAssertEqual(target.document, "hello")
+    }
+
+    func testForwardDeleteRemovesASelection() {
+        let (controller, target) = cursorController(before: "he", selecting: "ll", after: "o")
+        controller.press(.deleteForward)
+        XCTAssertEqual(target.document, "heo")
+    }
+
+    func testForwardDeleteRemovesAWholeEmoji() {
+        let (controller, target) = cursorController(before: "a", after: "😀b")
+        controller.press(.deleteForward)
+        XCTAssertEqual(target.document, "ab")
+    }
+
+    /// `CursorTextTarget` snaps an in-cluster offset forward, so `ab` still
+    /// passes against `adjustTextPosition(1)`. The offset is what rejects it.
+    func testForwardDeleteMovesByTheGraphemesUTF16Count() {
+        let (controller, target) = controller()
+        target.after = "😀b"
+        controller.press(.deleteForward)
+        XCTAssertEqual(target.offsets, ["😀".utf16.count])
+    }
+
+    func testForwardDeleteTypesNothing() {
+        let (controller, target) = controller()
+        controller.press(.deleteForward)
+        XCTAssertEqual(target.inserted, [])
     }
 
     func testEmojiKeyTogglesTheEmojiPanel() {

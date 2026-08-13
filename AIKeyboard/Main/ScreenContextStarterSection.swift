@@ -20,7 +20,7 @@ struct ScreenContextStarterSection: View {
                         number: 1, title: "Tap the button below",
                         detail: "iOS opens its own list of what can record the screen.")
                     ExplainerStepRow(
-                        number: 2, title: "Pick AI Keyboard, then Start Broadcast",
+                        number: 2, title: "Pick aBitBetterKeyboard, then Start Broadcast",
                         detail: "iOS counts down from three before anything starts.")
                     ExplainerStepRow(
                         number: 3, title: "Go back to your conversation",

@@ -3,10 +3,8 @@ import AIKeyboardCore
 
 // MARK: - The editor's pen
 //
-// Hand-drawn orange marks, translated from the approved mock's inline SVGs
-// with the control-point wobble kept — a pen, not a compass. They annotate
-// two or three marketing moments in the whole app (the onboarding headline,
-// the home greeting, one empty state) and never appear on working surfaces.
+// Hand-drawn orange marks from the approved mock. They mark tab titles and
+// onboarding, not the keyboard itself.
 //
 // Every doodle is `Theme.Brand.action` and hidden from accessibility by
 // construction: orange is the pen (red stays recording-only), and decoration
@@ -36,7 +34,6 @@ struct DoodleSwash: View {
     var body: some View {
         DoodleSwashPath()
             .stroke(Theme.Brand.action, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-            .aspectRatio(300.0 / 22.0, contentMode: .fit)
             .accessibilityHidden(true)
     }
 }

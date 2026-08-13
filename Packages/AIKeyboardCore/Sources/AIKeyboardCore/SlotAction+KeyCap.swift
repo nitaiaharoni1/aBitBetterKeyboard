@@ -24,6 +24,7 @@ public extension SlotAction {
         case .quickTone: return .quickTone
         case .cursorLeft: return .cursorLeft
         case .cursorRight: return .cursorRight
+        case .deleteForward: return .deleteForward
         case .hideKeyboard: return .hideKeyboard
         case .reply: return .aiReply
         case .fix: return .aiFix
@@ -58,6 +59,7 @@ public extension SlotAction {
         case .fix: return AIAction.fix.icon
         case .cursorLeft: return "arrow.left"
         case .cursorRight: return "arrow.right"
+        case .deleteForward: return "delete.right"
         case .hideKeyboard: return "keyboard.chevron.compact.down"
         case .punctuation, .text: return nil
         }

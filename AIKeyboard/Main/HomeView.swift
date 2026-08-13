@@ -35,22 +35,7 @@ struct HomeView: View {
                 .scrollDismissesKeyboard(.immediately)
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
-                AppSearchHeader(searchAccessibilityID: "app-search") {
-                    VStack(alignment: .leading, spacing: 0) {
-                        // The hero voice: heavy SF Pro with tight tracking (the web
-                        // hero's weight-800 / -.055em spec, ≈ -1.4pt at this size).
-                        // Only this line and the onboarding welcome headline carry
-                        // it; every other display line keeps the plain style.
-                        Text("AI Keyboard")
-                            .font(.system(size: 28, weight: .heavy))
-                            .tracking(-1.4)
-                            .foregroundStyle(Theme.Text.primary)
-
-                        DoodleSwash()
-                            .frame(width: 140, height: 10)
-                            .offset(x: 3, y: 1)
-                    }
-                }
+                AppSearchHeader(title: "aBitBetterKeyboard", searchAccessibilityID: "app-search")
             }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $search.homePush) { push in
@@ -130,7 +115,7 @@ struct HomeView: View {
 
                 if setup.keyboardAdded != .confirmed {
                     StatusRow(
-                        title: "Add AI Keyboard",
+                        title: "Add aBitBetterKeyboard",
                         detail: setup.keyboardAddedDetail,
                         check: setup.keyboardAdded
                     )
@@ -139,12 +124,12 @@ struct HomeView: View {
                 if setup.fullAccess != .confirmed {
                     StatusRow(
                         title: "Allow Full Access",
-                        detail: "Settings › General › Keyboard › Keyboards › AI Keyboard",
+                        detail: "Settings › General › Keyboard › Keyboards › aBitBetterKeyboard",
                         check: setup.fullAccess
                     )
                 }
 
-                PrimaryButton(title: "Open Settings", icon: "gearshape") {
+                PrimaryButton(title: "Open iOS Settings", icon: "gearshape") {
                     openSettings()
                 }
             }
@@ -205,7 +190,7 @@ struct HomeView: View {
                 HStack(alignment: .top, spacing: Theme.Space.sm) {
                     IconBadge(systemName: "sparkles", tint: Theme.Brand.solid)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("AI Keyboard Pro")
+                        Text("aBitBetterKeyboard Pro")
                             .font(Theme.Fonts.headline)
                             .foregroundStyle(Theme.Text.primary)
                         Text("A mock paywall. Nothing in this build is gated, for anyone.")

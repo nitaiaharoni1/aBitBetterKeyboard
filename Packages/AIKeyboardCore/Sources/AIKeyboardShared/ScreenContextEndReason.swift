@@ -89,7 +89,7 @@ public enum ScreenContextEndReason: UInt8, Codable, Sendable, CaseIterable {
         // somebody who came here from a failed Hebrew rewrite and has never been
         // shown a cloud model, because there is nothing for them to do with one.
         case .notConfigured:
-            return "AI Keyboard isn't connected yet, and reading a screen needs it."
+            return "aBitBetterKeyboard isn't connected yet, and reading a screen needs it."
         case .noFrames: return "No screen frames arrived."
         }
     }
@@ -98,7 +98,7 @@ public enum ScreenContextEndReason: UInt8, Codable, Sendable, CaseIterable {
     /// printed.
     ///
     /// **It is part of the reason rather than part of the view on purpose.** The
-    /// strip used to append a fixed "Restart it in AI Keyboard." to every ending
+    /// strip used to append a fixed "Restart it in aBitBetterKeyboard." to every ending
     /// and the app's Screen Context screen appended its own "Start it again
     /// below.", so the two surfaces gave different advice for the same page — and
     /// both gave advice that is wrong for an ending a restart cannot fix. Keeping

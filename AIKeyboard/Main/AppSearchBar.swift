@@ -1,15 +1,41 @@
 import AIKeyboardCore
 import SwiftUI
 
-/// Title plus the in-flow search field, shared by Home, Languages, and Settings
-/// so the three headers stay one chrome.
-struct AppSearchHeader<Title: View>: View {
+struct PageTitle: View {
+    var title: String
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 0) {
+            Image("BrandMark")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 40, height: 40)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(Theme.Fonts.page)
+                .tracking(-0.9)
+                .foregroundStyle(Theme.Text.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .overlay(alignment: .bottom) {
+                    DoodleSwash()
+                        .frame(height: 8)
+                        .offset(y: 5)
+                }
+        }
+        .padding(.bottom, 8)
+    }
+}
+
+/// Title plus the in-flow search field, shared by Home, Languages, Keys, and
+/// Settings so the four headers stay one chrome.
+struct AppSearchHeader: View {
+    var title: String
     var searchAccessibilityID: String = "app-search"
-    @ViewBuilder var title: () -> Title
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            title()
+            PageTitle(title: title)
             AppSearchField(fieldIdentifier: searchAccessibilityID)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

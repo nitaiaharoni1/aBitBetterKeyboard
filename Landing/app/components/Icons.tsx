@@ -57,3 +57,53 @@ export function Scribble({ className }: { className?: string }) {
     </svg>
   );
 }
+
+export function DoodleArrow({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 100 90" fill="none" aria-hidden="true">
+      <path
+        d="M8 8 C30 50 55 70 82 74"
+        stroke="#ee7442"
+        strokeWidth="4.5"
+        strokeLinecap="round"
+        pathLength={100}
+      />
+      <path
+        d="M62 60 C70 66 78 72 84 78 C76 78 66 80 58 82"
+        stroke="#ee7442"
+        strokeWidth="4.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        pathLength={100}
+      />
+    </svg>
+  );
+}
+
+export function DoodleStar({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <path
+        d="M20 4 C20.8 14 21 26 20 36"
+        stroke="#ee7442"
+        strokeWidth="4"
+        strokeLinecap="round"
+        pathLength={100}
+      />
+      <path
+        d="M6 13 C15 16.5 25 17 34 15"
+        stroke="#ee7442"
+        strokeWidth="4"
+        strokeLinecap="round"
+        pathLength={100}
+      />
+      <path
+        d="M10 29 C16.5 22 24 15 31 8"
+        stroke="#ee7442"
+        strokeWidth="4"
+        strokeLinecap="round"
+        pathLength={100}
+      />
+    </svg>
+  );
+}

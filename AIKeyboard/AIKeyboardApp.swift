@@ -98,7 +98,7 @@ struct RootView: View {
                     //
                     // The state it costs is navigation depth inside a tab, and
                     // that is affordable *because of where the picker is*: it
-                    // sits on the Settings root, which is the only screen a
+                    // sits on the Keys root, which is the only screen a
                     // palette can be changed from, so there is nothing pushed
                     // above it to lose. Moving the picker behind a
                     // `NavigationRow` would break that and this would start
@@ -117,6 +117,9 @@ struct RootView: View {
                 selectedMainTab = .settings
             } else if url == SharedStore.dictationStartURL {
                 beginDictationHandoffIfFresh()
+            } else if url == SharedStore.screenContextURL {
+                selectedMainTab = .home
+                search.openScreenContext()
             }
         }
         // The app watches the same capture channel the keyboard does, as an
@@ -166,15 +169,16 @@ struct RootView: View {
     /// the return value: an arbitrary external open of this URL with no fresh
     /// shared request must not auto-start the mic.
     ///
-    /// Lands on Home rather than a dedicated screen. The session still starts
-    /// here, in the foreground, because that is the OS boundary: the keyboard
-    /// cannot open the microphone, and an app cannot *begin* recording from
-    /// the background. Home's dictation card shows LIVE once it is running.
+    /// Lands on Home and pushes Dictation. The session still starts here, in
+    /// the foreground, because that is the OS boundary: the keyboard cannot
+    /// open the microphone, and an app cannot *begin* recording from the
+    /// background.
     private func beginDictationHandoffIfFresh() {
         guard SharedStore.shared.consumeDictationHandoff() else { return }
         selectedMainTab = .home
+        search.openDictation()
         Task {
-            _ = await DictationService.shared.start(minutes: store.dictationSessionMinutes)
+            _ = await DictationService.shared.start(minutes: 0)
         }
     }
 }

@@ -60,7 +60,7 @@ final class CloudModelSettingNameTests: XCTestCase {
         }
     }
 
-    /// **The recovery is a status, not an errand.** "Open AI Keyboard once to
+    /// **The recovery is a status, not an errand.** "Open aBitBetterKeyboard once to
     /// reconnect" was an instruction, and the keyboard cannot carry it out on the
     /// user's behalf: an extension has no `UIApplication`. The app reconnects on
     /// its own at launch, on foreground and on a background wake-up, so the
@@ -71,7 +71,7 @@ final class CloudModelSettingNameTests: XCTestCase {
     func testTheRecoveryReportsRatherThanInstructs() {
         XCTAssertEqual(BackendTransport.settingsPath, "Settings › AI › Cloud model")
         XCTAssertEqual(
-            BackendTransport.setUpRecovery, "AI Keyboard is reconnecting. Try again in a moment.")
+            BackendTransport.setUpRecovery, "aBitBetterKeyboard is reconnecting. Try again in a moment.")
         XCTAssertFalse(
             BackendTransport.setUpRecovery.localizedCaseInsensitiveContains("open ai keyboard"),
             "the recovery tells the user to open an app they are often already in")

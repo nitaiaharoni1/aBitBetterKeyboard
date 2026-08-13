@@ -22,7 +22,7 @@ final class CustomLayoutTests: XCTestCase {
     func testEveryActionRoundTrips() throws {
         let actions: [SlotAction] = [
             .shift, .backspace, .numbersPlane, .symbolsPlane, .globe, .settings, .space, .ret,
-            .dictation, .emoji, .quickTone, .cursorLeft, .cursorRight,
+            .dictation, .emoji, .quickTone, .cursorLeft, .cursorRight, .deleteForward,
             .hideKeyboard, .text(".com")
         ]
         let data = try JSONEncoder().encode(actions)
@@ -147,7 +147,7 @@ final class CustomLayoutTests: XCTestCase {
     /// thing a VoiceOver user has to tell two icon keys apart.
     func testNewCapsHaveDistinctAccessibilityLabels() {
         let caps: [KeyCap] = [
-            .settings, .emoji, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard
+            .settings, .emoji, .quickTone, .cursorLeft, .cursorRight, .deleteForward, .hideKeyboard
         ]
         let labels = caps.map(\.accessibilityLabel)
         XCTAssertEqual(Set(labels).count, caps.count, "two caps share a label: \(labels)")
@@ -158,14 +158,15 @@ final class CustomLayoutTests: XCTestCase {
     /// the cap, and a collision is a `ForEach` with duplicate identity.
     func testNewCapsHaveDistinctSpecIDs() {
         let caps: [KeyCap] = [
-            .settings, .emoji, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard
+            .settings, .emoji, .quickTone, .cursorLeft, .cursorRight, .deleteForward, .hideKeyboard
         ]
         XCTAssertEqual(Set(caps.map { KeySpec($0).id }).count, caps.count)
     }
 
     func testTheNewCapsAreFunctionKeys() {
         for cap in [
-            KeyCap.settings, .emoji, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard
+            KeyCap.settings, .emoji, .quickTone, .cursorLeft, .cursorRight, .deleteForward,
+            .hideKeyboard
         ] {
             XCTAssertTrue(cap.isFunctionKey, "\(cap) should not be treated as a character key")
         }
@@ -258,6 +259,7 @@ final class CustomLayoutTests: XCTestCase {
         XCTAssertFalse(SuggestionBar.barCatalogue.contains(.space))
         XCTAssertFalse(SuggestionBar.barCatalogue.contains(.shift))
         XCTAssertFalse(SuggestionBar.barCatalogue.contains(.backspace))
+        XCTAssertFalse(SuggestionBar.barCatalogue.contains(.deleteForward))
         for action in [SlotAction.emoji, .quickTone] {
             XCTAssertTrue(SuggestionBar.barCatalogue.contains(action), "\(action) is missing")
         }
@@ -369,7 +371,7 @@ final class CustomLayoutTests: XCTestCase {
         let layouts = [
             KeyboardCustomization.default,
             try XCTUnwrap(LayoutPreset.named("power")).customization,
-            try XCTUnwrap(LayoutPreset.named("compact")).customization,
+            try XCTUnwrap(LayoutPreset.named("compact")).customization
         ]
         for layout in layouts {
             XCTAssertEqual(
@@ -426,11 +428,9 @@ final class CustomLayoutTests: XCTestCase {
     /// read. The live host height can omit the banner; see
     /// `totalHeight(for:showsBanner:)`.
     ///
-    /// **The progress bar is the third, and it is in every form of this.** It was
-    /// two rows until a model call stopped drawing a banner and started drawing a
-    /// three-point line above the candidates instead; that line's height is
-    /// reserved whether or not anything is running, so a call starting cannot move
-    /// the keyboard under a thumb.
+    /// **The progress bar is the third, and the banner-on form still uses the
+    /// three-point hairline.** The live banner-off height reserves the taller
+    /// waveform slot instead; see `testTheWaveformSlotIsReservedWhileTheBannerIsDown`.
     func testTheTotalIsTheKeyAreaPlusTheThreeConstantRows() {
         XCTAssertEqual(
             Theme.Metrics.totalHeight(for: .default),
@@ -450,9 +450,8 @@ final class CustomLayoutTests: XCTestCase {
     /// default is not a choice anybody made in the editor, and it must never cross
     /// silently.
     ///
-    /// The margin is zero, which is the point. Adding the three-point progress bar
-    /// meant taking three points off the banner (72 → 69); a future row, a taller
-    /// key or a bigger banner has to be paid for the same way, and this is what
+    /// The margin is zero, which is the point. A taller key or a bigger banner
+    /// has to be paid for by shrinking something else, and this is what
     /// fails when it is not.
     func testTheShippedLayoutStillFitsUnderTheFingerprintCliff() {
         XCTAssertLessThanOrEqual(
@@ -465,30 +464,31 @@ final class CustomLayoutTests: XCTestCase {
             "the default layout warns about itself")
     }
 
-    /// Omitting the banner shortens the live height by exactly that row.
+    /// Omitting the banner also swaps the three-point hairline for the reserved
+    /// waveform slot, so the live height drops by the banner minus that extra
+    /// twenty-one points rather than by the banner alone.
     func testOmittingTheBannerShortensTheLiveHeightByTheBanner() {
         XCTAssertEqual(
             Theme.Metrics.totalHeight(for: .default, showsBanner: true)
                 - Theme.Metrics.totalHeight(for: .default, showsBanner: false),
-            Theme.Metrics.bannerHeight,
+            Theme.Metrics.bannerHeight + Theme.Metrics.progressBarHeight
+                - Theme.Metrics.recordingWaveformHeight,
             accuracy: 0.001)
     }
 
-    /// A live recording grows the hairline, and that growth is paid while the
-    /// banner is down — so the fingerprint cliff, which is the banner-on total,
-    /// is not crossed.
-    func testARecordingGrowsTheHairlineWithoutCrossingTheFingerprintCliff() {
-        let recording = Theme.Metrics.totalHeight(
-            for: .default, showsBanner: false, isRecording: true)
-        let idle = Theme.Metrics.totalHeight(
-            for: .default, showsBanner: false, isRecording: false)
+    /// The waveform slot is reserved while the banner is down, so opening the
+    /// microphone cannot move the keys. Paid out of the banner-off budget: the
+    /// fingerprint cliff is the banner-on total, which this slot does not reach.
+    func testTheWaveformSlotIsReservedWhileTheBannerIsDown() {
+        let live = Theme.Metrics.totalHeight(for: .default, showsBanner: false)
         XCTAssertEqual(
-            recording - idle,
-            Theme.Metrics.recordingWaveformHeight - Theme.Metrics.progressBarHeight,
+            live - Theme.Metrics.keyAreaHeight(for: .default)
+                - Theme.Metrics.suggestionBarHeight,
+            Theme.Metrics.recordingWaveformHeight,
             accuracy: 0.001)
         XCTAssertLessThan(
-            recording, Theme.Metrics.totalHeight(for: .default),
-            "a recording without a banner must stay under the tallest form")
+            live, Theme.Metrics.totalHeight(for: .default),
+            "the reserved waveform slot must stay under the tallest form")
     }
 
     /// Across layouts, the tallest-form total still differs only by the key area.

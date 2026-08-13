@@ -22,9 +22,6 @@ final class KeyboardViewController: UIInputViewController {
     /// Last banner presence we sized the host for. `objectWillChange` fires on
     /// every keystroke; this is what keeps those from touching the constraint.
     private var lastShowsActionBanner: Bool?
-    /// Last recording state we sized the host for. `objectWillChange` fires on
-    /// every loudness tick; this is what keeps those from touching the constraint.
-    private var lastIsRecording: Bool?
     /// Latched only once the shared container has actually taken the record, so a
     /// keyboard that starts without Full Access and is granted it mid-process
     /// still gets to leave one. See `recordPresence()`.
@@ -84,7 +81,7 @@ final class KeyboardViewController: UIInputViewController {
         }
 
         // Inject a custom URL opener so `Link` elements inside the keyboard
-        // (e.g. the "Open AI Keyboard" chip) route through `openContainingApp`
+        // (e.g. the "Open aBitBetterKeyboard" chip) route through `openContainingApp`
         // rather than through SwiftUI's default, which silently fails inside an
         // extension because `UIApplication.shared` is unavailable there.
         install(
@@ -98,25 +95,20 @@ final class KeyboardViewController: UIInputViewController {
         )
 
         // The action banner appears for a live reading, a refusal or a failure,
-        // and a live recording grows the hairline into a waveform — so the height
-        // we ask the host for has to follow both. `objectWillChange` fires before
-        // the property lands; defer one turn so the read sees the new state.
-        // Presence is compared only after that turn: every keystroke and every
-        // loudness tick publishes, and the constraint must not move unless the
-        // strip actually appeared or the microphone actually opened.
+        // so the height we ask the host for has to follow it. Recording does not:
+        // the waveform slot is already reserved in the banner-off height.
+        // `objectWillChange` fires before the property lands; defer one turn so
+        // the read sees the new state. Presence is compared only after that turn:
+        // every keystroke and every loudness tick publishes, and the constraint
+        // must not move unless the strip actually appeared.
         controller.objectWillChange
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 DispatchQueue.main.async {
                     guard let self, let controller = self.controller else { return }
                     let shows = controller.showsActionBanner
-                    let recording = controller.dictationKeyState.isRecording
-                    guard
-                        shows != self.lastShowsActionBanner
-                            || recording != self.lastIsRecording
-                    else { return }
+                    guard shows != self.lastShowsActionBanner else { return }
                     self.lastShowsActionBanner = shows
-                    self.lastIsRecording = recording
                     self.updateKeyboardHeight()
                 }
             }
@@ -165,6 +157,11 @@ final class KeyboardViewController: UIInputViewController {
 
     private func install<Content: View>(_ root: Content) {
         let host = UIHostingController(rootView: root)
+        // SwiftUI was applying the home-indicator safe area inside a view
+        // whose height already is the keyboard, which left an empty band
+        // under the space row.
+        host.safeAreaRegions = []
+        host.view.insetsLayoutMarginsFromSafeArea = false
         host.view.backgroundColor = .clear
         host.view.translatesAutoresizingMaskIntoConstraints = false
 
@@ -342,12 +339,12 @@ final class KeyboardViewController: UIInputViewController {
         // Banner presence plus the layout. The fingerprint crop still uses the
         // tallest form — see `ownUIHeightFraction()` — so a mid-read resize
         // cannot move the band even though the host height follows the strip.
+        // Recording does not change this: the waveform slot is reserved while
+        // the banner is down.
         let showsBanner = controller.showsActionBanner
-        let isRecording = controller.dictationKeyState.isRecording
         lastShowsActionBanner = showsBanner
-        lastIsRecording = isRecording
         let height = Theme.Metrics.totalHeight(
-            for: controller.customization, showsBanner: showsBanner, isRecording: isRecording)
+            for: controller.customization, showsBanner: showsBanner)
 
         guard let heightConstraint else {
             let constraint = view.heightAnchor.constraint(equalToConstant: height)

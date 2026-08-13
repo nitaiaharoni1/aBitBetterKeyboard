@@ -155,7 +155,7 @@ public struct SetupState: Equatable, Sendable {
     public var keyboardSwitchedDetail: String {
         switchAcknowledged
             ? "Confirmed — you switched with the globe key"
-            : "Tap the globe key in any app and choose AI Keyboard"
+            : "Tap the globe key in any app and choose aBitBetterKeyboard"
     }
 
     /// **Only claims the cloud when there is one.** This read "On — cloud rewrites
@@ -177,7 +177,7 @@ public struct SetupState: Equatable, Sendable {
         guard fullAccess == .confirmed else { return "Typing and on-device AI work without it" }
         return cloudConfigured
             ? "On — cloud rewrites and key clicks work"
-            : "On — key clicks work. AI Keyboard has not connected yet; it connects on its own "
+            : "On — key clicks work. aBitBetterKeyboard has not connected yet; it connects on its own "
                 + "once this app has a network connection."
     }
 
@@ -200,7 +200,7 @@ public struct SetupState: Equatable, Sendable {
             // and `SetupStateTests` fails the build if it comes back: this is the
             // state where there are none, and the whole point of the split is not
             // to promise them here.
-            : "The system key click sound, and the network AI Keyboard needs — including the connection "
+            : "The system key click sound, and the network aBitBetterKeyboard needs — including the connection "
                 + "this app makes once, on its own. Until it does, Hebrew Fix, Rewrite and Reply are "
                 + "refused."
     }
@@ -279,7 +279,7 @@ public struct SetupState: Equatable, Sendable {
         guard !isReady else { return nil }
         if presence != nil, isCurrent {
             return "The keyboard has run, and it reported Full Access as off. Turn on Allow Full "
-                + "Access under Settings › General › Keyboard › Keyboards › AI Keyboard."
+                + "Access under Settings › General › Keyboard › Keyboards › aBitBetterKeyboard."
         }
         if presence != nil {
             return "It is a few days since the keyboard last checked in, or the phone has "

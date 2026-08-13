@@ -50,6 +50,16 @@ final class KeyRepeater {
         self.limit = limit
     }
 
+    /// Held backspace. One tick is a word, so the letter curve's 45ms floor
+    /// would be 22 words a second, faster than a thumb can lift.
+    static func wordDelete() -> KeyRepeater {
+        KeyRepeater(
+            firstInterval: .milliseconds(150),
+            shortestInterval: .milliseconds(150),
+            acceleration: .zero,
+            limit: 40)
+    }
+
     func start(_ tick: @escaping @MainActor () -> Void) {
         stop()
         // Copied out deliberately. A closure that reads `self.limit` captures the

@@ -24,6 +24,8 @@ final class KeyClickTests: XCTestCase {
     /// would have passed against a keyboard whose delete key clicked like a letter.
     func testDeleteDoesNotSoundLikeALetter() {
         XCTAssertEqual(KeyCap.backspace.clickSound, .delete)
+        XCTAssertEqual(KeyCap.deleteForward.clickSound, .delete)
+        XCTAssertNotEqual(KeyCap.deleteForward.clickSound, KeyCap.shift.clickSound)
         XCTAssertNotEqual(KeyCap.backspace.clickSound, KeyCap.character("a").clickSound)
         XCTAssertNotEqual(KeyCap.backspace.clickSound, KeyCap.shift.clickSound)
     }

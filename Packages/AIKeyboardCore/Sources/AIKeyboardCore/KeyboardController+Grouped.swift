@@ -313,56 +313,45 @@ extension KeyboardController {
             GroupedKeys.letter(atX: Double($0.x), y: Double($0.y), in: GroupedKeys.lines(inCap: cap))
         }
         grouped.append(cap: cap, pin: pin)
-        applyGroupedGuess()
+        // Completions on the bar are not autocomplete. Autocomplete is writing a
+        // longer word into the field, and `fieldWord` never does that. The bar
+        // has to show the next most likely words (including longer ones) or the
+        // three slots go empty after a first tap that has no same-length collision.
+        applyGroupedGuess(completions: .afterExact)
+        if store.storedCompleteOnIdle { noteTypedInput() }
+    }
+
+    /// Only the tail this session wrote. `replaceCurrentWord` deletes the whole
+    /// prefix, so the first stroke of a new session ate the word already there.
+    func writeGroupedGuess(_ guess: String) {
+        deleteBackward(utf16Units: grouped.lastWritten.utf16.count)
+        target?.insertText(guess)
+        grouped.lastWritten = guess
     }
 
     /// Re-decode and rewrite the word in progress.
-    func applyGroupedGuess() {
+    func applyGroupedGuess(completions: GroupedCompletionPolicy) {
         guard grouped.isTyping else { return }
         let level = groupingLevel
         let decoder = grouped.decoder(
             language: language, level: level, personal: personalWordsForDecoding)
-        let code = grouped.code(language: language, level: level)
-        let pins = grouped.pins
-        let candidates = decoder.candidates(startingWith: code, pinnedTo: pins, limit: 3)
-        // Prefix completions are for a word still being typed. Once every
-        // keystroke has a letter, that string is the word; offering "were" over
-        // pinned "we" would learn a word nobody typed.
+        let decoded = decoder.decode(
+            matching: grouped.code(language: language, level: level),
+            pinnedTo: grouped.pins,
+            completions: completions)
         let raw =
             grouped.allLettersPinned
             ? grouped.pinnedWord
-            : (candidates.first ?? grouped.literal)
+            : (decoded.fieldWord ?? grouped.literal)
         let guess = grouped.cased(raw, in: language)
-        replaceCurrentWord(with: guess)
-        grouped.lastWritten = guess
+        writeGroupedGuess(guess)
         if shift == .on { shift = .off }
-        let bar =
-            grouped.allLettersPinned
-            ? [guess]
-            : candidates.map { grouped.cased($0, in: language) }
-        showGroupedCandidates(bar)
-    }
-
-    /// The bar, while a grouped word is in progress.
-    ///
-    /// **Slot zero is the literal reading, not the top candidate**, which is the
-    /// nearest thing left to the rule grouped keys broke: whatever the decoder
-    /// believes, the keys the user actually pressed are always one tap away. The
-    /// bold slot — what the space bar commits — is still the decoder's best
-    /// answer, because committing the literal by default would make the feature
-    /// pointless.
-    private func showGroupedCandidates(_ candidates: [String]) {
-        var slots: [Suggestion] = []
-        var seen = Set<String>()
-        for word in candidates + [grouped.literal] where seen.insert(word).inserted {
-            slots.append(Suggestion(text: word, language: language))
-            if slots.count == 3 { break }
-        }
-        // Bold the decoder's answer when it has one; with nothing but the literal
-        // there is nothing to bold, because space would only be re-committing what
-        // is already in the field.
         suggestions =
-            candidates.isEmpty ? slots : SuggestionEngine.markDefault(slots, at: 0)
+            grouped.allLettersPinned
+            ? []
+            : decoded.barWords.map {
+                Suggestion(text: grouped.cased($0, in: language), language: language)
+            }
     }
 
     /// Backspace takes back a whole key press, not a letter.
@@ -374,15 +363,18 @@ extension KeyboardController {
     /// progress, so ordinary deletion carries on.
     func deleteGroupedStroke() -> Bool {
         if grouped.abandonIfStale(prefix: currentWordPrefix) { return false }
+        idleTypingTask?.cancel()
+        idleTypingTask = nil
+        idleTypedAt = nil
         grouped.removeLast()
         if grouped.isTyping {
-            applyGroupedGuess()
+            applyGroupedGuess(completions: .afterExact)
         } else {
             // Deleting the last stroke empties the word, so `clear()` and not
             // just an empty `strokes`: `lastWritten` has to go too, or the next
             // press compares the field against a word that is no longer in it and
             // decides the cursor moved.
-            replaceCurrentWord(with: "")
+            writeGroupedGuess("")
             grouped.clear()
             refreshSuggestions()
         }
@@ -395,7 +387,8 @@ extension KeyboardController {
     func pinGroupedLetter(_ letter: String) -> Bool {
         if grouped.abandonIfStale(prefix: currentWordPrefix) { return false }
         guard grouped.pinLast(to: letter) else { return false }
-        applyGroupedGuess()
+        applyGroupedGuess(completions: .afterExact)
+        if store.storedCompleteOnIdle { noteTypedInput() }
         return true
     }
 
@@ -423,7 +416,7 @@ extension KeyboardController {
     /// Words the decoder should rank above the corpus: the user's own dictionary
     /// and what the keyboard has learned. The same precedence
     /// `SuggestionEngine.Source` already encodes.
-    private var personalWordsForDecoding: [String] {
+    var personalWordsForDecoding: [String] {
         SharedStore.shared.storedPersonalDictionary + personal.allWords(in: language)
     }
 }

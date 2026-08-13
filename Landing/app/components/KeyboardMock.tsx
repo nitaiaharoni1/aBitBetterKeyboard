@@ -1,5 +1,5 @@
 import type { Copy, Locale } from "../copy";
-import { EmojiIcon, MicIcon } from "./Icons";
+import { DoodleArrow, DoodleStar, EmojiIcon, MicIcon } from "./Icons";
 import styles from "./KeyboardMock.module.css";
 
 const latin = {
@@ -26,6 +26,7 @@ export default function KeyboardMock({
 
   return (
     <div className={styles.stage} aria-hidden="true">
+      <DoodleArrow className={styles.doodleArrow} />
       <div
         className={styles.scene}
         dir={hebrewLayout ? "rtl" : "ltr"}
@@ -102,6 +103,7 @@ export default function KeyboardMock({
           </span>
         </div>
       </div>
+      <DoodleStar className={styles.doodleStar} />
     </div>
   );
 }

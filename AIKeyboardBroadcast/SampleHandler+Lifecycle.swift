@@ -60,8 +60,8 @@ extension SampleHandler {
                     // because the page a reason would be written to is exactly
                     // what is missing.
                     code: 100,
-                    message: "Screen context could not reach AI Keyboard's shared storage.",
-                    recovery: "Open AI Keyboard once, then start screen context again."))
+                    message: "Screen context could not reach aBitBetterKeyboard's shared storage.",
+                    recovery: "Open aBitBetterKeyboard once, then start screen context again."))
             return
         }
 
