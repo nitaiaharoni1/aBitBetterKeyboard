@@ -343,9 +343,13 @@ public final class KeyboardController: ObservableObject {
     /// change.
     var refiner: PredictiveRefiner?
 
-    /// Completes the bold word and/or inserts a space after a pause. Cancelled
-    /// on every keystroke. See `scheduleIdleTyping`.
+    /// Completes the bold word and/or inserts a space after a pause. Armed
+    /// only from a key the user typed, so a caret tap or the keyboard coming
+    /// on screen cannot spend the pause. See `noteTypedInput`.
     var idleTypingTask: Task<Void, Never>?
+    /// The instant of the last typed character. `nil` until something is keyed
+    /// in this field, and cleared when the word is no longer in progress.
+    var idleTypedAt: ContinuousClock.Instant?
 
     /// What this user's typing has taught the keyboard.
     ///

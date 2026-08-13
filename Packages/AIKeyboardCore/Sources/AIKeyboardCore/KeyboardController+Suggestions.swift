@@ -12,7 +12,7 @@ extension KeyboardController {
         refreshDocumentState()
         guard store.storedPredictions else {
             suggestions = []
-            scheduleIdleTyping()
+            dropIdleTypingIfStale()
             return
         }
         let prefix = currentWordPrefix
@@ -27,7 +27,7 @@ extension KeyboardController {
         )
         suggestions = pinningDefaultToTypedIfNeeded(results, prefix: prefix)
         askForRefinement(prefix: prefix, context: context)
-        scheduleIdleTyping()
+        dropIdleTypingIfStale()
     }
 
     /// When space cannot commit a correction, the bold slot has to be the typed
@@ -158,20 +158,56 @@ extension KeyboardController {
 
     /// Restart the pause that can finish a word or add a space.
     ///
-    /// Cancelled on every refresh, so it only fires into a real pause. An empty
-    /// prefix is not a word in progress: firing space there would keep adding
-    /// blanks after every committed word. The wait is `storedIdleDelayMs`, read
-    /// at the keystroke, not the 300 ms that ships.
-    func scheduleIdleTyping() {
+    /// **Armed from a keystroke, not from a suggestion refresh.** A caret tap,
+    /// the keyboard coming on screen over a half-typed word, a language switch
+    /// and the host's own `textDidChange` all call `refreshSuggestions`, and
+    /// none of those is the user stopping typing. Starting the wait there
+    /// inserted a space 300 ms after a tap into someone else's word. The wait
+    /// is `storedIdleDelayMs`, read at the keystroke, not the 300 ms that ships.
+    func noteTypedInput() {
+        let prefix = currentWordPrefix
+        let typedAt = ContinuousClock.now
+        idleTypedAt = typedAt
+        scheduleIdleTyping(armedPrefix: prefix, typedAt: typedAt)
+    }
+
+    /// Cancel the pause when it can no longer apply. Does not start one: that
+    /// is `noteTypedInput`'s job, so a refresh cannot spend a pause nobody
+    /// typed into.
+    func dropIdleTypingIfStale() {
+        let prefix = currentWordPrefix
+        let armed = store.storedCompleteOnIdle || store.storedSpaceOnIdle
+        if prefix.isEmpty || !armed || !idleTypingMayRun {
+            idleTypingTask?.cancel()
+            idleTypingTask = nil
+            idleTypedAt = nil
+        }
+    }
+
+    func scheduleIdleTyping(armedPrefix: String, typedAt: ContinuousClock.Instant) {
         idleTypingTask?.cancel()
         idleTypingTask = nil
         guard store.storedCompleteOnIdle || store.storedSpaceOnIdle else { return }
-        guard !currentWordPrefix.isEmpty else { return }
+        guard !armedPrefix.isEmpty else { return }
         guard idleTypingMayRun else { return }
         let delay = store.storedIdleDelayMs
         idleTypingTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(delay))
+            do {
+                try await Task.sleep(for: .milliseconds(delay))
+            } catch {
+                return
+            }
             guard !Task.isCancelled, let self else { return }
+            // A later keystroke replaced `idleTypedAt` and armed a new wait.
+            // Cancellation should have dropped this task; this is the lock
+            // behind that door, so a swallowed cancel cannot insert a space
+            // from the first letter of the word.
+            guard self.idleTypedAt == typedAt else { return }
+            // A tap in the host field moved the caret onto a different word
+            // without a key. The pause belonged to `armedPrefix`.
+            guard SuggestionEngine.comparable(self.currentWordPrefix)
+                == SuggestionEngine.comparable(armedPrefix)
+            else { return }
             self.performIdleTyping()
         }
     }
@@ -197,10 +233,12 @@ extension KeyboardController {
                 recordCommittedWord(SuggestionEngine.wordCore(candidate.text))
                 deletedWordPrefix = nil
                 refreshSuggestions()
-                // The word is finished. Refresh would start the pause again and
-                // the next offer (hellos after hello) would rewrite it.
+                // The word is finished. A wait still running from the letters
+                // that just became this word must not fire again (`hellos`
+                // after `hello`).
                 idleTypingTask?.cancel()
                 idleTypingTask = nil
+                idleTypedAt = nil
                 reportInteraction(.suggestion)
             }
             return
@@ -236,6 +274,7 @@ extension KeyboardController {
         refiner?.cancel()
         idleTypingTask?.cancel()
         idleTypingTask = nil
+        idleTypedAt = nil
     }
 
     public func updateSupplementaryLexicon(_ words: [String]) {

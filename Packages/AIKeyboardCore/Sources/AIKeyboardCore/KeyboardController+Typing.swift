@@ -190,6 +190,7 @@ extension KeyboardController {
         target?.insertText(output.replacingOccurrences(of: "\n", with: ""))
         if shift == .on { shift = .off }
         refreshSuggestions()
+        noteTypedInput()
     }
 
     /// Marks that close a token, not the ones that live inside one.

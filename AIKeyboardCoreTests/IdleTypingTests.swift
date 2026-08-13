@@ -195,6 +195,70 @@ final class IdleTypingTests: XCTestCase {
 
         XCTAssertEqual(target.text, "hel")
     }
+
+    /// **The wait starts at the last key, not at a suggestion refresh.** Opening
+    /// the keyboard over a half-typed word, a caret tap, and the host's own
+    /// `textDidChange` all call `refreshSuggestions`, and the old pause treated
+    /// every one of those as "the user stopped typing". Space then landed 300 ms
+    /// later in a word nobody had just keyed.
+    func testIdleSpaceDoesNotFireFromARefreshAlone() async {
+        SharedStore.shared.spaceOnIdle = true
+        SharedStore.shared.idleDelayMs = 150
+        SharedStore.shared.autocorrect = false
+        let target = MockTextTarget(text: "hel")
+        let controller = KeyboardController(target: target, language: .english)
+
+        controller.refreshSuggestions()
+        try? await Task.sleep(for: .milliseconds(250))
+
+        XCTAssertEqual(
+            target.text, "hel",
+            "space on pause fired without a keystroke: \(target.text)")
+    }
+
+    /// A second letter has to restart the wait. Firing from the first letter
+    /// would insert a space in the gap between keys.
+    func testIdleSpaceDebouncesFromTheLastKeystroke() async {
+        SharedStore.shared.spaceOnIdle = true
+        SharedStore.shared.idleDelayMs = 150
+        SharedStore.shared.autocorrect = false
+        let target = MockTextTarget(text: "")
+        let controller = KeyboardController(target: target, language: .english)
+
+        controller.press(.character("h"))
+        try? await Task.sleep(for: .milliseconds(80))
+        controller.press(.character("e"))
+        try? await Task.sleep(for: .milliseconds(80))
+
+        XCTAssertEqual(
+            target.text, "he",
+            "space on pause fired from the first letter: \(target.text)")
+
+        try? await Task.sleep(for: .milliseconds(250))
+
+        XCTAssertEqual(
+            target.text, "he ",
+            "space on pause never fired after the last letter: \(target.text)")
+    }
+
+    /// A tap onto a different word is not a pause in typing this one.
+    func testIdleSpaceDoesNotFireAfterTheCaretMovesToAnotherWord() async {
+        SharedStore.shared.spaceOnIdle = true
+        SharedStore.shared.idleDelayMs = 150
+        SharedStore.shared.autocorrect = false
+        let target = MockTextTarget(text: "")
+        let controller = KeyboardController(target: target, language: .english)
+
+        controller.press(.character("h"))
+        controller.press(.character("i"))
+        target.text = "other"
+        controller.refreshSuggestions()
+        try? await Task.sleep(for: .milliseconds(250))
+
+        XCTAssertEqual(
+            target.text, "other",
+            "space on pause followed the caret onto a word that was not typed: \(target.text)")
+    }
 }
 
 /// A field that says it is a password. Local to this file: `MockTextTarget`
