@@ -57,8 +57,8 @@ final class CustomLayoutTests: XCTestCase {
         XCTAssertEqual(Set(all).count, all.count, "an action ships in two places: \(all)")
     }
 
-    /// **The punctuation key is not `text(".")`, and the difference is four marks
-    /// and a language.** A literal full stop looks identical on the cap and
+    /// **The punctuation key is not `text(".")`, and the difference is the hold
+    /// strip and a language.** A literal full stop looks identical on the cap and
     /// silently loses the long presses and the script's own mark, which is exactly
     /// the substitution somebody will make while reading the row.
     func testThePunctuationKeyKeepsItsLongPressMarks() {
@@ -66,7 +66,10 @@ final class CustomLayoutTests: XCTestCase {
             for: .english, plane: .letters, showsGlobe: true, customization: .default)[3]
         let key = row.keys.first { $0.addressableID == KeyboardLayout.punctuationKeyID }
         XCTAssertNotNil(key)
-        XCTAssertFalse(key?.alternates.isEmpty ?? true, "the four long-press marks are gone")
+        XCTAssertFalse(key?.alternates.isEmpty ?? true, "the long-press marks are gone")
+        XCTAssertEqual(
+            key?.alternates, ["!", "@", "#", ",", "?"],
+            "the strip is not ! @ # , . ? with the stop on the cap")
     }
 
     /// Arabic writes its comma and question mark differently, and the cap follows.

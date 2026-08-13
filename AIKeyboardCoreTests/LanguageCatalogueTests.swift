@@ -319,8 +319,12 @@ final class LanguageCatalogueTests: LanguageCatalogueTestFixture {
 
                 guard let key = found.first else { continue }
                 let marks = KeyboardLayout.punctuationMarks(for: language).map(String.init)
+                let popup = KeyboardLayout.punctuationPopupItems(for: language)
                 XCTAssertEqual(key.cap, .character(marks[0]))
-                XCTAssertEqual(key.alternates, Array(marks.dropFirst()))
+                XCTAssertEqual(key.alternates, popup.filter { $0 != marks[0] })
+                XCTAssertTrue(
+                    popup.contains(marks[0]),
+                    "\(language.displayName) popup is missing the mark a tap types")
             }
         }
 
@@ -330,6 +334,31 @@ final class LanguageCatalogueTests: LanguageCatalogueTestFixture {
         XCTAssertEqual(KeyboardLayout.punctuationMarks(for: .persian), ".،؟!'")
         XCTAssertEqual(KeyboardLayout.punctuationMarks(for: .greek), ".,;!'")
         XCTAssertEqual(KeyboardLayout.punctuationMarks(for: .hebrew), ".,?!'")
+    }
+
+    /// The period-key strip, left to right, matching Apple's own hold: bang,
+    /// at, hash, comma, the stop itself, question. The numbers plane keeps the
+    /// five `punctuationMarks` — putting @ and # there would collide with keys
+    /// those planes already draw.
+    ///
+    /// Asserting the exact array is what rejects the old `. , ? ! '` order, which
+    /// is also what `alternateItems` used to prepend the stop onto.
+    func testThePeriodPopupRunsBangAtHashCommaStopQuestion() {
+        XCTAssertEqual(
+            KeyboardLayout.punctuationPopupItems(for: .hebrew),
+            ["!", "@", "#", ",", ".", "?"])
+        XCTAssertEqual(
+            KeyboardLayout.punctuationPopupItems(for: .english),
+            ["!", "@", "#", ",", ".", "?"])
+        XCTAssertEqual(
+            KeyboardLayout.punctuationPopupItems(for: .arabic),
+            ["!", "@", "#", "،", ".", "؟"])
+        XCTAssertEqual(
+            KeyboardLayout.punctuationPopupItems(for: .persian),
+            ["!", "@", "#", "،", ".", "؟"])
+        XCTAssertEqual(
+            KeyboardLayout.punctuationPopupItems(for: .greek),
+            ["!", "@", "#", ",", ".", ";"])
     }
 
     /// Holding any Hebrew letter offers that letter with a geresh and with a

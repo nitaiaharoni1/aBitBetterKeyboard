@@ -349,6 +349,28 @@ final class AlternatesPopupTests: XCTestCase {
             0)
     }
 
+    /// The period strip is `! @ # , . ?`, and the stop is in the middle of it
+    /// rather than first. Index 0 is therefore bang: a lift that still treated
+    /// "home" as zero would highlight and, on a slide-threshold edge, commit the
+    /// wrong mark. Home is the stop's own index, so a finger that has not moved
+    /// keeps the period a tap already inserted.
+    func testThePeriodPopupHighlightsTheStopUntilTheFingerSlides() throws {
+        let spec = try XCTUnwrap(
+            KeyboardLayout.bottomRow(for: .hebrew, plane: .letters, showsGlobe: true).keys
+                .first { $0.addressableID == KeyboardLayout.punctuationKeyID })
+        let key = key(spec, language: .hebrew)
+        XCTAssertEqual(key.alternateItems, ["!", "@", "#", ",", ".", "?"])
+        XCTAssertEqual(key.homeAlternateIndex, 4)
+        XCTAssertEqual(key.alternateItems[key.homeAlternateIndex], ".")
+
+        let centre = CGPoint(x: 17, y: 22)
+        XCTAssertEqual(
+            key.alternateIndexOnLift(
+                popupIsVisible: true, translation: .zero, location: centre),
+            key.homeAlternateIndex,
+            "a standing finger would have swapped the period for bang")
+    }
+
     /// And the items a slide lands on are the two marks, which is the whole
     /// feature: the popup for ח is ח, ח׳, ח״.
     func testASlideAcrossTheStripReachesBothHebrewMarks() throws {

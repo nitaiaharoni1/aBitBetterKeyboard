@@ -74,7 +74,9 @@ extension KeyView {
                 // to correct it with. Nothing is drawn from this until the popup
                 // arms — see `alternateItem`.
                 guard hasAlternates else { return }
-                selectedAlternate = hasSlid(value.translation) ? alternateIndex(at: value.location) : 0
+                selectedAlternate =
+                    hasSlid(value.translation)
+                    ? alternateIndex(at: value.location) : homeAlternateIndex
             }
             .onEnded { value in
                 // Not just a mirror of the `onChanged` guard: `runsOnLift` means
@@ -99,10 +101,11 @@ extension KeyView {
                     translation: value.translation,
                     location: value.location)
                 endPress()
-                // Index 0 is what the key would have done on its own — the
-                // character it already inserted, or the default tone it has not run
-                // yet — so lifting on it means the long press changed nothing.
-                guard picked > 0, picked < alternateItems.count else {
+                // Home is what the key would have done on its own — the character
+                // it already inserted, or the default tone it has not run yet —
+                // so lifting on it means the long press changed nothing. For a
+                // letter that is index 0; for the period strip it is the stop.
+                guard picked != homeAlternateIndex, picked < alternateItems.count else {
                     // The tap this key deferred. See `runsOnLift`.
                     if runsOnLift { onPress(spec.cap, unitPoint(value.startLocation)) }
                     return
@@ -139,7 +142,7 @@ extension KeyView {
         translation: CGSize,
         location: CGPoint
     ) -> Int {
-        guard popupIsVisible, hasSlid(translation) else { return 0 }
+        guard popupIsVisible, hasSlid(translation) else { return homeAlternateIndex }
         return alternateIndex(at: location)
     }
 
@@ -192,7 +195,7 @@ extension KeyView {
         // before the popup arms keeps what it slid to. `@State` outlives the
         // press, so without a reset somewhere the next press on this key would
         // arm on whatever the last one chose.
-        selectedAlternate = 0
+        selectedAlternate = homeAlternateIndex
         alternatesTask?.cancel()
         alternatesTask = Task { @MainActor in
             // Never zero: opening on finger-down flashes the popup on every
