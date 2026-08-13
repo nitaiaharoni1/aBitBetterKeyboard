@@ -137,7 +137,8 @@ extension KeyboardController {
             isPending: pending,
             step: step)
         // Finger-down tracking stays `quick` so the balloon stays glued to the
-        // thumb; the landing uses `swipe` so it shares a beat with the keys.
+        // thumb; the landing uses `swipe` so it shares the same 80ms beat as
+        // the keys. Both tokens are that beat — the names say which change.
         let motion = pending ? Theme.Motion.quick : Theme.Motion.swipe
         withAnimation(motion) { languageSwitchIndication = indication }
 
