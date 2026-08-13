@@ -57,11 +57,16 @@ extension Theme {
         /// row, or a taller banner, costs a conversation switch on every screen
         /// read.
         public static let bannerHeight: CGFloat = 69
-        public static let keyHeight: CGFloat = 40
-        public static let rowSpacing: CGFloat = 12
-        public static let keySpacing: CGFloat = 6
+        public static let keyHeight: CGFloat = 41
+        public static let rowSpacing: CGFloat = 11
+        /// Gap between keys in a row. Tightened from 6 so the leftover width
+        /// lands in the caps (~0.9pt each on a ten-key 402pt row). Do not drop
+        /// further without re-checking
+        /// `LanguageCatalogueTests.testNoRowOverflowsTheKeyboard` on 320pt —
+        /// Bulgarian's thirteen columns are the ones that run out first.
+        public static let keySpacing: CGFloat = 5
         public static let sideInset: CGFloat = 3
-        public static let topInset: CGFloat = 8
+        public static let topInset: CGFloat = 7
         public static let bottomInset: CGFloat = 4
 
         /// Height of the four key rows plus their insets, at the shipped size.
