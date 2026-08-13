@@ -32,6 +32,17 @@ extension KeyboardController {
         return prompt.offersPicker ? prompt : nil
     }
 
+    /// The Reply-key overlay puts "Screen context is off" on the strip as
+    /// fallback, in case Control Center never appears over the keyboard.
+    /// `BannerState.resolve` prefers `block` over a reading, so once a session
+    /// is actually live that sentence is a lie sitting on top of a Reply that
+    /// would generate.
+    func dropStaleReplyBroadcastRefusal() {
+        guard screenContext.isLive else { return }
+        guard block?.action == .reply, block?.remedy == .broadcastPicker else { return }
+        block = nil
+    }
+
     /// The ending on the record, if the last thing that happened was one.
     ///
     /// `.off` is not an ending: it is the ordinary state of a phone that has never

@@ -208,6 +208,47 @@ final class SparkleReachabilityTests: XCTestCase {
             "the fallback strip has to say which refusal this is")
     }
 
+    /// The overlay tap always refuses, because whether Control Center appears
+    /// over a keyboard is unmeasured. The session becoming live is what proves
+    /// the picker worked, and `BannerState.resolve` prefers `block` over a
+    /// reading, so leaving the refusal up would keep printing "Screen context
+    /// is off" on a Reply that is about to generate.
+    @MainActor
+    func testTheBroadcastRefusalLeavesOnceASessionIsLive() {
+        let restore = preparePickerReadyStore()
+        defer { restore() }
+
+        let controller = KeyboardController(target: MockTextTarget(text: ""))
+        controller.screenContext = .off
+        controller.screenContextSource = .none
+        controller.acknowledgeReplyBroadcastTap()
+        XCTAssertEqual(
+            controller.block?.remedy, .broadcastPicker,
+            "the state under test is the fallback strip")
+
+        controller.screenContext = .starting
+        XCTAssertNil(
+            controller.block,
+            "Screen context is off is still on the strip after the session started")
+        XCTAssertFalse(controller.showsActionBanner)
+    }
+
+    /// A live session only retires the "please start a broadcast" sentence.
+    /// Full Access and a dead backend are refusals a picker cannot fix, and
+    /// `BannerState.resolve` still has to print them.
+    @MainActor
+    func testALiveSessionDoesNotClearARefusalThePickerCouldNotFix() {
+        let controller = KeyboardController(target: MockTextTarget(text: ""))
+        controller.refuse(
+            .init(
+                action: .reply, title: "Needs Full Access", detail: "Turn it on.",
+                remedy: .none))
+        controller.screenContext = .watching
+        XCTAssertEqual(
+            controller.block?.remedy, BannerState.Block.Remedy.none,
+            "a live session cleared a refusal starting a broadcast cannot fix")
+    }
+
     /// Typed token so `ScreenContextPrompt.offersPicker` can be true; restored
     /// because `SharedStore.shared` is process-wide.
     @MainActor

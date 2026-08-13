@@ -129,7 +129,9 @@ public final class KeyboardController: ObservableObject {
     @Published public internal(set) var documentHasText = false
 
     /// Mirrored from the capture session so views can observe one object.
-    @Published public var screenContext: ScreenContextState = .off
+    @Published public var screenContext: ScreenContextState = .off {
+        didSet { dropStaleReplyBroadcastRefusal() }
+    }
 
     /// Also mirrored, and separately, because the two move independently: the
     /// scripted sample handing over to a real session changes what the strip may
