@@ -69,4 +69,25 @@ final class FeedbackSettingsTests: XCTestCase {
         XCTAssertTrue(SharedStore.shared.storedKeySounds)
         XCTAssertTrue(SharedStore.shared.storedHaptics)
     }
+
+    /// The mock damped every letter to 0.6 of `.light`. Asking only "is there a
+    /// generator" would pass against that build; these two numbers are what
+    /// changed.
+    func testLetterKeysHitHarderThanTheMockDid() {
+        XCTAssertNotEqual(
+            Feedback.keyPressStyle, .light,
+            "light at 0.6 was the mock; a letter has to land as a click")
+        XCTAssertEqual(Feedback.keyPressStyle, .rigid)
+        XCTAssertGreaterThan(
+            Feedback.keyPressIntensity, 0.6,
+            "the mock damped every letter to 0.6 of light")
+        XCTAssertEqual(Feedback.keyPressIntensity, 1.0)
+    }
+
+    /// Reply / Fix / Dictate have to stay a step above a character, or the
+    /// stronger letter click swallows them.
+    func testActionsLandHarderThanLetters() {
+        XCTAssertEqual(Feedback.actionPressStyle, .heavy)
+        XCTAssertNotEqual(Feedback.actionPressStyle, Feedback.keyPressStyle)
+    }
 }

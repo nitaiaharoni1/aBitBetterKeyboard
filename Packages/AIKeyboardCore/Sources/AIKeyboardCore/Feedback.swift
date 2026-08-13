@@ -13,21 +13,32 @@ public enum Feedback {
     public static var hapticsEnabled: Bool { SharedStore.shared.storedHaptics }
     public static var soundEnabled: Bool { SharedStore.shared.storedKeySounds }
 
-    private static let light = UIImpactFeedbackGenerator(style: .light)
-    private static let medium = UIImpactFeedbackGenerator(style: .medium)
+    /// Letter keys. `.light` at 0.6 was the mock and reads as a miss; `.rigid`
+    /// at full intensity is a defined click without `.heavy`'s thud on every
+    /// character.
+    static let keyPressStyle: UIImpactFeedbackGenerator.FeedbackStyle = .rigid
+    static let keyPressIntensity: CGFloat = 1.0
+
+    /// Action-row confirmation. A heavier collision than a letter so Reply /
+    /// Fix / Dictate land harder than a character.
+    static let actionPressStyle: UIImpactFeedbackGenerator.FeedbackStyle = .heavy
+
+    private static let key = UIImpactFeedbackGenerator(style: keyPressStyle)
+    private static let action = UIImpactFeedbackGenerator(style: actionPressStyle)
     private static let selection = UISelectionFeedbackGenerator()
     private static let notification = UINotificationFeedbackGenerator()
 
     /// Call before a burst of taps so the Taptic engine is warm and the first
     /// tap is not late.
     public static func prepare() {
-        light.prepare()
+        key.prepare()
+        action.prepare()
         selection.prepare()
     }
 
     public static func keyPress() {
         guard hapticsEnabled else { return }
-        light.impactOccurred(intensity: 0.6)
+        key.impactOccurred(intensity: keyPressIntensity)
     }
 
     public static func modifierPress() {
@@ -37,7 +48,7 @@ public enum Feedback {
 
     public static func actionPress() {
         guard hapticsEnabled else { return }
-        medium.impactOccurred()
+        action.impactOccurred()
     }
 
     public static func success() {
