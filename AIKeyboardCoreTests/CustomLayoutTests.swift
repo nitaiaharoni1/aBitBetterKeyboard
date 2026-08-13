@@ -293,6 +293,100 @@ final class CustomLayoutTests: XCTestCase {
 
     // MARK: Height
 
+    /// The space bar is a thumb target; the digits are not. Three points move
+    /// from the numbers row onto space, and they must move as a pair: growing
+    /// space alone would cross the 368 pt fingerprint cliff, shrinking digits
+    /// alone would leave a gap above the space bar.
+    ///
+    /// **The equal-height keyboard is the bug these assert against.** Comparing
+    /// each row to `keyHeight ± rowHeightBias` is true of a zero bias as well,
+    /// so the less/greater checks are what fail when nothing moved.
+    func testTheNumbersRowPaysForTheTallerSpaceRow() throws {
+        let layout = KeyboardCustomization.default
+        let letters = KeyboardLayout.rows(
+            for: .english, plane: .letters, showsGlobe: false, customization: layout)
+        let numbers = KeyboardLayout.rows(
+            for: .english, plane: .numbers, showsGlobe: false, customization: layout)
+
+        let letterRow = try XCTUnwrap(letters.first { $0.id == 0 })
+        let letterSpace = try XCTUnwrap(
+            letters.first { $0.id == KeyboardLayout.RowID.bottom })
+        let numberRow = try XCTUnwrap(numbers.first { $0.id == 0 })
+        let numberSpace = try XCTUnwrap(
+            numbers.first { $0.id == KeyboardLayout.RowID.bottom })
+        let brackets = try XCTUnwrap(numbers.first { $0.id == 1 })
+
+        let letterHeight = letterRow.drawnHeight(
+            keyHeight: Theme.Metrics.keyHeight, rowSpacing: Theme.Metrics.rowSpacing)
+        let fitted = slidingKeyHeight(for: numbers, layout: layout, plane: .numbers)
+        let numberHeight = numberRow.drawnHeight(
+            keyHeight: fitted, rowSpacing: Theme.Metrics.rowSpacing)
+        let bracketHeight = brackets.drawnHeight(
+            keyHeight: fitted, rowSpacing: Theme.Metrics.rowSpacing)
+        let spaceOnLetters = letterSpace.drawnHeight(
+            keyHeight: Theme.Metrics.keyHeight, rowSpacing: Theme.Metrics.rowSpacing)
+        let spaceOnNumbers = numberSpace.drawnHeight(
+            keyHeight: Theme.Metrics.keyHeight, rowSpacing: Theme.Metrics.rowSpacing)
+
+        XCTAssertGreaterThan(
+            Theme.Metrics.rowHeightBias, 0,
+            "a zero bias is the old equal-height keyboard")
+        XCTAssertEqual(letterHeight, Theme.Metrics.keyHeight, accuracy: 0.001)
+        XCTAssertEqual(spaceOnLetters, Theme.Metrics.keyHeight, accuracy: 0.001)
+        XCTAssertLessThan(numberHeight, letterHeight)
+        XCTAssertLessThan(numberHeight, bracketHeight)
+        XCTAssertGreaterThan(spaceOnNumbers, spaceOnLetters)
+        XCTAssertEqual(
+            Theme.Metrics.keyAreaHeight(for: layout),
+            drawnKeyArea(layout, plane: .numbers), accuracy: 0.001,
+            "the transfer grew or shrank the numbers plane")
+        XCTAssertEqual(
+            Theme.Metrics.keyAreaHeight(for: layout),
+            drawnKeyArea(layout, plane: .symbols), accuracy: 0.001,
+            "tapping #+= changed the key-area height")
+    }
+
+    /// Same pair on the letters plane once the optional number row is on, so
+    /// turning it on cannot change the height of anything already there.
+    func testTheOptionalNumberRowPaysForTheTallerSpaceRow() throws {
+        var layout = KeyboardCustomization.default
+        layout.showsNumberRow = true
+        let rows = KeyboardLayout.rows(
+            for: .english, plane: .letters, showsGlobe: false, customization: layout)
+        let numbers = try XCTUnwrap(
+            rows.first { $0.id == KeyboardLayout.RowID.numbers })
+        let space = try XCTUnwrap(
+            rows.first { $0.id == KeyboardLayout.RowID.bottom })
+        XCTAssertLessThan(numbers.heightBias, 0)
+        XCTAssertGreaterThan(space.heightBias, 0)
+        XCTAssertEqual(numbers.heightBias + space.heightBias, 0, accuracy: 0.001)
+    }
+
+    /// The host asks for `keyAreaHeight`, and `KeyboardView` pins the grid to
+    /// that. Biases must cancel so the drawn letters grid still fills that frame;
+    /// 123 / `#+=` must fit in it too.
+    func testTheHostHeightMatchesWhatTheGridDraws() throws {
+        let layouts = [
+            KeyboardCustomization.default,
+            try XCTUnwrap(LayoutPreset.named("power")).customization,
+            try XCTUnwrap(LayoutPreset.named("compact")).customization,
+        ]
+        for layout in layouts {
+            XCTAssertEqual(
+                Theme.Metrics.keyAreaHeight(for: layout),
+                drawnKeyArea(layout, plane: .letters), accuracy: 0.001,
+                "row height biases no longer cancel; the host would clip or grow")
+        }
+        XCTAssertEqual(
+            Theme.Metrics.keyAreaHeight(for: .default),
+            drawnKeyArea(.default, plane: .numbers), accuracy: 0.001,
+            "123 does not fit in the letters-plane host")
+        XCTAssertEqual(
+            Theme.Metrics.keyAreaHeight(for: .default),
+            drawnKeyArea(.default, plane: .symbols), accuracy: 0.001,
+            "#+= does not fit in the letters-plane host")
+    }
+
     func testAFourRowGridReproducesTheShippedHeight() {
         var fourRows = KeyboardCustomization.default
         fourRows.showsNumberRow = false
@@ -411,6 +505,39 @@ final class CustomLayoutTests: XCTestCase {
     func testTheConstantSpellingsStillAnswerForTheDefault() {
         XCTAssertEqual(Theme.Metrics.keyAreaHeight, Theme.Metrics.keyAreaHeight(for: .default))
         XCTAssertEqual(Theme.Metrics.totalHeight(), Theme.Metrics.totalHeight(for: .default))
+    }
+
+    /// How tall a sliding key is on this plane, matching `KeyboardView+Keys`.
+    private func slidingKeyHeight(
+        for rows: [KeyRow], layout: KeyboardCustomization, plane: KeyboardPlane
+    ) -> CGFloat {
+        let sliding = rows.filter {
+            $0.id != KeyboardLayout.RowID.cursor && $0.id != KeyboardLayout.RowID.bottom
+        }
+        guard plane != .letters else { return layout.geometry.keyHeight }
+        return Theme.Metrics.fittedKeyHeight(
+            slidingRows: sliding.count,
+            referenceRows: 3 + (layout.showsNumberRow ? 1 : 0),
+            keyHeight: layout.geometry.keyHeight,
+            rowSpacing: layout.geometry.rowSpacing)
+    }
+
+    /// The whole key area a plane paints, including the action row and insets —
+    /// the number `KeyboardView` pins its grid to.
+    private func drawnKeyArea(_ layout: KeyboardCustomization, plane: KeyboardPlane) -> CGFloat {
+        let rows = KeyboardLayout.rows(
+            for: .english, plane: plane, showsGlobe: false, customization: layout)
+        let spacing = layout.geometry.rowSpacing
+        let slidingBase = slidingKeyHeight(for: rows, layout: layout, plane: plane)
+        let keys = rows.reduce(CGFloat(0)) { total, row in
+            let base =
+                (row.id == KeyboardLayout.RowID.bottom
+                    || row.id == KeyboardLayout.RowID.cursor)
+                ? layout.geometry.keyHeight : slidingBase
+            return total + row.drawnHeight(keyHeight: base, rowSpacing: spacing)
+        }
+        return keys + spacing * CGFloat(max(0, rows.count - 1))
+            + Theme.Metrics.topInset + Theme.Metrics.bottomInset
     }
 }
 

@@ -11,7 +11,9 @@ extension KeyboardLayout {
     /// why both planes grew a row rather than trading characters.
     static func numbers(for language: KeyboardLanguage) -> [KeyRow] {
         [
-            KeyRow(id: 0, keys: chars(language.digits)),
+            KeyRow(
+                id: 0, keys: chars(language.digits),
+                heightBias: -Theme.Metrics.rowHeightBias),
             KeyRow(id: 1, keys: chars(Self.brackets)),
             KeyRow(
                 id: RowID.extraSymbols,
@@ -34,7 +36,9 @@ extension KeyboardLayout {
         // so a language that is not English does not lose them.
         let others = Self.currencyExtras.filter { $0 != language.currency }.prefix(3)
         return [
-            KeyRow(id: 0, keys: chars(language.digits)),
+            KeyRow(
+                id: 0, keys: chars(language.digits),
+                heightBias: -Theme.Metrics.rowHeightBias),
             KeyRow(id: 1, keys: chars(Self.brackets)),
             KeyRow(
                 id: RowID.extraSymbols,
@@ -173,7 +177,10 @@ extension KeyboardLayout {
         keys.append(punctuationKey(for: language))
         // Match Backspace in the row above. Both are trailing function keys.
         keys.append(KeySpec(.ret, width: .unit(functionKeyUnits)))
-        return KeyRow(id: 3, keys: keys)
+        return KeyRow(
+            id: 3, keys: keys,
+            heightBias: Theme.Metrics.spaceRowHeightBias(
+                plane: plane, showsNumberRow: false))
     }
 
     /// The bottom row's punctuation key: a full stop on the cap, the other four

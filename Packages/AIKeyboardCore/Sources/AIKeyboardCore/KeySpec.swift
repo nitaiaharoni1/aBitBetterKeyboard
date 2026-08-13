@@ -210,10 +210,35 @@ public struct KeyRow: Identifiable, Sendable {
     /// keyboard's height. See `GroupedKeys.Row`.
     public let heightUnits: Int
 
-    public init(id: Int, keys: [KeySpec], sideInsetUnits: CGFloat = 0, heightUnits: Int = 1) {
+    /// Points added to this row's drawn height, on top of `heightUnits`.
+    ///
+    /// **The numbers row and the space row are a pair, and they cancel.** Three
+    /// points move off the digits (and off the matching top row of `#+=`) onto
+    /// the space bar. Either bias alone would grow or shrink the keyboard; the
+    /// two together leave the 368 pt fingerprint cliff where it is. Letter rows
+    /// stay at zero. See `Theme.Metrics.rowHeightBias`.
+    public let heightBias: CGFloat
+
+    public init(
+        id: Int, keys: [KeySpec], sideInsetUnits: CGFloat = 0, heightUnits: Int = 1,
+        heightBias: CGFloat = 0
+    ) {
         self.id = id
         self.keys = keys
         self.sideInsetUnits = sideInsetUnits
         self.heightUnits = max(1, heightUnits)
+        self.heightBias = heightBias
+    }
+
+    /// How tall this row is drawn, given the layout's key height and row gap.
+    ///
+    /// `heightUnits` is the grouped-band multiplier; `heightBias` is the few
+    /// points the numbers row gives the space row. Neither may change the
+    /// keyboard's total: units replace the rows they swallowed, and the two
+    /// biases cancel.
+    public func drawnHeight(keyHeight: CGFloat, rowSpacing: CGFloat) -> CGFloat {
+        keyHeight * CGFloat(heightUnits)
+            + rowSpacing * CGFloat(max(0, heightUnits - 1))
+            + heightBias
     }
 }

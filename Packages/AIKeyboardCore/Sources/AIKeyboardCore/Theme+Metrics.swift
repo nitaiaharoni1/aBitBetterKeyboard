@@ -58,6 +58,23 @@ extension Theme {
         /// read.
         public static let bannerHeight: CGFloat = 69
         public static let keyHeight: CGFloat = 41
+        /// Points the numbers row gives the space row.
+        ///
+        /// **A transfer, not a growth.** The shipped total sits on the 368 pt
+        /// fingerprint cliff, so the space bar can only get taller if another row
+        /// in the same grid gets shorter by the same amount. Applied when the
+        /// digits are on screen: the optional number row, and the top row of the
+        /// 123 / `#+=` planes. Letter rows stay at `keyHeight`.
+        public static let rowHeightBias: CGFloat = 3
+
+        /// The space row's share of `rowHeightBias`, or zero when there is no
+        /// numbers row in this grid to pay for it.
+        public static func spaceRowHeightBias(
+            plane: KeyboardPlane, showsNumberRow: Bool
+        ) -> CGFloat {
+            (plane != .letters || showsNumberRow) ? rowHeightBias : 0
+        }
+
         public static let rowSpacing: CGFloat = 11
         /// Gap between keys in a row. Tightened from 6 so the leftover width
         /// lands in the caps (~0.9pt each on a ten-key 402pt row). Do not drop
@@ -84,7 +101,9 @@ extension Theme {
         /// * 3` — which was right for exactly as long as the grid could only be
         /// three letter rows and a bottom row. With an optional number row and an
         /// optional cursor row it is four, five or six, and the key height is no
-        /// longer a constant either.
+        /// longer a constant either. The numbers/space `rowHeightBias` pair does
+        /// not appear here because it cancels;
+        /// `testTheHostHeightMatchesWhatTheGridDraws` fails if it stops.
         public static func keyAreaHeight(for layout: KeyboardCustomization) -> CGFloat {
             let rows = CGFloat(layout.rowCount)
             return layout.geometry.keyHeight * rows
