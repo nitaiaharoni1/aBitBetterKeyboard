@@ -96,22 +96,24 @@ final class CustomLayoutCompilerTests: XCTestCase {
             rows.first?.keys.compactMap(\.characterValue).joined(), KeyboardLanguage.arabic.digits)
     }
 
-    /// The digits are already the top row of the numbers plane; drawing them twice
-    /// is not a feature.
-    func testTheNumberRowIsNotDrawnOnTheNumbersPlane() {
-        var layout = KeyboardCustomization.default
-        layout.showsNumberRow = false
-        let without = KeyboardLayout.rows(
-            for: .english, plane: .numbers, showsGlobe: true, customization: layout
-        ).count
-        layout.showsNumberRow = true
-        let with = KeyboardLayout.rows(
-            for: .english, plane: .numbers, showsGlobe: true, customization: layout
-        ).count
-        // The digits are already the top row here; drawing them twice is not a
-        // feature. Compared rather than counted, because the default also ships an
-        // action row and an absolute count pins two decisions at once.
-        XCTAssertEqual(with, without)
+    /// The digits are already the top row of the numbers and symbols planes;
+    /// drawing them twice is not a feature.
+    func testTheNumberRowIsNotDrawnOnTheNumbersOrSymbolsPlane() {
+        for plane in [KeyboardPlane.numbers, .symbols] {
+            var layout = KeyboardCustomization.default
+            layout.showsNumberRow = false
+            let without = KeyboardLayout.rows(
+                for: .english, plane: plane, showsGlobe: true, customization: layout
+            ).count
+            layout.showsNumberRow = true
+            let with = KeyboardLayout.rows(
+                for: .english, plane: plane, showsGlobe: true, customization: layout
+            ).count
+            // The digits are already the top row here; drawing them twice is not a
+            // feature. Compared rather than counted, because the default also ships
+            // an action row and an absolute count pins two decisions at once.
+            XCTAssertEqual(with, without, "\(plane)")
+        }
     }
 
     /// The compiler still appends this row last. `KeyboardView` draws it first,

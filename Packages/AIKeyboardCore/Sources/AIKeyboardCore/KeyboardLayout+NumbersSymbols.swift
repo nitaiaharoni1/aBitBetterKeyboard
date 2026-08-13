@@ -5,46 +5,75 @@ extension KeyboardLayout {
 
     // MARK: Numbers and symbols
 
+    /// SwiftKey's four-row numbers page: digits, brackets, connectors, then the
+    /// `#+=` punctuation row. The three-row iOS page this replaced hid the
+    /// brackets behind `#+=`; putting them here is the whole change, and it is
+    /// why both planes grew a row rather than trading characters.
     static func numbers(for language: KeyboardLanguage) -> [KeyRow] {
         [
             KeyRow(id: 0, keys: chars(language.digits)),
+            KeyRow(id: 1, keys: chars(Self.brackets)),
             KeyRow(
-                id: 1,
+                id: RowID.extraSymbols,
                 keys: chars(connectors(for: language))
                     + [KeySpec(.character(language.currency))]
                     + chars("&@\"", alternates: quoteAlternates)),
-            KeyRow(
-                id: 2,
-                keys: [KeySpec(.plane(.symbols, label: "#+="), width: .pinned)]
-                    + punctuation(for: language)
-                    + [KeySpec(.backspace, width: .pinned)],
-                sideInsetUnits: 0
-            )
+            punctuationRow(
+                plane: .symbols, label: "#+=", language: language)
         ]
     }
 
+    /// SwiftKey's four-row symbols page: the same digits and brackets as
+    /// numbers, then the remaining marks. Digits stay on this page so `#+=`
+    /// does not drop a row the thumb had just learned.
     static func symbols(for language: KeyboardLanguage) -> [KeyRow] {
-        // The language's own currency leads, and the three that are not it follow,
-        // so no row ever carries the same sign twice — two keys with one id is a
-        // `ForEach` with duplicate identity.
-        let others = ["$", "€", "¥", "•"].filter { $0 != language.currency }.prefix(3)
+        // SwiftKey's extras are $ € £ ·. The language's own currency leads, and
+        // the three that are not it follow, so no row ever carries the same sign
+        // twice — two keys with one id is a `ForEach` with duplicate identity.
+        // ¥ and • used to sit where £ and · sit now; they ride as long presses
+        // so a language that is not English does not lose them.
+        let others = Self.currencyExtras.filter { $0 != language.currency }.prefix(3)
         return [
-            KeyRow(id: 0, keys: chars("[]{}#%^*+=")),
+            KeyRow(id: 0, keys: chars(language.digits)),
+            KeyRow(id: 1, keys: chars(Self.brackets)),
             KeyRow(
-                id: 1,
-                keys: chars("_\\|~<>") + [KeySpec(.character(language.currency))]
-                    + others.map { KeySpec(.character($0)) }),
-            KeyRow(
-                id: 2,
-                keys: [KeySpec(.plane(.numbers, label: "123"), width: .pinned)]
-                    + punctuation(for: language)
-                    + [KeySpec(.backspace, width: .pinned)],
-                sideInsetUnits: 0
-            )
+                id: RowID.extraSymbols,
+                keys: chars("_\\|~<>")
+                    + [currencyKey(language.currency)]
+                    + others.map { currencyKey($0) }),
+            punctuationRow(
+                plane: .numbers, label: "123", language: language)
         ]
     }
 
-    /// The run of connectors that opens the numbers plane's middle row.
+    /// The brackets row SwiftKey prints on both symbol pages.
+    private static let brackets = "[]{}#%^*+="
+
+    /// SwiftKey's four trailing marks on the symbols page, after `_\\|~<>`.
+    private static let currencyExtras = ["$", "€", "£", "·"]
+
+    /// The two marks this keyboard used to print where SwiftKey prints £ and ·.
+    private static let currencyExtraAlternates: [String: [String]] = [
+        "£": ["¥"], "·": ["•"]
+    ]
+
+    private static func currencyKey(_ mark: String) -> KeySpec {
+        KeySpec(.character(mark), alternates: currencyExtraAlternates[mark] ?? [])
+    }
+
+    private static func punctuationRow(
+        plane: KeyboardPlane, label: String, language: KeyboardLanguage
+    ) -> KeyRow {
+        KeyRow(
+            id: 2,
+            keys: [KeySpec(.plane(plane, label: label), width: .pinned)]
+                + punctuation(for: language)
+                + [KeySpec(.backspace, width: .pinned)],
+            sideInsetUnits: 0
+        )
+    }
+
+    /// The run of connectors on the numbers plane's third row.
     ///
     /// The semicolon is the one that moves. Greek writes its question mark as a
     /// semicolon, so its semicolon is the ano teleia — and leaving `;` in both
