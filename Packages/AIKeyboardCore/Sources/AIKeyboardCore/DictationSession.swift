@@ -49,6 +49,10 @@ public final class DictationSession: ObservableObject {
 
     @Published public private(set) var availability: Availability = .noSession(.notEnded)
     @Published public private(set) var level: Double = 0
+    /// Bumped on every poll so the keyboard's waveform keeps a sample even when
+    /// loudness has not changed. `@Published` on `level` is Equatable and drops
+    /// a held note; three identical bars and a pause is what that looked like.
+    @Published public private(set) var levelTick: UInt64 = 0
     @Published public private(set) var transcript = ""
     /// The transcript so far for the utterance this keyboard has open, or
     /// empty when there is none. Replaced wholesale each time a better one
@@ -225,12 +229,14 @@ public final class DictationSession: ObservableObject {
             availability = .noSession(ended)
             level = 0
             remainingSeconds = nil
+            levelTick &+= 1
             report()
             return
         }
 
         remainingSeconds = state.remainingSeconds(now: now)
         level = state.level
+        levelTick &+= 1
 
         switch state.phase {
         case .idle:

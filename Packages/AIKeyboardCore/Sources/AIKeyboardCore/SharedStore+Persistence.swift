@@ -9,6 +9,7 @@ extension SharedStore {
     public func resetToDefaults() {
         for key in [
             Key.hasCompletedOnboarding, Key.enabledLanguages, Key.autocorrect,
+            Key.completeOnIdle, Key.spaceOnIdle, Key.idleDelayMs,
             Key.autocapitalise, Key.predictions, Key.haptics, Key.keySounds,
             Key.learnsFromTyping,
             Key.defaultTone, Key.customToneInstruction, Key.dictationSessionMinutes,
@@ -36,6 +37,9 @@ extension SharedStore {
         brandPalette = .orange
         enabledLanguages = Self.shippedDefaultLanguages
         autocorrect = true
+        completeOnIdle = false
+        spaceOnIdle = false
+        idleDelayMs = 300
         autocapitalise = true
         predictions = true
         learnsFromTyping = true
@@ -79,6 +83,14 @@ extension SharedStore {
         if defaults.object(forKey: Key.autocorrect) != nil {
             autocorrect = defaults.bool(forKey: Key.autocorrect)
         }
+        if defaults.object(forKey: Key.completeOnIdle) != nil {
+            completeOnIdle = defaults.bool(forKey: Key.completeOnIdle)
+        }
+        if defaults.object(forKey: Key.spaceOnIdle) != nil {
+            spaceOnIdle = defaults.bool(forKey: Key.spaceOnIdle)
+        }
+        let delay = defaults.integer(forKey: Key.idleDelayMs)
+        if Self.idleDelayChoices.contains(delay) { idleDelayMs = delay }
         if defaults.object(forKey: Key.autocapitalise) != nil {
             autocapitalise = defaults.bool(forKey: Key.autocapitalise)
         }

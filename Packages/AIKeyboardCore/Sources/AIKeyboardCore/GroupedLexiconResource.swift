@@ -9,19 +9,10 @@ import os
 /// `JSONDecoder` over the same data builds an array of boxed strings and costs
 /// several times as much on a keyboard's first keystroke.
 ///
-/// ## It is absent on a fresh checkout, on purpose
-///
-/// `Scripts/generate-grouped-lexicon.py` writes it from `wordfreq`, whose *data*
-/// is drawn from corpora with mixed and partly unstated licences even though its
-/// code is Apache 2.0. So the generated files are **gitignored and may not ship**
-/// until a licence is settled, exactly as `Bar/grouped/README.md` says of the
-/// measurement lexicons.
-///
-/// When it is missing, `GroupedDecoder` falls back to `SeedLanguageModel` and
-/// reports `.seedOnly`. That is a few hundred words per language: it decodes
-/// `the`, `שלום` and whatever the user has taught the keyboard, and reaches
-/// almost nothing else. **Grouped keys are not shippable in that state**, which
-/// is why the state is reported rather than inferred.
+/// Built by `Scripts/generate-grouped-lexicon.py` from the Leipzig Corpora
+/// Collection (CC BY 4.0). Attribution is `GroupedLexicon-NOTICE.txt`. When a
+/// list is missing, `GroupedDecoder` falls back to `SeedLanguageModel` and
+/// reports `.seedOnly`.
 enum GroupedLexiconResource {
 
     static func words(for language: KeyboardLanguage) -> [String] {

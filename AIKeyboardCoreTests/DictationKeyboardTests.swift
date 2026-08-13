@@ -191,10 +191,12 @@ final class DictationKeyboardTests: XCTestCase {
         XCTAssertEqual(target.text, "Hi, I'll send it tomorrow")
     }
 
-    /// **The gate's refusal has to reach the user, and must not reach the
-    /// document.** This is the case the whole `SpeechGate` exists for: the model
-    /// would have invented a sentence here.
-    func testARecordingWithNoSpeechInItInsertsNothingAndSaysWhy() throws {
+    /// **The gate's refusal must not reach the document, and it must not raise a
+    /// strip either.** This is the case the whole `SpeechGate` exists for: the
+    /// model would have invented a sentence here. "Nothing to insert" used to
+    /// say why; a second tap is the recovery now, and a 69pt row for it was the
+    /// banner coming back for a case the microphone key already settled.
+    func testARecordingWithNoSpeechInItInsertsNothingAndShowsNoBanner() throws {
         let id = beginLiveSession()
         session.poll()
         controller.startDictation()
@@ -209,41 +211,21 @@ final class DictationKeyboardTests: XCTestCase {
         session.poll()
 
         XCTAssertEqual(target.text, "")
-        XCTAssertEqual(controller.dictationFailure, SpeechGate.Verdict.silent.explanation)
-        // **The banner has to say so, and the panel is no longer where it says
-        // it.** A live session now reports above the suggestion bar so the keys
-        // stay usable while speaking, which means the failed-recording sentence
-        // moved there too. Asserting `dictationFailure` alone would not reject the
-        // broken version: the property was always set correctly, and the defect
-        // this guards against is nothing being *shown*.
         XCTAssertEqual(
-            BannerState.resolve(
-                isDictating: controller.isDictating,
-                dictationIsLive: controller.dictationAvailability.isLive,
-                dictationTranscript: controller.dictationTranscript,
-                dictationFailure: controller.dictationFailure,
-                isWorking: controller.isWorking,
-                runningAction: controller.runningAction,
-                error: controller.aiError,
-                block: controller.block,
-                options: controller.bannerOptions,
-                index: controller.bannerIndex,
-                screenContext: nil,
-                idleHint: BannerState.defaultHint),
-            .dictationFailed(SpeechGate.Verdict.silent.explanation),
-            "the banner has to say why nothing was inserted")
+            controller.dictationFailure, "",
+            "a silent take still raised Nothing to insert")
+        XCTAssertFalse(
+            controller.bannerState.isPresented,
+            "the banner has to stay down: a silent take is a second tap, not a strip")
 
-        // And the way out has to be one tap, on the button already under the
-        // thumb: `SpeechGate` is tuned to refuse rather than risk an invented
-        // sentence, so refusals are a normal part of using this.
-        XCTAssertEqual(controller.dictationAvailability, .ready)
+        // Try again still works: `refresh()` re-reads the live session the
+        // sink stopped watching.
         controller.startDictation()
         XCTAssertTrue(controller.isDictating, "Try again did not reopen an utterance")
-        XCTAssertEqual(controller.dictationFailure, "")
         XCTAssertEqual(recorder.request()?.utterance, utterance + 1)
     }
 
-    func testAFailedTranscriptionInsertsNothingAndSaysWhy() throws {
+    func testAFailedTranscriptionInsertsNothingAndShowsNoBanner() throws {
         let id = beginLiveSession()
         session.poll()
         controller.startDictation()
@@ -258,7 +240,8 @@ final class DictationKeyboardTests: XCTestCase {
         session.poll()
 
         XCTAssertEqual(target.text, "")
-        XCTAssertEqual(controller.dictationFailure, "The cloud model couldn't be reached.")
+        XCTAssertEqual(controller.dictationFailure, "")
+        XCTAssertFalse(controller.bannerState.isPresented)
     }
 
     // MARK: Streaming
@@ -527,6 +510,58 @@ final class DictationKeyboardTests: XCTestCase {
         XCTAssertEqual(target.text, "noted", "toggling must still insert what was said")
     }
 
+    /// **A third tap used to cancel, and the tap before that used to start a
+    /// second recording.** Between pause and the words arriving, `isDictating` is
+    /// already false. Asking only that question opened a new utterance on top of
+    /// the first one's transcription; the × that replaced it cancelled the insert.
+    /// The tap is ignored now: record and pause, nothing else.
+    func testATapWhileTheWordsAreInFlightDoesNotCancelOrStartAgain() throws {
+        let id = beginLiveSession()
+        session.poll()
+        controller.toggleDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+
+        controller.toggleDictation()
+        XCTAssertEqual(controller.dictationKeyState, .finishing)
+
+        controller.toggleDictation()
+        XCTAssertEqual(
+            recorder.request()?.utterance, utterance,
+            "a tap while transcribing opened a second utterance")
+        XCTAssertNotEqual(
+            recorder.request()?.cancelUtterance ?? 0, utterance,
+            "a tap while transcribing cancelled the insert")
+        XCTAssertEqual(controller.dictationKeyState, .finishing)
+
+        try recorder.publish(
+            DictationTranscriptRecord(
+                sessionID: id, utterance: utterance, text: "noted",
+                recordedAt: 1, completedAt: 2, seconds: 1))
+        session.poll()
+        XCTAssertEqual(target.text, "noted", "the ignored tap threw the sentence away")
+    }
+
+    /// **`$level` is Equatable and drops a held note.** The waveform is a history
+    /// of polls, not of changes; three identical bars and a pause is a dashed
+    /// line that does not move.
+    func testTheWaveformKeepsASampleWhenLoudnessDoesNotChange() {
+        beginLiveSession()
+        session.poll()
+        controller.startDictation()
+        XCTAssertTrue(controller.isDictating)
+
+        recorder.setLevel(0.1)
+        session.poll()
+        let count = controller.dictationLevels.count
+        XCTAssertGreaterThan(count, 0, "the first poll after speaking did not reach the waveform")
+
+        recorder.setLevel(0.1)
+        session.poll()
+        XCTAssertEqual(
+            controller.dictationLevels.count, count + 1,
+            "a held note dropped samples and the strip froze")
+    }
+
     // MARK: The tap has to read the page
 
     /// **The one live-session test here with no `session.poll()` before the tap,
@@ -620,8 +655,6 @@ final class DictationKeyboardTests: XCTestCase {
             BannerState.resolve(
                 isDictating: controller.isDictating,
                 dictationIsLive: controller.dictationAvailability.isLive,
-                dictationTranscript: controller.dictationTranscript,
-                dictationFailure: controller.dictationFailure,
                 isWorking: controller.isWorking,
                 runningAction: controller.runningAction,
                 error: controller.aiError,

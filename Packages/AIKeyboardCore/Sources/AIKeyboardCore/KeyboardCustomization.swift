@@ -56,7 +56,7 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
     /// candidates a user reads mid-word; dictation was a 1-unit glyph in the
     /// bottom row between space and the full stop; and Reply and Fix were not
     /// reachable at all without opening a panel that covered the keys. They are
-    /// now one row of five under the keyboard, which is the row the user asked
+    /// now one row of five above the keys, which is the row the user asked
     /// for and which the editor can rearrange like any other.
     ///
     /// Three consequences, all deliberate:
@@ -97,7 +97,7 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
     )
 
     /// The action row as it ships: everything the keyboard can do to the text,
-    /// in one row under the keys.
+    /// in one row above the keys.
     ///
     /// **Ordered so the destructive-looking one is furthest from the space bar.**
     /// Dictation is the only control here that starts something the user then has

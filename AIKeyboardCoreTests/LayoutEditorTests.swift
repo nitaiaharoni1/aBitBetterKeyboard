@@ -215,6 +215,9 @@ final class LayoutEditorTests: XCTestCase {
         XCTAssertFalse(model.visibleRows.contains(.cursor))
         model.setExtraRow(enabled: true)
         XCTAssertTrue(model.visibleRows.contains(.cursor))
+        XCTAssertEqual(
+            model.visibleRows.first, .cursor,
+            "the extra row is listed first because it is drawn above the letters")
     }
 
     func testRowKindFindsAKeyInEveryRow() {

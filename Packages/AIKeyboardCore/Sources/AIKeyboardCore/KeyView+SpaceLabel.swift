@@ -23,61 +23,10 @@ extension KeyView {
     /// chevrons point at the two directions a finger can travel, and those do not
     /// swap when the language does. `SpaceSwipe.language` carries why.
     var spaceLabel: some View {
-        // The lit code follows the finger, so a slide walks the highlight along the
-        // strip and — past three languages, where the strip is a window — scrolls
-        // it. Nil until a finger is down, which is the resting state.
-        let lit = indication?.language ?? language
-        let codes = SpaceSwipe.codeStrip(active: lit, in: enabledLanguages)
-        return ZStack {
-            if !codes.isEmpty {
-                HStack(spacing: 0) {
-                    slideChevron("chevron.compact.left")
-                    Spacer(minLength: 0)
-                    slideChevron("chevron.compact.right")
-                }
-            }
-            VStack(spacing: 0) {
-                if !codes.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(codes, id: \.self) { code in
-                            Text(code.shortName)
-                                .font(.system(size: 12, weight: code == lit ? .semibold : .regular))
-                                .foregroundStyle(
-                                    code == lit
-                                        ? Theme.Keys.label
-                                        : Theme.Keys.secondaryLabel.opacity(0.6))
-                        }
-                    }
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
-                }
-                Text(indication?.language.nativeName ?? language.spaceLabel)
-                    .font(
-                        .system(
-                            size: codes.isEmpty ? 15 : 11,
-                            weight: indication == nil ? .light : .medium)
-                    )
-                    .foregroundStyle(
-                        indication == nil ? Theme.Keys.secondaryLabel : Theme.Keys.label
-                    )
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
-            }
-        }
-        .padding(.horizontal, 8)
-        .frame(maxWidth: .infinity)
-        .environment(\.layoutDirection, .leftToRight)
-    }
-
-    func slideChevron(_ name: String) -> some View {
-        Image(systemName: name)
-            // One step above the house weight, and deliberately. These sit at 0.55
-            // opacity on a grey key: a light hairline at this size disappears
-            // altogether, and they are the only thing that says the slide exists.
-            // Bigger than they were now that they live at the key's edges rather
-            // than tucked against the caption, which is where the room is.
-            .font(Theme.Glyph.medium(15))
-            .foregroundStyle(Theme.Keys.secondaryLabel.opacity(0.55))
+        SpaceBarLabel(
+            language: language,
+            indication: indication,
+            enabledLanguages: enabledLanguages)
     }
 
     /// Scripts carry different amounts of ink, and a twelve-column layout has
@@ -110,5 +59,88 @@ extension KeyView {
             characterFontSize,
             width * 0.72 / widest,
             height * 0.56 / CGFloat(max(1, lines.count)))
+    }
+}
+
+/// The space bar's own drawing, pulled out of `KeyView` so the sliding highlight
+/// can own a `Namespace` without putting one on every key.
+private struct SpaceBarLabel: View {
+
+    let language: KeyboardLanguage
+    let indication: LanguageSwitchIndication?
+    let enabledLanguages: [KeyboardLanguage]
+
+    @Namespace private var strip
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        // The lit code follows the finger, so a slide walks the highlight along the
+        // strip and — past three languages, where the strip is a window — scrolls
+        // it. Nil until a finger is down, which is the resting state.
+        let lit = indication?.language ?? language
+        let codes = SpaceSwipe.codeStrip(active: lit, in: enabledLanguages)
+        let step = indication?.step ?? 0
+        return ZStack {
+            if !codes.isEmpty {
+                HStack(spacing: 0) {
+                    slideChevron("chevron.compact.left", emphasized: step < 0)
+                    Spacer(minLength: 0)
+                    slideChevron("chevron.compact.right", emphasized: step > 0)
+                }
+            }
+            VStack(spacing: 0) {
+                if !codes.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(codes, id: \.self) { code in
+                            Text(code.shortName)
+                                .font(.system(size: 12, weight: code == lit ? .semibold : .regular))
+                                .foregroundStyle(
+                                    code == lit
+                                        ? Theme.Keys.label
+                                        : Theme.Keys.secondaryLabel.opacity(0.6)
+                                )
+                                .background(alignment: .center) {
+                                    if code == lit, !reduceMotion {
+                                        Capsule()
+                                            .fill(Theme.Keys.label.opacity(0.10))
+                                            .padding(.horizontal, -5)
+                                            .padding(.vertical, -2)
+                                            .matchedGeometryEffect(id: "space-lit", in: strip)
+                                    }
+                                }
+                        }
+                    }
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+                }
+                Text(indication?.language.nativeName ?? language.spaceLabel)
+                    .font(
+                        .system(
+                            size: codes.isEmpty ? 15 : 11,
+                            weight: indication == nil ? .light : .medium)
+                    )
+                    .foregroundStyle(
+                        indication == nil ? Theme.Keys.secondaryLabel : Theme.Keys.label
+                    )
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+                    .contentTransition(.opacity)
+            }
+        }
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity)
+        .environment(\.layoutDirection, .leftToRight)
+    }
+
+    func slideChevron(_ name: String, emphasized: Bool) -> some View {
+        Image(systemName: name)
+            // One step above the house weight, and deliberately. These sit at 0.55
+            // opacity on a grey key: a light hairline at this size disappears
+            // altogether, and they are the only thing that says the slide exists.
+            // Bigger than they were now that they live at the key's edges rather
+            // than tucked against the caption, which is where the room is.
+            .font(Theme.Glyph.medium(15))
+            .foregroundStyle(Theme.Keys.secondaryLabel.opacity(emphasized ? 0.95 : 0.55))
+            .scaleEffect(emphasized && !reduceMotion ? 1.18 : 1)
     }
 }

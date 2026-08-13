@@ -37,18 +37,17 @@ public struct WorkingProgressBar: View {
     /// `run(_:)` and `runTone(_:)` both refuse while one is open.
     var isRecording: Bool { controller.dictationKeyState.isRecording }
 
-    /// **The same three points, showing sound instead of progress.** A recording
-    /// has nothing to say about how far along it is — it ends when the speaker
-    /// stops — so a sweeping segment would be inventing a measurement. What it
-    /// does have is loudness, which is the one honest thing to draw and the thing
-    /// that tells somebody the microphone is actually hearing them. It is
-    /// deliberately tiny: this strip exists because it costs nothing when nothing
-    /// is happening, and a waveform tall enough to admire would cost the keys.
+    /// **The same reserved slot, showing sound instead of progress — and taller,
+    /// because three points cannot.** A recording has nothing to say about how
+    /// far along it is, so a sweeping segment would be inventing a measurement.
+    /// What it does have is loudness. Drawn into the hairline that was a dashed
+    /// line that never moved; this uses `recordingWaveformHeight` so a spoken
+    /// frame is actually taller than silence.
     private func waveform(width: CGFloat) -> some View {
         let levels = controller.dictationLevels
         let count = max(1, KeyboardController.dictationLevelHistory)
         let barWidth = max(1, (width - CGFloat(count - 1) * Self.waveGap) / CGFloat(count))
-        let full = Theme.Metrics.progressBarHeight
+        let full = Theme.Metrics.recordingWaveformHeight
 
         return HStack(alignment: .center, spacing: Self.waveGap) {
             ForEach(0..<count, id: \.self) { slot in
@@ -61,9 +60,7 @@ public struct WorkingProgressBar: View {
                     .fill(Theme.Semantic.record)
                     .frame(
                         width: barWidth,
-                        // Never quite zero: a silent moment is a thin line rather
-                        // than a gap, or the strip looks broken between words.
-                        height: max(full * 0.28, min(full, full * CGFloat(level) * 2.2)))
+                        height: Self.waveHeight(level: level, full: full, slot: slot))
             }
         }
         .frame(width: width, height: full)
@@ -71,6 +68,30 @@ public struct WorkingProgressBar: View {
 
     /// The gap between two bars of the waveform.
     static let waveGap: CGFloat = 1.5
+
+    /// Speech RMS that fills the strip. The quietest corpus clip peaks at 0.208
+    /// (`SpeechGate.peakFloor` is 0.01); typical frames sit well below that.
+    static let waveFullLevel: Double = 0.12
+
+    /// How tall one sliver of the recording waveform is.
+    ///
+    /// **Drawn into three points, this is a dashed line that never moves.** Speech
+    /// RMS lives around 0.02–0.2; the recording strip is 24 points so a quiet
+    /// spoken frame is taller than the idle hairline. The square root lifts
+    /// quiet speech into the visible range. `slot` keeps neighbouring bars from
+    /// marching as a wall on a held note — we have loudness, not frequency
+    /// bands, so a standing sine across the row stands in for spectrum.
+    static func waveHeight(level: Double, full: CGFloat, slot: Int = 0) -> CGFloat {
+        let visual = min(1, sqrt(max(0, level) / waveFullLevel))
+        let freq = 0.62 + 0.38 * sin(Double(slot) * 1.37)
+        return max(full * 0.12, full * CGFloat(visual * freq))
+    }
+
+    /// Height this view occupies right now. The hairline while idle or working;
+    /// the waveform while a microphone is open. See `Theme.Metrics.recordingWaveformHeight`.
+    var barHeight: CGFloat {
+        isRecording ? Theme.Metrics.recordingWaveformHeight : Theme.Metrics.progressBarHeight
+    }
 
     /// The indeterminate sweep a model call draws.
     private func sweep(width: CGFloat) -> some View {
@@ -104,9 +125,9 @@ public struct WorkingProgressBar: View {
                 sweep(width: geo.size.width)
             }
         }
-        .frame(height: Theme.Metrics.progressBarHeight)
-        // Reserved, never removed. See the note above and
-        // `Theme.Metrics.progressBarHeight`.
+        .frame(height: barHeight)
+        // Reserved at three points while idle, taller while recording. See
+        // `Theme.Metrics.recordingWaveformHeight`.
         .opacity(controller.isWorking || isRecording ? 1 : 0)
         .padding(.horizontal, Theme.Space.sm)
         // Pinned like every other control row in this keyboard: a slide along the
@@ -115,7 +136,8 @@ public struct WorkingProgressBar: View {
         // See `.claude/rules/keyboard-layout.md`.
         .environment(\.layoutDirection, .leftToRight)
         .animation(Theme.Motion.quick, value: controller.isWorking)
-        .animation(Theme.Motion.quick, value: isRecording)
+        .animation(Theme.Motion.press, value: isRecording)
+        .animation(.easeOut(duration: 0.08), value: controller.dictationLevels)
         // **The one thing a VoiceOver user lost with the strip.** The banner said
         // "Fix, working" out loud; a sweeping capsule says nothing at all, and the
         // lit key beside it is a colour.

@@ -88,16 +88,6 @@ public enum BannerState: Equatable {
     /// payload.
     case blocked(Block)
 
-    /// A recording finished and produced nothing to insert.
-    ///
-    /// **Its own case because the alternative was silence.** The panel this
-    /// replaced stayed on screen after a failed recording precisely so it could
-    /// say why — `DictationKeyboardTests` pins that a recording with no speech in
-    /// it "inserts nothing and says why". Routing a live session to the banner
-    /// took the panel away, and without this the user tapped Stop, watched the
-    /// waveform vanish and got no text and no reason.
-    case dictationFailed(String)
-
     /// Why an action refused to start, in the words the strip prints.
     ///
     /// A value rather than four `BannerState` cases, because the four differ in
@@ -155,8 +145,6 @@ public enum BannerState: Equatable {
     public static func resolve(
         isDictating: Bool,
         dictationIsLive: Bool,
-        dictationTranscript: String,
-        dictationFailure: String,
         isWorking: Bool,
         runningAction: AIAction?,
         error: AIEngineError?,
@@ -170,18 +158,14 @@ public enum BannerState: Equatable {
         screenContext: ScreenContext?,
         idleHint: String
     ) -> BannerState {
-        // Ahead of the live check, not inside it: `stopDictation` clears
-        // `isDictating` before the reason lands, so a failure tested second is a
-        // failure never shown.
-        if !dictationFailure.isEmpty, dictationTranscript.isEmpty, dictationIsLive || isDictating {
-            return .dictationFailed(dictationFailure)
-        }
         // **A recording draws no strip and still outranks everything below it.**
         // The microphone key is red for the length of it and the words arrive in
         // the field as they are spoken, so there is nothing left for a row above
-        // the candidates to say — but a recording started after a Fix must not
-        // leave that Fix's leftover answer on screen behind a Use button, which is
-        // what falling through to the branches below would do.
+        // the candidates to say — including a silent take. "Nothing to insert"
+        // was a 69pt strip for a second tap, and the key is already orange
+        // record again. A recording started after a Fix must not leave that
+        // Fix's leftover answer on screen behind a Use button, which is what
+        // falling through to the branches below would do.
         if isDictating || dictationIsLive { return idle(screenContext, idleHint) }
         // Above every idle branch and above the work branches, because this is a
         // sentence about the tap the user just made. Below dictation for the reason
@@ -250,7 +234,7 @@ public enum BannerState: Equatable {
     public var isPresented: Bool {
         switch self {
         case .hint: return false
-        case .context, .options, .failed, .blocked, .dictationFailed:
+        case .context, .options, .failed, .blocked:
             return true
         }
     }

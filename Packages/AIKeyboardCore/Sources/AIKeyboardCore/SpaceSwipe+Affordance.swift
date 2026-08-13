@@ -89,11 +89,20 @@ public struct LanguageSwitchIndication: Equatable, Sendable {
     /// True while the finger is still on the space bar and could still move on.
     public let isPending: Bool
 
-    public init(language: KeyboardLanguage, position: Int, count: Int, isPending: Bool) {
+    /// Which way this indication was reached: `1` a slide right, `-1` a slide
+    /// left, `0` when there is no direction (a name with no gesture behind it).
+    /// The letter-key transition and the callout both read this so they travel
+    /// the same way the strip already points. See `SpaceSwipe.slideEdges`.
+    public let step: Int
+
+    public init(
+        language: KeyboardLanguage, position: Int, count: Int, isPending: Bool, step: Int = 0
+    ) {
         self.language = language
         self.position = position
         self.count = count
         self.isPending = isPending
+        self.step = step
     }
 }
 
@@ -108,14 +117,12 @@ struct LanguageCallout: View {
 
     let indication: LanguageSwitchIndication
 
+    @Namespace private var dotsNS
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         VStack(spacing: 4) {
-            Text("\(indication.language.flag) \(indication.language.nativeName)")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Theme.Keys.label)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-
+            title
             dots
         }
         .padding(.horizontal, 12)
@@ -131,15 +138,48 @@ struct LanguageCallout: View {
         .environment(\.layoutDirection, .leftToRight)
     }
 
+    private var title: some View {
+        let label = Text("\(indication.language.flag) \(indication.language.nativeName)")
+            .font(.system(size: 15, weight: .medium))
+            .foregroundStyle(Theme.Keys.label)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+        return ZStack {
+            if reduceMotion {
+                label
+            } else {
+                label
+                    .id(indication.language)
+                    .transition(nameTransition)
+            }
+        }
+        .clipped()
+    }
+
+    private var nameTransition: AnyTransition {
+        guard let edges = SpaceSwipe.slideEdges(step: indication.step) else { return .opacity }
+        return .asymmetric(
+            insertion: .move(edge: edges.incoming).combined(with: .opacity),
+            removal: .move(edge: edges.outgoing).combined(with: .opacity)
+        )
+    }
+
     private var dots: some View {
         HStack(spacing: 4) {
             ForEach(0..<max(1, indication.count), id: \.self) { index in
                 Circle()
                     .fill(
-                        index == indication.position
+                        index == indication.position && reduceMotion
                             ? Theme.Brand.solid : Theme.Keys.secondaryLabel.opacity(0.3)
                     )
                     .frame(width: 5, height: 5)
+                    .overlay {
+                        if index == indication.position, !reduceMotion {
+                            Circle()
+                                .fill(Theme.Brand.solid)
+                                .matchedGeometryEffect(id: "space-dot", in: dotsNS)
+                        }
+                    }
             }
         }
     }

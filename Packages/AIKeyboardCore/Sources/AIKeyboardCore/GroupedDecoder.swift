@@ -177,10 +177,10 @@ public final class GroupedDecoder {
 
     /// Whether a word has the letters the user pinned, where they pinned them.
     ///
-    /// A pin is the user overruling the decoder by long-pressing a key and
-    /// choosing a letter out of it, so it is a hard filter rather than a ranking
-    /// nudge: a candidate that disagrees with a letter somebody deliberately
-    /// picked is not a worse answer, it is the wrong answer.
+    /// A pin is a letter the user aimed at: a long press, or a tap clearly on
+    /// one letter of the group. It is a hard filter rather than a ranking
+    /// nudge: a candidate that disagrees with a letter somebody aimed at is
+    /// not a worse answer, it is the wrong answer.
     static func honours(_ pins: [Int: String], _ word: String) -> Bool {
         let letters = Array(word)
         for (position, letter) in pins {

@@ -161,13 +161,15 @@ public enum Theme {
         /// Label colour for glyphs sitting on `functionStrong` / `functionSoft`.
         public static let labelOnFunction = Color.adaptive(light: 0xFFFEFA, dark: 0xF4F3EF)
         /// Pressed state inverts: letters darken, function keys lighten.
-        public static let letterPressed = Color.adaptive(light: 0xE4E1DB, dark: 0x6C7072)
+        /// Darker than the keyboard background so a press reads around the thumb,
+        /// not only as a 1-step fade of the cap.
+        public static let letterPressed = Color.adaptive(light: 0xD4D0C8, dark: 0x7C8082)
         public static let functionPressed = Color.adaptive(light: 0xFFFEFA, dark: 0x54595B)
         public static let label = Color.adaptive(light: 0x2C3031, dark: 0xF4F3EF)
         public static let secondaryLabel = Color.adaptive(light: 0x626766, dark: 0xC7C7CC)
         public static let shadow = Color.adaptive(light: 0x898A8D, dark: 0x000000)
-        /// The panel that slides over the key rows (AI, emoji, dictation), and the
-        /// banner's pill.
+        /// The banner's pill. Not the emoji grid: that wears `background`, the
+        /// same as the letters it replaced.
         ///
         /// **Raised by the same amount `background` was, because it is only ever
         /// read against it.** At 0xE6E8ED it sat 21 units above the old
@@ -280,12 +282,44 @@ public enum Theme {
     // MARK: Motion
 
     public enum Motion {
+        private static var reduce: Bool { UIAccessibility.isReduceMotionEnabled }
+
         /// Standard state change. Fast enough to feel instant, slow enough to be read.
-        public static let quick = Animation.easeOut(duration: 0.18)
-        /// Panels sliding in and out over the key rows.
-        public static let panel = Animation.spring(response: 0.34, dampingFraction: 0.86)
+        public static var quick: Animation {
+            .easeOut(duration: reduce ? 0.08 : 0.18)
+        }
+        /// Finger-down on a key. Faster than `quick` so the press reads as a click.
+        public static let press = Animation.easeOut(duration: 0.10)
+        /// Panels sliding in and out over the key rows. A keyboard overlay, not a
+        /// sheet: 0.22s, not the 0.34s this used to spend opening emoji.
+        public static var panel: Animation {
+            reduce
+                ? .easeOut(duration: 0.12)
+                : .spring(response: 0.22, dampingFraction: 0.92)
+        }
         /// Content appearing inside a panel that is already open.
-        public static let content = Animation.spring(response: 0.28, dampingFraction: 0.9)
+        public static var content: Animation {
+            reduce
+                ? .easeOut(duration: 0.12)
+                : .spring(response: 0.28, dampingFraction: 0.9)
+        }
+        /// A language switch: the letter keys slide with the swipe. Longer than
+        /// `quick` so the incoming layout can be read, still under 300ms so it
+        /// never feels like waiting. Reduce Motion keeps the crossfade.
+        public static var swipe: Animation {
+            reduce
+                ? .easeOut(duration: 0.12)
+                : .spring(response: 0.30, dampingFraction: 0.90)
+        }
+
+        /// A balloon growing out of a key. Opacity alone under Reduce Motion.
+        public static func pop(reduceMotion: Bool) -> AnyTransition {
+            guard !reduceMotion else { return .opacity }
+            return .asymmetric(
+                insertion: .scale(scale: 0.6, anchor: .bottom).combined(with: .opacity),
+                removal: .opacity
+            )
+        }
     }
 }
 

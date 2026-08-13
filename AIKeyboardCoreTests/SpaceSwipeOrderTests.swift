@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 
 @testable import AIKeyboardCore
@@ -165,5 +166,22 @@ final class SpaceSwipeOrderTests: XCTestCase {
         XCTAssertEqual(
             reached, Set(KeyboardLanguage.allCases),
             "\(Set(KeyboardLanguage.allCases).subtracting(reached).count) languages were unreachable")
+    }
+
+    // MARK: How the keys move
+
+    /// A right swipe lights the code on the right of the space bar, so the new
+    /// keys have to enter from the right. A pager that followed the finger would
+    /// bring the left neighbour in and fight the strip.
+    func testTheKeysEnterFromTheSideTheStripAlreadyNamed() {
+        let right = SpaceSwipe.slideEdges(step: 1)
+        XCTAssertEqual(right?.incoming, .trailing)
+        XCTAssertEqual(right?.outgoing, .leading)
+
+        let left = SpaceSwipe.slideEdges(step: -1)
+        XCTAssertEqual(left?.incoming, .leading)
+        XCTAssertEqual(left?.outgoing, .trailing)
+
+        XCTAssertNil(SpaceSwipe.slideEdges(step: 0))
     }
 }

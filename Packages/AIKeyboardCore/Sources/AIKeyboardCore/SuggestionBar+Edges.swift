@@ -27,11 +27,11 @@ extension SuggestionBar {
     ///
     /// **It now names a row rather than a button, because the buttons moved and
     /// there is more than one of them.** Reply, Fix, Rewrite and dictation are keys
-    /// in the action row under the keyboard, and the bar's own ends ship empty. It
+    /// in the action row above the keys, and the bar's own ends ship empty. It
     /// deliberately does not say "the sparkle": on a stock install there is no
     /// sparkle, and a user who has put one back in the bar through the layout
     /// editor is not who this copy is written for.
-    public static let aiButtonName = "the action row under the keys"
+    public static let aiButtonName = "the action row above the keys"
 
     /// Whether any AI action could run right now.
     ///

@@ -26,8 +26,6 @@ final class BannerStateTests: XCTestCase {
     private func resolve(
         isDictating: Bool = false,
         dictationIsLive: Bool = false,
-        dictationTranscript: String = "",
-        dictationFailure: String = "",
         isWorking: Bool = false,
         runningAction: AIAction? = nil,
         error: AIEngineError? = nil,
@@ -40,8 +38,6 @@ final class BannerStateTests: XCTestCase {
         BannerState.resolve(
             isDictating: isDictating,
             dictationIsLive: dictationIsLive,
-            dictationTranscript: dictationTranscript,
-            dictationFailure: dictationFailure,
             isWorking: isWorking,
             runningAction: runningAction,
             error: error,
@@ -75,26 +71,14 @@ final class BannerStateTests: XCTestCase {
         XCTAssertEqual(state, .hint(BannerState.defaultHint))
     }
 
-    /// **A failed recording is reported even though `isDictating` is already
-    /// false.** `stopDictation` clears the flag before the reason arrives, so a
-    /// failure tested after the live check is a failure never shown — the waveform
-    /// vanishes and the user gets no text and no explanation.
-    func testAFailedRecordingIsReportedAfterTheFlagIsCleared() {
-        let state = resolve(
-            isDictating: false, dictationIsLive: true, dictationFailure: "No speech")
-        XCTAssertEqual(state, .dictationFailed("No speech"))
-    }
-
-    /// A transcript that landed is not a failure, whatever is left in the reason.
-    ///
-    /// The words are in the field by the time this is asked — they were streamed
-    /// there as they were spoken — so what this rejects is a "Nothing to insert"
-    /// strip appearing over a sentence the user can see.
-    func testATranscriptWinsOverAStaleFailure() {
-        let state = resolve(
-            isDictating: false, dictationIsLive: true, dictationTranscript: "hello",
-            dictationFailure: "No speech")
-        XCTAssertFalse(state.isPresented)
+    /// **A silent recording is not a strip.** "Nothing to insert" used to be
+    /// drawn here because `stopDictation` clears `isDictating` before the
+    /// reason lands, and a failure tested after the live check was a failure
+    /// never shown. The strip is gone on purpose now — a second tap is the
+    /// recovery — so this pins that a leftover reason still does not earn a
+    /// row once the key is idle.
+    func testASilentRecordingDoesNotEarnARow() {
+        XCTAssertFalse(resolve(isDictating: false, dictationIsLive: true).isPresented)
     }
 
     /// **Work outranks both a result and a failure**, because `beginWork` sets
@@ -232,11 +216,7 @@ final class BannerStateTests: XCTestCase {
         XCTAssertTrue(resolve(runningAction: .rewrite, options: [reply]).isPresented)
         XCTAssertTrue(resolve(runningAction: .fix, error: .refused).isPresented)
         XCTAssertTrue(resolve(block: noSession).isPresented)
-        XCTAssertTrue(
-            resolve(
-                dictationIsLive: true,
-                dictationFailure: "No speech"
-            ).isPresented)
+        XCTAssertFalse(resolve(dictationIsLive: true).isPresented)
         let context = ScreenContext(
             appName: "", appIcon: "", sender: "Dani", message: "when?", language: .hebrew)
         XCTAssertTrue(resolve(screenContext: context).isPresented)

@@ -15,7 +15,7 @@ import XCTest
 /// never opens.
 ///
 /// **The control moved out of the suggestion bar and the defect did not.** It is
-/// now a key in the action row under the keyboard, so this addresses
+/// now a key in the action row above the keyboard, so this addresses
 /// `key-quick-tone` rather than `bar-tone` — and it goes through
 /// `KeyboardController.press(.quickTone)`, which asks `SuggestionBar.toneTap` the
 /// same three-way question the bar button asked. That shared question is the whole

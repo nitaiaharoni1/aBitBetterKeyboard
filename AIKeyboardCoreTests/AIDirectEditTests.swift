@@ -330,16 +330,16 @@ final class AIDirectEditTests: XCTestCase {
 /// a `ViewBuilder`.
 final class DictationKeyStateTests: XCTestCase {
 
-    /// Red is reserved for a microphone that is keeping what it hears, and each of
-    /// the other three states is a way of not being that.
+    /// Red stays on until the words have landed. Flipping to orange record in that
+    /// window invited a second tap.
     func testOnlyALiveMicrophoneIsDrawnInRed() {
         XCTAssertTrue(DictationKeyState.recording(secondsLeft: nil).isRecording)
         XCTAssertTrue(DictationKeyState.recording(secondsLeft: 5).isRecording)
-        XCTAssertFalse(DictationKeyState.finishing.isRecording)
+        XCTAssertTrue(DictationKeyState.finishing.isRecording)
         XCTAssertFalse(DictationKeyState.idle.isRecording)
     }
 
-    /// The lit cap covers one state more than the red one does. A key that went
+    /// The lit cap covers one state more than idle does. A key that went
     /// dark while the last words were in flight would be offering to start a second
     /// recording over the first one's answer.
     func testTheKeyStaysLitUntilTheWordsHaveLanded() {
@@ -348,28 +348,31 @@ final class DictationKeyStateTests: XCTestCase {
         XCTAssertTrue(DictationKeyState.finishing.isActive)
     }
 
-    /// **The caption is what a tap does, and it may never say Dictate over a
-    /// recording.** That is not hypothetical: the key was captioned from a single
-    /// `isActionActive` flag before the strip was deleted, and a flag has two
-    /// values where this has four.
+    /// **The caption is what a tap does, and it may never say Record over a
+    /// recording.**
     func testTheCaptionNamesTheStateRatherThanTheAction() {
-        XCTAssertEqual(DictationKeyState.idle.title, "Dictate")
-        XCTAssertEqual(DictationKeyState.recording(secondsLeft: nil).title, "Stop")
-        XCTAssertEqual(DictationKeyState.finishing.title, "Cancel")
+        XCTAssertEqual(DictationKeyState.idle.title, "Record")
+        XCTAssertEqual(DictationKeyState.recording(secondsLeft: nil).title, "Pause")
+        XCTAssertEqual(DictationKeyState.finishing.title, "Pause")
     }
 
-    /// **Three appearances, three things said — and it used to be three
-    /// appearances and one.**
-    ///
+    /// **Two appearances, not three.** Record at rest, pause while live. An ×
+    /// while the last words were in flight offered to cancel an insert already
+    /// on its way.
+    func testTheKeyHasRecordAndPauseAndNoCancel() {
+        XCTAssertEqual(DictationKeyState.idle.icon, "waveform")
+        XCTAssertEqual(DictationKeyState.recording(secondsLeft: nil).icon, "pause.fill")
+        XCTAssertEqual(DictationKeyState.finishing.icon, "pause.fill")
+        XCTAssertNotEqual(DictationKeyState.finishing.icon, "xmark")
+        XCTAssertNotEqual(DictationKeyState.finishing.title, "Cancel")
+        XCTAssertNotEqual(
+            DictationKeyState.finishing.accessibilityLabel, "Cancel transcription")
+    }
+
     /// `KeyView`'s label comes from `KeyCap`, which is a value and cannot know a
-    /// recording is running, so this key read "Dictate" to VoiceOver whether the
-    /// microphone was idle, live or finishing. Everything that told the
-    /// four apart was a colour, a glyph and a nine-point caption. The one state
-    /// where being wrong matters most is the one where a microphone is on.
-    ///
-    /// The split is the conventional one and worth keeping: the **label** is what
-    /// a tap does, the **value** is the state. A countdown is not what a tap does,
-    /// which is why the visible caption cannot serve as the label.
+    /// recording is running, so this key read "Record" to VoiceOver whether the
+    /// microphone was idle or live. The split is the conventional one: the
+    /// **label** is what a tap does, the **value** is the state.
     func testEveryStateSaysSomethingDifferentOutLoud() {
         let states: [DictationKeyState] = [
             .idle, .recording(secondsLeft: nil), .recording(secondsLeft: 12), .finishing
@@ -379,11 +382,13 @@ final class DictationKeyStateTests: XCTestCase {
             Set(spoken).count, states.count,
             "two states of a live microphone are indistinguishable to VoiceOver")
 
-        XCTAssertEqual(DictationKeyState.idle.accessibilityLabel, "Dictate")
+        XCTAssertEqual(DictationKeyState.idle.accessibilityLabel, "Record")
         XCTAssertEqual(
-            DictationKeyState.recording(secondsLeft: nil).accessibilityLabel, "Stop recording",
+            DictationKeyState.recording(secondsLeft: nil).accessibilityLabel, "Pause recording",
             "the button that stops a live microphone offered to start one")
-        XCTAssertEqual(DictationKeyState.finishing.accessibilityLabel, "Cancel transcription")
+        XCTAssertEqual(
+            DictationKeyState.finishing.accessibilityLabel, "Pause recording",
+            "finishing offered to cancel rather than matching pause")
 
         XCTAssertEqual(DictationKeyState.idle.accessibilityValue, "")
         XCTAssertEqual(DictationKeyState.recording(secondsLeft: nil).accessibilityValue, "Recording")
@@ -398,8 +403,43 @@ final class DictationKeyStateTests: XCTestCase {
     func testTheLastMinuteIsCountedOnTheKey() {
         XCTAssertEqual(DictationKeyState.recording(secondsLeft: 12).title, "12s left")
         XCTAssertEqual(
-            DictationKeyState.recording(secondsLeft: nil).title, "Stop",
+            DictationKeyState.recording(secondsLeft: nil).title, "Pause",
             "a clock running for the whole session is one the user is invited to watch")
+    }
+}
+
+/// The three-point strip above the candidates, and the reason a live microphone
+/// showed a dashed line that never moved.
+final class WorkingProgressBarTests: XCTestCase {
+
+    /// **Typical speech has to be taller than silence.** The linear `level * 2.2`
+    /// drawing landed every corpus-like frame on the 0.28 floor, so a live
+    /// microphone was a static dashed line. 0.05 RMS is a quiet spoken frame
+    /// (`SpeechGate.peakFloor` is 0.01; the quietest clip peaks at 0.208).
+    func testASpokenFrameIsTallerThanSilence() {
+        let full: CGFloat = Theme.Metrics.recordingWaveformHeight
+        let silent = WorkingProgressBar.waveHeight(level: 0, full: full)
+        let spoken = WorkingProgressBar.waveHeight(level: 0.05, full: full)
+        XCTAssertGreaterThan(
+            spoken, silent,
+            "a spoken frame draws the same height as silence: the strip cannot move")
+    }
+
+    /// **The recording strip has to be taller than the idle hairline.** Drawn
+    /// into three points, even amplified speech is a dashed line. A quiet spoken
+    /// frame (0.05 RMS) in the recording height must clear that hairline or the
+    /// user still cannot see the voice.
+    func testASpokenFrameIsTallerThanTheIdleHairline() {
+        let spoken = WorkingProgressBar.waveHeight(
+            level: 0.05, full: Theme.Metrics.recordingWaveformHeight)
+        XCTAssertGreaterThan(
+            spoken, Theme.Metrics.progressBarHeight,
+            "speech still fits inside the three-point hairline")
+    }
+
+    func testTheRecordingWaveformIsTallerThanTheHairline() {
+        XCTAssertGreaterThan(
+            Theme.Metrics.recordingWaveformHeight, Theme.Metrics.progressBarHeight)
     }
 }
 

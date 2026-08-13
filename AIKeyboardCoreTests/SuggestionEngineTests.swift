@@ -298,4 +298,51 @@ extension SuggestionEngineTests {
             results.contains { $0.text == "standup" },
             "in English the dictionary ranks this, not our list: \(results.map(\.text))")
     }
+
+    // MARK: What a suggestion is
+
+    /// The synthesised `==` counted a fresh `UUID` on every init, so the bar
+    /// treated every refresh as a different list and faded for 180ms on every
+    /// letter. Two offers of the same word are the same offer.
+    func testTwoOffersOfTheSameWordAreTheSameOffer() {
+        let first = Suggestion(text: "hello", language: .english, isDefault: true)
+        let second = Suggestion(text: "hello", language: .english, isDefault: true)
+        XCTAssertNotEqual(first.id, second.id)
+        XCTAssertEqual(
+            first, second,
+            "A new identity made \"hello\" look like a different candidate than \"hello\"")
+        XCTAssertNotEqual(first, Suggestion(text: "help", language: .english, isDefault: true))
+        XCTAssertNotEqual(first, Suggestion(text: "hello", language: .english, isDefault: false))
+    }
+
+    /// The engine pins the typed word at index 0. Drawing that array in order put
+    /// the default on the left. The bar now moves it to the middle; a build that
+    /// still draws `suggestions[slot]` fails the first assertion.
+    func testTheDefaultCandidateIsDrawnInTheMiddle() {
+        let typed = Suggestion(text: "hel", language: .english, isDefault: true)
+        let hello = Suggestion(text: "hello", language: .english)
+        let help = Suggestion(text: "help", language: .english)
+        let slots = SuggestionBar.centeredSlots([typed, hello, help])
+        XCTAssertEqual(slots[1]?.text, "hel")
+        XCTAssertEqual(slots[0]?.text, "hello")
+        XCTAssertEqual(slots[2]?.text, "help")
+    }
+
+    /// Autocorrect already stores the default at index 1. Re-ordering that list
+    /// would swap the typed word into the middle and hide the correction.
+    func testACorrectionAlreadyInTheMiddleStaysThere() {
+        let typed = Suggestion(text: "sched", language: .english)
+        let schedule = Suggestion(text: "schedule", language: .english, isDefault: true)
+        let scheduled = Suggestion(text: "scheduled", language: .english)
+        let slots = SuggestionBar.centeredSlots([typed, schedule, scheduled])
+        XCTAssertEqual(slots.map { $0?.text }, ["sched", "schedule", "scheduled"])
+    }
+
+    /// One candidate used to occupy slot 0, so a lone word sat on the left third
+    /// of the bar with two empty columns beside it.
+    func testALoneCandidateSitsInTheMiddle() {
+        let only = Suggestion(text: "qwt", language: .english, isDefault: true)
+        let slots = SuggestionBar.centeredSlots([only])
+        XCTAssertEqual(slots.map { $0?.text }, [nil, "qwt", nil])
+    }
 }

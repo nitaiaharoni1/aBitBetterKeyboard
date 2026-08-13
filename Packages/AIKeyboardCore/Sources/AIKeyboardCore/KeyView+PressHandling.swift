@@ -53,7 +53,7 @@ extension KeyView {
                     if slidesForLanguage {
                         onSpaceTouch?(.began)
                     } else if !runsOnLift {
-                        onPress(spec.cap)
+                        onPress(spec.cap, unitPoint(value.startLocation))
                     }
                     startRepeatIfNeeded()
                     startAlternatesIfNeeded()
@@ -104,7 +104,7 @@ extension KeyView {
                 // yet — so lifting on it means the long press changed nothing.
                 guard picked > 0, picked < alternateItems.count else {
                     // The tap this key deferred. See `runsOnLift`.
-                    if runsOnLift { onPress(spec.cap) }
+                    if runsOnLift { onPress(spec.cap, unitPoint(value.startLocation)) }
                     return
                 }
                 onAlternate?(alternateItems[picked])
@@ -144,6 +144,14 @@ extension KeyView {
     }
 
     static let slideThreshold: CGFloat = 6
+
+    /// Finger-down in this key, 0...1, origin top-left. Grouped keys read it as
+    /// a soft pin; every other key ignores it.
+    func unitPoint(_ location: CGPoint) -> CGPoint {
+        CGPoint(
+            x: width > 0 ? min(1, max(0, location.x / width)) : 0.5,
+            y: height > 0 ? min(1, max(0, location.y / height)) : 0.5)
+    }
 
     /// Everything a finger leaving this key has to undo, on every path it can
     /// leave by. Idempotent, because a normal lift arrives here twice: once from

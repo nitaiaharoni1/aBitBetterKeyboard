@@ -31,8 +31,6 @@ extension ActionBanner {
                 "exclamationmark.triangle",
                 block.action?.title ?? "Dictation",
                 tint: Theme.Semantic.warning)
-        case .dictationFailed:
-            tag("mic.slash", "Dictation", tint: Theme.Semantic.warning)
         }
     }
 
@@ -121,9 +119,9 @@ extension ActionBanner {
             .accessibilityLabel("\(title). \(detail)")
 
         case .blocked(let block):
-            // The same multi-line shape `.failed` and `.dictationFailed` already use.
-            // A refusal is the same kind of thing they are — a sentence about
-            // something that did not happen — so it earns no new vocabulary.
+            // The same multi-line shape `.failed` already uses. A refusal is the
+            // same kind of thing it is — a sentence about something that did not
+            // happen — so it earns no new vocabulary.
             VStack(alignment: .leading, spacing: 2) {
                 Text(block.title)
                     .font(.system(size: 13, weight: .medium))
@@ -134,18 +132,6 @@ extension ActionBanner {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(block.title). \(block.detail)")
             .accessibilityIdentifier("banner-blocked")
-
-        case .dictationFailed(let reason):
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Nothing to insert")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.Keys.label)
-                    .lineLimit(1)
-                caption(reason)
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Nothing to insert. \(reason)")
-            .accessibilityIdentifier("banner-dictation-failed")
         }
     }
 

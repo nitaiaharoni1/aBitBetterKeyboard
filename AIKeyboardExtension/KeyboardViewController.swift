@@ -22,6 +22,9 @@ final class KeyboardViewController: UIInputViewController {
     /// Last banner presence we sized the host for. `objectWillChange` fires on
     /// every keystroke; this is what keeps those from touching the constraint.
     private var lastShowsActionBanner: Bool?
+    /// Last recording state we sized the host for. `objectWillChange` fires on
+    /// every loudness tick; this is what keeps those from touching the constraint.
+    private var lastIsRecording: Bool?
     /// Latched only once the shared container has actually taken the record, so a
     /// keyboard that starts without Full Access and is granted it mid-process
     /// still gets to leave one. See `recordPresence()`.
@@ -94,21 +97,26 @@ final class KeyboardViewController: UIInputViewController {
                     })
         )
 
-        // The action banner appears for a live reading, a model call, a refusal
-        // or a recording, and is gone while idle — so the height we ask the host
-        // for has to follow `showsActionBanner`. `objectWillChange` fires before
+        // The action banner appears for a live reading, a refusal or a failure,
+        // and a live recording grows the hairline into a waveform — so the height
+        // we ask the host for has to follow both. `objectWillChange` fires before
         // the property lands; defer one turn so the read sees the new state.
-        // Presence is compared only after that turn: every keystroke publishes,
-        // and the constraint must not move unless the strip actually appeared or
-        // left.
+        // Presence is compared only after that turn: every keystroke and every
+        // loudness tick publishes, and the constraint must not move unless the
+        // strip actually appeared or the microphone actually opened.
         controller.objectWillChange
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 DispatchQueue.main.async {
                     guard let self, let controller = self.controller else { return }
                     let shows = controller.showsActionBanner
-                    guard shows != self.lastShowsActionBanner else { return }
+                    let recording = controller.dictationKeyState.isRecording
+                    guard
+                        shows != self.lastShowsActionBanner
+                            || recording != self.lastIsRecording
+                    else { return }
                     self.lastShowsActionBanner = shows
+                    self.lastIsRecording = recording
                     self.updateKeyboardHeight()
                 }
             }
@@ -335,9 +343,11 @@ final class KeyboardViewController: UIInputViewController {
         // tallest form — see `ownUIHeightFraction()` — so a mid-read resize
         // cannot move the band even though the host height follows the strip.
         let showsBanner = controller.showsActionBanner
+        let isRecording = controller.dictationKeyState.isRecording
         lastShowsActionBanner = showsBanner
+        lastIsRecording = isRecording
         let height = Theme.Metrics.totalHeight(
-            for: controller.customization, showsBanner: showsBanner)
+            for: controller.customization, showsBanner: showsBanner, isRecording: isRecording)
 
         guard let heightConstraint else {
             let constraint = view.heightAnchor.constraint(equalToConstant: height)

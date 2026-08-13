@@ -38,7 +38,7 @@ enum OnboardingPracticeStage: Int, CaseIterable {
             return "Tap a suggestion, open Emoji, or swipe across Space to change languages."
         case .smartTools:
             return
-                "Tap Dictate or Reply to see their setup guidance. The Playground adds Send and guides every task."
+                "Tap Record or Reply to see their setup guidance. The Playground adds Send and guides every task."
         }
     }
 }

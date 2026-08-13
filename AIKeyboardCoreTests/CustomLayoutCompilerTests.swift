@@ -114,7 +114,10 @@ final class CustomLayoutCompilerTests: XCTestCase {
         XCTAssertEqual(with, without)
     }
 
-    func testTheCursorRowSitsBelowTheBottomRow() {
+    /// The compiler still appends this row last. `KeyboardView` draws it first,
+    /// above the letters — `CustomLayoutRenderingTests.testTheOptionalRowsAreWhereTheySay`
+    /// is the measurement of that.
+    func testTheCursorRowCompilesAfterTheBottomRow() {
         var layout = KeyboardCustomization.default
         layout.cursorRow = [SlotSpec(action: .cursorLeft), SlotSpec(action: .cursorRight)]
         let rows = KeyboardLayout.rows(
@@ -133,8 +136,9 @@ final class CustomLayoutCompilerTests: XCTestCase {
     func testTheBottomRowSwitchesBackFromTheNumbersPlane() {
         let rows = KeyboardLayout.rows(
             for: .hebrew, plane: .numbers, showsGlobe: true, customization: .default)
-        // Addressed by id, not by `last`: the default ships an action row below
-        // the bottom one, so `rows.last` stopped being the bottom row.
+        // Addressed by id, not by `last`: the compiler appends the action row
+        // after the bottom one, so `rows.last` is not the bottom row. The view
+        // then draws that last row first, above the letters.
         XCTAssertTrue(
             rows[KeyboardLayout.RowID.bottom].keys.map(\.cap)
                 .contains(.plane(.letters, label: KeyboardLanguage.hebrew.lettersPlaneLabel)))

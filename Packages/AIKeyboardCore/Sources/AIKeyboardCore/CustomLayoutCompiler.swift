@@ -25,7 +25,9 @@ extension KeyboardLayout {
         public static let cursor = 4
     }
 
-    /// Every row the keyboard draws, in the order it draws them.
+    /// Every row the keyboard draws. Letter, number and bottom rows are in the
+    /// order they appear on screen; the action row (`RowID.cursor`) is last here
+    /// and first on screen — `KeyboardView` lifts it above the letter block.
     public static func rows(
         for language: KeyboardLanguage,
         plane: KeyboardPlane,

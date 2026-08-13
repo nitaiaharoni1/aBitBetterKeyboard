@@ -12,6 +12,7 @@ extension KeyboardController {
         refreshDocumentState()
         guard store.storedPredictions else {
             suggestions = []
+            scheduleIdleTyping()
             return
         }
         let prefix = currentWordPrefix
@@ -24,18 +25,25 @@ extension KeyboardController {
             supplementary: store.storedPersonalDictionary + supplementaryWords,
             personal: personal
         )
-        // When the space bar is not allowed to commit a correction, the bold
-        // "default" slot has to be the typed word rather than the correction, or
-        // the bar advertises a swap that will not happen. Two reasons it is not
-        // allowed: the setting is off, or the user is backspacing through this
-        // particular word (`isCorrectingWordByHand`). Next-word suggestions (empty
-        // prefix) are never auto-committed anyway; leave their middle bold alone.
-        if !prefix.isEmpty, !store.storedAutocorrect || isCorrectingWordByHand {
-            suggestions = SuggestionEngine.markDefault(results, at: 0)
-        } else {
-            suggestions = results
-        }
+        suggestions = pinningDefaultToTypedIfNeeded(results, prefix: prefix)
         askForRefinement(prefix: prefix, context: context)
+        scheduleIdleTyping()
+    }
+
+    /// When space cannot commit a correction, the bold slot has to be the typed
+    /// word, or the bar advertises a swap that will not happen. Two reasons it
+    /// is not allowed: Autocorrect is off, or the user is backspacing through
+    /// this word. Next-word suggestions (empty prefix) are never auto-committed
+    /// anyway; leave their middle bold alone.
+    private func pinningDefaultToTypedIfNeeded(
+        _ results: [Suggestion], prefix: String
+    )
+        -> [Suggestion]
+    {
+        if !prefix.isEmpty, !store.storedAutocorrect || isCorrectingWordByHand {
+            return SuggestionEngine.markDefault(results, at: 0)
+        }
+        return results
     }
 
     /// Re-reads the two facts about the document that the keys are drawn from,
@@ -111,71 +119,29 @@ extension KeyboardController {
                 screenContext: ScreenContextSession.shared.isLive
                     ? ScreenContextSession.shared.state.context : nil,
                 permitted: SecureField.permitsRead(
-                    secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType),
-                localSlotCount: suggestions.count))
+                    secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)))
     }
 
-    /// Put the model's words into the slots the local tier is not holding.
+    /// Put the model's words into the bar.
     ///
-    /// **Three things this must never do, and they are the contract the async tier
-    /// is allowed to exist under.**
+    /// Slot 0 stays the typed keystrokes, so the user can always keep what they
+    /// keyed. When Autocorrect is on, the first model word becomes default.
+    /// When it is off (or the user is repairing this word by hand), default
+    /// stays on the typed word so the bar does not advertise a swap space will
+    /// not make. The model's words still fill the other slots for a tap.
     ///
-    /// It never touches slot 0, because that is the literal keystrokes and the
-    /// user must always be able to commit exactly what they typed.
-    ///
-    /// It never changes what the space bar would insert. **Pinning the bold
-    /// *index* is not enough and this used to do only that**: `markDefault` was
-    /// re-applied at the local tier's index over a list whose contents the model
-    /// had already replaced, so the word under the bold slot became the model's
-    /// while the index stood still. That is the exact harm the two-tier split
-    /// exists to prevent — the user reads the bar, pauses to think, presses space,
-    /// and gets a word they never saw. It is reachable wherever the local tier
-    /// autocorrects with a thin bar: four of the ninety corpus entries sit at
-    /// default index 1 with two slots (`tomorow` → `tomorrow`), which is exactly
-    /// the state `PredictiveRefiner.shouldRefine` lets through mid-word, and
-    /// `refine` serves a cached answer synchronously, so not even the 300 ms
-    /// cushion stands between the keystroke and the swap.
-    ///
-    /// **The pin is scoped to a word in progress, because that is when space
-    /// commits at all.** `insertSpace` leaves an empty prefix alone, so with
-    /// nothing typed the bold slot is a tap target rather than something the space
-    /// bar will insert — and refining the likeliest next word is the whole point
-    /// of the tier. So: prefix empty, everything below slot 0 is the model's to
-    /// replace; mid-word, the default slot's contents are the local tier's and
-    /// stay.
-    ///
-    /// And it never applies to a document that has moved on. The answer took
-    /// hundreds of milliseconds to arrive; if the word in progress changed while
-    /// it was in flight it is an answer to a question nobody is asking any more.
+    /// It never applies to a document that has moved on. The prefix is the one
+    /// handed back from the callback, not re-read here against itself.
     func applyRefinement(_ words: [String], for prefix: String) {
         guard store.storedPredictions, prefix == currentWordPrefix,
             let first = suggestions.first
         else { return }
-        let defaultIndex = suggestions.firstIndex(where: \.isDefault) ?? 0
-        var held = [0: first]
-        if !prefix.isEmpty { held[defaultIndex] = suggestions[defaultIndex] }
-
-        // The model's words, then what the local tier had, so a model that
-        // returned one usable word costs the user a slot rather than leaving a
-        // gap.
-        //
-        // **Every held word is in `seen` before the first slot is filled, not as
-        // its own slot comes up.** Filling in order is only enough while the held
-        // slots are a run from zero, which today they are — `defaultIndex` is 0 or
-        // 1 and slot 0 is always held. That is a fact about `shouldAutocorrect` in
-        // another file, and the cost of it changing is the same word twice in the
-        // bar: the model returns something folding to the held default, it is
-        // unseen at the free slot above, and the held copy lands underneath it.
-        // Seeding the set makes that impossible here rather than elsewhere.
+        let held = [0: first]
         let pool =
             words.map { Suggestion(text: $0, language: language) } + suggestions.dropFirst()
         var merged: [Suggestion] = []
         var seen = Set(held.values.map { SeedLanguageModel.fold($0.text) })
-        for slot in suggestions.indices {
-            // `continue`, not `break`: a pool with nothing left for a free slot
-            // must not take the held slots under it down with it, because the
-            // held default is the one thing this function exists to protect.
-            // `markDefault` clamps, so a short list still bolds it.
+        for slot in 0..<3 {
             guard
                 let choice = held[slot]
                     ?? pool.first(where: { !seen.contains(SeedLanguageModel.fold($0.text)) })
@@ -183,13 +149,93 @@ extension KeyboardController {
             seen.insert(SeedLanguageModel.fold(choice.text))
             merged.append(choice)
         }
-        suggestions = SuggestionEngine.markDefault(merged, at: defaultIndex)
+        let modelFolds = Set(words.map(SeedLanguageModel.fold))
+        let defaultIndex =
+            merged.firstIndex { modelFolds.contains(SeedLanguageModel.fold($0.text)) } ?? 0
+        suggestions = pinningDefaultToTypedIfNeeded(
+            SuggestionEngine.markDefault(merged, at: defaultIndex), prefix: prefix)
     }
 
-    /// Drop anything the async tier is waiting on. Called as the keyboard goes
-    /// away; an answer that arrives afterwards would land in the next document.
+    /// Restart the pause that can finish a word or add a space.
+    ///
+    /// Cancelled on every refresh, so it only fires into a real pause. An empty
+    /// prefix is not a word in progress: firing space there would keep adding
+    /// blanks after every committed word. The wait is `storedIdleDelayMs`, read
+    /// at the keystroke, not the 300 ms that ships.
+    func scheduleIdleTyping() {
+        idleTypingTask?.cancel()
+        idleTypingTask = nil
+        guard store.storedCompleteOnIdle || store.storedSpaceOnIdle else { return }
+        guard !currentWordPrefix.isEmpty else { return }
+        guard idleTypingMayRun else { return }
+        let delay = store.storedIdleDelayMs
+        idleTypingTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(delay))
+            guard !Task.isCancelled, let self else { return }
+            self.performIdleTyping()
+        }
+    }
+
+    /// The pause fired. Completing the word and adding a space are separate
+    /// switches; both on is the completion plus a space.
+    func performIdleTyping() {
+        guard idleTypingMayRun else { return }
+        let prefix = currentWordPrefix
+        guard !prefix.isEmpty else { return }
+        let complete = store.storedCompleteOnIdle
+        let space = store.storedSpaceOnIdle
+        guard complete || space else { return }
+
+        if complete, store.storedPredictions, let candidate = idleCompletion(for: prefix) {
+            if space {
+                apply(candidate)
+            } else {
+                Feedback.keyPress()
+                Feedback.keyClick(.tock)
+                clearRevertibleEdit()
+                replaceCurrentWord(with: candidate.text)
+                recordCommittedWord(SuggestionEngine.wordCore(candidate.text))
+                deletedWordPrefix = nil
+                refreshSuggestions()
+                // The word is finished. Refresh would start the pause again and
+                // the next offer (hellos after hello) would rewrite it.
+                idleTypingTask?.cancel()
+                idleTypingTask = nil
+                reportInteraction(.suggestion)
+            }
+            return
+        }
+        if space { insertSpace() }
+    }
+
+    /// Complete on pause writes the first suggestion that is not the typed
+    /// word, not the bold slot. Mid-word the engine leaves the keystrokes as
+    /// default unless it is sure they are a typo, and Autocorrect-off remakes
+    /// default to slot 0 so space will not swap. The completion is still
+    /// sitting in slot 1. Taking `isDefault` made this switch a no-op.
+    func idleCompletion(for prefix: String) -> Suggestion? {
+        let typed = SuggestionEngine.comparable(prefix)
+        guard !typed.isEmpty else { return nil }
+        return suggestions.first { SuggestionEngine.comparable($0.text) != typed }
+    }
+
+    /// A credential field, a recording, a hand repair, a selection, or the
+    /// emoji panel: none of those is a pause in ordinary typing.
+    private var idleTypingMayRun: Bool {
+        guard overlay == .none, !isDictating, !isCorrectingWordByHand, selection == nil else {
+            return false
+        }
+        return SecureField.permitsRead(
+            secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
+    }
+
+    /// Drop anything the async tier or the idle pause is waiting on. Called as
+    /// the keyboard goes away; an answer that arrives afterwards would land in
+    /// the next document.
     public func cancelRefinement() {
         refiner?.cancel()
+        idleTypingTask?.cancel()
+        idleTypingTask = nil
     }
 
     public func updateSupplementaryLexicon(_ words: [String]) {

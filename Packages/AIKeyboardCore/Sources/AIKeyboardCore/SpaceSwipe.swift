@@ -85,4 +85,41 @@ public enum SpaceSwipe {
         let index = ((start + places) % count + count) % count
         return enabled[index]
     }
+
+    // MARK: How the keys move
+
+    /// Which edges a slide of this step enters and leaves by.
+    ///
+    /// **The letter keys follow the strip, not a pager's finger.** A right swipe
+    /// lights the code on the right of the space bar, so the new keys enter from
+    /// the right; content-follows-finger would bring in the *left* neighbour and
+    /// fight the affordance the key already printed. Nil when there is no step,
+    /// which is the resting crossfade.
+    public static func slideEdges(step: Int) -> (incoming: Edge, outgoing: Edge)? {
+        if step > 0 { return (.trailing, .leading) }
+        if step < 0 { return (.leading, .trailing) }
+        return nil
+    }
+
+    /// The letter rows replacing each other. Opacity alone when Reduce Motion is
+    /// on, or when there is no direction to honour.
+    public static func letterTransition(step: Int, reduceMotion: Bool) -> AnyTransition {
+        guard !reduceMotion, let edges = slideEdges(step: step) else { return .opacity }
+        return .asymmetric(
+            insertion: .move(edge: edges.incoming).combined(with: .opacity),
+            removal: .move(edge: edges.outgoing).combined(with: .opacity)
+        )
+    }
+
+    /// The balloon is pulled out of the space bar in the same direction the
+    /// finger just travelled.
+    public static func calloutTransition(step: Int, reduceMotion: Bool) -> AnyTransition {
+        guard !reduceMotion, let edges = slideEdges(step: step) else { return .opacity }
+        return .asymmetric(
+            insertion: .move(edge: edges.incoming)
+                .combined(with: .scale(scale: 0.88, anchor: .bottom))
+                .combined(with: .opacity),
+            removal: .opacity
+        )
+    }
 }

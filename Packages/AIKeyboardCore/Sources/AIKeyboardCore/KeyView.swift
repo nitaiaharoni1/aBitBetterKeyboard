@@ -49,7 +49,7 @@ public struct KeyView: View {
     /// are: it is resolved from a recording running in another process, and a
     /// `KeySpec` is a value that can read none of that. See `DictationKeyState`.
     let dictationState: DictationKeyState
-    let onPress: (KeyCap) -> Void
+    let onPress: (KeyCap, CGPoint) -> Void
     let onRepeat: (() -> Void)?
     let onAlternate: ((String) -> Void)?
     /// Set only on the space bar, and its presence is what makes that key defer:
@@ -71,6 +71,7 @@ public struct KeyView: View {
     /// Control Centre pull, the host resigning first responder — and `onEnded` was
     /// the only place the repeat loop was ever stopped.
     @GestureState var isTouching = false
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     public init(
         spec: KeySpec,
@@ -88,7 +89,7 @@ public struct KeyView: View {
         isDisabled: Bool = false,
         disabledHint: String = "",
         dictationState: DictationKeyState = .idle,
-        onPress: @escaping (KeyCap) -> Void,
+        onPress: @escaping (KeyCap, CGPoint) -> Void,
         onRepeat: (() -> Void)? = nil,
         onAlternate: ((String) -> Void)? = nil,
         onSpaceTouch: ((SpaceTouchPhase) -> Void)? = nil
@@ -120,22 +121,23 @@ public struct KeyView: View {
                 .fill(background)
                 .shadow(
                     color: Self.contactShadow(for: capKind),
-                    radius: 0, x: 0, y: isPressed ? 1 : 2
+                    radius: 0, x: 0, y: isPressed ? Self.pressContactY : Self.restContactY
                 )
                 .shadow(
                     color: Self.ambientShadow(for: capKind),
-                    radius: isPressed ? 3 : 7, x: 0, y: isPressed ? 2 : 4
+                    radius: isPressed ? Self.pressAmbientRadius : Self.restAmbientRadius,
+                    x: 0, y: isPressed ? Self.pressAmbientY : Self.restAmbientY
                 )
 
             label
         }
         .frame(width: width, height: height)
-        // The press, felt: the cap — label with it — settles a point onto its
-        // contact line and the lift goes out from under it. An offset, not
-        // layout, so no neighbour moves; applied before the overlays, so the
-        // callouts stay anchored where the key sits at rest.
-        .offset(y: isPressed ? 1 : 0)
-        .animation(Theme.Motion.quick, value: isPressed)
+        // The press, felt: the cap — label with it — seats onto the keyboard
+        // and the lift goes out from under it. An offset, not layout, so no
+        // neighbour moves; applied before the overlays, so the callouts stay
+        // anchored where the key sits at rest.
+        .offset(y: isPressed ? Self.pressTravel : 0)
+        .animation(Theme.Motion.press, value: isPressed)
         .overlay(alignment: .bottom) { callout }
         .overlay(alignment: .bottom) { alternatesPopup }
         .overlay(alignment: .bottom) { languageCallout }
@@ -211,9 +213,9 @@ public struct KeyView: View {
     ///
     /// **`KeyCap` answers for every key but one.** A `KeyCap` is a value and knows
     /// nothing about a recording running in another process, so the microphone key
-    /// said "Dictate" in all four of its states — including while it was the button
-    /// that stops a live microphone. Its four appearances are visual (a red cap, a
-    /// filled glyph, a caption, a countdown) and were, until this, entirely silent.
+    /// said "Record" in both of its states — including while it was the button
+    /// that stops a live microphone. Its two appearances are visual (a red cap, a
+    /// pause glyph) and were, until this, entirely silent.
     func label(for cap: KeyCap) -> String {
         // A grouped letter key is the other one: it is `.character("qw\nas")`, and
         // only the layout that built it knows that is four letters rather than a

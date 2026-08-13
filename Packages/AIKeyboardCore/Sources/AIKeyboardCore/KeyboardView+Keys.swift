@@ -32,51 +32,31 @@ extension KeyboardView {
                 customization: layout,
                 grouping: grouping
             )
-            // The action row is `cursorRow`. Emoji replaces only what sits above
-            // it — the letters (and optional number row, and the 123/space row) —
-            // so the five actions stay under the thumb that just opened the grid.
+            // The action row is `cursorRow`. The compiler appends it last;
+            // this view draws it first, above the letter block. Emoji replaces
+            // only what sits below it — the letters (and optional number row,
+            // and the 123/space row) — so the five actions stay reachable while
+            // the grid is open.
             let letterRows = rows.filter { $0.id != KeyboardLayout.RowID.cursor }
             let actionRows = rows.filter { $0.id == KeyboardLayout.RowID.cursor }
+            // The space row stays put: the thumb is on it. Everything above it
+            // slides with the language, matching the strip rather than a pager.
+            let slidingRows = letterRows.filter { $0.id != KeyboardLayout.RowID.bottom }
+            let bottomRows = letterRows.filter { $0.id == KeyboardLayout.RowID.bottom }
             // **Emoji search puts the letters back and takes the action row
-            // instead**, which is the exact opposite trade to the grid above it.
+            // instead**, which is the exact opposite trade to the grid below it.
             // Typing a search term needs an alphabet, and at 364 pt there is no
             // band left to put one in — so the two halves swap: the grid goes, the
             // keys return, and the matches take the row the actions were in. The
             // actions are not reachable in that state and do not need to be; the
             // Emoji key that closes it all is in the suggestion bar's edge, and
-            // the search box's own ✕ is a tap away.
+            // the search box's own ✕ is a tap away. The results sit between the
+            // search box and the letters, which is the only place they fit.
             let searching = controller.overlay == .emojiSearch
             let showLetterKeys = controller.overlay == .none || searching
             let showActionRow = controller.overlay == .none || controller.overlay == .emoji
 
             VStack(spacing: layout.geometry.rowSpacing) {
-                ZStack {
-                    // Letter / number / bottom rows. Hidden (not removed) while a
-                    // panel is up so the emoji grid keeps the same height.
-                    rowsView(
-                        letterRows, availableWidth: available, unit: unit,
-                        height: layout.geometry.keyHeight,
-                        rowSpacing: layout.geometry.rowSpacing
-                    )
-                    .opacity(showLetterKeys ? 1 : 0)
-                    .allowsHitTesting(showLetterKeys)
-                    .keyboardGridChrome(width: gridWidth, reach: layout.geometry.reach)
-
-                    // Over the letter area only — not over the action row below.
-                    // Same width and reach pin as the keys, so one-handed mode
-                    // does not leave a full-bleed emoji panel over a narrowed row.
-                    if controller.overlay == .emoji {
-                        EmojiPanel(controller: controller, keyHeight: layout.geometry.keyHeight)
-                            .frame(width: gridWidth)
-                            .frame(
-                                maxWidth: .infinity,
-                                alignment: reachAlignment(layout.geometry.reach)
-                            )
-                            .environment(\.layoutDirection, .leftToRight)
-                            .transition(panelTransition)
-                    }
-                }
-
                 if !actionRows.isEmpty {
                     ZStack {
                         rowsView(
@@ -99,6 +79,62 @@ extension KeyboardView {
                             )
                             .transition(panelTransition)
                         }
+                    }
+                }
+
+                ZStack(alignment: .top) {
+                    // Letter / number / extra rows slide; the space row below does
+                    // not. Hidden (not removed) while a panel is up so the emoji
+                    // grid keeps the same height.
+                    //
+                    // **The sliding stack is a ZStack so old and new letters can
+                    // overlap for the swipe, and it must not be allowed to grow.**
+                    // A ZStack in a GeometryReader eats leftover height. That
+                    // leftover sat *between* the backspace row and the space row,
+                    // shoved the space row into the bottom edge, and `.clipped()`
+                    // then sliced the backspace row's own shadow off. Hugging the
+                    // keys restores the same 12pt gap every other row has.
+                    VStack(spacing: layout.geometry.rowSpacing) {
+                        if !slidingRows.isEmpty {
+                            ZStack {
+                                rowsView(
+                                    slidingRows, availableWidth: available, unit: unit,
+                                    height: layout.geometry.keyHeight,
+                                    rowSpacing: layout.geometry.rowSpacing
+                                )
+                                .id(controller.language)
+                                .transition(
+                                    SpaceSwipe.letterTransition(
+                                        step: controller.languageSlideStep,
+                                        reduceMotion: reduceMotion))
+                            }
+                            .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if !bottomRows.isEmpty {
+                            rowsView(
+                                bottomRows, availableWidth: available, unit: unit,
+                                height: layout.geometry.keyHeight,
+                                rowSpacing: layout.geometry.rowSpacing
+                            )
+                        }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .opacity(showLetterKeys ? 1 : 0)
+                    .allowsHitTesting(showLetterKeys)
+                    .keyboardGridChrome(width: gridWidth, reach: layout.geometry.reach)
+
+                    // Over the letter area only — not over the action row above.
+                    // Same width and reach pin as the keys, so one-handed mode
+                    // does not leave a full-bleed emoji panel over a narrowed row.
+                    if controller.overlay == .emoji {
+                        EmojiPanel(controller: controller, keyHeight: layout.geometry.keyHeight)
+                            .frame(width: gridWidth)
+                            .frame(
+                                maxWidth: .infinity,
+                                alignment: reachAlignment(layout.geometry.reach)
+                            )
+                            .environment(\.layoutDirection, .leftToRight)
+                            .transition(panelTransition)
                     }
                 }
             }
@@ -220,7 +256,7 @@ extension KeyboardView {
                 // candidates. Same shape as `toneAlternates` and `isEmojiOpen`
                 // above: state the `KeySpec` cannot reach on its own.
                 dictationState: key.cap == .dictation ? controller.dictationKeyState : .idle,
-                onPress: { controller.press($0) },
+                onPress: { controller.press($0, at: $1) },
                 // Through `press` rather than straight to `deleteBackward`, so a
                 // held delete clicks on every repeat the way it buzzes on every
                 // repeat — and so a repeat inside the emoji search box eats the

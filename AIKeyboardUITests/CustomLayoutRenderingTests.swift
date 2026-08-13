@@ -64,8 +64,8 @@ final class CustomLayoutRenderingTests: XCTestCase {
         XCTAssertLessThan(one.frame.minX, zero.frame.minX, "the number row mirrored under Hebrew")
     }
 
-    /// The number row is above the letters and the cursor row below the bottom
-    /// one, which is the whole claim `RowID` makes.
+    /// The extra row is above the number row, which is above the letters. The
+    /// compiler still appends the extra row last; `KeyboardView` is what lifts it.
     func testTheOptionalRowsAreWhereTheySay() throws {
         try selectPreset("power")
         openPlayground()
@@ -77,9 +77,9 @@ final class CustomLayoutRenderingTests: XCTestCase {
         for (name, item) in [("digit", digit), ("letter", letter), ("space", space), ("cursor", cursor)] {
             XCTAssertTrue(item.exists, "no \(name) key on screen")
         }
+        XCTAssertLessThan(cursor.frame.midY, digit.frame.midY, "the extra row is below the number row")
         XCTAssertLessThan(digit.frame.midY, letter.frame.midY, "the number row is below the letters")
-        XCTAssertGreaterThan(
-            cursor.frame.midY, space.frame.midY, "the cursor row is above the bottom row")
+        XCTAssertLessThan(letter.frame.midY, space.frame.midY, "the letters are below the space row")
     }
 
     /// Key height reaches the rendered keys, not only the arithmetic.

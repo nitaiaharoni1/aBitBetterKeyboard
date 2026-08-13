@@ -11,30 +11,23 @@ key-heights tall. The third row keeps shift and delete, so it stays one row deep
 and groups sideways. The keyboard's total height does not change, because the
 band is two rows tall because it *is* two rows.
 
-Status: **Phase A measured; Phase B built and compiling, not yet shippable.** The
-harness is `Bar/grouped/` and its findings are in `Bar/grouped/README.md`. The
-keyboard is `GroupedKeys.swift`, `GroupedDecoder.swift`,
-`GroupedLexiconResource.swift` and `KeyboardController+Grouped.swift`, with the
-dial in Settings ▸ Typing.
+Status: **Phase A measured; Phase B built.** The harness is `Bar/grouped/` and
+its findings are in `Bar/grouped/README.md`. The keyboard is `GroupedKeys.swift`,
+`GroupedDecoder.swift`, `GroupedLexiconResource.swift` and
+`KeyboardController+Grouped.swift`, with the dial in Settings ▸ Typing.
 
-> **What still stands between this and shipping**, in one place:
-> **the lexicon licence.** `Scripts/generate-grouped-lexicon.py` builds the
-> bundled word list from `wordfreq`, whose data is drawn from corpora with mixed
-> and partly unstated licences, so the generated files are gitignored and must
-> not ship. Without them `GroupedDecoder` reports `.seedOnly` and falls back to a
-> few hundred seed words, which decodes the common core and almost nothing else.
-> Settings says so when the files are missing. Hebrew is a second, smaller gate:
-> L2 commits the wrong word about three times in ten, so
-> `GroupedKeys.Level.hebrewCeiling` clamps Hebrew at L1 while English keeps the
-> stop the user picked. The feature is off by default and the code path is inert
-> until somebody turns the dial.
+> **What still stands between this and shipping.** Hebrew L2 commits the wrong
+> word about three times in ten, so `GroupedKeys.Level.hebrewCeiling` clamps
+> Hebrew at L1 while English keeps the stop the user picked. The feature is off
+> by default. The bundled word lists are Leipzig Corpora Collection frequency
+> lists (CC BY 4.0); run `Scripts/generate-grouped-lexicon.py` to refresh them.
 
 > **What the harness returned, in six lines.** Separating Hebrew's clitics is
-> worth +7.0 points at 14 keys and costs no extra keys; **L1 is the last stop
+> worth +7.0 points at thirteen keys and costs no extra keys; **L1 is the last stop
 > where it is fully satisfiable**, and below that one pair is stuck. Hebrew caps
 > lower than English at every level and the gap widens sharply under compression
-> (4.8 points at 14 keys, 22.9 at four). k=2 — not currently a dial stop — costs
-> only 1.6 points against an ungrouped English keyboard. Hebrew L2 commits the
+> (about 3.5 points at thirteen keys, 22.9 at four). k=2 is the "Two letters" dial stop
+> and costs about 3 points against an ungrouped English keyboard. Hebrew L2 commits the
 > wrong word nearly three times in ten. **Banding gained English 1.8 to 4.4 points
 > and cost Hebrew 1.8 to 7.9**, and neither side of that is the reason to do it —
 > the harness cannot see target size at all. Every rate carries a **2-point**
@@ -118,8 +111,8 @@ The band is the first two, ten columns wide with nothing under `p`.
 
 | Level | Letters/key | Keys | Band | Third row |
 |---|---|---|---|---|
-| pairs | 2 | 14 | `[q/a][w/s][e/d][r/f][t/g][y/h][u/j][i/k][o/l][p]` | `[zx][cv][bn][m]` |
-| L1 | 3 | 8 | `[qw/as][er/df][ty/gh][ui/jk][o/l][p]` | `[zxcv][bnm]` |
+| pairs | 2 | 12 | `[q/a][w/s][e/d][r/f][t/g][y/h][u/j][i/k][op/l]` | `[zx][cv][bnm]` |
+| L1 | 3 | 7 | `[qw/as][er/df][ty/gh][ui/jk][op/l]` | `[zxcv][bnm]` |
 | L2 | 4 | 7 | `[qw/as][er/df][ty/gh][ui/jk][op/l]` | `[zxcv][bnm]` |
 | L3 | 5 | 5 | `[qwe/asd][rty/fgh][ui/jk][op/l]` | `[zxcvbnm]` |
 
@@ -129,8 +122,8 @@ Eight letters over ten, so `ך` and `ף` have nothing above them.
 
 | Level | Letters/key | Keys | Band | Third row |
 |---|---|---|---|---|
-| pairs | 2 | 14 | `[ק/ש][ר/ד][א/ג][ט/כ][ו/ע][ן/י][ם/ח][פ/ל][/ךף]` | `[ז][סב][הנ][מצ][תץ]` |
-| L1 | 3 | 9 | `[קר/שד][אט/גכ][ו/ע][ןם/יח][פ/לך][/ף]` | `[זסב][הנ][מצתץ]` |
+| pairs | 2 | 13 | `[ק/ש][ר/ד][א/ג][ט/כ][ו/ע][ן/י][ם/ח][פ/ל][/ךף]` | `[זסב][הנ][מצ][תץ]` |
+| L1 | 3 | 8 | `[קר/שד][אט/גכ][ו/ע][ןם/יח][פ/לךף]` | `[זסב][הנ][מצתץ]` |
 | L2 | 4 | 7 | `[קר/שד][אט/גכ][ון/עי][םפ/חל][/ךף]` | `[זסבהנ][מצתץ]` |
 | L3 | 5 | 6 | `[קר/שד][אט/גכ][ונם/עיח][פ/לךף]` | `[זסבהנ][מצתץ]` |
 
@@ -141,12 +134,12 @@ reach. At three per key the band comes out in twos and fours around a mean of
 the row-at-a-time layout in both languages — because `keyCount` is asked once for
 the band's two rows together rather than once each.
 
-**Known weakness in these stops, and banding made it worse.** English L1 and L2
-differ by one key out of eight, and now by **1.0 point** (92.3% against 91.3%)
-where they used to differ by 3.6. Two stops that differ by neither look nor
-accuracy are one stop. The sweep covers k=2 through 7, and **k=2 is the stop this
-table is missing**: 14 keys, 96.5% English and 91.7% Hebrew, 1.6 points off an
-ungrouped English keyboard.
+**Known weakness in these stops, and folding leftovers made it sharper.** English
+L1 and L2 differ by **no keys and no points** (both 91.3%): leftover `p` used to
+be the extra key at L1, and folding it in made the two stops the same English
+keyboard. Hebrew still has one more key at L1 (8 against 7). Two stops that
+differ by neither look nor accuracy are one stop. The sweep covers k=2 through 7;
+k=2 is 12/13 keys, 94.9% English and 91.4% Hebrew.
 
 ## The Hebrew problem, measured
 

@@ -15,7 +15,8 @@ import SwiftUI
 /// key with no session running, the banner shows an "Open AI Keyboard" button.
 /// `KeyboardViewController` wires `onOpenContainingApp` to try
 /// `extensionContext?.open(_:)` first, with a responder-chain fallback.
-/// `DictationHandoffView` is what appears when that deep link lands.
+/// Home is what appears when that deep link lands, and the session starts
+/// automatically so the user can swipe back.
 struct DictationView: View {
 
     @EnvironmentObject private var store: SharedStore

@@ -40,12 +40,14 @@ public enum GroupedKeys {
     /// are percentages of.
     public enum Level: Int, CaseIterable, Codable, Sendable {
         case off = 1
-        /// 14 keys in both languages, each one letter over another. Measured at
-        /// 96.5% English / 91.7% Hebrew top-1, against 98.1% / 97.0% ungrouped —
-        /// so English pays a point and a half for a target twice the area, and
-        /// Hebrew pays five.
+        /// 12 keys English, 13 Hebrew, each roughly one letter over another. Measured at
+        /// 94.9% English / 91.4% Hebrew top-1, against 98.1% / 97.0% ungrouped.
+        /// Leftover columns (`p`, `ךף`) join a neighbour rather than sitting on a
+        /// one-letter key.
         case pairs = 2
-        /// 8 keys English, 9 Hebrew. 92.3% / 82.4%.
+        /// 7 keys English, 8 Hebrew. 91.3% / 81.9%. English's leftover `p` folds
+        /// into the key beside it, so this stop and L2 draw the same English
+        /// keyboard; Hebrew still has one more key.
         case l1 = 3
         /// 7 keys in both. 91.3% / 71.2%.
         case l2 = 4
@@ -90,8 +92,8 @@ public enum GroupedKeys {
         public var measuredAccuracy: (english: Int, hebrew: Int) {
             switch self {
             case .off: return (98, 97)
-            case .pairs: return (97, 92)
-            case .l1: return (92, 82)
+            case .pairs: return (95, 91)
+            case .l1: return (91, 82)
             case .l2: return (91, 71)
             case .l3: return (83, 68)
             }
@@ -107,9 +109,10 @@ public enum GroupedKeys {
         /// A line may be empty where the row below the band runs out of letters.
         public let lines: [[String]]
 
-        /// How many of the ungrouped keyboard's key positions this one covers,
-        /// which is also its width in units. The band's last key is one position
-        /// wide and two letters tall; a five-letter key is three positions wide.
+        /// How many of the ungrouped keyboard's key positions this one covers.
+        /// Used to keep the column budget at ten so the band still fills the row
+        /// it replaced; drawn width is an equal share of that row, not this span,
+        /// so a leftover column cannot sit on a skinny key beside a fat one.
         public let span: Int
 
         public init(lines: [[String]], span: Int) {
@@ -121,13 +124,14 @@ public enum GroupedKeys {
 
         /// What is written on the cap: one line per row, newline-separated.
         ///
-        /// **A one-letter key keeps a bare cap**, because it is an ordinary key —
-        /// it types its letter directly and looks up its own accents by it.
-        /// `letters(inCap:)` is the only thing that ever reads a grouped cap back.
+        /// Empty lines stay: a leftover column with nothing above it (`ךף`) is
+        /// still a band key, and the blank top line is how it draws on the lower
+        /// half instead of floating in the middle. `letters(inCap:)` drops the
+        /// break, so it is layout rather than a letter.
         public var cap: String {
             let letters = self.letters
             guard letters.count > 1 else { return letters.first ?? "" }
-            return lines.filter { !$0.isEmpty }.map { $0.joined() }.joined(separator: "\n")
+            return lines.map { $0.joined() }.joined(separator: "\n")
         }
     }
 
@@ -160,8 +164,8 @@ public enum GroupedKeys {
     ///
     /// **A band asks it once, for both its rows together**, which is what keeps
     /// the key count at every dial stop exactly the one `Bar/grouped/` measured:
-    /// English's 19 banded letters at three per key give six keys where the two
-    /// rows separately gave three and three.
+    /// English's 19 banded letters at three per key give six column-groups, then
+    /// leftover `p` folds in, so the band draws five keys.
     static func keyCount(rowLength: Int, level: Level) -> Int {
         max(1, Int((Double(rowLength) / Double(level.rawValue) + 0.5).rounded(.down)))
     }
@@ -241,8 +245,8 @@ public enum GroupedKeys {
     ///
     /// **Keeping them off one another's keys is the single biggest Hebrew win
     /// available and it costs no keys at all** — only different boundaries, so
-    /// the letters stay in order and muscle memory survives. Worth +4.9 points at
-    /// 14 keys and +2.3 at nine. Plain adjacency puts ה with מ, which makes "the
+    /// the letters stay in order and muscle memory survives. Worth +7.0 points at
+    /// thirteen keys and +6.6 at eight. Plain adjacency puts ה with מ, which makes "the
     /// X" and "from X" the same keystroke, in a language where every sentence has
     /// one.
     ///
@@ -295,7 +299,9 @@ public enum GroupedKeys {
                 ? nil
                 : split(row, into: count, avoiding: { avoid.contains($0) ? 1 : 0 }))
             ?? split(row, into: count)
-        return Row(groups: parts.map { Group(lines: [$0], span: $0.count) }, heightUnits: 1)
+        let groups = absorbingSingletons(
+            parts.map { Group(lines: [$0], span: $0.count) }, keepingApart: avoid)
+        return Row(groups: groups, heightUnits: 1)
     }
 
     /// Two rows merged into one row of double-height keys.
@@ -324,13 +330,66 @@ public enum GroupedKeys {
                 ? nil
                 : split(columns, into: count, avoiding: { $0.clitics(in: avoid) }))
             ?? split(columns, into: count)
-        return Row(
-            groups: parts.map { part in
+        let groups = absorbingSingletons(
+            parts.map { part in
                 Group(
                     lines: [part.compactMap(\.top), part.compactMap(\.bottom)],
                     span: part.count)
             },
-            heightUnits: 2)
+            keepingApart: avoid)
+        return Row(groups: groups, heightUnits: 2)
+    }
+
+    /// Fold any one-letter group into a neighbour. English `p` and Hebrew `ף`
+    /// sit on leftover columns with nothing above or below them, and the split
+    /// otherwise leaves them on a key of their own — a single character on a
+    /// skinny button, which is the opposite of this feature. Two leftovers next
+    /// to each other join first (`ך` with `ף`); otherwise the letter joins the
+    /// neighbour that does not put two Hebrew prefixes on one key.
+    private static func absorbingSingletons(
+        _ groups: [Group], keepingApart avoid: Set<String>
+    ) -> [Group] {
+        var groups = groups
+        while groups.count > 1, let index = groups.firstIndex(where: { $0.letters.count == 1 }) {
+            let target = mergeTarget(for: index, in: groups, keepingApart: avoid)
+            let lo = min(index, target)
+            let hi = max(index, target)
+            groups[lo] = merged(groups[lo], groups[hi])
+            groups.remove(at: hi)
+        }
+        return groups
+    }
+
+    /// Which neighbour a singleton should join. Prefers another singleton (so
+    /// two leftover columns become one key) and otherwise the side that keeps
+    /// Hebrew prefixes apart; left wins a tie, which is the leftover sitting
+    /// on the right of a left-aligned shorter row.
+    private static func mergeTarget(
+        for index: Int, in groups: [Group], keepingApart avoid: Set<String>
+    ) -> Int {
+        let neighbors = [index - 1, index + 1].filter { groups.indices.contains($0) }
+        func collides(_ other: Int) -> Bool {
+            clitics(in: groups[index], avoid: avoid) + clitics(in: groups[other], avoid: avoid) > 1
+        }
+        let safeSingletons = neighbors.filter {
+            groups[$0].letters.count == 1 && !collides($0)
+        }
+        if let pick = safeSingletons.first { return pick }
+        let safe = neighbors.filter { !collides($0) }
+        return (safe.first ?? neighbors.first) ?? index
+    }
+
+    private static func clitics(in group: Group, avoid: Set<String>) -> Int {
+        group.letters.filter(avoid.contains).count
+    }
+
+    private static func merged(_ left: Group, _ right: Group) -> Group {
+        let lineCount = max(left.lines.count, right.lines.count)
+        let lines = (0..<lineCount).map { index in
+            (index < left.lines.count ? left.lines[index] : [])
+                + (index < right.lines.count ? right.lines[index] : [])
+        }
+        return Group(lines: lines, span: left.span + right.span)
     }
 
     /// One key position of the ungrouped keyboard, and the one under it.
@@ -413,6 +472,50 @@ public enum GroupedKeys {
     /// not single `Character`s — see there.
     public static func letters(inCap cap: String) -> [String] {
         cap.filter { !$0.isNewline }.map(String.init)
+    }
+
+    /// The lines a cap is drawn on, empty rows kept. Same split `KeySpec.groupedLines`
+    /// uses; here so a tap can be named without a `KeySpec`.
+    public static func lines(inCap cap: String) -> [[String]] {
+        cap.split(separator: "\n", omittingEmptySubsequences: false).map { $0.map(String.init) }
+    }
+
+    /// Which letter a tap on this key meant, or `nil` when the tap is too close
+    /// to the middle to call.
+    ///
+    /// `x` and `y` are 0...1 in the key, origin top-left. The key is sliced the
+    /// way it is drawn: one band per line, equal columns per letter on that line.
+    /// An empty line (the blank top of `ךף`) occupies its slice and yields
+    /// nothing. A dead band around every *internal* boundary leaves a thumb that
+    /// aimed at the key, not at a letter, for the decoder — the same idea as a
+    /// long press, which is the hard version of this pin.
+    public static func letter(
+        atX x: Double, y: Double, in lines: [[String]], deadBand: Double = 0.18
+    ) -> String? {
+        guard !lines.isEmpty else { return nil }
+        let x = min(1, max(0, x))
+        let y = min(1, max(0, y))
+        let rowCount = lines.count
+        let rowFrac = y * Double(rowCount)
+        var row = Int(rowFrac)
+        if row >= rowCount { row = rowCount - 1 }
+        let line = lines[row]
+        guard !line.isEmpty else { return nil }
+        let colCount = line.count
+        let colFrac = x * Double(colCount)
+        var col = Int(colFrac)
+        if col >= colCount { col = colCount - 1 }
+        let fy = rowFrac - Double(row)
+        let fx = colFrac - Double(col)
+        if rowCount > 1 {
+            if row > 0, fy < deadBand { return nil }
+            if row < rowCount - 1, fy > 1 - deadBand { return nil }
+        }
+        if colCount > 1 {
+            if col > 0, fx < deadBand { return nil }
+            if col < colCount - 1, fx > 1 - deadBand { return nil }
+        }
+        return line[col]
     }
 
     /// Whether this language may be grouped at all.

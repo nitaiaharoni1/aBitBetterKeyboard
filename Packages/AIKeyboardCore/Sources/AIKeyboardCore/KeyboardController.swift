@@ -45,6 +45,12 @@ public final class KeyboardController: ObservableObject {
     /// space bar says "space". See `LanguageSwitchIndication`.
     @Published public var languageSwitchIndication: LanguageSwitchIndication?
 
+    /// Which way the letter keys should slide for the language currently on
+    /// screen: `1` incoming from the right, `-1` from the left. Held separately
+    /// from `languageSwitchIndication` because the confirmation balloon clears
+    /// after 1.4s and the next switch still needs the last step to pick an edge.
+    @Published var languageSlideStep = 0
+
     /// True while a mock AI call is in flight.
     @Published public var isWorking = false
     @Published public var workingPhase: Double = 0
@@ -337,6 +343,10 @@ public final class KeyboardController: ObservableObject {
     /// change.
     var refiner: PredictiveRefiner?
 
+    /// Completes the bold word and/or inserts a space after a pause. Cancelled
+    /// on every keystroke. See `scheduleIdleTyping`.
+    var idleTypingTask: Task<Void, Never>?
+
     /// What this user's typing has taught the keyboard.
     ///
     /// **`.shared` only for the real keyboard, and a throwaway for everybody
@@ -403,19 +413,26 @@ public final class KeyboardController: ObservableObject {
         dictation.$availability
             .sink { [weak self] availability in self?.dictationAvailability = availability }
             .store(in: &cancellables)
-        // **Every tick of this one, unlike the countdown above.** It is what the
-        // waveform is *made of*: throttling it to whole seconds would leave three
-        // bars and a pause. It only ticks while a session is being watched, which
-        // is only while somebody is dictating.
-        dictation.$level
-            .sink { [weak self] level in
+        // **Every poll, not every change of loudness.** `$level` is Equatable and
+        // drops a held note, which left the strip as three bars and a pause —
+        // the dashed line that did not move. `levelTick` rises on every poll
+        // whether the number changed or not, which is what the waveform is made
+        // of. It only ticks while a session is being watched.
+        dictation.$levelTick
+            .sink { [weak self] _ in
                 guard let self else { return }
                 guard self.isDictating else {
-                    if !self.dictationLevels.isEmpty { self.dictationLevels = [] }
+                    // Freeze the last reading through `.finishing`, then drop it
+                    // once the key is idle again. Clearing on `!isDictating` made
+                    // the strip a flat dashed line for the second the words were
+                    // in flight.
+                    if !self.isDictationActive, !self.dictationLevels.isEmpty {
+                        self.dictationLevels = []
+                    }
                     return
                 }
                 var levels = self.dictationLevels
-                levels.append(level)
+                levels.append(self.dictation.level)
                 if levels.count > Self.dictationLevelHistory { levels.removeFirst() }
                 self.dictationLevels = levels
             }

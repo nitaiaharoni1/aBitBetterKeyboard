@@ -380,6 +380,23 @@ final class CustomLayoutTests: XCTestCase {
             accuracy: 0.001)
     }
 
+    /// A live recording grows the hairline, and that growth is paid while the
+    /// banner is down — so the fingerprint cliff, which is the banner-on total,
+    /// is not crossed.
+    func testARecordingGrowsTheHairlineWithoutCrossingTheFingerprintCliff() {
+        let recording = Theme.Metrics.totalHeight(
+            for: .default, showsBanner: false, isRecording: true)
+        let idle = Theme.Metrics.totalHeight(
+            for: .default, showsBanner: false, isRecording: false)
+        XCTAssertEqual(
+            recording - idle,
+            Theme.Metrics.recordingWaveformHeight - Theme.Metrics.progressBarHeight,
+            accuracy: 0.001)
+        XCTAssertLessThan(
+            recording, Theme.Metrics.totalHeight(for: .default),
+            "a recording without a banner must stay under the tallest form")
+    }
+
     /// Across layouts, the tallest-form total still differs only by the key area.
     func testOnlyTheLayoutChangesTheTotalHeight() {
         let compact = LayoutPreset.named("compact")!.customization

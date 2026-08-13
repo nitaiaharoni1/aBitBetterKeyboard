@@ -25,8 +25,9 @@ extension KeyView {
         // whole of the notice, and "the microphone in your keyboard is on right
         // now" is not a sentence an orange cap identical to the one Fix wears can
         // carry. `Theme.Semantic.record` is the only red in the product and this
-        // is what it is for. It is deliberately off through a pause and off while
-        // the last words are transcribed — see `DictationKeyState`.
+        // is what it is for. It stays red through the second the last words
+        // are transcribed, so the key does not flash orange record and invite
+        // another tap — see `DictationKeyState`.
         if dictationState.isRecording { return .record }
         // **The microphone is the one key that wears a filled cap at rest**, and
         // it is orange so that turning red means something. Every other control
@@ -122,6 +123,17 @@ extension KeyView {
     // are static so `KeyStyleButton` — the panel's key-styled controls — draws
     // identical material rather than a second opinion of it.
 
+    /// How far a pressed cap seats, and how the two shadows collapse with it.
+    /// Shared with `KeyStyleButton` so the emoji panel's key-styled controls
+    /// cannot drift from the keys.
+    static let pressTravel: CGFloat = 2
+    static let restContactY: CGFloat = 2
+    static let pressContactY: CGFloat = 0
+    static let restAmbientRadius: CGFloat = 7
+    static let pressAmbientRadius: CGFloat = 2
+    static let restAmbientY: CGFloat = 4
+    static let pressAmbientY: CGFloat = 1
+
     /// The contact line: the hard shadow where the cap meets the keyboard.
     static func contactShadow(for kind: CapKind) -> Color {
         switch kind {
@@ -145,9 +157,9 @@ extension KeyView {
     }
 
     var accessibilityValue: String {
-        // The microphone's state, which its label cannot carry: "Stop recording"
-        // is what a tap does and says nothing about a countdown running out or a
-        // recording sitting paused. See `DictationKeyState.accessibilityValue`.
+        // The microphone's state, which its label cannot carry: "Pause recording"
+        // is what a tap does and says nothing about a countdown running out. See
+        // `DictationKeyState.accessibilityValue`.
         if spec.cap == .dictation { return dictationState.accessibilityValue }
         guard spec.cap == .space else { return "" }
         guard let indication else {
@@ -163,9 +175,11 @@ extension KeyView {
     /// The balloon that pops above a letter while the finger is down, so the
     /// glyph stays readable under the thumb.
     ///
-    /// No `!showsAlternates` here: a key that has a popup never has a callout in
-    /// the first place, so the two can no longer be up at once. See
-    /// `showsCharacterCallout`.
+    /// Grows out of the key rather than fading in: a fade is a caption appearing,
+    /// a scale from the bottom is the key itself lifting so the letter can be
+    /// read. Reduce Motion keeps the fade. No `!showsAlternates` here: a key that
+    /// has a popup never has a callout in the first place, so the two can no
+    /// longer be up at once. See `showsCharacterCallout`.
     @ViewBuilder
     var callout: some View {
         if isPressed, showsCharacterCallout, case .character(let value) = spec.cap {
@@ -180,7 +194,7 @@ extension KeyView {
                 )
                 .offset(y: -height - 4)
                 .allowsHitTesting(false)
-                .transition(.opacity)
+                .transition(Theme.Motion.pop(reduceMotion: reduceMotion))
         }
     }
 
@@ -209,7 +223,9 @@ extension KeyView {
             LanguageCallout(indication: indication)
                 .offset(y: -height - 6)
                 .allowsHitTesting(false)
-                .transition(.opacity)
+                .transition(
+                    SpaceSwipe.calloutTransition(
+                        step: indication.step, reduceMotion: reduceMotion))
         }
     }
 }

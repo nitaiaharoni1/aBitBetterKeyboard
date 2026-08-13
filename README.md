@@ -63,7 +63,7 @@ xcrun swift-format --in-place --recursive \
   Every key row is pinned left-to-right, matching Apple's physical key order
   rather than mirroring for right-to-left
 - Suggestion bar with three fixed slots edge to edge; the AI actions live in a
-  row under the keys, and both of the bar's ends ship empty
+  row above the keys, and both of the bar's ends ship empty
 - Code-switching predictions: Latin words typed inside a Hebrew sentence get
   offered from a loanword list and tagged with the language they came from
 - Emoji panel, nine categories, plain Unicode with no bundled images
@@ -94,7 +94,7 @@ xcrun swift-format --in-place --recursive \
 
 ## Design decisions worth arguing with
 
-**The AI actions sit in a row of their own under the keys, and nothing they do
+**The AI actions sit in a row of their own above the keys, and nothing they do
 covers the keys.** They act on text you are looking at rather than characters you
 are inserting, so they are kept off the bottom row, which stays close to the
 system layout where muscle memory lives. Every outcome — running, answered,

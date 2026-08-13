@@ -523,20 +523,10 @@ final class ContextAwareSuggestionTests: XCTestCase {
 
     // MARK: The async tier
 
-    /// The contract the second tier exists under. It may replace the slots the
-    /// local tier is not holding, and it may not change what the space bar is
-    /// about to insert — otherwise a pause in typing silently swaps the word.
-    ///
-    /// **The version of this test that stood here passed against the bug it is
-    /// named after, which is the trap `AGENTS.md` names.** It never called
-    /// `applyRefinement`: it built the merged list by hand as
-    /// `[before[0], Suggestion("REFINED"), before[2]]`, handed that to
-    /// `markDefault(at: 1)` and asserted the default was still at index 1 — which
-    /// it was, holding `REFINED`. That is a demonstration of the defect written as
-    /// an assertion that it is fine. This one drives the real controller and
-    /// asserts on the default's *text*, which only the fixed build gets right: the
-    /// broken one answers `REFINED`.
-    func testRefinementNeverChangesWhatTheSpaceBarWouldCommit() {
+    /// The model is allowed to change the bold word. Slot 0 stays the typed
+    /// letters. A build that still pins the local default fails the last
+    /// assertion: it would keep `receive` bold after the model said `REFINED`.
+    func testRefinementCanChangeTheBoldWord() {
         withBarSettingsOn {
             let target = MockTextTarget(text: "recieve")
             let controller = KeyboardController(target: target, language: .english)
@@ -552,10 +542,41 @@ final class ContextAwareSuggestionTests: XCTestCase {
                 controller.suggestions.first?.text, "recieve",
                 "slot 0 is the literal keystrokes")
             XCTAssertEqual(
-                controller.suggestions.first(where: \.isDefault)?.text, "receive",
-                "the model may not decide what space inserts: "
+                controller.suggestions.first(where: \.isDefault)?.text, "REFINED",
+                "the model has to be able to take the bold slot: "
                     + "\(controller.suggestions.map(\.text))")
         }
+    }
+
+    /// Autocorrect-off means space will not commit, so the bar must not bold a
+    /// model word after refine. The word still lands in the bar for a tap.
+    func testRefinementKeepsTheTypedWordBoldWhenAutocorrectIsOff() {
+        let store = SharedStore.shared
+        let (autocorrect, predictions) = (store.autocorrect, store.predictions)
+        store.autocorrect = false
+        store.predictions = true
+        defer {
+            store.autocorrect = autocorrect
+            store.predictions = predictions
+        }
+        let target = MockTextTarget(text: "hel")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.refreshSuggestions()
+        XCTAssertEqual(
+            controller.suggestions.first(where: \.isDefault)?.text, "hel",
+            "Autocorrect off has to pin the bold slot before refine is asked")
+
+        controller.applyRefinement(["hello", "help"], for: "hel")
+
+        XCTAssertEqual(controller.suggestions.first?.text, "hel")
+        XCTAssertEqual(
+            controller.suggestions.first(where: \.isDefault)?.text, "hel",
+            "refine must not bold a model word that space is not allowed to insert: "
+                + "\(controller.suggestions.map(\.text))")
+        XCTAssertTrue(
+            controller.suggestions.contains { $0.text == "hello" },
+            "the model's word still has to be tappable: "
+                + "\(controller.suggestions.map(\.text))")
     }
 
     /// The other half of the same rule. With nothing typed the bold slot is a tap
@@ -612,10 +633,10 @@ final class ContextAwareSuggestionTests: XCTestCase {
     func testRefinementRefusesWhenThereIsNothingOrNoPermission() {
         let refiner = PredictiveRefiner(
             onDevice: nil, cloud: AlwaysPredicts(), apply: { _, _ in })
-        func request(text: String, permitted: Bool, slots: Int = 1) -> PredictiveRefiner.Request {
+        func request(text: String, permitted: Bool) -> PredictiveRefiner.Request {
             PredictiveRefiner.Request(
                 textBefore: text, wordInProgress: "", language: .english, screenContext: nil,
-                permitted: permitted, localSlotCount: slots)
+                permitted: permitted)
         }
         XCTAssertFalse(refiner.shouldRefine(request(text: "Hello there", permitted: false)))
         XCTAssertFalse(refiner.shouldRefine(request(text: "   ", permitted: true)))
@@ -630,7 +651,7 @@ final class ContextAwareSuggestionTests: XCTestCase {
         func request(_ language: KeyboardLanguage) -> PredictiveRefiner.Request {
             PredictiveRefiner.Request(
                 textBefore: "משהו", wordInProgress: "", language: language, screenContext: nil,
-                permitted: true, localSlotCount: 1)
+                permitted: true)
         }
         XCTAssertTrue(refiner.shouldRefine(request(.english)))
         XCTAssertFalse(refiner.shouldRefine(request(.hebrew)))

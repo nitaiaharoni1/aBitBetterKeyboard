@@ -124,7 +124,7 @@ struct HomeDictationCard: View {
             isActive: dictation.isRunning,
             title: "Dictation",
             detail: dictation.isRunning
-                ? "The keyboard's microphone button works now"
+                ? "Swipe back to the app you were writing in. The mic key works now."
                 : "Start a session here to dictate from the keyboard",
             badge: dictation.isRunning ? ("LIVE", Theme.Semantic.record) : nil,
             accessibilityID: "home-dictation"

@@ -24,7 +24,7 @@ final class AlternatesPopupTests: XCTestCase {
             height: 44,
             language: language,
             shift: .off,
-            onPress: { _ in },
+            onPress: { _, _ in },
             // `KeyboardView.alternateHandler(for:)` hands one to every key that
             // has alternates and nil to the rest, and the popup is gated on it.
             onAlternate: spec.alternates.isEmpty ? nil : { _ in })
@@ -48,7 +48,7 @@ final class AlternatesPopupTests: XCTestCase {
             language: .hebrew,
             shift: .off,
             toneAlternates: tones,
-            onPress: { cap in
+            onPress: { cap, _ in
                 recorder.presses.append(cap)
                 recorder.log.append("press")
             },

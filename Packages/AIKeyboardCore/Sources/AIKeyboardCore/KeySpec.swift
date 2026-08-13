@@ -30,7 +30,7 @@ public enum KeyCap: Equatable, Sendable {
     ///
     /// **They exist because the action row made them destinations rather than menu
     /// items.** There used to be an `aiMenu` cap that opened a panel listing four
-    /// actions, costing a tap to reach any of them; with a row of actions under the
+    /// actions, costing a tap to reach any of them; with a row of actions above the
     /// keys the two that need no further choice run outright, and the panel is
     /// deleted. Rewrite keeps needing one choice — a register — so it stays
     /// `quickTone`, which runs the default and holds the rest behind a long press.
@@ -61,7 +61,7 @@ public enum KeyCap: Equatable, Sendable {
         case .settings: return "Settings"
         case .space: return "Space"
         case .ret: return "Return"
-        case .dictation: return "Dictate"
+        case .dictation: return "Record"
         case .emoji: return "Emoji"
         case .quickTone: return "One-tap rewrite"
         case .cursorLeft: return "Cursor left"
@@ -87,11 +87,10 @@ public enum KeyWidth: Equatable, Sendable {
     /// nothing about the spacing beside it, so a grouped key declared `.unit(2)`
     /// came out two keys wide *minus* the gutter it covered — five of them left
     /// 27pt of the row unused and the band drew visibly narrower than the row
-    /// under it, on a feature whose entire purpose is width. A share is the same
-    /// proportion expressed as "of what is actually there", so the gutters land
-    /// inside the keys that replaced them. `.flexible` is the same idea with
-    /// every claimant equal, which is wrong here: a two-column key and a
-    /// one-column key are not the same width.
+    /// under it. A share is the same proportion expressed as "of what is actually
+    /// there", so the gutters land inside the keys. Grouped letter keys all take
+    /// `.share(1)`, so they fill the row as equal buttons; weighting by span left
+    /// leftover columns on skinny keys beside fat ones.
     case share(CGFloat)
     /// A fixed width in points, the same on every plane and in all sixty-four
     /// languages. Shift, delete and the plane switch that brackets the third row.

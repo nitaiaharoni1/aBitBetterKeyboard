@@ -58,7 +58,7 @@ extension KeyView {
     /// deliberately runs nothing on press (see `runsOnLift`), so its handler has
     /// nothing to undo and must not be given anything to undo.
     func commitAlternate(_ item: String) {
-        if spec.cap != .quickTone { onPress(spec.cap) }
+        if spec.cap != .quickTone { onPress(spec.cap, CGPoint(x: 0.5, y: 0.5)) }
         onAlternate?(item)
     }
 
@@ -151,7 +151,7 @@ extension KeyView {
             )
             .offset(y: -height - 6)
             .allowsHitTesting(false)
-            .transition(.opacity)
+            .transition(Theme.Motion.pop(reduceMotion: reduceMotion))
         }
     }
 

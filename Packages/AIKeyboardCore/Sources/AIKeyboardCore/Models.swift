@@ -16,6 +16,12 @@ extension KeyboardLanguage {
 
 /// A word offered in the suggestion bar.
 public struct Suggestion: Identifiable, Sendable, Equatable {
+    /// Fresh every time a list is built, so SwiftUI can tell two slots apart.
+    /// **Not part of equality.** The synthesised `==` included it, so the bar
+    /// saw a new array on every keystroke even when the three words had not
+    /// moved, and faded them for 180ms — a beat behind the fingers. Two
+    /// suggestions are the same offer when the word, the language and the bold
+    /// slot agree.
     public let id = UUID()
     public let text: String
     /// Which language the candidate came from, which is not always the layout on
@@ -31,6 +37,10 @@ public struct Suggestion: Identifiable, Sendable, Equatable {
         self.text = text
         self.language = language
         self.isDefault = isDefault
+    }
+
+    public static func == (lhs: Suggestion, rhs: Suggestion) -> Bool {
+        lhs.text == rhs.text && lhs.language == rhs.language && lhs.isDefault == rhs.isDefault
     }
 }
 
@@ -94,8 +104,8 @@ public enum ShiftState: Sendable {
 public enum DictationKeyState: Equatable, Sendable {
     /// Nothing is running. The key offers to start.
     case idle
-    /// The microphone is open and what it hears is being kept. **The one state
-    /// drawn in record red.**
+    /// The microphone is open and what it hears is being kept. Drawn in record
+    /// red, together with `.finishing` — see `isRecording`.
     ///
     /// `secondsLeft` is the session's own countdown and is non-nil only inside the
     /// last minute of it. **It is on the key because the strip that used to carry
@@ -105,47 +115,46 @@ public enum DictationKeyState: Equatable, Sendable {
     /// whole session is one the user is invited to watch; a clock that appears is
     /// news.
     case recording(secondsLeft: Int?)
-    /// The recording is closed and the last words are still in flight. A tap here
-    /// calls the insert off, which is the only moment that is possible — see
-    /// `KeyboardController.toggleDictation`.
+    /// The recording is closed and the last words are still in flight.
+    ///
+    /// Drawn as pause, same as `.recording`: the key has two appearances, waves
+    /// and pause, and an × was the third. A tap here does nothing — the insert is
+    /// already on its way, and starting a second utterance on top of it is the
+    /// defect this case exists to prevent. See `KeyboardController.toggleDictation`.
     case finishing
 
     /// Whether the key is the live control, whatever it is doing.
     public var isActive: Bool { self != .idle }
 
-    /// Whether a microphone is keeping what it hears right now. The record-red
-    /// cap, and the question every caller means when it asks — asked as a property
-    /// rather than as `== .recording`, which stopped compiling the moment the
-    /// countdown became a payload and would otherwise have to be spelled
-    /// `if case`.
-    public var isRecording: Bool {
-        if case .recording = self { return true }
-        return false
-    }
+    /// Whether the key is the live microphone control, red cap included.
+    ///
+    /// True through `.finishing` as well as `.recording`, so the key does not
+    /// flip back to orange record for the second it takes the words to land —
+    /// that flash read as "tap me again" and is exactly the window a second
+    /// utterance used to open in.
+    public var isRecording: Bool { self != .idle }
 
-    /// **Waves rather than a microphone, and a pause bar rather than a red dot.**
-    /// A microphone is a picture of the hardware; waves are a picture of what the
-    /// key does with it, and they are what the recording state can then animate
-    /// into. While it is running the key shows the *interruption* — a pause bar is
-    /// the shape a thumb goes back to when it wants the thing to stop, and this
-    /// key does stop rather than pause, which is why nothing else on the keyboard
-    /// offers a pause any more.
+    /// **Waves at rest, pause while the microphone is on.** Two appearances,
+    /// not three: an × while the last words were in flight offered to cancel an
+    /// insert that is already on its way, and nobody asked for that. The pause
+    /// bar is still a stop, not a pause — the cross-process pause protocol is
+    /// gone — and it stays on the key until the transcript lands so the thumb
+    /// has one shape to go back to.
     public var icon: String {
         switch self {
         case .idle: return "waveform"
-        case .recording: return "pause.fill"
-        case .finishing: return "xmark"
+        case .recording, .finishing: return "pause.fill"
         }
     }
 
     /// What a tap does, in the width a nine-point caption has.
     public var title: String {
         switch self {
-        case .idle: return "Dictate"
+        case .idle: return "Record"
         case .recording(let secondsLeft):
-            guard let secondsLeft else { return "Stop" }
+            guard let secondsLeft else { return "Pause" }
             return "\(secondsLeft)s left"
-        case .finishing: return "Cancel"
+        case .finishing: return "Pause"
         }
     }
 
@@ -153,7 +162,7 @@ public enum DictationKeyState: Equatable, Sendable {
     ///
     /// **The states were drawn differently and said one thing.** The key's label
     /// comes from `KeyCap`, which knows nothing about a recording, so it read
-    /// "Dictate, button" whether the microphone was idle, live or finishing — the
+    /// "Record, button" whether the microphone was idle, live or finishing — the
     /// whole distinction this type exists to draw was silent, and the one state
     /// where being wrong matters most is the one where a microphone is on. The
     /// caption above cannot serve: it is nine points of text that says `42s left`,
@@ -163,9 +172,8 @@ public enum DictationKeyState: Equatable, Sendable {
     /// cap and four neighbouring keys; this is read alone.
     public var accessibilityLabel: String {
         switch self {
-        case .idle: return "Dictate"
-        case .recording: return "Stop recording"
-        case .finishing: return "Cancel transcription"
+        case .idle: return "Record"
+        case .recording, .finishing: return "Pause recording"
         }
     }
 

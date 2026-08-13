@@ -88,7 +88,9 @@ public struct SuggestionBar: View {
         .padding(.horizontal, Theme.Space.xxs)
         // The revert control arrives with an answer already in the field, so it
         // fades in rather than appearing between two frames beside three candidate
-        // slots that emptied in the same moment.
+        // slots that emptied in the same moment. The words themselves do not
+        // animate: a fresh `UUID` on every refresh used to make this bar fade
+        // for 180ms on every letter, a beat behind the fingers. See `Suggestion`.
         .animation(Theme.Motion.content, value: controller.revertibleEdit)
     }
 
@@ -97,12 +99,19 @@ public struct SuggestionBar: View {
     /// Always three slots of equal width, in the same three places in every
     /// language. A single candidate stretched across the whole bar reads as a
     /// banner rather than as a word you can tap.
+    ///
+    /// **The default sits in the middle, even when the engine left it at index
+    /// 0.** Mid-word the array is still `[typed, best, next]` so the refiner can
+    /// find the keystrokes; drawing that order put the word you want on the left
+    /// third of the bar. The system keyboard puts it in the center. Only the
+    /// drawing order changes here.
     private var suggestions: some View {
-        HStack(spacing: 0) {
+        let slots = Self.centeredSlots(controller.suggestions)
+        return HStack(spacing: 0) {
             ForEach(0..<3, id: \.self) { slot in
                 if slot > 0 { candidateSeparator }
-                if slot < controller.suggestions.count {
-                    candidate(controller.suggestions[slot])
+                if let suggestion = slots[slot] {
+                    candidate(suggestion)
                         .accessibilityIdentifier("suggestion-\(slot)")
                 } else {
                     Color.clear.frame(maxWidth: .infinity, minHeight: 36)
@@ -110,7 +119,19 @@ public struct SuggestionBar: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .animation(Theme.Motion.quick, value: controller.suggestions)
+    }
+
+    /// Visual order for the three candidate slots: default in the middle, the
+    /// others on either side, a lone word centered rather than hugging the left.
+    static func centeredSlots(_ items: [Suggestion]) -> [Suggestion?] {
+        var slots: [Suggestion?] = [nil, nil, nil]
+        guard !items.isEmpty else { return slots }
+        let defaultIndex = items.firstIndex(where: \.isDefault) ?? 0
+        slots[1] = items[defaultIndex]
+        let others = items.indices.filter { $0 != defaultIndex }.map { items[$0] }
+        if others.count > 0 { slots[0] = others[0] }
+        if others.count > 1 { slots[2] = others[1] }
+        return slots
     }
 
     private func candidate(_ suggestion: Suggestion) -> some View {

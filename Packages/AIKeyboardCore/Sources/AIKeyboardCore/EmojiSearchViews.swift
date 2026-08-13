@@ -16,6 +16,7 @@ struct EmojiSearchField: View {
     var isEditing: Bool { controller.overlay == .emojiSearch }
 
     @State private var caretVisible = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: Theme.Space.xs) {
@@ -82,6 +83,7 @@ struct EmojiSearchField: View {
                 .frame(width: 2, height: 20)
                 .opacity(caretVisible ? 1 : 0)
                 .onAppear {
+                    guard !reduceMotion else { return }
                     withAnimation(.easeInOut(duration: 0.6).repeatForever()) {
                         caretVisible = false
                     }

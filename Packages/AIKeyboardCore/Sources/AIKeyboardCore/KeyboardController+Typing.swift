@@ -15,7 +15,7 @@ extension KeyboardController {
     /// `t` comes back as one word autocorrected from `schedt`. Paying here means
     /// the space is typed in the order the fingers made it and against the
     /// candidate that was on screen when it was pressed.
-    public func press(_ cap: KeyCap) {
+    public func press(_ cap: KeyCap, at unitPoint: CGPoint? = nil) {
         if cap != .space, spaceTouch.interrupted() {
             // Clicks *before* this key does, for the reason the space is typed
             // before it: the other thumb pressed it first. `insertSpace` is
@@ -47,7 +47,7 @@ extension KeyboardController {
 
         switch cap {
         case .character(let value):
-            insertCharacter(value)
+            insertCharacter(value, at: unitPoint)
         case .shift:
             toggleShift()
         case .backspace:
@@ -150,7 +150,7 @@ extension KeyboardController {
     /// `Locale`, so this does not build one per keystroke. The key cap, the
     /// callout and the long-press popup go through the same call, or the key
     /// shows one letter and types another.
-    func insertCharacter(_ value: String) {
+    func insertCharacter(_ value: String, at unitPoint: CGPoint? = nil) {
         Feedback.keyPress()
         // A key carrying several letters types no letter of its own: it adds one
         // keystroke to the word in progress and the decoder says what that word
@@ -158,7 +158,7 @@ extension KeyboardController {
         // long-press escape hatch picking one letter out of the group just
         // pressed, which pins that position rather than starting a new key.
         if isGroupedCap(value) {
-            pressGroupedKey(value)
+            pressGroupedKey(value, at: unitPoint)
             return
         }
         if isGroupedTyping, pinGroupedLetter(value) { return }

@@ -11,13 +11,14 @@ extension KeyboardController {
         // check opened the panel; putting the check first left the no-session tap
         // without them. The last two are the streaming bookkeeping, and they belong
         // in the same place for the same reason: a refused tap has to leave nothing
-        // behind that a later recording would try to delete. `dictation.$failure` only ever *sets* `dictationFailure`,
-        // and the only other place that clears it is `stopDictation`'s teardown —
-        // which the user reaches through a Dismiss button that is gone the moment
-        // the session ends, because `.dictationFailed` needs a live session to
-        // render. So a refusal left behind by a session that closed itself sat in
-        // the property until the next live session brought it back on screen,
-        // attached to a recording that had not failed.
+        // behind that a later recording would try to delete. `dictation.$failure`
+        // used to only ever *set* `dictationFailure`, and the only other place
+        // that cleared it was `stopDictation`'s teardown — which the user reached
+        // through a Dismiss button on a "Nothing to insert" strip that is gone.
+        // A refusal left behind by a session that closed itself sat in the
+        // property until the next live session brought it back on screen,
+        // attached to a recording that had not failed. The sink no longer sets
+        // it; this reset stays so a leftover cannot resurface.
         dictationTranscript = ""
         dictationFailure = ""
         pendingDictationInsert = false
@@ -96,28 +97,21 @@ extension KeyboardController {
         }
     }
 
-    /// Starts a recording when none is open, finishes the open one, and calls off
-    /// a finish that has not landed yet.
+    /// Starts a recording when none is open, and finishes the open one.
     ///
     /// **The microphone key's whole job, and it is the only control this feature
-    /// has.** The strip that carried Pause, Resume and Cancel is not drawn for a
-    /// recording any more, and pause is gone outright: a second tap stops, which
-    /// is what the key's own pause glyph promises. Nothing else on the keyboard
-    /// offers a dictation control.
+    /// has.** Two modes: record starts, pause stops. The × that used to cancel a
+    /// transcription in flight is gone — the insert is already on its way, and
+    /// cancelling it threw away a sentence the user had just spoken.
     ///
-    /// The third case is the one worth spelling out. Between the stop tap and the
-    /// words arriving, `isDictating` is already false — so the version of this that
-    /// asked only that question opened a **second** utterance on top of a
-    /// transcription that was still in flight, and the answer to the first landed
-    /// in the middle of the second. It is also the last moment the insert can be
-    /// called off, which is what the strip's × used to offer: past this, the
-    /// transcript sink inserts unconditionally. Whatever the recording already
-    /// streamed into the field stays where it is — those are the user's own words
-    /// and cancelling a wait is not a request to delete them.
+    /// `.finishing` is the window between the pause tap and the words arriving.
+    /// `isDictating` is already false there, so a tap that asked only that
+    /// question opened a **second** utterance on top of a transcription still in
+    /// flight. The tap is ignored instead: not a cancel, not a new recording.
     public func toggleDictation() {
         switch dictationKeyState {
         case .recording: stopDictation(insert: true)
-        case .finishing: stopDictation(insert: false)
+        case .finishing: return
         case .idle: startDictation()
         }
     }
@@ -179,14 +173,15 @@ extension KeyboardController {
         }
 
         // **The third clause used to be `overlay == .dictation` and dropping it
-        // outright would have wedged the banner.** It was what let a *stopped*
-        // session still be torn down — and the state that needs that is a recording
-        // that failed: `dictation.$failure` clears `isDictating` and
-        // `pendingDictationInsert` before setting the reason, so by the time the
-        // user taps Dismiss on "Nothing to insert" the first two are both false. The
-        // panel used to be open, so the old clause carried it; with no panel, this
-        // guard would return early and `dictationFailure` would never be cleared,
-        // leaving the sentence to reappear on the session's next tick forever.
+        // outright would have wedged a leftover refusal.** It was what let a
+        // *stopped* session still be torn down — and the state that needed that
+        // was a recording that failed while the "Nothing to insert" strip was
+        // still up: `dictation.$failure` cleared `isDictating` and
+        // `pendingDictationInsert` before setting the reason, so by the time
+        // the user tapped Dismiss the first two were both false. That strip is
+        // gone and the sink stops the watch itself now; the clause stays so a
+        // leftover `dictationFailure` can still be cleared rather than sitting
+        // until the next session.
         guard isDictating || pendingDictationInsert || !dictationFailure.isEmpty else { return }
 
         pendingDictationInsert = false
@@ -402,33 +397,26 @@ extension KeyboardController {
                 guard let self, !detail.isEmpty else { return }
                 self.pendingDictationInsert = false
                 self.isDictating = false
-                // **A failure after the words are already in the field is not
-                // "Nothing to insert".** Streaming means the ordinary recording has
-                // published two or three readings before the final call is even
-                // made, so a network failure on that last call would otherwise put
-                // a refusal on screen over a sentence the user can see themselves
-                // in the field — and offer them a Dismiss button for it. The last
-                // second or two of speech is genuinely lost; saying so would take a
-                // strip, and the sentence standing in the field says more.
-                guard self.streamedDictation.isEmpty else {
-                    self.streamedDictation = ""
-                    self.dictationStreamAbandoned = false
-                    // **And the watch has to be stopped here, by hand.** Leaving
-                    // `dictationFailure` empty is what keeps the strip off screen,
-                    // and it is also what makes `stopDictation` return at its own
-                    // guard — so nothing else would ever tear this down, not even
-                    // `KeyboardViewController.viewWillDisappear`, and a `RunLoop`
-                    // timer left running in a dismissed keyboard goes on refreshing
-                    // `DictationRequest.keyboardAliveAt`. That is the one thing that
-                    // defeats the dead-man's switch. The other failure path leaves
-                    // the watch up on purpose, because `.dictationFailed` needs a
-                    // live session to render and the user's Dismiss is what stops
-                    // it; this path has no sentence and no Dismiss.
-                    self.dictation.stopWatching()
-                    self.refreshSuggestions()
-                    return
-                }
-                self.dictationFailure = detail
+                self.streamedDictation = ""
+                self.dictationStreamAbandoned = false
+                // **Never raise "Nothing to insert".** A silent take is a second
+                // tap, and a 69pt strip that says so is the banner coming back
+                // for a case the microphone key already settled: it is orange
+                // record again. The last second of a failed cloud call after
+                // something was streamed is the same — the sentence is in the
+                // field, and a strip saying otherwise would be the keyboard
+                // disagreeing with itself.
+                //
+                // **The watch has to stop here, by hand.** Leaving
+                // `dictationFailure` empty is what keeps the strip off, and it
+                // is also what makes `stopDictation` return at its own guard —
+                // so nothing else would ever tear this down, not even
+                // `KeyboardViewController.viewWillDisappear`, and a `RunLoop`
+                // timer left running in a dismissed keyboard goes on refreshing
+                // `DictationRequest.keyboardAliveAt`. That is the one thing that
+                // defeats the dead-man's switch.
+                self.dictation.stopWatching()
+                self.refreshSuggestions()
             }
             .store(in: &dictationObservers)
     }

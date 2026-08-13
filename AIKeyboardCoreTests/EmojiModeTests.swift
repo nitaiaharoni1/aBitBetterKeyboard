@@ -194,6 +194,42 @@ final class EmojiModeTests: XCTestCase {
         XCTAssertTrue(fresh[2].cells.prefix(EmojiPanel.rowCount).allSatisfy(\.leadsSection))
     }
 
+    /// **Two categories used to run into each other.** The seam is a 1pt overlay
+    /// that costs no layout, so Smileys' last 😀 sat against People's first 👋
+    /// with nothing but that hairline between them. The gap is padding on the
+    /// trailing column of the section that is ending — not a column of its own,
+    /// or a tab would land on empty space, and not on the next section's leading
+    /// edge, or tapping Food would open on a gutter.
+    func testAGapSitsBetweenTwoCategoriesNotBeforeTheFirstOrAfterTheLast() {
+        let sections = EmojiPanel.sections(recent: SharedStore.shippedRecentEmoji)
+
+        XCTAssertFalse(
+            sections.last!.cells.contains(where: \.trailsSection),
+            "the last category has only the panel edge beyond it")
+
+        let bounded = sections.dropLast().filter { !$0.cells.isEmpty }
+        XCTAssertFalse(bounded.isEmpty)
+        for section in bounded {
+            let lastColumn = section.cells.suffix(EmojiPanel.rowCount)
+            XCTAssertTrue(
+                lastColumn.allSatisfy(\.trailsSection),
+                "\(section.id) last column should carry the gap")
+            let earlier = section.cells.dropLast(EmojiPanel.rowCount)
+            XCTAssertFalse(
+                earlier.contains(where: \.trailsSection),
+                "\(section.id) earlier columns should not")
+        }
+
+        // Empty Recent is not a section that ends, so Smileys — the first
+        // category that actually draws — must not open with a gutter.
+        let fresh = EmojiPanel.sections(recent: [])
+        XCTAssertTrue(fresh[0].cells.isEmpty)
+        XCTAssertFalse(
+            fresh[1].cells.prefix(EmojiPanel.rowCount).contains(where: \.trailsSection))
+        XCTAssertTrue(
+            fresh[1].cells.suffix(EmojiPanel.rowCount).allSatisfy(\.trailsSection))
+    }
+
     func testTheSelectedTabFollowsTheScrollOffset() {
         let sections = EmojiPanel.sections(recent: SharedStore.shippedRecentEmoji)
         let width: CGFloat = 40
@@ -212,5 +248,43 @@ final class EmojiModeTests: XCTestCase {
         // Past the end of everything, the last tab stays lit rather than the
         // computation running off the end of the list.
         XCTAssertEqual(tab(at: 999_999), EmojiCatalog.categories.last?.id)
+    }
+
+    /// **The Recent tab stayed orange after every other category was opened.**
+    /// Offset-from-the-grid-background reports 0 for a `LazyHGrid` (the
+    /// viewport, not the content), so `category(atOffset:)` kept answering
+    /// Recent. The orange tab follows the cell that actually sits on the
+    /// leading edge.
+    func testTheOrangeTabFollowsTheCellOnTheLeadingEdgeNotAlwaysRecent() {
+        let recent = EmojiPanel.VisibleCategory(id: EmojiCatalog.recentID, minX: 0)
+        let smileys = EmojiPanel.VisibleCategory(id: "Smileys", minX: 80)
+        let food = EmojiPanel.VisibleCategory(id: "Food", minX: 400)
+
+        XCTAssertEqual(
+            EmojiPanel.nearerTheLeadingEdge(recent, smileys).id,
+            EmojiCatalog.recentID)
+        XCTAssertEqual(
+            EmojiPanel.nearerTheLeadingEdge(smileys, food).id,
+            "Smileys")
+
+        // Scrolled so Smileys owns the left edge: Recent is gone (minX < 0 and
+        // no longer covering 0), Smileys is sitting on 0.
+        let recentGone = EmojiPanel.VisibleCategory(id: EmojiCatalog.recentID, minX: -80)
+        let smileysAtEdge = EmojiPanel.VisibleCategory(id: "Smileys", minX: 0)
+        XCTAssertEqual(
+            EmojiPanel.nearerTheLeadingEdge(recentGone, smileysAtEdge).id,
+            "Smileys",
+            "Recent must not stay selected once another category owns the edge")
+
+        // A tap names Food before the strip has moved. The hold must not let
+        // a still-visible Recent cell overwrite it.
+        XCTAssertEqual(
+            EmojiPanel.selectedCategory(
+                current: "Food", leading: EmojiCatalog.recentID, holdingTap: true),
+            "Food")
+        XCTAssertEqual(
+            EmojiPanel.selectedCategory(
+                current: "Food", leading: "Smileys", holdingTap: false),
+            "Smileys")
     }
 }

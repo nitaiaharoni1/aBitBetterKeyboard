@@ -50,7 +50,7 @@ public extension SlotAction {
         case .settings: return "gearshape"
         case .space: return "space"
         case .ret: return "return"
-        case .dictation: return "mic"
+        case .dictation: return "waveform"
         case .emoji: return "face.smiling"
         case .quickTone: return AIAction.rewrite.icon
         // Each action's own icon, so the key and the banner's label draw one thing.

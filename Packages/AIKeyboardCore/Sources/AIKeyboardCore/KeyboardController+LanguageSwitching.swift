@@ -32,11 +32,12 @@ extension KeyboardController {
         let enabled = enabledLanguages
         guard let destination = SpaceSwipe.language(from: language, in: enabled, places: places)
         else { return }
-        withAnimation(Theme.Motion.quick) {
+        withAnimation(Theme.Motion.swipe) {
+            languageSlideStep = places
             language = destination
             plane = .letters
         }
-        announceLanguage(destination, in: enabled, pending: false)
+        announceLanguage(destination, in: enabled, pending: false, step: places)
         refreshSuggestions()
         reportInteraction(.languageSwitch)
     }
@@ -110,7 +111,8 @@ extension KeyboardController {
         // thumb. The finger is covering the space bar, so this is the half of the
         // indication the user can feel rather than read.
         Feedback.modifierPress()
-        announceLanguage(candidate, in: enabled, pending: true)
+        let step = SpaceSwipe.places(translation: travelled, languageCount: enabled.count)
+        announceLanguage(candidate, in: enabled, pending: true, step: step)
     }
 
     private func clearPendingLanguageSwitch() {
@@ -124,15 +126,19 @@ extension KeyboardController {
     /// switched by swiping ever gets, and it is what the globe key was missing
     /// too — a layout that changes under the thumb with nothing saying to what.
     func announceLanguage(
-        _ named: KeyboardLanguage, in enabled: [KeyboardLanguage], pending: Bool
+        _ named: KeyboardLanguage, in enabled: [KeyboardLanguage], pending: Bool, step: Int
     ) {
         languageSwitchTask?.cancel()
         let indication = LanguageSwitchIndication(
             language: named,
             position: enabled.firstIndex(of: named) ?? 0,
             count: enabled.count,
-            isPending: pending)
-        withAnimation(Theme.Motion.quick) { languageSwitchIndication = indication }
+            isPending: pending,
+            step: step)
+        // Finger-down tracking stays `quick` so the balloon stays glued to the
+        // thumb; the landing uses `swipe` so it shares a beat with the keys.
+        let motion = pending ? Theme.Motion.quick : Theme.Motion.swipe
+        withAnimation(motion) { languageSwitchIndication = indication }
 
         // A pending name stays until the finger decides. A landed one is a
         // confirmation, and a confirmation that never leaves is a caption.

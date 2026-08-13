@@ -40,14 +40,6 @@ extension ActionBanner {
                     openAppChip(url)
                 }
             }
-
-        case .dictationFailed:
-            // `stopDictation(insert: false)` rather than `clearBanner`: the reason
-            // lives on the session, not on the banner, so clearing this side of it
-            // would leave the sentence to reappear on the next tick.
-            dismissButton(identifier: "banner-dictation-dismiss") {
-                controller.stopDictation(insert: false)
-            }
         }
     }
 

@@ -24,6 +24,7 @@ from grouping import (  # noqa: E402
     clitic_forms,
     fold_final_forms,
     key_count,
+    letter_at,
     rows_without_final_forms,
     split_row,
     split_row_avoiding,
@@ -67,10 +68,14 @@ def main() -> None:
             check(f"split preserves {row!r} k={k}", "".join(split_row(row, k)), row)
 
     # --- the dial, against the spec table ------------------------------------
-    check("EN L1 keys", Layout(en, 3).keys, 8)
+    check("EN ungrouped is 26 keys", Layout(en, 1).keys, 26)
+    check("HE ungrouped is 27 keys", Layout(he, 1).keys, 27)
+    check("EN pairs keys", Layout(en, 2).keys, 12)
+    check("HE pairs separated keys", Layout(he, 2, avoid=HEBREW_CLITICS).keys, 13)
+    check("EN L1 keys", Layout(en, 3).keys, 7)
     check("EN L2 keys", Layout(en, 4).keys, 7)
     check("EN L3 keys", Layout(en, 5).keys, 5)
-    check("HE L1 keys", Layout(he, 3).keys, 9)
+    check("HE L1 keys", Layout(he, 3).keys, 8)
     check("HE L2 keys", Layout(he, 4).keys, 7)
     check("HE L3 keys", Layout(he, 5).keys, 6)
 
@@ -82,6 +87,11 @@ def main() -> None:
         Layout(en, 5).groups,
         ["qweasd", "rtyfgh", "uijk", "opl", "zxcvbnm"],
     )
+    # leftover letters never sit on a key of their own
+    for k in (2, 3, 4, 5):
+        for layout in (Layout(en, k), Layout(he, k, avoid=HEBREW_CLITICS)):
+            singles = [g for g in layout.groups if len(g) == 1]
+            check(f"no singleton keys k={k} {layout.rows[0][:2]!r}", singles, [])
 
     # --- the Hebrew clitic collisions, as measured ---------------------------
     # Banding moved these: the band's own columns hold no two clitics — ו sits
@@ -149,6 +159,15 @@ def main() -> None:
     check("word_core trims both ends", word_core("(recieve,"), "recieve")
     check("word_core keeps an inner apostrophe", word_core("don't"), "don't")
     check("word_core survives a bare mark", word_core("..."), "")
+
+    qwas = [["q", "w"], ["a", "s"]]
+    check("tap top-left of qwas is q", letter_at(0.2, 0.2, qwas), "q")
+    check("tap top-right of qwas is w", letter_at(0.8, 0.2, qwas), "w")
+    check("tap bottom-left of qwas is a", letter_at(0.2, 0.8, qwas), "a")
+    check("tap the middle of qwas names nothing", letter_at(0.5, 0.5, qwas), None)
+    leftover = [[], ["ך", "ף"]]
+    check("tap the empty top of ךף names nothing", letter_at(0.5, 0.2, leftover), None)
+    check("tap lower-left of ךף is ך", letter_at(0.2, 0.8, leftover), "ך")
 
     # --- leave-one-out is the claim the context numbers rest on --------------
     # A version that forgot to hold out would score its own sentence's pairs and

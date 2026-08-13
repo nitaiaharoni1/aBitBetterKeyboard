@@ -39,7 +39,7 @@ enum PlaygroundTourStep: Int, CaseIterable {
         case .emoji:
             return "Open Emoji, then choose one from the grid."
         case .dictation:
-            return "Tap Dictate. If it is not running, the keyboard will show how to start it."
+            return "Tap Record. If it is not running, the keyboard will show how to start it."
         case .languageSwitch:
             return "Swipe sideways across the space bar to switch languages."
         case .reply:

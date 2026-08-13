@@ -2,20 +2,11 @@ import Foundation
 
 /// The second tier of the suggestion bar: a model, asked once the user pauses.
 ///
-/// **What it is allowed to change is the whole design, and it is deliberately
-/// almost nothing.** The local tier fills all three slots on every keystroke —
-/// measured over the typing corpus at a median around 1.2 ms, worst case 10-16 ms
-/// on a Hebrew word — and decides what the space bar commits. This runs
-/// hundreds of milliseconds later, off the keystroke path, and may replace slots
-/// 1 and 2 and nothing else. It may not touch slot 0, which is the literal
-/// keystrokes, and it may not move the bold slot.
-///
-/// That last rule is the one worth defending. If the async tier could change what
-/// space commits, then every pause in typing would be a moment where the word
-/// about to be inserted silently became a different word — the user reads the
-/// bar, pauses to think, presses space, and gets something they never saw. Making
-/// autocorrect fully local and fully deterministic means a model can improve the
-/// *options* without ever being able to surprise somebody mid-sentence.
+/// The local tier fills all three slots on every keystroke. This runs hundreds
+/// of milliseconds later and may replace the side words *and* the bold one.
+/// Slot 0 stays the typed keystrokes. Space still only inserts the bold word
+/// when Autocorrect is on; Complete on pause and Space on pause are separate
+/// switches.
 ///
 /// **When it runs.** On a 300 ms idle after the last keystroke, and only when the
 /// answer could plausibly beat what is already on screen. The guards are in
@@ -99,22 +90,16 @@ public final class PredictiveRefiner {
         /// all. Passed in rather than asked here, because the two things it
         /// depends on both live in `KeyboardController`.
         public let permitted: Bool
-        /// Whether the local tier already produced real candidates. When it did
-        /// not — the bar holds only what was typed — a refinement is worth much
-        /// more, and when it did the bar is already useful and a swap is a change
-        /// for its own sake.
-        public let localSlotCount: Int
 
         public init(
             textBefore: String, wordInProgress: String, language: KeyboardLanguage,
-            screenContext: ScreenContext?, permitted: Bool, localSlotCount: Int
+            screenContext: ScreenContext?, permitted: Bool
         ) {
             self.textBefore = textBefore
             self.wordInProgress = wordInProgress
             self.language = language
             self.screenContext = screenContext
             self.permitted = permitted
-            self.localSlotCount = localSlotCount
         }
 
         /// What two requests must share to be the same question. Deliberately not
@@ -185,9 +170,6 @@ public final class PredictiveRefiner {
     /// - **Nothing to predict from.** An empty field with no message on screen has
     ///   no context at all, and a model asked to guess from nothing returns the
     ///   same three openers the local tier already has.
-    /// - **The local tier already answered well.** Three good candidates on screen
-    ///   plus a word in progress is the case where a swap is most disruptive and
-    ///   least valuable — the user is mid-word and reading the bar.
     func shouldRefine(_ request: Request) -> Bool {
         guard request.permitted else { return false }
         guard predictors.contains(where: { $0.canPredict(in: request.language) }) else {
@@ -195,7 +177,6 @@ public final class PredictiveRefiner {
         }
         let hasText = !request.textBefore.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasText || request.screenContext != nil else { return false }
-        if !request.wordInProgress.isEmpty, request.localSlotCount >= 3 { return false }
         return true
     }
 

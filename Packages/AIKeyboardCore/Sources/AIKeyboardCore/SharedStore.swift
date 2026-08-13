@@ -71,6 +71,9 @@ public final class SharedStore: ObservableObject {
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let enabledLanguages = "enabledLanguages"
         static let autocorrect = "autocorrect"
+        static let completeOnIdle = "completeOnIdle"
+        static let spaceOnIdle = "spaceOnIdle"
+        static let idleDelayMs = "idleDelayMs"
         static let autocapitalise = "autocapitalise"
         static let predictions = "predictions"
         static let haptics = "haptics"
@@ -249,6 +252,56 @@ public final class SharedStore: ObservableObject {
             return defaults.bool(forKey: Key.autocorrect)
         }
         return autocorrect
+    }
+
+    /// Finish the word after a pause. Off on a fresh install: it rewrites the
+    /// field without a tap, and nobody should be opted into that. The wait is
+    /// `idleDelayMs`, not a hardcoded 300.
+    @Published public var completeOnIdle = false {
+        didSet { defaults.set(completeOnIdle, forKey: Key.completeOnIdle) }
+    }
+
+    /// Add a space after a 300 ms pause. Separate from completing the word, and
+    /// off for the same reason: a space the user did not press is easy to hate.
+    @Published public var spaceOnIdle = false {
+        didSet { defaults.set(spaceOnIdle, forKey: Key.spaceOnIdle) }
+    }
+
+    /// Same cross-process rule as `storedAutocorrect`: the toggle is in the app
+    /// and the pause lives in the keyboard extension.
+    public var storedCompleteOnIdle: Bool {
+        if defaults.object(forKey: Key.completeOnIdle) != nil {
+            return defaults.bool(forKey: Key.completeOnIdle)
+        }
+        return completeOnIdle
+    }
+
+    public var storedSpaceOnIdle: Bool {
+        if defaults.object(forKey: Key.spaceOnIdle) != nil {
+            return defaults.bool(forKey: Key.spaceOnIdle)
+        }
+        return spaceOnIdle
+    }
+
+    /// How long to wait after the last keystroke before Complete on pause or
+    /// Space on pause fire. 300 ms ships: shorter catches the gap between keys,
+    /// longer waits for a real stop.
+    @Published public var idleDelayMs = 300 {
+        didSet { defaults.set(idleDelayMs, forKey: Key.idleDelayMs) }
+    }
+
+    public static let idleDelayChoices = [150, 300, 500, 800, 1200]
+
+    /// Same cross-process rule as `storedAutocorrect`. An unknown stored value
+    /// falls back to 300 rather than firing on the next keystroke.
+    public var storedIdleDelayMs: Int {
+        let stored: Int
+        if defaults.object(forKey: Key.idleDelayMs) != nil {
+            stored = defaults.integer(forKey: Key.idleDelayMs)
+        } else {
+            stored = idleDelayMs
+        }
+        return Self.idleDelayChoices.contains(stored) ? stored : 300
     }
 
     @Published public var autocapitalise = true {

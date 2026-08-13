@@ -142,7 +142,7 @@ final class DemoWalkthroughTests: XCTestCase {
         // these controls are.** Emoji, the sparkle and the one-tap rewrite used to
         // sit at the ends of the suggestion bar and the three text actions were
         // rows inside a panel that covered the keys; they are keys in the action
-        // row under the keyboard, and their answers arrive in the banner above it.
+        // row above the keys, and their answers arrive in the banner above that.
         // `bar-emoji` and `bar-sparkle` still exist as identifiers — a user can put
         // either back through the layout editor — but neither is in the shipped
         // default, so a walkthrough that addresses them is walking a keyboard

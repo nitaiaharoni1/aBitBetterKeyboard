@@ -115,12 +115,22 @@ final class RenderedRowOrderTests: XCTestCase {
     }
 
     /// The three letter rows, characters only, left to right.
+    ///
+    /// **Not `prefix(3)`.** The action row is drawn above the letters, so the first
+    /// visual row of `key-` identifiers is Emoji / Reply / Fix, which has no
+    /// `key-char-` keys. Taking the first three rows would compare Apple's letters
+    /// against an empty row plus two letter rows and pass a mirrored keyboard.
+    /// Skip rows with no letters (the action row, the space row) and skip a
+    /// digits-only number row if one is on.
     private func renderedLetterRows() -> [[String]] {
-        renderedRows().prefix(3).map { row in
-            row.compactMap { name in
+        renderedRows().compactMap { row -> [String]? in
+            let letters = row.compactMap { name -> String? in
                 name.hasPrefix("key-char-") ? String(name.dropFirst("key-char-".count)) : nil
             }
-        }
+            guard !letters.isEmpty else { return nil }
+            let digitsOnly = letters.allSatisfy { $0.count == 1 && $0.first?.isNumber == true }
+            return digitsOnly ? nil : letters
+        }.prefix(3).map { $0 }
     }
 
     /// The three suggestion slots are drawn in the same three places whatever the

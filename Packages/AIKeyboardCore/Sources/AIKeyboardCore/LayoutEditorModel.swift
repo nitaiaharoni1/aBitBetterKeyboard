@@ -16,7 +16,7 @@ public final class LayoutEditorModel: ObservableObject {
     /// concerned; only the drawing differs. That is what keeps move, remove and
     /// retarget from being written twice.
     public enum RowKind: String, CaseIterable, Sendable {
-        case bottom, cursor, barLeading, barTrailing
+        case cursor, bottom, barLeading, barTrailing
 
         public var title: String {
             switch self {
@@ -63,7 +63,8 @@ public final class LayoutEditorModel: ObservableObject {
 
     public var canUndo: Bool { !history.isEmpty }
 
-    /// The rows the editor lists, in the order it lists them. The cursor row is
+    /// The rows the editor lists, in the order they appear on the keyboard. The
+    /// extra row is first because `KeyboardView` draws it above the letters; it is
     /// absent when it is switched off, which is what an empty `cursorRow` means.
     public var visibleRows: [RowKind] {
         RowKind.allCases.filter { $0 != .cursor || !draft.cursorRow.isEmpty }

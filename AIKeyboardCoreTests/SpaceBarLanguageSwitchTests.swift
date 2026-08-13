@@ -182,6 +182,9 @@ final class SpaceBarLanguageSwitchTests: XCTestCase {
         XCTAssertEqual(controller.languageSwitchIndication?.isPending, true)
         XCTAssertEqual(controller.languageSwitchIndication?.count, 3)
         XCTAssertEqual(controller.languageSwitchIndication?.position, 1)
+        XCTAssertEqual(
+            controller.languageSwitchIndication?.step, 1,
+            "A right swipe did not tell the keys which edge to enter from")
         XCTAssertEqual(controller.language, .english, "The slide switched before the finger lifted")
     }
 
@@ -220,6 +223,21 @@ final class SpaceBarLanguageSwitchTests: XCTestCase {
         XCTAssertEqual(
             controller.languageSwitchIndication?.isPending, false,
             "The space bar is still showing a candidate for a slide that has already landed")
+        XCTAssertEqual(controller.languageSlideStep, 1)
+        XCTAssertEqual(controller.languageSwitchIndication?.step, 1)
+    }
+
+    /// A left swipe has to carry the opposite step, or the keys slide in from the
+    /// wrong side and fight the codes the space bar just highlighted.
+    func testALeftSwipeTellsTheKeysToEnterFromTheLeft() {
+        SharedStore.shared.enabledLanguages = [.english, .hebrew, .russian]
+        let controller = KeyboardController(target: MockTextTarget(), language: .hebrew)
+
+        slide(controller, -60)
+
+        XCTAssertEqual(controller.language, .english)
+        XCTAssertEqual(controller.languageSlideStep, -1)
+        XCTAssertEqual(controller.languageSwitchIndication?.step, -1)
     }
 
     /// A confirmation that never leaves is not a confirmation, it is a caption:

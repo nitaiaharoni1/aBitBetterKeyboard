@@ -53,10 +53,10 @@ def main() -> None:
 
     out = []
     for language, k, avoid, label in (
-        ("en", 2, None, "en k=2 (14 keys)"),
-        ("en", 3, None, "en k=3 / L1 (8 keys)"),
-        ("he", 2, HEBREW_CLITICS, "he k=2 separated (14 keys)"),
-        ("he", 3, HEBREW_CLITICS, "he k=3 / L1 separated (9 keys)"),
+        ("en", 2, None, "en k=2 (12 keys)"),
+        ("en", 3, None, "en k=3 / L1 (7 keys)"),
+        ("he", 2, HEBREW_CLITICS, "he k=2 separated (13 keys)"),
+        ("he", 3, HEBREW_CLITICS, "he k=3 / L1 separated (8 keys)"),
     ):
         print(f"\n=== {label}")
         print(f"{'words':>8} {'~KB':>6} {'commit':>7} {'offered':>8} {'oov':>6} {'coll':>7}")

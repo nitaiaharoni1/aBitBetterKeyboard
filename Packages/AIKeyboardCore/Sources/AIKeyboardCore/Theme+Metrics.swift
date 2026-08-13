@@ -26,6 +26,17 @@ extension Theme {
         /// that shrinks. See `bannerHeight` below.
         public static let progressBarHeight: CGFloat = 3
 
+        /// How tall the recording waveform is allowed to grow.
+        ///
+        /// **The hairline above cannot show loudness.** Three points with a floor
+        /// is a dashed line; speech needs vertical room or every frame looks the
+        /// same. 24 is the `WaveformView` in the companion app at a size that
+        /// still fits under the fingerprint cliff: a live recording draws no
+        /// banner, so this replaces 3 points with 24 and the total stays 48
+        /// points under `bannerHeight + progressBarHeight`. Paid only while the
+        /// microphone is on — a model call keeps the three-point sweep.
+        public static let recordingWaveformHeight: CGFloat = 24
+
         /// The strip above the suggestion bar: what the keyboard is doing, and the
         /// answer when it has one. See `ActionBanner`.
         ///
@@ -94,13 +105,18 @@ extension Theme {
         /// Height the keyboard extension asks the host app for right now.
         ///
         /// The banner is omitted for everything the keys can say themselves
-        /// (`showsBanner: false`), so ordinary typing — and a running model call,
-        /// and a live recording — is `bannerHeight` shorter. The progress bar is
-        /// in every form of this, running or not: see `progressBarHeight`.
+        /// (`showsBanner: false`), so ordinary typing — and a running model call —
+        /// is `bannerHeight` shorter. The progress bar is in every form of this,
+        /// running or not: see `progressBarHeight`. A live recording is the one
+        /// exception: it swaps that hairline for `recordingWaveformHeight` so
+        /// loudness has vertical room. The fingerprint crop still reads the
+        /// tallest form (banner on, hairline), which a recording-without-banner
+        /// does not exceed.
         public static func totalHeight(
-            for layout: KeyboardCustomization, showsBanner: Bool
+            for layout: KeyboardCustomization, showsBanner: Bool, isRecording: Bool = false
         ) -> CGFloat {
-            (showsBanner ? bannerHeight : 0) + progressBarHeight + suggestionBarHeight
+            let progress = isRecording ? recordingWaveformHeight : progressBarHeight
+            return (showsBanner ? bannerHeight : 0) + progress + suggestionBarHeight
                 + keyAreaHeight(for: layout)
         }
 

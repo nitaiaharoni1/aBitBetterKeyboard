@@ -52,14 +52,12 @@ public enum KeyboardLayout {
                 + Int(stretchUnits(of: planned, row: index, hasCase: base.hasCase))
         }
         // **The floor of ten applies to grouped layouts too, and it is free there
-        // because a grouped key is measured in the positions it swallowed.** A
-        // four-letter key spans two of the ungrouped keyboard's columns and is
-        // declared `.share(2)`, so the band adds up to the same ten columns the
-        // rows it replaced did — the keys are wide because each one takes several
-        // columns' worth of the row, not because the grid shrank. The earlier
-        // row-at-a-time version had to skip the floor, since its keys were one
-        // unit each however many letters they carried, and holding *those* to ten
-        // columns drew three narrow keys centred in a ten-column grid.
+        // because a grouped key is still measured in the positions it swallowed.**
+        // The band adds up to the same ten columns the rows it replaced did, so
+        // holding it to ten does not centre a handful of keys in a wide grid.
+        // Drawn width is an equal share of the row rather than `.share(span)`:
+        // a leftover column used to sit on a one-unit key beside a two-unit
+        // neighbour, which is a skinny button on a feature whose point is size.
         return max(10, needed.max() ?? 10)
     }
 
@@ -240,21 +238,15 @@ public enum KeyboardLayout {
                 keys.append(KeySpec(.shift, width: .pinned))
             }
             keys += planned[index].groups.map { group in
-                // **The span is the width, and that is the whole of how a grouped
-                // key gets big.** A key that swallowed two of the ungrouped
-                // keyboard's positions is two units wide, so a banded row adds up
-                // to exactly the ten columns its two rows used to.
                 let letters = group.letters
                 return KeySpec(
                     .character(group.cap),
-                    // `.share` while grouped, `.unit(1)` while not — and the second
-                    // half is what keeps this one code path from moving a keyboard
-                    // that nobody grouped. A share is only different from a unit
-                    // when a key stands over more than one column: it collects the
-                    // gutters between the keys it replaced, which `.unit` cannot,
-                    // because a unit is a key width and knows nothing about the
-                    // spacing beside it.
-                    width: level == .off ? .unit(1) : .share(CGFloat(group.span)),
+                    // `.share(1)` while grouped, `.unit(1)` while not. Equal shares
+                    // fill the row and keep every grouped button the same size;
+                    // weighting by `span` left leftover columns on skinny keys.
+                    // Ungrouped stays `.unit(1)` so this path cannot move a
+                    // keyboard that nobody grouped.
+                    width: level == .off ? .unit(1) : .share(1),
                     alternates: alternates[group.cap] ?? [],
                     // Only when there is more than one, so an ordinary key stays
                     // an ordinary key: this is what makes the cap draw letter by

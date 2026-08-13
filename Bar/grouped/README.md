@@ -13,8 +13,10 @@ called out where they matter.
 
 ```bash
 Bar/grouped/harness/run.sh                # self-tests, then sweeps; ~70s → results.json
+python3 Bar/grouped/harness/miss.py       # same data, with thumbs that miss
 python3 Bar/grouped/harness/validity.py   # how much those numbers can carry
 python3 Bar/grouped/harness/lexsize.py    # accuracy against word-list size
+python3 Scripts/generate-grouped-lexicon.py  # CC BY 4.0 lists the keyboard ships
 ```
 
 **No simulator, no Swift, no network.** That is the whole design: `Bar/typing`
@@ -76,13 +78,13 @@ languages. Anything else would be a harness bug rather than a finding.
 | k | dial | keys | commit | offered | ranker | coll | vs row-at-a-time |
 |---|---|---|---|---|---|---|---|
 | 1 | control | 26 | 98.1% | 98.1% | 100.0% | 1.0 | — |
-| 2 | | 14 | 96.5% | 98.1% | 98.3% | 2.9 | +0.0 |
-| 3 | **L1** | 8 | 92.3% | 97.1% | 94.1% | 12.2 | **+1.8** |
-| 4 | **L2** | 7 | 91.3% | 97.0% | 93.0% | 13.8 | **+4.4** |
+| 2 | | 12 | 94.9% | 98.1% | 96.7% | 4.0 | — |
+| 3 | **L1** | 7 | 91.3% | 97.0% | 93.0% | 13.8 | — |
+| 4 | **L2** | 7 | 91.3% | 97.0% | 93.0% | 13.8 | — |
 | 5 | **L3** | 5 | 82.7% | 93.8% | 84.3% | 44.4 | +1.5 |
 | 7 | | 4 | 74.1% | 89.9% | 75.5% | 76.6 | — |
 
-Keys: `[qw/as] [er/df] [ty/gh] [ui/jk] [o/l] [p]` over `[zxcv] [bnm]` at L1.
+Keys: `[qw/as] [er/df] [ty/gh] [ui/jk] [op/l]` over `[zxcv] [bnm]` at L1 and L2 (the same English keyboard; leftover `p` folds in).
 
 OOV is 1.9% throughout, so it is never the binding constraint.
 
@@ -93,13 +95,13 @@ Adjacent grouping, and the same rows with the seven clitics forced apart:
 | k | dial | keys | adjacent | separated | gain | separated offered | clitic pairs split |
 |---|---|---|---|---|---|---|---|
 | 1 | control | 27 | 97.0% | 97.0% | — | 97.0% | n/a |
-| 2 | | 14 | 84.7% | **91.7%** | +7.0 | 96.9% | all (1 of 1) |
-| 3 | **L1** | 9 | 75.6% | **82.4%** | +6.8 | 94.0% | all (1 of 1) |
+| 2 | | 13 | 84.4% | **91.4%** | +7.0 | 96.9% | all |
+| 3 | **L1** | 8 | 75.3% | **81.9%** | +6.6 | 93.9% | all |
 | 4 | **L2** | 7 | 71.2% | 71.2% | +0.0 | 88.7% | none (1 left) |
 | 5 | **L3** | 6 | 65.0% | 67.9% | +2.9 | 85.5% | none (1 left) |
 | 7 | | 4 | 51.2% | 51.2% | +0.0 | 69.1% | none |
 
-Keys: `[קר/שד] [אט/גכ] [ו/ע] [ןם/יח] [פל/ך] [ף]` over `[זסב] [הנ] [מצתץ]` at L1.
+Keys: `[קר/שד] [אט/גכ] [ו/ע] [ןם/יח] [פ/לךף]` over `[זסב] [הנ] [מצתץ]` at L1.
 
 OOV is 3.0%. `run.py` prints `INFEASIBLE` on any row where the constraint could
 not be fully satisfied, which is k≥4 — but that flag is binary and the outcome is
@@ -108,6 +110,9 @@ own columns hold no two clitics, so what is left to satisfy is the single row
 `זסבהנמצתץ`, which holds three of them and gets two keys from k=4.
 
 ## The findings
+
+Key counts in this section are the banding study, before leftover one-letter
+groups were folded into a neighbour. The headline tables above are current.
 
 **0. Banding helped English and hurt Hebrew, and both are outside the spread.**
 Merging the top two rows into double-height keys — which is what makes a key a
@@ -271,15 +276,16 @@ The chosen stops, at their best Hebrew variant:
 
 | | keys (en/he) | English | Hebrew |
 |---|---|---|---|
-| **L1** k=3 | 8 / 9 | 92.3% | 82.4% |
+| **pairs** k=2 | 12 / 13 | 94.9% | 91.4% |
+| **L1** k=3 | 7 / 8 | 91.3% | 81.9% |
 | **L2** k=4 | 7 / 7 | 91.3% | 71.2% |
 | **L3** k=5 | 5 / 6 | 82.7% | 67.9% |
 
 Four things fall out, all of them decisions rather than conclusions:
 
-- **k=2 is nearly free in English and is not currently a stop.** 14 keys, 96.5%,
-  with keys twice the area. It costs 1.6 points against an ungrouped keyboard.
-  Hebrew pays 5.3 for the same stop, which is the shape of the whole table.
+- **k=2 is nearly free in English.** 12 keys, 94.9%, with leftover letters folded
+  in. It costs 3.2 points against an ungrouped keyboard (inside a couple of
+  points of the old 14-key stop). Hebrew pays 5.6 for the same stop.
 - **Hebrew L2 commits the wrong word nearly three times in ten**, and L3 more than
   three. Both are still *offered* 88.7% and 85.5% of the time, so with a glance at
   the bar they are usable, but as a space-bar default they are not.

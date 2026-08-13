@@ -107,6 +107,41 @@ def split_row_avoiding(row: str, k: int, avoid: set[str]) -> list[str] | None:
     return None if parts is None else ["".join(part) for part in parts]
 
 
+def absorb_singletons(parts: list, letters_of, merge, avoid: set[str]) -> list:
+    """Fold any one-letter group into a neighbour.
+
+    English `p` and Hebrew `ף` sit on leftover columns with nothing above or
+    below them, and the split otherwise leaves them on a key of their own.
+    Two leftovers next to each other join first; otherwise the letter joins
+    the neighbour that does not put two Hebrew prefixes on one key.
+    """
+    parts = [list(part) for part in parts]
+    while True:
+        singles = [i for i, part in enumerate(parts) if len(letters_of(part)) == 1]
+        if not singles or len(parts) == 1:
+            return parts
+        i = singles[0]
+        neighbors = [j for j in (i - 1, i + 1) if 0 <= j < len(parts)]
+
+        def collides(other: int) -> bool:
+            merged = letters_of(parts[i]) + letters_of(parts[other])
+            return sum(1 for c in merged if c in avoid) > 1
+
+        safe_singletons = [
+            j
+            for j in neighbors
+            if len(letters_of(parts[j])) == 1 and not collides(j)
+        ]
+        if safe_singletons:
+            target = safe_singletons[0]
+        else:
+            safe = [j for j in neighbors if not collides(j)]
+            target = (safe or neighbors)[0]
+        lo, hi = (target, i) if target < i else (i, target)
+        parts[lo] = merge(parts[lo], parts[hi])
+        del parts[hi]
+
+
 def band(top: str, bottom: str, k: int, avoid: set[str]) -> tuple[list[str], bool]:
     """Two rows merged into one row of double-height keys.
 
@@ -136,6 +171,12 @@ def band(top: str, bottom: str, k: int, avoid: set[str]) -> tuple[list[str], boo
         infeasible = parts is None
     if parts is None:
         parts = split(columns, n)
+    parts = absorb_singletons(
+        parts,
+        letters_of=lambda part: [c for col in part for c in col if c],
+        merge=lambda left, right: left + right,
+        avoid=avoid,
+    )
     groups = [
         "".join(c for c, _ in part) + "".join(c for _, c in part) for part in parts
     ]
@@ -184,7 +225,18 @@ class Layout:
                     parts = split_row(row, k)
             else:
                 parts = split_row(row, k)
-            self.groups_by_row.append(parts)
+            letter_parts = [list(part) for part in parts]
+            # k=1 is one letter per key on purpose. Absorbing those would glue
+            # the ungrouped control into a handful of keys and score a keyboard
+            # nobody ships.
+            if k > 1:
+                letter_parts = absorb_singletons(
+                    letter_parts,
+                    letters_of=lambda part: part,
+                    merge=lambda left, right: left + right,
+                    avoid=avoid or set(),
+                )
+            self.groups_by_row.append(["".join(part) for part in letter_parts])
 
         self.groups = [g for row in self.groups_by_row for g in row]
         self.letter_to_key = {
@@ -271,3 +323,38 @@ def word_core(word: str) -> str:
     touched it.
     """
     return word.strip(_EDGE)
+
+
+def letter_at(x: float, y: float, lines: list[list[str]], dead_band: float = 0.18) -> str | None:
+    """Which letter a tap on this key meant, or None when it is too close to
+    the middle to call. x and y are 0..1 in the key, origin top-left.
+
+    Matches `GroupedKeys.letter(atX:y:in:)`. Empty lines occupy their slice and
+    yield nothing, so a tap on the blank top of `ךף` is not a letter.
+    """
+    if not lines:
+        return None
+    x = min(1.0, max(0.0, x))
+    y = min(1.0, max(0.0, y))
+    row_count = len(lines)
+    row_frac = y * row_count
+    row = min(row_count - 1, int(row_frac))
+    line = lines[row]
+    if not line:
+        return None
+    col_count = len(line)
+    col_frac = x * col_count
+    col = min(col_count - 1, int(col_frac))
+    fy = row_frac - row
+    fx = col_frac - col
+    if row_count > 1:
+        if row > 0 and fy < dead_band:
+            return None
+        if row < row_count - 1 and fy > 1 - dead_band:
+            return None
+    if col_count > 1:
+        if col > 0 and fx < dead_band:
+            return None
+        if col < col_count - 1 and fx > 1 - dead_band:
+            return None
+    return line[col]

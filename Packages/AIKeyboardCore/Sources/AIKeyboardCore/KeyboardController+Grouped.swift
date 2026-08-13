@@ -43,7 +43,8 @@ extension GroupedKeys {
 /// characters: a press on `[qwer]` is four possibilities, not a letter. The rule
 /// is replaced rather than dropped, and the replacement is that **there is always
 /// a route to the exact letter the user meant**: long-press the key, pick the
-/// letter, and that position is pinned for the rest of the word.
+/// letter, and that position is pinned for the rest of the word. A tap that
+/// lands clearly on one letter of the group is the same pin without the popup.
 public final class GroupedInput {
 
     /// One key press: the cap that was hit, and the letter the user pinned by
@@ -134,7 +135,10 @@ public final class GroupedInput {
 
     // MARK: Editing the word
 
-    func append(cap: String) { strokes.append(Stroke(cap: cap)) }
+    func append(cap: String, pin: String? = nil) {
+        let allowed = pin.flatMap { GroupedKeys.letters(inCap: cap).contains($0) ? $0 : nil }
+        strokes.append(Stroke(cap: cap, pinned: allowed))
+    }
 
     /// Pin the last stroke to one letter. Called when a long press picks a letter
     /// out of the group that was just pressed.
@@ -246,7 +250,7 @@ extension KeyboardController {
     /// because a person typing has to see words appear. That is what
     /// `replaceCurrentWord` is already for, and it is why the pending word does
     /// not need its own rendering anywhere.
-    func pressGroupedKey(_ cap: String) {
+    func pressGroupedKey(_ cap: String, at unitPoint: CGPoint? = nil) {
         block = nil
         clearRevertibleEdit()
 
@@ -265,7 +269,13 @@ extension KeyboardController {
         // one-shot shift, so `The` decoded as `The`, then `the`.
         if !grouped.isTyping { grouped.startedShifted = shift.isUppercase }
 
-        grouped.append(cap: cap)
+        // A tap clearly on one letter of the group is a soft pin: the same filter
+        // a long press applies, without opening the popup. A tap in the middle
+        // of the key leaves the decoder to guess. VoiceOver sends no point.
+        let pin = unitPoint.flatMap {
+            GroupedKeys.letter(atX: Double($0.x), y: Double($0.y), in: GroupedKeys.lines(inCap: cap))
+        }
+        grouped.append(cap: cap, pin: pin)
         applyGroupedGuess()
     }
 

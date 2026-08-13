@@ -14,12 +14,12 @@ struct LayoutThumbnail: View {
             let rows = CGFloat(layout.rowCount)
             let height = max(2, (geo.size.height - gap * (rows - 1)) / rows)
             VStack(spacing: gap) {
+                if !layout.cursorRow.isEmpty { bar(count: layout.cursorRow.count, height: height) }
                 if layout.showsNumberRow { bar(count: 10, height: height) }
                 bar(count: 10, height: height)
                 bar(count: 9, height: height)
                 bar(count: 9, height: height)
                 bar(count: layout.bottomRow.count, height: height)
-                if !layout.cursorRow.isEmpty { bar(count: layout.cursorRow.count, height: height) }
             }
             .frame(width: geo.size.width * layout.geometry.reach.widthFraction)
             .frame(maxWidth: .infinity, alignment: alignment)

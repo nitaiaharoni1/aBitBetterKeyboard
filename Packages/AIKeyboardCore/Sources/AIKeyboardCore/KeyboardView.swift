@@ -24,6 +24,7 @@ public struct KeyboardView: View {
     // Internal so `KeyboardView+Keys` (and any later split) can read it. Private
     // would compile only while the keys lived in this same file.
     @ObservedObject var controller: KeyboardController
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     public init(controller: KeyboardController) {
         self.controller = controller
@@ -45,8 +46,8 @@ public struct KeyboardView: View {
             }
 
             // Between the banner and the candidates, and present in every state:
-            // its three points are reserved so a call starting cannot move the
-            // three candidate slots under a thumb. See `WorkingProgressBar`.
+            // three points reserved so a call starting cannot move the keys, and
+            // a taller waveform while the microphone is open. See `WorkingProgressBar`.
             WorkingProgressBar(controller: controller)
 
             SuggestionBar(controller: controller)
@@ -57,21 +58,23 @@ public struct KeyboardView: View {
             // them existed to say something the strip above now says, and they said
             // it with the keyboard hidden. What is left of overlays lives inside
             // `keyGrid`: the emoji grid replaces the letters and leaves the action
-            // row, and emoji search hands the letters back and takes only that row.
+            // row above them, and emoji search hands the letters back and takes
+            // only that row.
             keyGrid
                 .frame(height: Theme.Metrics.keyAreaHeight(for: controller.customization))
         }
         .background(Theme.Keys.background)
         .environment(\.layoutDirection, controller.language.layoutDirection)
         .coordinateSpace(name: Self.frameSpace)
-        .animation(Theme.Motion.content, value: controller.showsActionBanner)
+        .animation(Theme.Motion.quick, value: controller.showsActionBanner)
         .onAppear { Feedback.prepare() }
     }
 
     /// How the emoji grid arrives. Still needed by `KeyboardView+Keys`, which is the
     /// one place left that puts anything over the keys.
     var panelTransition: AnyTransition {
-        .asymmetric(
+        if reduceMotion { return .opacity }
+        return .asymmetric(
             insertion: .move(edge: .bottom).combined(with: .opacity),
             removal: .opacity
         )
@@ -81,7 +84,7 @@ public struct KeyboardView: View {
 extension View {
     /// Side inset, optional one-handed width, and the left-to-right pin every key
     /// row needs. Shared by the letter block and the action row; the emoji panel
-    /// above the action row uses the same width and reach, without the key inset.
+    /// below the action row uses the same width and reach, without the key inset.
     func keyboardGridChrome(width: CGFloat, reach: Reach) -> some View {
         // **Every row is drawn in the order its keys are listed, in every
         // language, and the letters plane is not an exception.** It was, and

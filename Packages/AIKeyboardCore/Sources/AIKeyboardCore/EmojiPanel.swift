@@ -21,8 +21,9 @@ import SwiftUI
 /// rows of glyphs with nothing between them: the seam is only legible from the
 /// tab row's highlight, which the user is not looking at while swiping. A
 /// hairline down the leading edge of every section's first column says it in
-/// place. It is an overlay, not a column of its own, so `category(atOffset:)`
-/// still counts the same columns.
+/// place, and `sectionGap` of air sits on the trailing column of the section
+/// before it, so two categories do not touch. The gap is padding, not a column
+/// of its own: a tab still scrolls to the first emoji, not to empty space.
 public struct EmojiPanel: View {
 
     @ObservedObject var controller: KeyboardController
@@ -36,12 +37,27 @@ public struct EmojiPanel: View {
     /// grid showed, and the strip has to beat it to be worth the change.
     static let rowCount = 5
 
+    /// How long a tap keeps its tab orange while the strip is still jumping.
+    /// Covers `Theme.Motion.quick` with a little slack, so a still-visible
+    /// Recent cell cannot paint Recents orange again before the jump lands.
+    static let pinHold: TimeInterval = 0.25
+
     /// What a column wants to be. The real width is this rounded to a whole
     /// number of columns across the panel, so the strip never rests showing a
     /// half-column at the edge of a section.
     static let targetCellWidth: CGFloat = 38
 
-    @State private var scrollOffset: CGFloat = 0
+    /// Air between two categories in the strip. On the trailing column of the
+    /// section that is ending, so a tab still lands on the next category's first
+    /// emoji rather than on the gutter.
+    static let sectionGap: CGFloat = Theme.Space.sm
+
+    /// The orange tab. Named by a tap immediately, and by the cell sitting on
+    /// the leading edge once the strip has moved. Not derived from a
+    /// GeometryReader on the `LazyHGrid` itself: that reader sees the viewport,
+    /// so its offset stays 0 and Recents stays selected forever.
+    @State private var selectedCategory: String = EmojiCatalog.recentID
+    @State private var holdTapUntil: Date = .distantPast
 
     /// The strip's cells, rebuilt only when the recents change. See the `.task`
     /// in `body` for why this is not a computed property.
@@ -66,14 +82,17 @@ public struct EmojiPanel: View {
                     .frame(height: gridHeight)
 
                 EmojiCategoryRow(
-                    selected: Self.category(
-                        atOffset: scrollOffset, cellWidth: cellWidth, in: sections),
+                    selected: selectedCategory,
                     height: keyHeight,
                     // The section's *first cell*, not the section. `ForEach(sections)`
                     // gives the loop its identity but puts no view on screen with
                     // the category's own id, so `scrollTo("Food")` addressed
                     // nothing and every tab was silently dead.
-                    onSelect: { scrollTarget = Self.anchorID(forCategory: $0) },
+                    onSelect: { id in
+                        selectedCategory = id
+                        holdTapUntil = Date().addingTimeInterval(Self.pinHold)
+                        scrollTarget = Self.anchorID(forCategory: id)
+                    },
                     // `press` rather than `deleteBackward`, for the sound: this is
                     // a key the user pressed, and only `press` speaks for one.
                     onDelete: { controller.press(.backspace) }
@@ -88,10 +107,10 @@ public struct EmojiPanel: View {
         .onChange(of: controller.recentEmoji) { _, recent in
             sections = Self.sections(recent: recent)
         }
-        // The panel is a surface of its own over the key rows, so it wears the
-        // warm panel colour rather than the keyboard's background; the category
-        // row's card caps are read against it.
-        .background(Theme.Keys.panel)
+        // Same fill as the letters this grid replaced. `Keys.panel` is the
+        // warmer lift the banner uses; painting it here left a cream rectangle
+        // inside a grey keyboard.
+        .background(Theme.Keys.background)
         // Emoji read left to right regardless of the keyboard language, and so
         // does the strip they sit in: a horizontal `ScrollView` in a right-to-left
         // environment starts at the far end, which would open Hebrew's grid on the
@@ -107,7 +126,11 @@ public struct EmojiPanel: View {
     // MARK: Grid
 
     private func grid(cellWidth: CGFloat, cellHeight: CGFloat) -> some View {
-        ScrollViewReader { proxy in
+        let columns = sections.reduce(0) { $0 + $1.cells.count / Self.rowCount }
+        let gaps = sections.reduce(0) { $0 + ($1.cells.contains(where: \.trailsSection) ? 1 : 0) }
+        let contentWidth = CGFloat(columns) * cellWidth + CGFloat(gaps) * Self.sectionGap
+
+        return ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHGrid(
                     rows: Array(
@@ -121,19 +144,16 @@ public struct EmojiPanel: View {
                         }
                     }
                 }
-                .background {
-                    // The whole of the scroll tracking. One reader for the strip,
-                    // not one per cell: with sections padded to whole columns the
-                    // offset alone says which category is at the leading edge.
-                    GeometryReader { inner in
-                        Color.clear.preference(
-                            key: EmojiScrollOffsetKey.self,
-                            value: -inner.frame(in: .named(scrollSpace)).minX)
-                    }
-                }
+                .frame(width: contentWidth, alignment: .leading)
             }
             .coordinateSpace(name: scrollSpace)
-            .onPreferenceChange(EmojiScrollOffsetKey.self) { scrollOffset = $0 }
+            .onPreferenceChange(LeadingEmojiCategoryKey.self) { lead in
+                guard let lead else { return }
+                let next = Self.selectedCategory(
+                    current: selectedCategory, leading: lead.id,
+                    holdingTap: Date() < holdTapUntil)
+                if next != selectedCategory { selectedCategory = next }
+            }
             .onChange(of: scrollTarget) { _, target in
                 guard let target else { return }
                 withAnimation(Theme.Motion.quick) { proxy.scrollTo(target, anchor: .leading) }
@@ -165,11 +185,25 @@ public struct EmojiPanel: View {
         // Outside the button and with no vertical inset: the rule has to scale
         // with nothing when a finger presses the emoji next to it, and the five
         // cells of a column have to join into one unbroken line rather than a
-        // dashed one. An overlay so the seam costs no layout — the column maths
-        // in `category(atOffset:)` is what the tab highlight rides on.
+        // dashed one. The hairline is still an overlay; the gap is padding on
+        // the column that is ending, so it does not become a column the tab
+        // highlight could land on.
         .overlay(alignment: .leading) {
             if cell.leadsSection {
                 Rectangle().fill(Self.ruleTint).frame(width: 1)
+            }
+        }
+        .padding(.trailing, cell.trailsSection ? Self.sectionGap : 0)
+        // The orange tab follows whichever cell is sitting on the leading edge,
+        // not a GeometryReader on the grid. A `LazyHGrid`'s own background is
+        // the viewport, so that offset stayed 0 and Recents stayed selected.
+        .background {
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: LeadingEmojiCategoryKey.self,
+                    value: VisibleCategory(
+                        id: cell.categoryID,
+                        minX: geo.frame(in: .named(scrollSpace)).minX))
             }
         }
     }
@@ -191,12 +225,18 @@ public struct EmojiPanel: View {
 
     struct Cell: Identifiable, Equatable {
         let id: String
+        let categoryID: String
         let emoji: String?
         /// Whether this cell wears the seam on its leading edge. True for a whole
         /// first column — every cell with an index under `rowCount`, blanks
         /// included, so a section shorter than one column still rules its full
         /// height — and false for the first section that has any cells at all.
         var leadsSection = false
+        /// Whether this cell wears the gap on its trailing edge. True for the
+        /// last column of a section that has another non-empty section after it,
+        /// so two categories do not run into each other, and false for the last
+        /// section on the strip, which has only the edge of the panel beyond it.
+        var trailsSection = false
     }
 
     struct Section: Equatable {
@@ -222,7 +262,15 @@ public struct EmojiPanel: View {
             result.append(section(id: category.id, emoji: category.emoji, rule: anythingBefore))
             anythingBefore = anythingBefore || !category.emoji.isEmpty
         }
-        return result
+        return result.enumerated().map { index, section in
+            let hasFollowing = result[(index + 1)...].contains { !$0.cells.isEmpty }
+            guard hasFollowing, !section.cells.isEmpty else { return section }
+            var cells = section.cells
+            for i in (cells.count - rowCount)..<cells.count {
+                cells[i].trailsSection = true
+            }
+            return Section(id: section.id, cells: cells)
+        }
     }
 
     /// The cell a category tab scrolls to: the first one in that section. Spelled
@@ -232,7 +280,7 @@ public struct EmojiPanel: View {
     private static func section(id: String, emoji: [String], rule: Bool) -> Section {
         var cells = emoji.enumerated().map {
             Cell(
-                id: "\(id)-\($0.offset)", emoji: $0.element,
+                id: "\(id)-\($0.offset)", categoryID: id, emoji: $0.element,
                 leadsSection: rule && $0.offset < rowCount)
         }
         let remainder = cells.count % rowCount
@@ -244,7 +292,7 @@ public struct EmojiPanel: View {
                 let index = cells.count
                 cells.append(
                     Cell(
-                        id: "\(id)-blank-\(blank)", emoji: nil,
+                        id: "\(id)-blank-\(blank)", categoryID: id, emoji: nil,
                         leadsSection: rule && index < rowCount))
             }
         }
@@ -272,12 +320,53 @@ public struct EmojiPanel: View {
         }
         return sections.last?.id ?? EmojiCatalog.recentID
     }
+
+    /// The cell that owns the strip's leading edge: the one covering x = 0.
+    /// Among cells that have scrolled past the edge (`minX <= 0`), that is the
+    /// one closest to zero. Recents at −80 and Smileys at 0 therefore names
+    /// Smileys, which is the case the offset-from-the-grid-background never saw.
+    static func nearerTheLeadingEdge(
+        _ a: VisibleCategory, _ b: VisibleCategory
+    )
+        -> VisibleCategory
+    {
+        switch (a.minX <= 0, b.minX <= 0) {
+        case (true, true): return a.minX >= b.minX ? a : b
+        case (true, false): return a
+        case (false, true): return b
+        case (false, false): return a.minX <= b.minX ? a : b
+        }
+    }
+
+    /// A tap names the orange tab immediately. Visible cells must not paint
+    /// Recents back on until the jump has landed (or the hold has expired).
+    static func selectedCategory(current: String, leading: String, holdingTap: Bool) -> String {
+        if holdingTap, leading != current { return current }
+        return leading
+    }
+
+    struct VisibleCategory: Equatable {
+        var id: String
+        var minX: CGFloat
+    }
 }
 
-/// How far the strip has been swiped, in points.
-struct EmojiScrollOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat { 0 }
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+/// The category sitting on the leading edge of the emoji strip, from the
+/// visible cells themselves. A GeometryReader on the `LazyHGrid` reports the
+/// viewport and stays at offset 0, which is why Recents stayed orange.
+struct LeadingEmojiCategoryKey: PreferenceKey {
+    static var defaultValue: EmojiPanel.VisibleCategory? { nil }
+    static func reduce(
+        value: inout EmojiPanel.VisibleCategory?,
+        nextValue: () -> EmojiPanel.VisibleCategory?
+    ) {
+        guard let next = nextValue() else { return }
+        guard let current = value else {
+            value = next
+            return
+        }
+        value = EmojiPanel.nearerTheLeadingEdge(current, next)
+    }
 }
 
 // MARK: - Category row
@@ -383,7 +472,12 @@ struct EmojiCategoryRow: View {
         ) {
             Image(systemName: icon)
                 .font(Theme.Glyph.font(19))
+                .foregroundStyle(isSelected ? Theme.Text.onBrand : Theme.Keys.secondaryLabel)
         }
+        // `KeyStyleButton` holds press `@State`. Without a new identity when
+        // the orange pill moves, it can keep the `isSelected` it was created
+        // with — Recents, on first appear.
+        .id("\(id)-\(isSelected)")
         .accessibilityLabel(id)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
@@ -449,11 +543,13 @@ struct KeyStyleButton<Label: View>: View {
                 .fill(fill)
                 .shadow(
                     color: drawsCap ? KeyView.contactShadow(for: capKind) : .clear,
-                    radius: 0, x: 0, y: isPressed ? 1 : 2
+                    radius: 0, x: 0,
+                    y: isPressed ? KeyView.pressContactY : KeyView.restContactY
                 )
                 .shadow(
                     color: drawsCap ? KeyView.ambientShadow(for: capKind) : .clear,
-                    radius: isPressed ? 3 : 7, x: 0, y: isPressed ? 2 : 4
+                    radius: isPressed ? KeyView.pressAmbientRadius : KeyView.restAmbientRadius,
+                    x: 0, y: isPressed ? KeyView.pressAmbientY : KeyView.restAmbientY
                 )
             label()
                 // `&& !isSelected`: the flip exists because a pressed cap goes
@@ -464,8 +560,9 @@ struct KeyStyleButton<Label: View>: View {
         }
         .frame(width: width, height: height)
         .frame(maxWidth: width == nil ? .infinity : nil)
-        .offset(y: isPressed ? 1 : 0)
-        .animation(Theme.Motion.quick, value: isPressed)
+        .offset(y: isPressed ? KeyView.pressTravel : 0)
+        .animation(Theme.Motion.press, value: isPressed)
+        .animation(Theme.Motion.quick, value: isSelected)
         .contentShape(Rectangle())
         .gesture(press)
         .onChange(of: isTouching) { _, touching in
@@ -520,14 +617,14 @@ struct KeyStyleButton<Label: View>: View {
         if isSelected { return Theme.Brand.action }
         // **A capless press has to be a wash, and both of the named colours that
         // look right are traps.** A cap answers a finger by going pale, which
-        // needs a cap to go pale *from*; a bare glyph has only the panel under it.
-        // `Theme.Keys.functionPressed` is 0xFFFEFA on a 0xF4F3EF panel, eleven
-        // units, invisible on a phone in daylight — and `Theme.Keys.card` is
-        // *the same colour* in light mode (both 0xFFFEFA), so reaching for it
-        // changes nothing where the problem is and costs contrast in the dark,
-        // where 0x2E3435 on 0x242829 is closer than the 0x54595B it replaced.
-        // Only a wash off the label tint moves the right way in both: it darkens
-        // the light panel and lightens the dark one, because the label does.
+        // needs a cap to go pale *from*; a bare glyph has only the keyboard
+        // background under it. `Theme.Keys.functionPressed` is 0xFFFEFA on
+        // 0xE2E4E8, a pale cap on a pale field — and `Theme.Keys.card` is *the
+        // same colour* in light mode (both 0xFFFEFA), so reaching for it changes
+        // nothing where the problem is and costs contrast in the dark, where
+        // 0x2E3435 on 0x1E2122 is closer than the 0x54595B it replaced. Only a
+        // wash off the label tint moves the right way in both: it darkens the
+        // light field and lightens the dark one, because the label does.
         if isPressed { return drawsCap ? Theme.Keys.functionPressed : EmojiPanel.pressWash }
         return drawsCap ? restingCap : .clear
     }

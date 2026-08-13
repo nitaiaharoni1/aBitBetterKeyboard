@@ -80,12 +80,12 @@ extension KeyView {
                 .foregroundStyle(labelColor)
 
         case .dictation:
-            // **This key is the whole of the recording notice now**, so it has four
-            // appearances rather than two: the strip that used to carry a waveform,
-            // a countdown and a Pause button is not drawn for a recording any more.
-            // The glyph, the word and the record-red cap are all resolved from one
-            // value — see `DictationKeyState` and `KeyView.capKind` — so the key can
-            // never end up filled red while captioned Dictate.
+            // **This key is the whole of the recording notice now**, so it has two
+            // appearances: waves at rest, pause while the microphone is on. The
+            // × that cancelled a transcription in flight is gone. The glyph, the
+            // word and the record-red cap are all resolved from one value — see
+            // `DictationKeyState` and `KeyView.capKind` — so the key can never end
+            // up filled red while captioned Record.
             actionLabel(
                 icon: dictationState.icon,
                 title: dictationState.title,
@@ -184,13 +184,23 @@ extension KeyView {
     func groupedLabel(_ lines: [[String]], size: CGFloat) -> some View {
         VStack(spacing: size * 0.12) {
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                HStack(spacing: size * 0.34) {
-                    ForEach(Array(line.enumerated()), id: \.offset) { _, letter in
-                        Text(shift.isUppercase ? language.uppercased(letter) : letter)
+                Group {
+                    if line.isEmpty {
+                        // An empty HStack collapses; a clear view still takes its
+                        // slice, which is how `ךף` stays on the lower half.
+                        Color.clear
+                    } else {
+                        HStack(spacing: size * 0.34) {
+                            ForEach(Array(line.enumerated()), id: \.offset) { _, letter in
+                                Text(shift.isUppercase ? language.uppercased(letter) : letter)
+                            }
+                        }
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .frame(maxHeight: .infinity)
         .font(.system(size: size, weight: .light))
         .foregroundStyle(Theme.Keys.label)
         .lineLimit(1)
