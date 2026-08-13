@@ -351,6 +351,22 @@ final class AIDirectEditTests: XCTestCase {
         XCTAssertFalse(controller.showsActionBanner)
     }
 
+    /// The WhatsApp screenshots. The engine echoed the jammed string — that is
+    /// `corrections: none` after `EditScope` — and the previous Fix stayed quiet
+    /// because the answer matched the field. The field has to change.
+    func testFixSplitsJammedHebrewTheModelLeftAlone() async {
+        let engine = DirectEditEngine(fixed: "מהאופישלומהקורה")
+        let controller = makeDirectEditController(
+            text: "מהאופישלומהקורה", engine: engine)
+
+        controller.run(.fix)
+        await settleToneController(controller)
+
+        XCTAssertEqual(controller.contextBefore, "מה אופי שלו מה קורה")
+        XCTAssertEqual(controller.revertibleEdit?.previous, "מהאופישלומהקורה")
+        XCTAssertFalse(controller.showsActionBanner)
+    }
+
     // MARK: The two keys that need text
 
     /// Fix and Rewrite are drawn off on an empty field and come back the moment

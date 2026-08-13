@@ -213,6 +213,55 @@ final class EditScopeTests: XCTestCase {
         )
     }
 
+    // MARK: Words stuck together
+
+    /// The WhatsApp screenshots. Jammed Hebrew is several words, not one already-
+    /// correct word, and `none` used to throw the split away so Fix was a no-op.
+    func testJammedHebrewIsSplitEvenWhenTheModelSaidNone() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "מה אופי שלו מה קורה", to: "מהאופישלומהקורה", corrections: "none"),
+            "מה אופי שלו מה קורה"
+        )
+        XCTAssertEqual(
+            EditScope.applied(
+                "היי מה אופי שלו מה קורה", to: "היי מהאופישלומהקורה", corrections: "none"),
+            "היי מה אופי שלו מה קורה"
+        )
+    }
+
+    /// The list described the mistake in words rather than as `wrong -> right`,
+    /// so the jammed token was not in the named set and the shape check put it
+    /// back. Spacing is not a word swap.
+    func testJammedHebrewIsSplitEvenWhenTheModelNamedTheChangeBadly() {
+        XCTAssertEqual(
+            EditScope.applied(
+                "מה אופי שלו מה קורה", to: "מהאופישלומהקורה", corrections: "חסרים רווחים"),
+            "מה אופי שלו מה קורה"
+        )
+        XCTAssertEqual(
+            EditScope.applied(
+                "hello there", to: "hellothere", corrections: "missing spaces"),
+            "hello there"
+        )
+    }
+
+    /// Joining is the opposite recovery and is still refused on `none`.
+    func testJammedWordsAreNotJoinedBackTogetherWhenTheModelSaidNone() {
+        XCTAssertEqual(
+            EditScope.applied("מהקורה", to: "מה קורה", corrections: "none"),
+            "מה קורה"
+        )
+    }
+
+    /// A Hebrew full stop on `none` is still tidying, not a split.
+    func testAFullStopIsStillNotAWhitespaceSplit() {
+        XCTAssertFalse(
+            EditScope.splitsOnlyByWhitespace("מעולה, נתראה מחר בבוקר.", of: "מעולה, נתראה מחר בבוקר"))
+        XCTAssertTrue(
+            EditScope.splitsOnlyByWhitespace("מה קורה", of: "מהקורה"))
+    }
+
     // MARK: Full stops
 
     /// Measured: the model kept putting a full stop on the end of Hebrew messages

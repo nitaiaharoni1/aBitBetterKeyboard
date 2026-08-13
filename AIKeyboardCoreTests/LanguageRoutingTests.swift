@@ -71,6 +71,14 @@ final class PromptSelectionTests: XCTestCase {
         XCTAssertTrue(Prompts.fix(for: "אני יבדוק").contains("לעולם אל תתרגם"))
     }
 
+    /// The instruction the WhatsApp screenshots were missing: jammed words are
+    /// a mistake. Without this line the model treated `מהאופישלומהקורה` as
+    /// already correct and Fix changed nothing.
+    func testFixPromptsCallJammedWordsAMistake() {
+        XCTAssertTrue(Prompts.fix(for: "hellothere").contains("hellothere"))
+        XCTAssertTrue(Prompts.fix(for: "מהקורה").contains("מהקורה"))
+    }
+
     func testToneDirectionIsAppendedPerRegister() {
         let shorter = Prompts.tone(.shorter, for: "the meeting is tomorrow")
         let friendly = Prompts.tone(.friendly, for: "the meeting is tomorrow")

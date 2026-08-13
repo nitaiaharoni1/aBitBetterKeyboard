@@ -37,7 +37,7 @@ public struct CloudIntelligence: TextIntelligence {
             fields: [
                 CloudField(
                     "corrections",
-                    "Every spelling and grammar mistake in the whole message, as `wrong -> right`, comma separated. Multi-word grammar counts as one: `dont -> don't`, `its not -> it doesn't`. Not mistakes: a correctly spelled word, an alternative accepted Hebrew spelling, slang, an abbreviation, an already-correct contraction, a deliberate lowercase, and a missing full stop. A missing apostrophe is a mistake. 'none' when nothing is wrong."
+                    "Every spelling and grammar mistake in the whole message, as `wrong -> right`, comma separated. Multi-word grammar counts as one: `dont -> don't`, `its not -> it doesn't`. Words stuck together with no space are a mistake: `hellothere -> hello there`, `מהקורה -> מה קורה`. Not mistakes: a correctly spelled word, an alternative accepted Hebrew spelling, slang, an abbreviation, an already-correct contraction, a deliberate lowercase, and a missing full stop. A missing apostrophe is a mistake. 'none' when nothing is wrong."
                 ),
                 CloudField(
                     "text",

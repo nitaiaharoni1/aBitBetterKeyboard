@@ -56,7 +56,16 @@ public enum EditScope {
     ) -> String {
         // Nothing wrong means nothing to change — including no full stop on the
         // end. This alone is what keeps an already-correct message intact.
-        guard !declaresNothing(corrections) else { return source }
+        //
+        // **Except a run of letters that is several words with the spaces
+        // missing.** That is the WhatsApp case Fix was a no-op on: the model
+        // wrote `none` because the corrections field never called missing spaces
+        // a mistake, then this returned the jammed string and `applyDirectly`
+        // stayed quiet. Spacing is not tidying — the letters did not change —
+        // so a split that only inserts whitespace is kept even on `none`.
+        guard !declaresNothing(corrections) else {
+            return splitsOnlyByWhitespace(candidate, of: source) ? candidate : source
+        }
         let named = Set(split(corrections).map { word($0.text) }.filter { !$0.isEmpty })
         return reconciled(candidate, to: source, named: named)
     }
@@ -89,6 +98,17 @@ public enum EditScope {
 
                 if let contraction = restoredContraction(from: was, to: now) {
                     kept.append(contraction)
+                    continue
+                }
+                // Several words jammed into one token, then split. The letters
+                // did not change, so this is not a word the model swapped on
+                // its own — and the list often describes it as "missing spaces"
+                // rather than naming the jammed token, which is the check below
+                // that would otherwise put the jammed token back.
+                if now.count > was.count, letters(in: was) == letters(in: now),
+                    !letters(in: was).isEmpty
+                {
+                    kept += now
                     continue
                 }
                 // A word-for-word swap is judged one word at a time, so a
@@ -139,6 +159,16 @@ public enum EditScope {
         return text.isEmpty
             || ["none", "n/a", "na", "null", "-", "nothing", "no errors", "אין", "אין שגיאות", "ללא"]
                 .contains(text)
+    }
+
+    /// `candidate` is `source` with spaces inserted between letters and nothing
+    /// else changed — not a full stop, not a question mark, not a respelling.
+    ///
+    /// Joining words back together is refused: that is the model deleting the
+    /// spaces the writer typed, which is the opposite of this recovery.
+    public static func splitsOnlyByWhitespace(_ candidate: String, of source: String) -> Bool {
+        candidate.filter { !$0.isWhitespace } == source.filter { !$0.isWhitespace }
+            && split(candidate).count > split(source).count
     }
 
     // MARK: The two corrections made without asking
@@ -241,6 +271,10 @@ public enum EditScope {
     /// punctuation and capitalisation never register as a change.
     private static func word(_ token: String) -> String {
         token.filter { $0.isLetter || $0.isNumber }.lowercased()
+    }
+
+    private static func letters(in tokens: [Token]) -> String {
+        tokens.map { word($0.text) }.joined()
     }
 
     private static func leadingPunctuation(_ token: String) -> String {

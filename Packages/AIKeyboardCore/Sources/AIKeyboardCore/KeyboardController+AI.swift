@@ -262,9 +262,10 @@ extension KeyboardController {
         let preferred =
             bannerOptions.indices.contains(bannerIndex)
             ? bannerOptions[bannerIndex].language : nil
+        let answer = runningAction == .fix ? MissingSpaces.restored(text) : text
         announceHostLanguage(
-            preferred ?? Self.languageForHost(reported: "", text: text) ?? language)
-        replaceTargetText(with: text)
+            preferred ?? Self.languageForHost(reported: "", text: answer) ?? language)
+        replaceTargetText(with: answer)
         dismissOverlay()
     }
 
@@ -339,9 +340,15 @@ extension KeyboardController {
         // so an undo built on `previous` would delete the reply and leave the words
         // it consumed gone for good. Reply had no undo at all until it started
         // applying itself, which is why this only matters now.
-        let restored = inserts ? (selected ?? "") : previous
+        let undone = inserts ? (selected ?? "") : previous
         // Nothing at all: leave it to `BannerState.resolve`'s "Nothing came back".
         guard !text.isEmpty else { return }
+        // **Jammed letters are split here, not in the engine.** The model can
+        // echo `מהאופישלומהקורה` with `corrections: none`; `EditScope` then
+        // returns the source and the identical-text guard below used to stay
+        // quiet. `MissingSpaces` is the recovery that does not wait on a sampled
+        // call. Rewrite and Reply are not proofreading, so they are left alone.
+        let answer = action == .fix ? MissingSpaces.restored(text) : text
         // **Byte-for-byte identical is an answer, not a warning.** It is what
         // `EditScope.applied` returns when the model named no mistakes, and it is
         // the ordinary outcome of running Fix over a sentence that is already
@@ -349,7 +356,7 @@ extension KeyboardController {
         // revert button offering to change nothing. Telling the user "Nothing to
         // change" is a 69pt strip for a tap that did its job. The progress bar
         // ending is the signal; the field is already what they wanted.
-        guard text != previous else {
+        guard answer != previous else {
             clearBannerState()
             return
         }
@@ -361,9 +368,9 @@ extension KeyboardController {
         clearRevertibleEdit()
         announceHostLanguage(
             (action == .reply ? replyContext?.language : nil)
-                ?? Self.language(of: text, fallback: language))
-        replaceTargetText(with: text)
-        revertibleEdit = AIEdit(action: action, previous: restored, applied: text, undo: undo)
+                ?? Self.language(of: answer, fallback: language))
+        replaceTargetText(with: answer)
+        revertibleEdit = AIEdit(action: action, previous: undone, applied: answer, undo: undo)
         // **Emptied, because the next action must not inherit it.**
         // `selectTone(_:)` keeps whatever is already in `aiSourceText` — correct
         // when it is reached from an action that has just filled it, and wrong from

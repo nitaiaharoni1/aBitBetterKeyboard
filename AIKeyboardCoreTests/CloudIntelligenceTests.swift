@@ -112,6 +112,35 @@ final class CloudIntelligenceTests: XCTestCase {
             "the text field no longer asks for the whole message")
     }
 
+    /// Same trap as the apostrophe: missing spaces were not in the list of
+    /// mistakes, so the model wrote `none` for a jammed Hebrew sentence and
+    /// Fix was a silent no-op. The example has to be in the field the model
+    /// fills, not only in the instructions it may skim.
+    func testFixAsksTheModelToNameWordsStuckTogether() async throws {
+        let transport = StubTransport(
+            reply: ["corrections": "מהקורה -> מה קורה", "text": "מה קורה"])
+        _ = try await CloudIntelligence(transport: transport).fix("מהקורה")
+
+        let corrections = try XCTUnwrap(transport.lastRequest?.fields.first { $0.name == "corrections" })
+        XCTAssertTrue(
+            corrections.description.contains("hellothere -> hello there"),
+            "the field no longer shows an English jammed-words example")
+        XCTAssertTrue(
+            corrections.description.contains("מהקורה -> מה קורה"),
+            "the field no longer shows a Hebrew jammed-words example")
+    }
+
+    /// `corrections: none` used to throw the split away even when `text` had
+    /// already inserted the spaces. That is the WhatsApp screenshot: the
+    /// progress bar ended and the field still said `מהאופישלומהקורה`.
+    func testFixKeepsASplitEvenWhenTheModelSaidNone() async throws {
+        let transport = StubTransport(
+            reply: ["corrections": "none", "text": "מה אופי שלו מה קורה"])
+        let result = try await CloudIntelligence(transport: transport).fix("מהאופישלומהקורה")
+
+        XCTAssertEqual(result, "מה אופי שלו מה קורה")
+    }
+
     /// The corrections the model names are what the corrected message is held to,
     /// so an answer that reports none has to come back as the user typed it —
     /// full stop and all. See `EditScope`.
