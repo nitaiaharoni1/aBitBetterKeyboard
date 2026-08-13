@@ -172,47 +172,79 @@ extension KeyView {
 
     // MARK: Callouts
 
+    /// How tall the neck that meets the key is, and how far it sits into the cap
+    /// so the balloon reads as growing out of it rather than hovering.
+    static let calloutNeckHeight: CGFloat = 12
+    static let calloutOverlap: CGFloat = 3
+
+    /// The circle the glyph sits in: wider than the key, or it is not a preview.
+    var calloutBubbleSize: CGFloat { max(width * 1.65, height * 1.35, 52) }
+
+    /// Heavier and larger than the cap, so the letter is readable under a thumb.
+    var calloutFontSize: CGFloat {
+        max(characterFontSize * 1.4, min(34, calloutBubbleSize * 0.58))
+    }
+
+    private var calloutNeckWidth: CGFloat {
+        min(width * 0.58, calloutBubbleSize * 0.38)
+    }
+
     /// The balloon that pops above a letter while the finger is down, so the
     /// glyph stays readable under the thumb.
     ///
     /// Grows out of the key rather than fading in: a fade is a caption appearing,
     /// a scale from the bottom is the key itself lifting so the letter can be
-    /// read. Reduce Motion keeps the fade. No `!showsAlternates` here: a key that
-    /// has a popup never has a callout in the first place, so the two can no
-    /// longer be up at once. See `showsCharacterCallout`.
+    /// read. Reduce Motion keeps the fade. The popup takes this seat the moment
+    /// it opens — `drawsCharacterCallout(popupIsVisible:)` is what keeps the two
+    /// from stacking.
     @ViewBuilder
     var callout: some View {
         if isPressed, showsCharacterCallout, case .character(let value) = spec.cap {
-            Text(shift.isUppercase ? language.uppercased(value) : value)
-                .font(.system(size: 32, weight: .light))
+            let glyph = shift.isUppercase ? language.uppercased(value) : value
+            Text(displayLabel(glyph))
+                .font(.system(size: calloutFontSize, weight: .medium))
                 .foregroundStyle(Theme.Keys.label)
-                .frame(width: width * 1.35, height: height * 1.05)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+                .frame(width: calloutBubbleSize, height: calloutBubbleSize)
+                .frame(
+                    width: calloutBubbleSize,
+                    height: calloutBubbleSize + Self.calloutNeckHeight,
+                    alignment: .top
+                )
+                .background {
+                    CharacterCalloutShape(neckWidth: calloutNeckWidth)
                         .fill(Theme.Keys.letter)
                         .shadow(color: Theme.Keys.shadow.opacity(0.35), radius: 4, y: 2)
-                )
-                .offset(y: -height - 4)
+                }
+                .fixedSize()
+                .offset(y: -height + Self.calloutOverlap)
                 .allowsHitTesting(false)
                 .transition(Theme.Motion.pop(reduceMotion: reduceMotion))
         }
     }
 
-    /// Only a key with nothing else to show.
+    /// Whether this key draws the press balloon *right now*.
     ///
-    /// **A key that has a popup shows the popup and nothing before it.** The
-    /// callout and the popup are two balloons in the same place drawing the same
-    /// glyph, so a hold used to play as one appearing, a beat, then the other
-    /// replacing it — most visible in Hebrew, where every one of the twenty-seven
-    /// letters carries a geresh, so every letter did it. The popup already leads
-    /// with the character the key typed (see `alternateItems`), which is the whole
-    /// job the callout was doing; a hold that opens it therefore loses nothing,
-    /// and `KeyView.alternatesDelay` is short enough that the gap before it reads
-    /// as part of the press rather than as a dead moment.
+    /// Reads `showsAlternates`, so a hold that has opened the strip no longer
+    /// has a callout underneath it. Tests that cannot set that flag go through
+    /// `drawsCharacterCallout(popupIsVisible:)` instead.
+    var showsCharacterCallout: Bool { drawsCharacterCallout(popupIsVisible: showsAlternates) }
+
+    /// **Letters preview on finger-down, including the ones that have a popup.**
+    /// Hebrew's every letter carries a geresh, so gating this on `hasAlternates`
+    /// left the whole alphabet with no tap feedback — a thumb covering the glyph
+    /// and nothing above it. The balloon and the strip still cannot be up at
+    /// once: pass `popupIsVisible: true` and this is false.
     ///
-    /// The punctuation key was the first key to work this way and is no longer a
-    /// special case: it has alternates like the rest of them.
-    var showsCharacterCallout: Bool { !hasAlternates }
+    /// The punctuation key still skips it. Its cap already wears the four marks,
+    /// and previewing a lone period for the hold delay is the two-step open that
+    /// was pulled. A grouped cap is several letters; a single balloon would name
+    /// the wrong thing.
+    func drawsCharacterCallout(popupIsVisible: Bool) -> Bool {
+        guard case .character = spec.cap else { return false }
+        guard spec.addressableID != KeyboardLayout.punctuationKeyID else { return false }
+        guard spec.groupedLetters == nil else { return false }
+        return !popupIsVisible
+    }
 
     /// The same balloon, for the language a slide along the space bar is pointing
     /// at. Only while the finger is down: once it lifts the thumb is out of the
@@ -227,5 +259,42 @@ extension KeyView {
                     SpaceSwipe.calloutTransition(
                         step: indication.step, reduceMotion: reduceMotion))
         }
+    }
+}
+
+/// The press balloon: a circle for the glyph, tapering down to the key.
+///
+/// One path rather than a circle stacked on a triangle, so the contact shadow
+/// is a single silhouette. The neck starts inside the circle so the fill does
+/// not leave a seam where they meet.
+struct CharacterCalloutShape: Shape {
+    var neckWidth: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let neckHeight = min(KeyView.calloutNeckHeight, rect.height * 0.28)
+        let diameter = min(rect.width, rect.height - neckHeight)
+        let radius = diameter / 2
+        let center = CGPoint(x: rect.midX, y: radius)
+        let neckTop = diameter * 0.62
+        let neckTopWidth = min(diameter * 0.46, max(neckWidth, 1) * 1.35)
+
+        var path = Path()
+        path.addEllipse(
+            in: CGRect(
+                x: center.x - radius, y: center.y - radius,
+                width: diameter, height: diameter))
+
+        var neck = Path()
+        neck.move(to: CGPoint(x: center.x - neckTopWidth / 2, y: neckTop))
+        neck.addLine(to: CGPoint(x: center.x + neckTopWidth / 2, y: neckTop))
+        neck.addQuadCurve(
+            to: CGPoint(x: center.x + neckWidth / 2, y: rect.maxY),
+            control: CGPoint(x: center.x + neckWidth / 2, y: diameter + neckHeight * 0.15))
+        neck.addLine(to: CGPoint(x: center.x - neckWidth / 2, y: rect.maxY))
+        neck.addQuadCurve(
+            to: CGPoint(x: center.x - neckTopWidth / 2, y: neckTop),
+            control: CGPoint(x: center.x - neckWidth / 2, y: diameter + neckHeight * 0.15))
+        path.addPath(neck)
+        return path
     }
 }

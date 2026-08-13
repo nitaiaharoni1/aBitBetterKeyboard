@@ -141,7 +141,9 @@ public struct KeyView: View {
         .overlay(alignment: .bottom) { callout }
         .overlay(alignment: .bottom) { alternatesPopup }
         .overlay(alignment: .bottom) { languageCallout }
-        .zIndex(isPressed ? 1 : 0)
+        // High enough that a balloon wider than the key sits above every
+        // neighbour, not only the ones SwiftUI happened to draw first.
+        .zIndex(isPressed ? 10 : 0)
         .contentShape(Rectangle())
         .gesture(pressGesture)
         // **The whole key, not the gesture alone.** `.disabled` takes the touch out

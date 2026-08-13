@@ -64,14 +64,11 @@ extension KeyView {
 
     /// How long the finger stays down before the popup opens.
     ///
-    /// **One number for every key that has a popup, and it is short because
-    /// nothing is on screen during it.** It used to be three, and the longest of
-    /// them — 450ms for a letter — was paid for by the press callout filling the
-    /// wait. A key with alternates has no callout now (`showsCharacterCallout`),
-    /// so a long hold is a hold against a blank space above the key, which reads
-    /// as a keyboard that has not noticed the finger. 200ms is under the quarter
-    /// second a pause becomes visible at, and still well over the 60–120ms a
-    /// deliberate tap lasts.
+    /// **One number for every key that has a popup.** The press callout now
+    /// fills the wait — letters preview on finger-down even when they have
+    /// alternates — so this is no longer covering a blank space above the key.
+    /// 200ms is still under the quarter second a pause becomes visible at, and
+    /// still well over the 60–120ms a deliberate tap lasts.
     ///
     /// **Not zero, and that is the whole reason there is a number at all.**
     /// Opening on finger-down puts the popup on screen for the length of every

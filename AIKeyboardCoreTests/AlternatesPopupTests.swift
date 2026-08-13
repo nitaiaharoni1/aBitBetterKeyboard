@@ -68,39 +68,80 @@ final class AlternatesPopupTests: XCTestCase {
         return key(spec, language: language)
     }
 
-    // MARK: One balloon, not two
+    // MARK: The press balloon
 
-    /// **A key with a popup draws no press callout, so a hold shows one thing
-    /// once.** They are two balloons in the same place drawing the same glyph:
-    /// the callout on finger-down, then the popup replacing it, which played as
-    /// ח, a beat, then ח beside ח׳. In Hebrew that was every letter of the
-    /// alphabet, because every one of them carries a geresh.
+    /// **A letter draws a callout on tap even when it has a long-press popup.**
+    /// Gating on `hasAlternates` left Hebrew with no tap feedback at all — every
+    /// letter carries a geresh, so the thumb covered the glyph and nothing rose
+    /// above it. English `a` and Russian `е` are the same shape. `q` has no
+    /// popup and must still draw one, or a key with nothing else to show is
+    /// mute.
     ///
-    /// Asserting both halves, because dropping the callout from a key that has
-    /// nothing else to show would leave that key with no press feedback at all.
-    func testOnlyAKeyWithNothingElseToShowDrawsThePressCallout() throws {
-        for character in ["ח", "צ", "ק"] {
+    /// The two balloons still cannot be up at once: a hold that has opened the
+    /// strip hides the callout. Asserting that half is what rejects the version
+    /// that stacked ח on top of ח beside ח׳.
+    func testALetterDrawsACalloutOnPressEvenWhenItHasAPopup() throws {
+        for character in ["מ", "ח", "צ", "ק"] {
+            let view = try letterKey(character, in: .hebrew)
+            XCTAssertTrue(view.hasAlternates, "\(character) is the Hebrew case this exists for")
+            XCTAssertTrue(view.showsCharacterCallout, "\(character) must preview on tap")
+            XCTAssertTrue(
+                view.drawsCharacterCallout(popupIsVisible: false),
+                "\(character) is a letter under a thumb and must preview")
             XCTAssertFalse(
-                try letterKey(character, in: .hebrew).showsCharacterCallout,
-                "\(character) draws a callout and then a popup over it")
+                view.drawsCharacterCallout(popupIsVisible: true),
+                "\(character) would draw the callout and the strip together")
         }
-        XCTAssertFalse(try letterKey("a", in: .english).showsCharacterCallout)
-        XCTAssertFalse(try letterKey("е", in: .russian).showsCharacterCallout, "е offers ё")
+        XCTAssertTrue(try letterKey("a", in: .english).drawsCharacterCallout(popupIsVisible: false))
+        XCTAssertFalse(try letterKey("a", in: .english).drawsCharacterCallout(popupIsVisible: true))
+        XCTAssertTrue(try letterKey("е", in: .russian).drawsCharacterCallout(popupIsVisible: false))
 
-        // `q` has no alternates, so the callout is the only thing it can show.
-        XCTAssertTrue(try letterKey("q", in: .english).showsCharacterCallout)
-        XCTAssertFalse(try letterKey("q", in: .english).hasAlternates)
+        let q = try letterKey("q", in: .english)
+        XCTAssertFalse(q.hasAlternates)
+        XCTAssertTrue(q.drawsCharacterCallout(popupIsVisible: false))
+        XCTAssertTrue(q.showsCharacterCallout)
     }
 
-    /// The punctuation key is no longer the one key that skips the callout: it
-    /// skips it for the same reason every other popup key now does.
-    func testThePunctuationKeyIsNoLongerASpecialCase() throws {
+    /// A digit is a character the thumb covers the same way a letter is.
+    func testADigitDrawsACalloutOnPress() throws {
+        let one = try XCTUnwrap(
+            KeyboardLayout.rows(for: .english, plane: .numbers).flatMap(\.keys)
+                .first { $0.cap == .character("1") },
+            "the numbers plane has no 1 key")
+        XCTAssertTrue(key(one, language: .english).drawsCharacterCallout(popupIsVisible: false))
+    }
+
+    /// The punctuation key still skips it: its cap already wears the marks, and
+    /// previewing a lone period for the hold delay is the two-step open that was
+    /// pulled. Function keys and grouped caps have nothing a single balloon can
+    /// name.
+    func testThePunctuationKeyAndNonLettersSkipTheCallout() throws {
         let punctuation = try XCTUnwrap(
             KeyboardLayout.bottomRow(for: .hebrew, plane: .letters, showsGlobe: true).keys
                 .first { $0.addressableID == KeyboardLayout.punctuationKeyID })
         let view = key(punctuation, language: .hebrew)
         XCTAssertTrue(view.hasAlternates)
+        XCTAssertFalse(view.drawsCharacterCallout(popupIsVisible: false))
         XCTAssertFalse(view.showsCharacterCallout)
+
+        XCTAssertFalse(key(KeySpec(.space), language: .hebrew).drawsCharacterCallout(popupIsVisible: false))
+        XCTAssertFalse(key(KeySpec(.shift), language: .hebrew).drawsCharacterCallout(popupIsVisible: false))
+
+        let grouped = key(
+            KeySpec(.character("קר\nאט"), groupedLetters: ["ק", "ר", "א", "ט"]),
+            language: .hebrew)
+        XCTAssertFalse(
+            grouped.drawsCharacterCallout(popupIsVisible: false),
+            "a grouped cap is several letters; a single balloon would name the wrong thing")
+    }
+
+    /// The balloon has to be larger than the key it grew out of, or it is not a
+    /// preview — it is the same glyph under the thumb.
+    func testTheCalloutIsLargerAndHeavierThanTheKeyCap() throws {
+        let view = try letterKey("מ", in: .hebrew)
+        XCTAssertGreaterThan(view.calloutBubbleSize, view.width)
+        XCTAssertGreaterThan(view.calloutFontSize, view.characterFontSize)
+        XCTAssertGreaterThan(KeyView.calloutNeckHeight, 0)
     }
 
     /// And the hold is one number, never zero: a popup that opened on
@@ -110,7 +151,7 @@ final class AlternatesPopupTests: XCTestCase {
         XCTAssertGreaterThan(KeyView.alternatesDelay, .zero)
         XCTAssertLessThan(
             KeyView.alternatesDelay, .milliseconds(250),
-            "with no callout to fill it, a longer wait reads as a keyboard that has not noticed")
+            "the callout fills the wait; a longer hold still reads as a keyboard that has not noticed")
     }
 
     /// A key with nothing to offer never starts the wait at all.
