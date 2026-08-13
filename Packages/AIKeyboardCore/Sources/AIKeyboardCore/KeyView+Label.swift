@@ -180,9 +180,16 @@ extension KeyView {
     /// row would be right and only the cap reversed. Separate views also mean the
     /// gaps between letters are laid out rather than kerned, so the last letter of
     /// a line cannot be tracked off the edge of its own key.
+    ///
+    /// **Each letter occupies an equal cell that fills the key.** A clustered
+    /// HStack (`spacing: size * 0.34` around intrinsically sized glyphs) left
+    /// `ו` looking like a skinny button beside `קר` on caps the width solver had
+    /// already made equal — the same shape as weighting `.share` by span, in the
+    /// one place that test cannot see, because it reads the solved widths. Hit
+    /// testing already splits the cap into equal cells; the drawing has to match.
     @ViewBuilder
     func groupedLabel(_ lines: [[String]], size: CGFloat) -> some View {
-        VStack(spacing: size * 0.12) {
+        VStack(spacing: 0) {
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 Group {
                     if line.isEmpty {
@@ -190,9 +197,10 @@ extension KeyView {
                         // slice, which is how `ךף` stays on the lower half.
                         Color.clear
                     } else {
-                        HStack(spacing: size * 0.34) {
+                        HStack(spacing: Self.groupedLetterSpacing) {
                             ForEach(Array(line.enumerated()), id: \.offset) { _, letter in
                                 Text(shift.isUppercase ? language.uppercased(letter) : letter)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
                         }
                     }
@@ -200,7 +208,7 @@ extension KeyView {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .font(.system(size: size, weight: .light))
         .foregroundStyle(Theme.Keys.label)
         .lineLimit(1)
