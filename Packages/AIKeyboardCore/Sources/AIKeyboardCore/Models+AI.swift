@@ -221,3 +221,50 @@ public enum ToneStyle: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 }
+
+// MARK: - Fix styles
+
+/// How thoroughly Fix should proofread, picked from a long press on the key.
+///
+/// **These are not tones.** `Prompts.fix` keeps the writer's register on
+/// purpose and `EditScope` undoes any change the model cannot name as a
+/// mistake, so pointing a `ToneStyle` at Fix would leave it with nothing to
+/// do — that is why the one-tap rewrite key is Rewrite and not Fix. A long
+/// press here chooses *which mistakes count*, not how the sentence should
+/// sound.
+///
+/// The default tap is `.proofread`. The other three exist because that pass
+/// is conservative on purpose (a lowercase first word stays, a missing full
+/// stop stays) and people who want a narrower or a tidier pass have nowhere
+/// to ask for one without this list. Titles are what the stacked popup draws,
+/// so they have to stay short.
+public enum FixStyle: String, CaseIterable, Identifiable, Sendable {
+    /// Grammar, spelling and punctuation, writer's register kept. The tap.
+    case proofread
+    /// Misspellings and jammed words only. Grammar and punctuation stay.
+    case spelling
+    /// Punctuation and sentence capitals only. Every word stays.
+    case punctuate
+    /// Proofread, then make the message look finished: capitalise the first
+    /// word, end a statement (English) or a question.
+    case polish
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .proofread: return "Fix"
+        case .spelling: return "Spelling"
+        case .punctuate: return "Punctuate"
+        case .polish: return "Polish"
+        }
+    }
+
+    /// Punctuate and Polish ask for punctuation the model will not name as a
+    /// word mistake, so `EditScope.applied` on `none` would throw it away.
+    /// Those two styles keep a punctuation-only candidate; the other two do
+    /// not, because adding a full stop was never what they asked for.
+    var allowsUnnamedPunctuation: Bool {
+        self == .punctuate || self == .polish
+    }
+}

@@ -10,16 +10,20 @@ extension KeyView {
     /// commits nothing new — a long press that the user did not follow through on
     /// must not silently swap the letter they already typed.
     ///
-    /// A letter offers its own character and then its accents. The one-tap rewrite
-    /// key offers the registers, which arrive already ordered with the default
-    /// first — see `KeyboardController.toneAlternates` for why that order is not
-    /// cosmetic.
+    /// A letter offers its own character and then its accents. The rewrite key
+    /// offers the registers, and Fix offers its passes, both already ordered
+    /// with the default first — see `KeyboardController.toneAlternates` and
+    /// `fixAlternates` for why that order is not cosmetic.
     ///
     /// The bottom-row full stop is the exception: its list is SwiftKey's order,
     /// with the period in the middle rather than first. Resting still keeps the
     /// period because `alternateRestIndex` names it, not slot 0.
     var alternateItems: [String] {
-        if spec.cap == .quickTone { return toneAlternates }
+        switch spec.cap {
+        case .quickTone: return toneAlternates
+        case .aiFix: return fixAlternates
+        default: break
+        }
         guard case .character(let value) = spec.cap else { return [] }
         if spec.addressableID == KeyboardLayout.punctuationKeyID {
             return spec.alternates
@@ -71,7 +75,11 @@ extension KeyView {
 
     /// What VoiceOver calls the action that picks one item out of the popup.
     func alternateActionLabel(_ item: String) -> String {
-        spec.cap == .quickTone ? "Rewrite as \(item)" : "Insert \(displayLabel(item))"
+        switch spec.cap {
+        case .quickTone: return "Rewrite as \(item)"
+        case .aiFix: return "Fix as \(item)"
+        default: return "Insert \(displayLabel(item))"
+        }
     }
 
     /// Picking an item without the press that normally precedes it.
@@ -84,11 +92,13 @@ extension KeyView {
     /// wrote last. Replaying the press costs one insert nobody sees and keeps a
     /// single implementation of what an alternate means.
     ///
-    /// The one-tap rewrite key is the exception in the other direction: it
-    /// deliberately runs nothing on press (see `runsOnLift`), so its handler has
-    /// nothing to undo and must not be given anything to undo.
+    /// The rewrite key and Fix are the exception in the other direction: they
+    /// deliberately run nothing on press (see `runsOnLift`), so their handler
+    /// has nothing to undo and must not be given anything to undo.
     func commitAlternate(_ item: String) {
-        if spec.cap != .quickTone { onPress(spec.cap, CGPoint(x: 0.5, y: 0.5)) }
+        if spec.cap != .quickTone, spec.cap != .aiFix {
+            onPress(spec.cap, CGPoint(x: 0.5, y: 0.5))
+        }
         onAlternate?(item)
     }
 
@@ -117,7 +127,7 @@ extension KeyView {
     static let punctuationAlternatesDelay: Duration = .milliseconds(50)
 
     /// The wait this key actually sleeps. Punctuation is the 50ms case; every
-    /// other popup (letters, rewrite) is `alternatesDelay`.
+    /// other popup (letters, rewrite, Fix) is `alternatesDelay`.
     var alternatesHoldDelay: Duration {
         spec.addressableID == KeyboardLayout.punctuationKeyID
             ? Self.punctuationAlternatesDelay
@@ -127,10 +137,12 @@ extension KeyView {
     /// **Words stack, glyphs run along a row.** Seven registers at a readable size
     /// is about 1,000 points of width on a 393-point screen, so the strip that
     /// works for five accented `e`s cannot hold them. Stacking also puts the list
-    /// where the thumb already is: this key is in the action row at the bottom of
-    /// the keyboard, so the popup opens upward over the keys, which is empty space
-    /// for as long as the finger is down.
-    private var alternatesAreStacked: Bool { spec.cap == .quickTone }
+    /// where the thumb already is: these keys sit in the action row at the bottom
+    /// of the keyboard, so the popup opens upward over the keys, which is empty
+    /// space for as long as the finger is down.
+    private var alternatesAreStacked: Bool {
+        spec.cap == .quickTone || spec.cap == .aiFix
+    }
 
     private var alternateItemWidth: CGFloat { alternatesAreStacked ? 156 : max(width, 34) }
     private var alternateItemHeight: CGFloat {

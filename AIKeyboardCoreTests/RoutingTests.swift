@@ -48,7 +48,7 @@ private struct StubEngine: TextIntelligence {
         return handles(text)
     }
 
-    func fix(_ text: String) async throws -> String {
+    func fix(_ text: String, style: FixStyle) async throws -> String {
         calls.increment()
         if let failure { throw failure }
         return answer
@@ -273,7 +273,7 @@ final class FoundationModelsEngineTests: XCTestCase {
 /// simulator: it does not fail, it blocks, and the app is killed for it.
 private struct HangingEngine: TextIntelligence {
     func canHandle(_ text: String, action: AIAction) -> Bool { true }
-    func fix(_ text: String) async throws -> String {
+    func fix(_ text: String, style: FixStyle) async throws -> String {
         try await Task.sleep(for: .seconds(600))
         return ""
     }

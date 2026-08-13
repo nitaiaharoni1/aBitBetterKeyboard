@@ -30,17 +30,12 @@ public enum KeyCap: Equatable, Sendable {
     /// Reply and Fix, run straight from a key.
     ///
     /// **They exist because the action row made them destinations rather than menu
-    /// items.** There used to be an `aiMenu` cap that opened a panel listing four
-    /// actions, costing a tap to reach any of them; with a row of actions above the
-    /// keys the two that need no further choice run outright, and the panel is
-    /// deleted. Rewrite keeps needing one choice — a register — so it stays
-    /// `quickTone`, which runs the default and holds the rest behind a long press.
-    ///
-    /// Fix is deliberately not folded into `quickTone`. `KeyboardController`
-    /// `runDefaultTone` carries the reason the one-tap button is Rewrite and not
-    /// Fix: `Prompts.fix` keeps the writer's register on purpose and `EditScope`
-    /// undoes any change the model cannot name as a mistake, so a tone pointed at
-    /// Fix would have nothing to do.
+    /// items.** Rewrite stays `quickTone`, which runs the default register and
+    /// holds the rest behind a long press. Fix is deliberately not folded into
+    /// that: a tone pointed at Fix would have nothing to do, because `Prompts.fix`
+    /// keeps the writer's register and `EditScope` undoes any change the model
+    /// cannot name as a mistake. Fix's own long press offers correction passes
+    /// (`FixStyle`) instead — which mistakes count, not how the sentence sounds.
     case aiReply
     case aiFix
 

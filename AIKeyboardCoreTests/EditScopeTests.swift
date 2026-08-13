@@ -380,5 +380,15 @@ final class EditScopeTests: XCTestCase {
         )
     }
 
+    /// Punctuate and Polish keep a candidate that only added marks. A word
+    /// change fails this, so a model that also "fixed" a word still falls
+    /// through to the ordinary scope check.
+    func testSameWordsIgnoresPunctuationAndCapitalisation() {
+        XCTAssertTrue(EditScope.sameWords("Hello, world.", as: "hello world"))
+        XCTAssertTrue(EditScope.sameWords("מה קורה?", as: "מה קורה"))
+        XCTAssertFalse(EditScope.sameWords("hello there", as: "hello world"))
+        XCTAssertFalse(EditScope.sameWords("hello there world", as: "hello world"))
+    }
+
     // Corpus tests live in EditScopeCorpusTests.swift.
 }

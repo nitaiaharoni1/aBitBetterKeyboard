@@ -171,6 +171,17 @@ public enum EditScope {
             && split(candidate).count > split(source).count
     }
 
+    /// The same words in the same order, ignoring punctuation, capitalisation
+    /// and spacing.
+    ///
+    /// **Punctuate and Polish ask for marks the model will not name as a word
+    /// mistake**, so `applied` on `none` would throw the period away. Those
+    /// styles keep the candidate when this is true; a candidate that also
+    /// changed a word fails it and falls through to the ordinary scope check.
+    public static func sameWords(_ candidate: String, as source: String) -> Bool {
+        split(candidate).map { word($0.text) } == split(source).map { word($0.text) }
+    }
+
     // MARK: The two corrections made without asking
 
     /// A contraction the writer typed without its apostrophe, when the model

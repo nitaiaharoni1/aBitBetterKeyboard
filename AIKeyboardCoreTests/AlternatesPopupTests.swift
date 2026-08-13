@@ -40,7 +40,9 @@ final class AlternatesPopupTests: XCTestCase {
         var log: [String] = []
     }
 
-    private func recordingKey(_ spec: KeySpec, tones: [String] = []) -> (KeyView, Recorder) {
+    private func recordingKey(
+        _ spec: KeySpec, tones: [String] = [], fixes: [String] = []
+    ) -> (KeyView, Recorder) {
         let recorder = Recorder()
         let view = KeyView(
             spec: spec,
@@ -49,6 +51,7 @@ final class AlternatesPopupTests: XCTestCase {
             language: .hebrew,
             shift: .off,
             toneAlternates: tones,
+            fixAlternates: fixes,
             onPress: { cap, _ in
                 recorder.presses.append(cap)
                 recorder.log.append("press")
@@ -236,9 +239,10 @@ final class AlternatesPopupTests: XCTestCase {
         XCTAssertEqual(recorder.alternates, ["ח׳"])
     }
 
-    /// And the one key that must *not* be pressed first, for the opposite
-    /// reason: it deliberately runs nothing on press, so its handler has nothing
-    /// to undo and a replayed press would spend a model call on the default tone.
+    /// And the one keys that must *not* be pressed first, for the opposite
+    /// reason: they deliberately run nothing on press, so their handler has
+    /// nothing to undo and a replayed press would spend a model call on the
+    /// default pass.
     func testAVoiceOverActionOnTheRewriteKeyDoesNotPressIt() {
         let (view, recorder) = recordingKey(
             KeySpec(.quickTone), tones: ["Clearer", "Friendly"])
@@ -246,6 +250,15 @@ final class AlternatesPopupTests: XCTestCase {
         XCTAssertEqual(recorder.log, ["alternate"])
         XCTAssertTrue(recorder.presses.isEmpty)
         XCTAssertEqual(recorder.alternates, ["Friendly"])
+    }
+
+    func testAVoiceOverActionOnTheFixKeyDoesNotPressIt() {
+        let (view, recorder) = recordingKey(
+            KeySpec(.aiFix), fixes: ["Fix", "Spelling"])
+        view.commitAlternate("Spelling")
+        XCTAssertEqual(recorder.log, ["alternate"])
+        XCTAssertTrue(recorder.presses.isEmpty)
+        XCTAssertEqual(recorder.alternates, ["Spelling"])
     }
 
     /// Every popup item is reachable without the gesture, which is the rule the
@@ -264,6 +277,33 @@ final class AlternatesPopupTests: XCTestCase {
 
         let tone = recordingKey(KeySpec(.quickTone), tones: ["Clearer", "Friendly"]).0
         XCTAssertEqual(tone.alternateActionLabel("Friendly"), "Rewrite as Friendly")
+
+        let fix = recordingKey(KeySpec(.aiFix), fixes: ["Fix", "Spelling"]).0
+        XCTAssertEqual(fix.alternateActionLabel("Spelling"), "Fix as Spelling")
+        XCTAssertEqual(fix.alternatePickerItems, ["Spelling"])
+        XCTAssertTrue(fix.runsOnLift)
+        XCTAssertEqual(fix.alternateRestIndex, 0)
+    }
+
+    /// Same standing-finger rule as a letter, on a stack: the point under a
+    /// finger that never moved is not item 0, so rest has to keep Fix.
+    func testAStandingFingerOnFixKeepsProofread() {
+        let view = recordingKey(
+            KeySpec(.aiFix), fixes: ["Fix", "Spelling", "Punctuate", "Polish"]).0
+        XCTAssertTrue(view.runsOnLift)
+        XCTAssertEqual(view.alternateItems, ["Fix", "Spelling", "Punctuate", "Polish"])
+        let centre = CGPoint(x: 17, y: 22)
+        XCTAssertNotEqual(view.alternateIndex(at: centre), 0)
+        XCTAssertEqual(
+            view.alternateIndexOnLift(
+                popupIsVisible: true, translation: .zero, location: centre),
+            0)
+        XCTAssertEqual(
+            view.alternateIndexOnLift(
+                popupIsVisible: true,
+                translation: CGSize(width: 0, height: -20),
+                location: CGPoint(x: 17, y: -20)),
+            view.alternateIndex(at: CGPoint(x: 17, y: -20)))
     }
 
     // MARK: Handler path — shipping delete-then-retype route

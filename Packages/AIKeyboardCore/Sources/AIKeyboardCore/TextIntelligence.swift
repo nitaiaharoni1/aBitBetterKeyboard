@@ -36,7 +36,10 @@ public protocol TextIntelligence: Sendable {
     /// engine can be good at correcting a sentence and useless at rewriting one.
     func canHandle(_ text: String, action: AIAction) -> Bool
 
-    func fix(_ text: String) async throws -> String
+    /// `style` is the long-press pass: proofread on a tap, spelling / punctuate /
+    /// polish from the popup. An engine that cannot honour a narrower pass runs
+    /// proofread rather than inventing a second prompt set.
+    func fix(_ text: String, style: FixStyle) async throws -> String
     /// `instruction` is the user's own register, or nil for one of the six
     /// built-in ones. Only meaningful alongside a non-nil `tone`: Rewrite offers
     /// three different *decisions* rather than one register, and a user-authored
@@ -91,8 +94,8 @@ public struct RoutedIntelligence: Sendable {
         return RoutedIntelligence(onDevice: local, cloud: cloud, deadline: deadline)
     }
 
-    public func fix(_ text: String) async throws -> AIOutput<String> {
-        try await route(text, .fix) { try await $0.fix(text) }
+    public func fix(_ text: String, style: FixStyle = .proofread) async throws -> AIOutput<String> {
+        try await route(text, .fix) { try await $0.fix(text, style: style) }
     }
 
     /// **The register is not part of the routing question, and that is a

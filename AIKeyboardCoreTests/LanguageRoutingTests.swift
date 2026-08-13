@@ -134,4 +134,39 @@ final class PromptSelectionTests: XCTestCase {
         )
         XCTAssertTrue(Prompts.reply(for: context).contains("לעולם אל תתרגם"))
     }
+
+    /// The default Fix prompt is the measured one: a style other than
+    /// proofread appends a pass, it does not replace the base. Replacing it
+    /// would drop the jammed-word examples this file already pins.
+    func testAProofreadFixPromptIsTheMeasuredBase() {
+        XCTAssertEqual(
+            Prompts.fix(for: "teh meeting"),
+            Prompts.fix(for: "teh meeting", style: .proofread))
+        XCTAssertEqual(
+            Prompts.fix(for: "אני יבדוק"),
+            Prompts.fix(for: "אני יבדוק", style: .proofread))
+    }
+
+    func testASpellingPassKeepsTheBaseAndNamesTheNarrowerJob() {
+        let english = Prompts.fix(for: "teh meeting", style: .spelling)
+        XCTAssertTrue(english.contains("hellothere"), "the jammed-word example left the prompt")
+        XCTAssertTrue(english.contains("This pass corrects spelling only"))
+        XCTAssertNotEqual(english, Prompts.fix(for: "teh meeting"))
+
+        let hebrew = Prompts.fix(for: "אני יבדוק", style: .spelling)
+        XCTAssertTrue(hebrew.contains("לעולם אל תתרגם"))
+        XCTAssertTrue(hebrew.contains("המעבר הזה מתקן כתיב בלבד"))
+    }
+
+    func testPunctuateAndPolishAreTheirOwnPasses() {
+        XCTAssertTrue(
+            Prompts.fix(for: "teh meeting", style: .punctuate)
+                .contains("This pass does not change any word"))
+        XCTAssertTrue(
+            Prompts.fix(for: "teh meeting", style: .polish)
+                .contains("look finished"))
+        XCTAssertNotEqual(
+            Prompts.fix(for: "teh meeting", style: .punctuate),
+            Prompts.fix(for: "teh meeting", style: .polish))
+    }
 }
