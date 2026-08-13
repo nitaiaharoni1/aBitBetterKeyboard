@@ -101,7 +101,9 @@ extension Theme {
         /// * 3` — which was right for exactly as long as the grid could only be
         /// three letter rows and a bottom row. With an optional number row and an
         /// optional cursor row it is four, five or six, and the key height is no
-        /// longer a constant either.
+        /// longer a constant either. The numbers/space `rowHeightBias` pair does
+        /// not appear here because it cancels;
+        /// `testTheHostHeightMatchesWhatTheGridDraws` fails if it stops.
         public static func keyAreaHeight(for layout: KeyboardCustomization) -> CGFloat {
             let rows = CGFloat(layout.rowCount)
             return layout.geometry.keyHeight * rows

@@ -365,6 +365,31 @@ final class CustomLayoutTests: XCTestCase {
         XCTAssertEqual(numbers.heightBias + space.heightBias, 0, accuracy: 0.001)
     }
 
+    /// The host asks for `keyAreaHeight`, and `KeyboardView` pins the grid to
+    /// that. Biases must cancel so the drawn letters grid still fills that frame;
+    /// 123 / `#+=` must fit in it too.
+    func testTheHostHeightMatchesWhatTheGridDraws() throws {
+        let layouts = [
+            KeyboardCustomization.default,
+            try XCTUnwrap(LayoutPreset.named("power")).customization,
+            try XCTUnwrap(LayoutPreset.named("compact")).customization,
+        ]
+        for layout in layouts {
+            XCTAssertEqual(
+                Theme.Metrics.keyAreaHeight(for: layout),
+                drawnKeyArea(layout, plane: .letters), accuracy: 0.001,
+                "row height biases no longer cancel; the host would clip or grow")
+        }
+        XCTAssertEqual(
+            Theme.Metrics.keyAreaHeight(for: .default),
+            drawnKeyArea(.default, plane: .numbers), accuracy: 0.001,
+            "123 does not fit in the letters-plane host")
+        XCTAssertEqual(
+            Theme.Metrics.keyAreaHeight(for: .default),
+            drawnKeyArea(.default, plane: .symbols), accuracy: 0.001,
+            "#+= does not fit in the letters-plane host")
+    }
+
     func testAFourRowGridReproducesTheShippedHeight() {
         var fourRows = KeyboardCustomization.default
         fourRows.showsNumberRow = false
@@ -496,6 +521,20 @@ final class CustomLayoutTests: XCTestCase {
         }
         let gaps = Theme.Metrics.rowSpacing * CGFloat(max(0, keys.count - 1))
         return keyHeights + gaps
+    }
+
+    /// The whole key area a plane paints, including the action row and insets —
+    /// the number `KeyboardView` pins its grid to.
+    private func drawnKeyArea(_ layout: KeyboardCustomization, plane: KeyboardPlane) -> CGFloat {
+        let rows = KeyboardLayout.rows(
+            for: .english, plane: plane, showsGlobe: false, customization: layout)
+        let keyHeight = layout.geometry.keyHeight
+        let spacing = layout.geometry.rowSpacing
+        let keys = rows.reduce(CGFloat(0)) {
+            $0 + $1.drawnHeight(keyHeight: keyHeight, rowSpacing: spacing)
+        }
+        return keys + spacing * CGFloat(max(0, rows.count - 1))
+            + Theme.Metrics.topInset + Theme.Metrics.bottomInset
     }
 }
 
