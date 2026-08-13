@@ -254,7 +254,7 @@ final class AlternatesPopupTests: XCTestCase {
     func testEveryAlternateHasAName() throws {
         let hebrew = try letterKey("ח", in: .hebrew)
         XCTAssertEqual(
-            hebrew.alternateItems.dropFirst().map(hebrew.alternateActionLabel),
+            hebrew.alternatePickerItems.map(hebrew.alternateActionLabel),
             ["Insert ח׳", "Insert ח״"])
 
         let catalan = try letterKey("l", in: .catalan)
@@ -379,5 +379,74 @@ final class AlternatesPopupTests: XCTestCase {
         // And past either end it clamps rather than running off the strip.
         XCTAssertEqual(key.alternateIndex(at: CGPoint(x: 400, y: 22)), 2)
         XCTAssertEqual(key.alternateIndex(at: CGPoint(x: -400, y: 22)), 0)
+    }
+
+    // MARK: The period key
+
+    private func punctuationKeyView(language: KeyboardLanguage = .hebrew) throws -> KeyView {
+        let spec = try XCTUnwrap(
+            KeyboardLayout.bottomRow(for: language, plane: .letters, showsGlobe: true).keys
+                .first { $0.addressableID == KeyboardLayout.punctuationKeyID })
+        return key(spec, language: language)
+    }
+
+    /// SwiftKey's order, not `. , ? ! '`. The numbers row still prints those
+    /// five; this popup is the six a thumb reaches without leaving the letters
+    /// plane. Arabic and Greek swap in the comma and question mark they write.
+    func testThePeriodPopupIsOrderedLikeSwiftKey() throws {
+        XCTAssertEqual(
+            try punctuationKeyView().alternateItems, ["!", "@", "#", ",", ".", "?"])
+        XCTAssertEqual(try punctuationKeyView().alternateRestIndex, 4)
+        XCTAssertEqual(
+            try punctuationKeyView().alternatePickerItems, ["!", "@", "#", ",", "?"])
+        XCTAssertEqual(
+            try punctuationKeyView(language: .arabic).alternateItems,
+            ["!", "@", "#", "،", ".", "؟"])
+        XCTAssertEqual(
+            try punctuationKeyView(language: .greek).alternateItems,
+            ["!", "@", "#", ",", ".", ";"])
+    }
+
+    /// The strip is aligned so the period sits over the key, then clamped so the
+    /// question mark is not cut off by the right edge. A centred six-item strip
+    /// on this key overruns a phone-width canvas; asserting both the overrun and
+    /// the clamp is what rejects a build that only recentres.
+    func testThePeriodPopupStaysInsideTheKeyboard() throws {
+        let view = try punctuationKeyView()
+        let keyMinX: CGFloat = 360
+        let canvas: CGFloat = 393
+        let centredTrailing = keyMinX + view.width / 2 + view.alternatesWidth / 2
+        XCTAssertGreaterThan(
+            centredTrailing, canvas,
+            "the unclamped strip must overrun, or this is not testing the period key")
+
+        let dx = view.alternatesStripOffset(keyMinX: keyMinX, canvasWidth: canvas)
+        let leading = keyMinX + (view.width - view.alternatesWidth) / 2 + dx
+        let trailing = leading + view.alternatesWidth
+        XCTAssertGreaterThanOrEqual(leading, Theme.Radius.chip)
+        XCTAssertLessThanOrEqual(trailing, canvas - Theme.Radius.chip)
+
+        let centre = CGPoint(x: view.width / 2, y: view.height / 2)
+        XCTAssertEqual(
+            view.alternateIndexOnLift(
+                popupIsVisible: true, translation: .zero, location: centre),
+            view.alternateRestIndex,
+            "a finger that never moved must keep the period, even after the strip shifts")
+    }
+
+    /// Slide right of the period reaches `?`, the way SwiftKey's flick does.
+    func testASlideRightOfThePeriodReachesTheQuestionMark() throws {
+        let view = try punctuationKeyView()
+        let period = CGPoint(x: 17, y: 22)
+        XCTAssertEqual(view.alternateIndex(at: period), 4)
+        XCTAssertEqual(view.alternateItems[4], ".")
+        XCTAssertEqual(view.alternateIndex(at: CGPoint(x: 51, y: 22)), 5)
+        XCTAssertEqual(view.alternateItems[5], "?")
+        XCTAssertEqual(
+            view.alternateIndexOnLift(
+                popupIsVisible: true,
+                translation: CGSize(width: 34, height: 0),
+                location: CGPoint(x: 51, y: 22)),
+            5)
     }
 }

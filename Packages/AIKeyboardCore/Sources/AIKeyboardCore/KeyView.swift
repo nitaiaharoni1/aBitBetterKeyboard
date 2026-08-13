@@ -62,6 +62,7 @@ public struct KeyView: View {
     @State var alternatesTask: Task<Void, Never>?
     @State var showsAlternates = false
     @State var selectedAlternate = 0
+    @State var keyMinXInCanvas: CGFloat = 0
 
     /// True for as long as a touch is on this key.
     ///
@@ -72,6 +73,7 @@ public struct KeyView: View {
     /// the only place the repeat loop was ever stopped.
     @GestureState var isTouching = false
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.keyboardCanvasWidth) var keyboardCanvasWidth
 
     public init(
         spec: KeySpec,
@@ -173,6 +175,14 @@ public struct KeyView: View {
         // all. `@State` releasing the repeater covers this too; this makes it
         // prompt rather than dependent on when the storage is torn down.
         .onDisappear { endPress() }
+        .background {
+            GeometryReader { proxy in
+                let minX = proxy.frame(in: .named(KeyboardView.frameSpace)).minX
+                Color.clear
+                    .onAppear { keyMinXInCanvas = minX }
+                    .onChange(of: minX) { _, x in keyMinXInCanvas = x }
+            }
+        }
         .accessibilityElement()
         // **The part before the `#`, not the whole id.** A key compiled from a
         // custom layout carries `char-,#a1b2c3d4`: the prefix is what a test or a
@@ -200,7 +210,7 @@ public struct KeyView: View {
         // user could not write צ׳יפס, צה״ל or col·legi at all.
         .accessibilityActions {
             if hasAlternates {
-                ForEach(alternateItems.dropFirst(), id: \.self) { item in
+                ForEach(alternatePickerItems, id: \.self) { item in
                     Button(alternateActionLabel(item)) { commitAlternate(item) }
                 }
             }

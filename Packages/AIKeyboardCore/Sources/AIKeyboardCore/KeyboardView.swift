@@ -81,6 +81,18 @@ public struct KeyboardView: View {
     }
 }
 
+/// Width of `KeyboardView` in `frameSpace`, so a long-press strip can stay on screen.
+private struct KeyboardCanvasWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    var keyboardCanvasWidth: CGFloat {
+        get { self[KeyboardCanvasWidthKey.self] }
+        set { self[KeyboardCanvasWidthKey.self] = newValue }
+    }
+}
+
 extension View {
     /// Side inset, optional one-handed width, and the left-to-right pin every key
     /// row needs. Shared by the letter block and the action row; the emoji panel

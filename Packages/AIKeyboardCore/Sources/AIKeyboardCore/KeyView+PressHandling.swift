@@ -74,7 +74,12 @@ extension KeyView {
                 // to correct it with. Nothing is drawn from this until the popup
                 // arms — see `alternateItem`.
                 guard hasAlternates else { return }
-                selectedAlternate = hasSlid(value.translation) ? alternateIndex(at: value.location) : 0
+                selectedAlternate =
+                    hasSlid(value.translation)
+                    ? alternateIndex(
+                        at: value.location,
+                        keyMinX: keyMinXInCanvas,
+                        canvasWidth: keyboardCanvasWidth) : alternateRestIndex
             }
             .onEnded { value in
                 // Not just a mirror of the `onChanged` guard: `runsOnLift` means
@@ -97,16 +102,21 @@ extension KeyView {
                 let picked = alternateIndexOnLift(
                     popupIsVisible: showsAlternates,
                     translation: value.translation,
-                    location: value.location)
+                    location: value.location,
+                    keyMinX: keyMinXInCanvas,
+                    canvasWidth: keyboardCanvasWidth)
                 endPress()
-                // Index 0 is what the key would have done on its own — the
-                // character it already inserted, or the default tone it has not run
-                // yet — so lifting on it means the long press changed nothing.
-                guard picked > 0, picked < alternateItems.count else {
+                // Rest is what the key would have done on its own — the character
+                // it already inserted, or the default tone it has not run yet —
+                // so lifting on that item means the long press changed nothing.
+                // Slot 0 is that item for letters; the period popup puts `.`
+                // later, so this is `alternateRestIndex`, not `> 0`.
+                guard picked != alternateRestIndex else {
                     // The tap this key deferred. See `runsOnLift`.
                     if runsOnLift { onPress(spec.cap, unitPoint(value.startLocation)) }
                     return
                 }
+                guard picked >= 0, picked < alternateItems.count else { return }
                 onAlternate?(alternateItems[picked])
             }
     }
@@ -137,10 +147,12 @@ extension KeyView {
     func alternateIndexOnLift(
         popupIsVisible: Bool,
         translation: CGSize,
-        location: CGPoint
+        location: CGPoint,
+        keyMinX: CGFloat = 0,
+        canvasWidth: CGFloat = 0
     ) -> Int {
-        guard popupIsVisible, hasSlid(translation) else { return 0 }
-        return alternateIndex(at: location)
+        guard popupIsVisible, hasSlid(translation) else { return alternateRestIndex }
+        return alternateIndex(at: location, keyMinX: keyMinX, canvasWidth: canvasWidth)
     }
 
     static let slideThreshold: CGFloat = 6
@@ -192,7 +204,7 @@ extension KeyView {
         // before the popup arms keeps what it slid to. `@State` outlives the
         // press, so without a reset somewhere the next press on this key would
         // arm on whatever the last one chose.
-        selectedAlternate = 0
+        selectedAlternate = alternateRestIndex
         alternatesTask?.cancel()
         alternatesTask = Task { @MainActor in
             // Never zero: opening on finger-down flashes the popup on every

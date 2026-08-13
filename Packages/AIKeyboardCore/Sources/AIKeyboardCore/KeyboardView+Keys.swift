@@ -155,6 +155,7 @@ extension KeyboardView {
             }
             .padding(.top, Theme.Metrics.topInset)
             .padding(.bottom, Theme.Metrics.bottomInset)
+            .environment(\.keyboardCanvasWidth, geo.size.width)
         }
     }
 

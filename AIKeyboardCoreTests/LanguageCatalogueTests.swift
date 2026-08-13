@@ -295,18 +295,17 @@ final class LanguageCatalogueTests: LanguageCatalogueTestFixture {
             2)
     }
 
-    /// The bottom row's punctuation key types the script's own marks, on every
-    /// plane, exactly once per plane.
+    /// The bottom row's punctuation key types a full stop on every plane, and its
+    /// popup follows the script's comma and question mark.
     ///
-    /// **The two failures worth naming.** A key hardcoded to `.,?!` would type a
-    /// Latin question mark on an Arabic keyboard, which is why the marks are read
-    /// from the same `punctuationMarks` the numbers plane prints. And this key on
-    /// the numbers plane sits one row under the `.` that row already carries, so
-    /// without the explicit `punctuationKeyID` both would answer to `char-.` and
-    /// the plane would have two keys with one identity — undefined `ForEach`
-    /// behaviour, not a cosmetic clash. That is what let the key move onto all
-    /// three planes at all; `testNoPlaneHasTwoKeysWithTheSameIdentity` is what
-    /// keeps measuring it.
+    /// **The two failures worth naming.** A key hardcoded to Latin `?` would type
+    /// that mark on an Arabic keyboard, which is why the popup reads the same
+    /// script marks `punctuationMarks` uses. And this key on the numbers plane
+    /// sits one row under the `.` that row already carries, so without the
+    /// explicit `punctuationKeyID` both would answer to `char-.` and the plane
+    /// would have two keys with one identity — undefined `ForEach` behaviour, not
+    /// a cosmetic clash. That is what let the key move onto all three planes at
+    /// all; `testNoPlaneHasTwoKeysWithTheSameIdentity` is what keeps measuring it.
     func testThePunctuationKeyIsOnEveryPlaneAndTypesTheScriptsOwnMarks() {
         for language in KeyboardLanguage.allCases {
             for plane in [KeyboardPlane.letters, .numbers, .symbols] {
@@ -318,9 +317,9 @@ final class LanguageCatalogueTests: LanguageCatalogueTestFixture {
                     "\(language.displayName) has \(found.count) punctuation keys on \(plane)")
 
                 guard let key = found.first else { continue }
-                let marks = KeyboardLayout.punctuationMarks(for: language).map(String.init)
-                XCTAssertEqual(key.cap, .character(marks[0]))
-                XCTAssertEqual(key.alternates, Array(marks.dropFirst()))
+                XCTAssertEqual(key.cap, .character("."))
+                XCTAssertEqual(
+                    key.alternates, KeyboardLayout.punctuationPopupItems(for: language))
             }
         }
 
@@ -330,6 +329,12 @@ final class LanguageCatalogueTests: LanguageCatalogueTestFixture {
         XCTAssertEqual(KeyboardLayout.punctuationMarks(for: .persian), ".،؟!'")
         XCTAssertEqual(KeyboardLayout.punctuationMarks(for: .greek), ".,;!'")
         XCTAssertEqual(KeyboardLayout.punctuationMarks(for: .hebrew), ".,?!'")
+        XCTAssertEqual(
+            KeyboardLayout.punctuationPopupItems(for: .hebrew), ["!", "@", "#", ",", ".", "?"])
+        XCTAssertEqual(
+            KeyboardLayout.punctuationPopupItems(for: .arabic), ["!", "@", "#", "،", ".", "؟"])
+        XCTAssertEqual(
+            KeyboardLayout.punctuationPopupItems(for: .greek), ["!", "@", "#", ",", ".", ";"])
     }
 
     /// Holding any Hebrew letter offers that letter with a geresh and with a

@@ -14,12 +14,42 @@ extension KeyView {
     /// key offers the registers, which arrive already ordered with the default
     /// first — see `KeyboardController.toneAlternates` for why that order is not
     /// cosmetic.
+    ///
+    /// The bottom-row full stop is the exception: its list is SwiftKey's order,
+    /// with the period in the middle rather than first. Resting still keeps the
+    /// period because `alternateRestIndex` names it, not slot 0.
     var alternateItems: [String] {
         if spec.cap == .quickTone { return toneAlternates }
         guard case .character(let value) = spec.cap else { return [] }
+        if spec.addressableID == KeyboardLayout.punctuationKeyID {
+            return spec.alternates
+        }
         let base = shift.isUppercase ? language.uppercased(value) : value
         return [base]
             + spec.alternates.map { shift.isUppercase ? language.uppercased($0) : $0 }
+    }
+
+    /// The item a standing finger is choosing: the character this key already typed.
+    ///
+    /// Slot 0 for every letter and for the rewrite registers. The punctuation
+    /// popup puts the period later in the strip so the question mark can sit to
+    /// its right, so resting has to name that later slot or a hold-and-lift would
+    /// swap `.` for `!`.
+    var alternateRestIndex: Int {
+        guard case .character(let value) = spec.cap else { return 0 }
+        let base = shift.isUppercase ? language.uppercased(value) : value
+        return alternateItems.firstIndex(of: base) ?? 0
+    }
+
+    /// Popup items a VoiceOver action can pick: everything except the rest item.
+    ///
+    /// Slot 0 is that item for letters, so this is `dropFirst` there. The period
+    /// popup puts `.` later, and skipping slot 0 would hide `!` and offer a
+    /// second period.
+    var alternatePickerItems: [String] {
+        zip(alternateItems.indices, alternateItems).compactMap { index, item in
+            index == alternateRestIndex ? nil : item
+        }
     }
 
     /// Whether holding this key offers anything. Most keys have nothing.
@@ -89,7 +119,7 @@ extension KeyView {
         alternatesAreStacked ? 34 : height * 1.15
     }
 
-    private var alternatesWidth: CGFloat {
+    var alternatesWidth: CGFloat {
         alternatesAreStacked
             ? alternateItemWidth
             : alternateItemWidth * CGFloat(max(1, alternateItems.count))
@@ -103,19 +133,52 @@ extension KeyView {
 
     /// Which item the finger is over, in the key's own coordinate space.
     ///
-    /// A row is centred on the key, so its leading edge sits half its overhang to
-    /// the left of x = 0. A stack sits directly above the key: its bottom edge is
-    /// 6 points above the key's top, so it spans `-(6 + height)` to `-6` and the
-    /// index runs downward from there.
-    func alternateIndex(at point: CGPoint) -> Int {
+    /// A row is centred on the key, then shifted by `alternatesStripOffset` so a
+    /// strip that would draw past the keyboard stays inside it. The period popup
+    /// is also aligned so the period sits over the key. A stack sits directly
+    /// above the key: its bottom edge is 6 points above the key's top, so it
+    /// spans `-(6 + height)` to `-6` and the index runs downward from there.
+    func alternateIndex(
+        at point: CGPoint, keyMinX: CGFloat = 0, canvasWidth: CGFloat = 0
+    ) -> Int {
         let index: Int
         if alternatesAreStacked {
             index = Int(((point.y + 6 + alternatesHeight) / alternateItemHeight).rounded(.down))
         } else {
             let overhang = (alternatesWidth - width) / 2
-            index = Int(((point.x + overhang) / alternateItemWidth).rounded(.down))
+            let dx = alternatesStripOffset(keyMinX: keyMinX, canvasWidth: canvasWidth)
+            index = Int(((point.x + overhang - dx) / alternateItemWidth).rounded(.down))
         }
         return min(max(index, 0), max(0, alternateItems.count - 1))
+    }
+
+    /// Extra x after SwiftUI centres a wider strip on the key.
+    ///
+    /// The period popup aligns the period to the key (SwiftKey's shape) rather
+    /// than leaving it on the left of a centred strip. Every horizontal popup is
+    /// then clamped so its rounded corners stay inside the keyboard. Hit-testing
+    /// uses this same value; a visual shift that `alternateIndex` does not know
+    /// about is how a lift on `.` used to pick `,`.
+    func alternatesStripOffset(keyMinX: CGFloat, canvasWidth: CGFloat) -> CGFloat {
+        guard !alternatesAreStacked else { return 0 }
+        var dx: CGFloat = 0
+        if spec.addressableID == KeyboardLayout.punctuationKeyID {
+            dx = alternatesWidth / 2 - (CGFloat(alternateRestIndex) + 0.5) * alternateItemWidth
+        }
+        guard canvasWidth > 0 else { return dx }
+        let margin = Theme.Radius.chip
+        let centeredLeading = keyMinX + (width - alternatesWidth) / 2
+        var leading = centeredLeading + dx
+        if leading < margin {
+            dx += margin - leading
+            leading = centeredLeading + dx
+        }
+        let trailing = leading + alternatesWidth
+        let limit = canvasWidth - margin
+        if trailing > limit {
+            dx -= trailing - limit
+        }
+        return dx
     }
 
     @ViewBuilder
@@ -146,7 +209,10 @@ extension KeyView {
                     .fill(Theme.Keys.letter)
                     .shadow(color: Theme.Keys.shadow.opacity(0.35), radius: 5, y: 2)
             )
-            .offset(y: -height - 6)
+            .offset(
+                x: alternatesStripOffset(keyMinX: keyMinXInCanvas, canvasWidth: keyboardCanvasWidth),
+                y: -height - 6
+            )
             .allowsHitTesting(false)
             .transition(Theme.Motion.pop(reduceMotion: reduceMotion))
         }

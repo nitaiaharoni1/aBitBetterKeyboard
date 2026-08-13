@@ -135,14 +135,29 @@ extension KeyboardLayout {
 
     /// The five marks themselves, in the order the numbers plane prints them.
     ///
-    /// The bottom row's punctuation key offers the same five, so the two cannot
-    /// drift: a script that writes its question mark as ؟ has to get ؟ in both
-    /// places or the letters plane types a mark the language does not use.
+    /// The bottom-row full stop types the same mark, and its popup swaps this
+    /// script's comma and question mark into SwiftKey's six-item order. A script
+    /// that writes ؟ still types ؟ from the key a thumb finds without looking.
+    /// The apostrophe stays on this row; it is not in the popup.
     public static func punctuationMarks(for language: KeyboardLanguage) -> String {
         switch language.script {
         case .arabic: return ".،؟!'"
         case .greek: return ".,;!'"
         default: return ".,?!'"
+        }
+    }
+
+    /// Long-press order on the bottom-row full stop, matching SwiftKey.
+    ///
+    /// Tap is still the full stop. The popup puts it over the key, comma to its
+    /// left, question mark to its right, and `! @ #` further left. Arabic and
+    /// Greek swap in the comma and question mark they actually write; `@` and
+    /// `#` are the same glyphs in every script.
+    public static func punctuationPopupItems(for language: KeyboardLanguage) -> [String] {
+        switch language.script {
+        case .arabic: return ["!", "@", "#", "،", ".", "؟"]
+        case .greek: return ["!", "@", "#", ",", ".", ";"]
+        default: return ["!", "@", "#", ",", ".", "?"]
         }
     }
 
@@ -183,24 +198,24 @@ extension KeyboardLayout {
                 plane: plane, showsNumberRow: false))
     }
 
-    /// The bottom row's punctuation key: a full stop on the cap, the other four
-    /// marks of the script behind a long press.
+    /// The bottom row's punctuation key: a full stop on the cap, SwiftKey's six
+    /// marks behind a long press.
     ///
     /// **Drawn on every plane, and its identity is its own.** The numbers plane
-    /// already carries the same five marks on the row above as `char-.` and
-    /// friends; this key answers to `punctuationKeyID` so the two never share a
-    /// `ForEach` identity. That is what lets it stay under the thumb on 123 and
-    /// #+= rather than vanishing when the plane switches.
+    /// already carries five marks on the row above as `char-.` and friends; this
+    /// key answers to `punctuationKeyID` so the two never share a `ForEach`
+    /// identity. That is what lets it stay under the thumb on 123 and #+= rather
+    /// than vanishing when the plane switches.
     /// Internal rather than private so `CustomLayoutCompiler` can build the same
     /// key for a custom row. A second spelling of it there would be a copy that
     /// loses the alternates the first time somebody changes one of them.
     static func punctuationKey(for language: KeyboardLanguage) -> KeySpec {
-        let marks = punctuationMarks(for: language).map(String.init)
+        let popup = punctuationPopupItems(for: language)
         return KeySpec(
-            .character(marks[0]),
+            .character("."),
             width: .unit(1.0),
             id: punctuationKeyID,
-            alternates: Array(marks.dropFirst()))
+            alternates: popup)
     }
 
     /// Read by `KeyView`, which draws this one key's long presses in miniature
