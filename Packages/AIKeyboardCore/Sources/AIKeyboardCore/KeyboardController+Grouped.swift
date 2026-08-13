@@ -277,6 +277,7 @@ extension KeyboardController {
         }
         grouped.append(cap: cap, pin: pin)
         applyGroupedGuess()
+        noteTypedInput()
     }
 
     /// Re-decode and rewrite the word in progress.
@@ -347,6 +348,7 @@ extension KeyboardController {
     func pinGroupedLetter(_ letter: String) -> Bool {
         guard grouped.isTyping, grouped.pinLast(to: letter) else { return false }
         applyGroupedGuess()
+        noteTypedInput()
         return true
     }
 

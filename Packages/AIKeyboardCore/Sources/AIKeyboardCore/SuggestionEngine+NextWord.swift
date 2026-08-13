@@ -6,17 +6,20 @@ extension SuggestionEngine {
     //
     // No public on-device API predicts a word from nothing typed — that is
     // QuickType's job and QuickType is `UIKitCore`-private. So this is built out
-    // of three things the keyboard *can* see, asked in order of how much they
+    // of four things the keyboard *can* see, asked in order of how much they
     // know about the person holding it:
     //
     //   1. what this user writes after this word,
-    //   2. what people generally write after this word,
-    //   3. the openers a message starts with.
+    //   2. what followed this word earlier in this field,
+    //   3. what people generally write after this word,
+    //   4. the openers a message starts with.
     //
-    // The third used to be the whole mechanism. A 26-key table answered `i` and
+    // The fourth used to be the whole mechanism. A 26-key table answered `i` and
     // `to` and `אני`, and every other sentence in both languages fell through to
     // the same three words — which is why the corpus caught the bar showing
-    // `I · The · We` after "Happy" and `אני · מה · תודה` after "בוקר".
+    // `I · The · We` after "Happy" and `אני · מה · תודה` after "בוקר". The
+    // second used to be missing entirely: `previousWords` stops at a full stop,
+    // so a name two sentences back was invisible.
 
     /// Openers, for a field with nothing in it at all.
     ///
@@ -59,6 +62,14 @@ extension SuggestionEngine {
                 .map {
                     Candidate(
                         text: $0.element, language: contextLanguage, source: .learned,
+                        ordinal: $0.offset)
+                }
+            out +=
+                documentFollowers(after: last, in: context, limit: 3)
+                .enumerated()
+                .map {
+                    Candidate(
+                        text: $0.element, language: contextLanguage, source: .document,
                         ordinal: $0.offset)
                 }
             out +=

@@ -26,12 +26,15 @@ public final class PredictiveRefiner {
 
     /// The tail of the message handed to the model.
     ///
-    /// Words, not characters, and few of them: the model is guessing the next word
-    /// and everything before the current sentence is context it pays for and does
-    /// not use. Apple's on-device window is four thousand tokens for input *and*
-    /// output together, so a keyboard that sent the whole field would spend it on
-    /// a conversation from an hour ago.
-    private static let contextWords = 40
+    /// **iOS already windows `documentContextBeforeInput`.** That window *is*
+    /// the full typed input a keyboard can see, and chopping it again to 40
+    /// words threw away the start of any message longer than a short paragraph
+    /// — the names, the question, the reason the current sentence exists.
+    /// Apple's on-device window is four thousand tokens; a chat field that has
+    /// already been truncated by the host will not fill it. A notes document
+    /// that somehow arrives whole is still a string already in memory.
+    static func tail(of text: String) -> String { text }
+
     private static let cacheLimit = 128
 
     private let predictors: [any TextPrediction]
@@ -198,12 +201,6 @@ public final class PredictiveRefiner {
             if !cleaned.isEmpty { return cleaned }
         }
         return nil
-    }
-
-    static func tail(of text: String) -> String {
-        let words = text.split(whereSeparator: \.isWhitespace)
-        guard words.count > contextWords else { return text }
-        return words.suffix(contextWords).joined(separator: " ")
     }
 
     /// What survives of a model's answer.

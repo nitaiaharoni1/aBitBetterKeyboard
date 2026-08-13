@@ -521,6 +521,131 @@ final class ContextAwareSuggestionTests: XCTestCase {
                 + "the followers override must be scoped to Hebrew only")
     }
 
+    // MARK: The field is a lexicon
+
+    /// **The seed list is a prior, not the dictionary, and the field is a better
+    /// prior than either.** `Zorblin` is in no list this keyboard ships — not the
+    /// seed, not Apple's checker, not the personal dictionary — so the only way
+    /// it can appear in the bar is if the engine read the words already typed.
+    /// The old build scored the last two tokens against the seed and offered
+    /// whatever `Zor` happens to complete to, never the name sitting two words
+    /// back.
+    ///
+    /// A made-up name rather than `elephant`: `ele` completes to `electricity`
+    /// from the seed, and asserting "elephant is offered" would pass or fail
+    /// with Apple's list rather than with this engine.
+    func testAWordAlreadyTypedInThisFieldIsOfferedAgain() {
+        XCTAssertNil(
+            SeedLanguageModel.rank(of: "Zorblin", in: .english),
+            "Zorblin entered the seed — pick another word outside it")
+
+        let results = SuggestionEngine.suggestions(
+            prefix: "Zor", context: "Please call Zorblin about ",
+            languages: [.english], personal: emptyPersonal())
+        XCTAssertTrue(
+            results.contains { $0.text == "Zorblin" },
+            "got \(results.map(\.text)) — a word already in the field must be completable")
+    }
+
+    /// Same claim in Hebrew, including across a clitic the seed list never
+    /// stores. `לקוואק` is `ל` + a name no dictionary has; typing the name
+    /// without the preposition has to reach the stem that was already written.
+    func testAHebrewWordAlreadyTypedInThisFieldIsOfferedAgain() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "קוו", context: "שלחתי לקוואק את ",
+            languages: [.hebrew, .english], personal: emptyPersonal())
+        XCTAssertTrue(
+            results.contains { $0.text == "קוואק" },
+            "got \(results.map(\.text)) — the clitic has to come off before the "
+                + "field is searched, or לקוואק never matches קוו")
+    }
+
+    /// Completing from the field must still honour the prefix. A word two
+    /// sentences back that does not start with what was typed is not a
+    /// suggestion for this word.
+    func testADocumentWordThatDoesNotMatchThePrefixIsNotOffered() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "hel", context: "Zorblin said ",
+            languages: [.english], personal: emptyPersonal())
+        XCTAssertFalse(
+            results.contains { $0.text == "Zorblin" },
+            "got \(results.map(\.text))")
+    }
+
+    /// **A full stop closes `previousWords` and must not close the field.**
+    /// `I booked Zorblin yesterday. I booked ` has no seed row for `booked`, so
+    /// the old build fell through to the openers — `I · Thanks · Hi` — as if
+    /// the first sentence had been erased. The name that followed `booked`
+    /// earlier in this field is the prediction.
+    func testTheFieldItselfTeachesWhatFollowsAWord() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "", context: "I booked Zorblin yesterday. I booked ",
+            languages: [.english], personal: emptyPersonal())
+        XCTAssertTrue(
+            results.contains { $0.text == "Zorblin" },
+            "got \(results.map(\.text)) — the old bar fell through to the openers "
+                + "because previousWords stops at the full stop")
+    }
+
+    func testAHebrewFieldTeachesWhatFollowsAWord() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "", context: "שלחתי לקוואק אתמול. שלחתי ",
+            languages: [.hebrew, .english], personal: emptyPersonal())
+        XCTAssertTrue(
+            results.contains { $0.text == "לקוואק" },
+            "got \(results.map(\.text)) — a name after שלחתי earlier in this "
+                + "field has to beat the openers")
+    }
+
+    /// Line breaks are the same: `previousWords` reads only the last line, so
+    /// without a field-wide lexicon a name on the line above is gone. Completing
+    /// it is why the line above was typed.
+    func testAWordOnThePreviousLineIsStillCompletable() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "Zor", context: "Zorblin called.\nPlease ring ",
+            languages: [.english], personal: emptyPersonal())
+        XCTAssertTrue(
+            results.contains { $0.text == "Zorblin" },
+            "got \(results.map(\.text)) — a newline must not hide words already "
+                + "in the field from completion")
+    }
+
+    /// `UITextChecker` is the English and Hebrew dictionary. The seed is a few
+    /// hundred ranked words and absence from it proves nothing — `elephant` is
+    /// a real word, `eleph` is an unambiguous prefix of it, and a bar that only
+    /// knows the seed cannot offer it.
+    func testADictionaryWordOutsideTheSeedIsStillCompleted() {
+        XCTAssertNil(
+            SeedLanguageModel.rank(of: "elephant", in: .english),
+            "elephant entered the seed — pick another dictionary word outside it")
+        let results = SuggestionEngine.suggestions(
+            prefix: "eleph", context: "", languages: [.english], personal: emptyPersonal())
+        XCTAssertTrue(
+            results.contains { $0.text.lowercased() == "elephant" },
+            "got \(results.map(\.text)) — the checker is the dictionary; "
+                + "the seed is only a prior")
+    }
+
+    /// The helpers the tests above rest on, pinned separately so a bar-level
+    /// miss can be told from a tokenisation miss.
+    func testDocumentWordsReadAcrossSentencesAndLines() {
+        XCTAssertEqual(
+            SuggestionEngine.documentWords(in: "Please call Zorblin about "),
+            ["Please", "call", "Zorblin", "about"])
+        XCTAssertEqual(
+            SuggestionEngine.documentWords(in: "Zorblin called.\nPlease ring "),
+            ["Zorblin", "called", "Please", "ring"])
+        XCTAssertEqual(
+            SuggestionEngine.documentFollowers(
+                after: "booked", in: "I booked Zorblin yesterday. I booked ", limit: 3),
+            ["Zorblin"])
+        XCTAssertEqual(
+            SuggestionEngine.previousWords(in: "I booked Zorblin yesterday. I booked "),
+            ["I", "booked"],
+            "previousWords still stops at the full stop; the field lexicon is "
+                + "the other function")
+    }
+
     // MARK: The async tier
 
     /// The model is allowed to change the bold word. Slot 0 stays the typed
@@ -626,6 +751,19 @@ final class ContextAwareSuggestionTests: XCTestCase {
             PredictiveRefiner.cleaned(
                 ["  soon ", "soon", "a whole sentence that will never fit"], continuing: ""),
             ["soon"], "duplicates and sentences both have to go")
+    }
+
+    /// **The model is guessing the next word of this message, and iOS already
+    /// windows `documentContextBeforeInput`.** Chopping it again to 40 words
+    /// threw away the start of anything longer than a short paragraph — the
+    /// names, the question, the reason the current sentence exists. The
+    /// keyboard can only see what the host hands over; that *is* the full
+    /// typed input, and the refiner has to send it.
+    func testRefinementKeepsTheWholeTypedField() {
+        let words = (1...50).map { "w\($0)" }.joined(separator: " ")
+        XCTAssertEqual(
+            PredictiveRefiner.tail(of: words), words,
+            "a 40-word tail would have dropped w1 through w10")
     }
 
     /// A credential field is refused before anything is sent, and an empty field
