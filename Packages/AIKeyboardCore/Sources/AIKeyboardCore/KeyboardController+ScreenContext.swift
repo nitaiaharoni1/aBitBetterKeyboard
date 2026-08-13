@@ -57,10 +57,10 @@ extension KeyboardController {
     /// was a 30pt row that appeared and disappeared with the session; the banner is
     /// always drawn and already shows the reading itself, so the only part that
     /// needed a home was the five states that are not a reading. The strip's own
-    /// restart button is not reproduced: it offered the same `BroadcastPickerButton`
-    /// the setup panel holds, and Reply reaches that panel in one tap through the
-    /// banner's own Set up button — see `ScreenContextPrompt`, which is the single
-    /// place that decides whether starting a broadcast could get anywhere.
+    /// restart button is not reproduced: Reply with no session hosts the same
+    /// `BroadcastPickerButton` on the banner sentence — see `ScreenContextPrompt`,
+    /// which is the single place that decides whether starting a broadcast could
+    /// get anywhere.
     ///
     /// `.off` returns nil rather than a sentence, because a phone that has never
     /// started a broadcast is not in an error state and the banner has an ordinary

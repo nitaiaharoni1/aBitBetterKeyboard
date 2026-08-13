@@ -4,11 +4,12 @@ import XCTest
 
 /// What the keyboard offers when Reply is tapped with no session behind it.
 ///
-/// `ActionBanner` renders a title, a sentence and at most one button off this — it
-/// was `AIResultPanel` until that panel was deleted — and the button is the one
-/// worth pinning: it starts a **real screen recording**, with iOS's own
-/// countdown and its own red indicator, and a broadcast started with no cloud
-/// model behind it is refused by `SampleHandler.broadcastStarted` inside a second
+/// `ActionBanner` renders a title, a sentence and a dismiss × off this — it
+/// was `AIResultPanel` until that panel was deleted — and the sentence is the
+/// one worth pinning: when `offersPicker` is true a tap starts a **real screen
+/// recording**, with iOS's own countdown and its own red indicator, and a
+/// broadcast started with no cloud model behind it is refused by
+/// `SampleHandler.broadcastStarted` inside a second
 /// — `ScreenContextEndReason.refusalToStart(canRead:)` is the decision. So the
 /// picker must not be offered in that state, and it was.
 final class ScreenContextPromptTests: XCTestCase {
@@ -47,6 +48,9 @@ final class ScreenContextPromptTests: XCTestCase {
         XCTAssertTrue(ready.offersPicker)
         XCTAssertEqual(ready.title, "Screen context is off")
         XCTAssertTrue(ready.detail.contains("Start Broadcast"))
+        XCTAssertTrue(
+            ready.detail.hasPrefix("Tap"),
+            "the sentence has to say a tap starts it, or it still reads as a dead notice: \(ready.detail)")
     }
 
     /// Three refusals, three different pieces of work, in three different places.

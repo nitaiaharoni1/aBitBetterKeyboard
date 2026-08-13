@@ -100,10 +100,11 @@ public enum BannerState: Equatable {
         public enum Remedy: Equatable, Sendable {
             /// Nothing here can fix it. Dismiss is the only button.
             case none
-            /// The trailing chip *is* `RPSystemBroadcastPickerView`, the one system
-            /// affordance a keyboard extension can host. See `BroadcastPickerButton`
-            /// for the disassembly that establishes that, and for what it does not
-            /// establish.
+            /// The banner message *is* `RPSystemBroadcastPickerView`: a tap on the
+            /// sentence asks Control Center to present its broadcast picker. Trailing
+            /// is dismiss. See `BroadcastPickerButton` for the disassembly that
+            /// establishes that a SwiftUI tap cannot start a session itself, and for
+            /// what hosting the picker still does not establish.
             case broadcastPicker
             /// A button that asks the extension host to open the containing app at
             /// the given URL. The host tries `extensionContext?.open(_:)` first and
@@ -118,6 +119,12 @@ public enum BannerState: Equatable {
         public let title: String
         public let detail: String
         public let remedy: Remedy
+
+        /// The sentence hosts the system picker; trailing is ×. False for a
+        /// refusal that must not start a recording (no Full Access, no cloud).
+        var startsBroadcastFromMessage: Bool {
+            remedy == .broadcastPicker
+        }
 
         public init(action: AIAction?, title: String, detail: String, remedy: Remedy) {
             self.action = action

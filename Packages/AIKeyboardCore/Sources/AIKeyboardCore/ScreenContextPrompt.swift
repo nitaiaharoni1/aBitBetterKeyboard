@@ -53,12 +53,13 @@ struct ScreenContextPrompt: Equatable {
             return
         }
         title = "Screen context is off"
-        // **Short, and the last clause is load-bearing.** The picker asks Control
-        // Center to present over a keyboard extension, and whether that works is
-        // unmeasured on a device — see `BroadcastPickerButton`. If the system UI
-        // never appears, the app is the fallback.
+        // **Short, and the last clause is load-bearing.** The sentence *is* the
+        // picker: a tap asks Control Center to present over a keyboard extension,
+        // and whether that works is unmeasured on a device — see
+        // `BroadcastPickerButton`. If the system UI never appears, the app is the
+        // fallback.
         detail =
-            "Pick AI Keyboard, then Start Broadcast.\nIf nothing opens, start it in the app."
+            "Tap to pick AI Keyboard, then Start Broadcast.\nIf nothing opens, start it in the app."
         offersPicker = true
     }
 }

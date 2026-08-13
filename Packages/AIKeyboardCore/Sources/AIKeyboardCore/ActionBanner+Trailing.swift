@@ -23,14 +23,12 @@ extension ActionBanner {
             dismissButton(identifier: "banner-dismiss") { controller.clearBanner() }
 
         case .blocked(let block):
-            switch block.remedy {
-            case .none:
+            switch Self.blockedTrailing(for: block.remedy) {
+            case .dismiss:
                 dismissButton(identifier: "banner-blocked-dismiss") {
                     controller.clearBanner()
                 }
-            case .broadcastPicker:
-                pickerChip(block)
-            case .openApp(let url):
+            case .dismissAndOpenApp(let url):
                 // Compact HStack: the X lets the user decline the handoff;
                 // the chip opens the app with a fresh timestamp on tap.
                 HStack(spacing: Theme.Space.xxs) {
@@ -91,25 +89,21 @@ extension ActionBanner {
         .accessibilityIdentifier("banner-pager")
     }
 
-    /// Apple's own broadcast picker, sized to the strip.
-    ///
-    /// **The tap target is 10pt smaller than this in each dimension**, because
-    /// `-[RPSystemBroadcastPickerView addBroadcastPickerButton]` insets its real
-    /// `UIButton` by 5 on every edge. So 42 here is a 32pt target, against the 42 the
-    /// deleted setup panel could afford at 52 — and the strip cannot grow to buy it
-    /// back, because `Theme.Metrics.bannerHeight` is capped by the frame fingerprint
-    /// rather than by taste. See `.claude/rules/screen-context.md`.
-    ///
-    /// The white-then-brand circle behind it belongs to `BroadcastPickerButton`
-    /// itself and is deliberately not repeated here: the system assigns the glyph's
-    /// colour from `UIScreen.main.isCaptured` and never inherits one, so that
-    /// underlay is a correctness requirement rather than styling, and it lives with
-    /// the view that knows it.
-    func pickerChip(_ block: BannerState.Block) -> some View {
-        BroadcastPickerButton(size: 42)
-            .accessibilityLabel("Start screen context")
-            .accessibilityHint("Opens the iOS screen broadcast picker. \(block.detail)")
-            .accessibilityIdentifier("banner-start-broadcast")
+    /// What the trailing slot draws for a refusal. The broadcast picker is not
+    /// here: a record-dot chip was the only start control and it read as already
+    /// recording. The picker lives on the sentence; this is ×, or × plus Open.
+    enum BlockedTrailing: Equatable {
+        case dismiss
+        case dismissAndOpenApp(URL)
+    }
+
+    static func blockedTrailing(for remedy: BannerState.Block.Remedy) -> BlockedTrailing {
+        switch remedy {
+        case .none, .broadcastPicker:
+            return .dismiss
+        case .openApp(let url):
+            return .dismissAndOpenApp(url)
+        }
     }
 
     /// A tappable chip that opens the containing app via a SwiftUI `Link`.

@@ -131,6 +131,17 @@ extension ActionBanner {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(block.title). \(block.detail)")
+            .accessibilityHidden(block.startsBroadcastFromMessage)
+            .overlay {
+                // A SwiftUI tap cannot start a broadcast. The overlay *is*
+                // ReplayKit's button, stretched over the sentence; trailing is ×.
+                if block.startsBroadcastFromMessage {
+                    BroadcastPickerButton.overlay(
+                        label: "\(block.title). \(block.detail)",
+                        hint: "Opens the iOS screen broadcast picker.",
+                        identifier: "banner-start-broadcast")
+                }
+            }
             .accessibilityIdentifier("banner-blocked")
         }
     }
