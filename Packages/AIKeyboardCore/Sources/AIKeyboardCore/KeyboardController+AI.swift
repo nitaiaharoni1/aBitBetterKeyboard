@@ -57,8 +57,8 @@ extension KeyboardController {
             // corrected, which is the one thing the panel that used to cover them
             // hid. The screen-context setup screen was the last case argued to need
             // a panel, because it holds `BroadcastPickerButton`, a real `UIView`;
-            // that view is 42pt in the banner's trailing slot instead, at the cost
-            // of 10pt of tap target.
+            // that view now sits on the banner's sentence so a tap starts the
+            // picker, and trailing is dismiss.
             beginWork(.fix, showing: .none) { [engine] in
                 try await engine.fix(source)
             } apply: { controller, text in
@@ -114,7 +114,8 @@ extension KeyboardController {
             // cannot explain — and say it in the strip rather than in a panel over
             // the keys. `screenContextPrompt` is the single place that decides
             // *which* refusal this is, and whether starting a broadcast now could
-            // get further than the last one did; only that last case earns a button.
+            // get further than the last one did; only that last case puts the
+            // system picker on the sentence.
             let prompt = screenContextPrompt
             refuse(
                 .init(

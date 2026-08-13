@@ -13,7 +13,7 @@ import XCTest
 ///
 /// The affordance is Apple's own broadcast picker. It used to live in the Reply
 /// panel, reachable only through the sparkle; that panel and that key are both
-/// deleted, and the picker is the banner's trailing chip when
+/// deleted, and the picker is the banner message when
 /// `ScreenContextPrompt.offersPicker` is true. What has not changed is the state
 /// the defect is about, which is why this file still exists: an empty field with no
 /// session must leave a route open. The sparkle was enabled by `hasTextToWorkWith || canReply`, which is
