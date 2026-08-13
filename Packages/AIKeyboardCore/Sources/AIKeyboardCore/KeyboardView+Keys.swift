@@ -43,6 +43,21 @@ extension KeyboardView {
             // slides with the language, matching the strip rather than a pager.
             let slidingRows = letterRows.filter { $0.id != KeyboardLayout.RowID.bottom }
             let bottomRows = letterRows.filter { $0.id == KeyboardLayout.RowID.bottom }
+            // Numbers and symbols draw SwiftKey's extra row. Fit those four into
+            // the height three letter rows already occupy, so tapping 123 cannot
+            // grow the keyboard past the fingerprint cliff. Letters never take
+            // this path: they are the reference. A number row the user turned on
+            // raises the reference with `rowCount`, so both planes stay at the
+            // shipped key height.
+            let referenceSlidingRows = 3 + (layout.showsNumberRow ? 1 : 0)
+            let slidingKeyHeight =
+                controller.plane == .letters
+                ? layout.geometry.keyHeight
+                : Theme.Metrics.fittedKeyHeight(
+                    slidingRows: slidingRows.count,
+                    referenceRows: referenceSlidingRows,
+                    keyHeight: layout.geometry.keyHeight,
+                    rowSpacing: layout.geometry.rowSpacing)
             // **Emoji search puts the letters back and takes the action row
             // instead**, which is the exact opposite trade to the grid below it.
             // Typing a search term needs an alphabet, and at 364 pt there is no
@@ -99,7 +114,7 @@ extension KeyboardView {
                             ZStack {
                                 rowsView(
                                     slidingRows, availableWidth: available, unit: unit,
-                                    height: layout.geometry.keyHeight,
+                                    height: slidingKeyHeight,
                                     rowSpacing: layout.geometry.rowSpacing
                                 )
                                 .id(controller.language)

@@ -314,11 +314,15 @@ final class CustomLayoutTests: XCTestCase {
         let numberRow = try XCTUnwrap(numbers.first { $0.id == 0 })
         let numberSpace = try XCTUnwrap(
             numbers.first { $0.id == KeyboardLayout.RowID.bottom })
+        let brackets = try XCTUnwrap(numbers.first { $0.id == 1 })
 
         let letterHeight = letterRow.drawnHeight(
             keyHeight: Theme.Metrics.keyHeight, rowSpacing: Theme.Metrics.rowSpacing)
+        let fitted = slidingKeyHeight(for: numbers, layout: layout, plane: .numbers)
         let numberHeight = numberRow.drawnHeight(
-            keyHeight: Theme.Metrics.keyHeight, rowSpacing: Theme.Metrics.rowSpacing)
+            keyHeight: fitted, rowSpacing: Theme.Metrics.rowSpacing)
+        let bracketHeight = brackets.drawnHeight(
+            keyHeight: fitted, rowSpacing: Theme.Metrics.rowSpacing)
         let spaceOnLetters = letterSpace.drawnHeight(
             keyHeight: Theme.Metrics.keyHeight, rowSpacing: Theme.Metrics.rowSpacing)
         let spaceOnNumbers = numberSpace.drawnHeight(
@@ -330,22 +334,15 @@ final class CustomLayoutTests: XCTestCase {
         XCTAssertEqual(letterHeight, Theme.Metrics.keyHeight, accuracy: 0.001)
         XCTAssertEqual(spaceOnLetters, Theme.Metrics.keyHeight, accuracy: 0.001)
         XCTAssertLessThan(numberHeight, letterHeight)
+        XCTAssertLessThan(numberHeight, bracketHeight)
         XCTAssertGreaterThan(spaceOnNumbers, spaceOnLetters)
         XCTAssertEqual(
-            numberHeight + spaceOnNumbers, letterHeight + spaceOnLetters,
-            accuracy: 0.001,
+            Theme.Metrics.keyAreaHeight(for: layout),
+            drawnKeyArea(layout, plane: .numbers), accuracy: 0.001,
             "the transfer grew or shrank the numbers plane")
-
-        let letterGrid = gridHeight(letters)
-        let numberGrid = gridHeight(numbers)
         XCTAssertEqual(
-            letterGrid, numberGrid, accuracy: 0.001,
-            "tapping 123 changed the key-area height")
-
-        let symbols = KeyboardLayout.rows(
-            for: .english, plane: .symbols, showsGlobe: false, customization: layout)
-        XCTAssertEqual(
-            letterGrid, gridHeight(symbols), accuracy: 0.001,
+            Theme.Metrics.keyAreaHeight(for: layout),
+            drawnKeyArea(layout, plane: .symbols), accuracy: 0.001,
             "tapping #+= changed the key-area height")
     }
 
@@ -510,17 +507,19 @@ final class CustomLayoutTests: XCTestCase {
         XCTAssertEqual(Theme.Metrics.totalHeight(), Theme.Metrics.totalHeight(for: .default))
     }
 
-    /// Drawn height of the key grid, excluding the action row which sits above it
-    /// on every plane.
-    private func gridHeight(_ rows: [KeyRow]) -> CGFloat {
-        let keys = rows.filter { $0.id != KeyboardLayout.RowID.cursor }
-        let keyHeights = keys.reduce(CGFloat(0)) {
-            $0
-                + $1.drawnHeight(
-                    keyHeight: Theme.Metrics.keyHeight, rowSpacing: Theme.Metrics.rowSpacing)
+    /// How tall a sliding key is on this plane, matching `KeyboardView+Keys`.
+    private func slidingKeyHeight(
+        for rows: [KeyRow], layout: KeyboardCustomization, plane: KeyboardPlane
+    ) -> CGFloat {
+        let sliding = rows.filter {
+            $0.id != KeyboardLayout.RowID.cursor && $0.id != KeyboardLayout.RowID.bottom
         }
-        let gaps = Theme.Metrics.rowSpacing * CGFloat(max(0, keys.count - 1))
-        return keyHeights + gaps
+        guard plane != .letters else { return layout.geometry.keyHeight }
+        return Theme.Metrics.fittedKeyHeight(
+            slidingRows: sliding.count,
+            referenceRows: 3 + (layout.showsNumberRow ? 1 : 0),
+            keyHeight: layout.geometry.keyHeight,
+            rowSpacing: layout.geometry.rowSpacing)
     }
 
     /// The whole key area a plane paints, including the action row and insets —
@@ -528,10 +527,14 @@ final class CustomLayoutTests: XCTestCase {
     private func drawnKeyArea(_ layout: KeyboardCustomization, plane: KeyboardPlane) -> CGFloat {
         let rows = KeyboardLayout.rows(
             for: .english, plane: plane, showsGlobe: false, customization: layout)
-        let keyHeight = layout.geometry.keyHeight
         let spacing = layout.geometry.rowSpacing
-        let keys = rows.reduce(CGFloat(0)) {
-            $0 + $1.drawnHeight(keyHeight: keyHeight, rowSpacing: spacing)
+        let slidingBase = slidingKeyHeight(for: rows, layout: layout, plane: plane)
+        let keys = rows.reduce(CGFloat(0)) { total, row in
+            let base =
+                (row.id == KeyboardLayout.RowID.bottom
+                    || row.id == KeyboardLayout.RowID.cursor)
+                ? layout.geometry.keyHeight : slidingBase
+            return total + row.drawnHeight(keyHeight: base, rowSpacing: spacing)
         }
         return keys + spacing * CGFloat(max(0, rows.count - 1))
             + Theme.Metrics.topInset + Theme.Metrics.bottomInset

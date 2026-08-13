@@ -18,11 +18,14 @@ extension KeyboardLayout {
     /// over them, so two rows with one id is a `ForEach` with duplicate identity.
     /// The letter rows own 0, 1 and 2 and the bottom row owns 3, which is what
     /// shipped; the two new rows take numbers outside that range rather than
-    /// renumbering anything that already works.
+    /// renumbering anything that already works. Numbers and symbols reuse 0–2
+    /// for digits, brackets and the punctuation row, and `extraSymbols` for the
+    /// fourth SwiftKey row that letters do not have.
     public enum RowID {
         public static let numbers = -1
         public static let bottom = 3
         public static let cursor = 4
+        public static let extraSymbols = 5
     }
 
     /// Every row the keyboard draws. Letter, number and bottom rows are in the
@@ -38,8 +41,9 @@ extension KeyboardLayout {
         var rows: [KeyRow] = []
         let columns = columns(for: language, plane: plane, grouping: grouping)
 
-        // The number row is a letters-plane affordance. On the numbers plane the
-        // digits are already the top row, and drawing them twice is not a feature.
+        // The number row is a letters-plane affordance. On the numbers and
+        // symbols planes the digits are already the top row — SwiftKey keeps
+        // them on both pages — and drawing them twice is not a feature.
         if customization.showsNumberRow, plane == .letters {
             rows.append(numberRow(for: language, columns: columns))
         }

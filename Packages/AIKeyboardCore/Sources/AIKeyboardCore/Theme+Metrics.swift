@@ -146,5 +146,26 @@ extension Theme {
 
         /// Apple's minimum comfortable target. Anything smaller gets mistapped.
         public static let minTouchTarget: CGFloat = 44
+
+        /// How tall each sliding key is when a plane draws more rows than the
+        /// letters plane paid for.
+        ///
+        /// SwiftKey's numbers and symbols pages are four rows. The letters plane
+        /// is three, and `KeyboardCustomization.rowCount` follows the letters
+        /// plane so the host height — and the 368 pt fingerprint cliff — does
+        /// not move when the user taps 123. Four rows at the shipped 41 pt would
+        /// be that move. This squeezes the extra row into the same block three
+        /// letter rows already occupy; a layout that already turned the number
+        /// row on has paid for the fourth slot and is left alone.
+        public static func fittedKeyHeight(
+            slidingRows: Int, referenceRows: Int, keyHeight: CGFloat, rowSpacing: CGFloat
+        ) -> CGFloat {
+            guard slidingRows > referenceRows, slidingRows > 0 else { return keyHeight }
+            let block =
+                CGFloat(referenceRows) * keyHeight
+                + CGFloat(max(0, referenceRows - 1)) * rowSpacing
+            let gaps = CGFloat(slidingRows - 1) * rowSpacing
+            return max(0, (block - gaps) / CGFloat(slidingRows))
+        }
     }
 }
