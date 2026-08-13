@@ -265,6 +265,58 @@ final class IdleTypingTests: XCTestCase {
             target.text, "other",
             "space on pause followed the caret onto a word that was not typed: \(target.text)")
     }
+
+    /// Backspace is a keystroke. The wait from the letters it removed is armed
+    /// on a prefix that is gone, so a new wait has to start on what is left.
+    func testIdleSpaceFiresAfterBackspace() async {
+        SharedStore.shared.spaceOnIdle = true
+        SharedStore.shared.idleDelayMs = 200
+        SharedStore.shared.autocorrect = false
+        let target = MockTextTarget(text: "hel")
+        let controller = KeyboardController(target: target, language: .english)
+
+        controller.press(.backspace)
+        XCTAssertEqual(target.text, "he", "the state under test is the letters delete left")
+        try? await Task.sleep(for: .milliseconds(350))
+
+        XCTAssertEqual(
+            target.text, "he ",
+            "space on pause never fired after backspace: \(target.text)")
+    }
+
+    /// Deleting the last letter is not a pause in a word. A space here would
+    /// appear in an empty field.
+    func testIdleSpaceDoesNotFireWhenBackspaceClearsTheWord() async {
+        SharedStore.shared.spaceOnIdle = true
+        SharedStore.shared.idleDelayMs = 200
+        SharedStore.shared.autocorrect = false
+        let target = MockTextTarget(text: "h")
+        let controller = KeyboardController(target: target, language: .english)
+
+        controller.press(.backspace)
+        try? await Task.sleep(for: .milliseconds(350))
+
+        XCTAssertEqual(target.text, "", "space on pause landed in an empty field")
+    }
+
+    /// Complete on pause would undo the delete: `hel` to `he` must not become
+    /// `hello`. Space on pause is the other switch and is tested above.
+    func testCompleteOnIdleDoesNotRewriteAWordBeingDeleted() {
+        SharedStore.shared.completeOnIdle = true
+        let target = MockTextTarget(text: "hel")
+        let controller = KeyboardController(target: target, language: .english)
+
+        controller.press(.backspace)
+        controller.suggestions = [
+            Suggestion(text: "he", language: .english, isDefault: true),
+            Suggestion(text: "hello", language: .english)
+        ]
+        controller.performIdleTyping()
+
+        XCTAssertEqual(
+            target.text, "he",
+            "complete on pause rewrote a word delete was changing")
+    }
 }
 
 /// A field that says it is a password. Local to this file: `MockTextTarget`

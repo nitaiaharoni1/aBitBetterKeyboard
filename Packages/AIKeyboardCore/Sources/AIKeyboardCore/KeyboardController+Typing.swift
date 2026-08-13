@@ -305,6 +305,8 @@ extension KeyboardController {
         // `isCorrectingWordByHand`.
         deletedWordPrefix = currentWordPrefix
         refreshSuggestions()
+        // The letters just deleted armed a wait on a prefix that is gone.
+        noteTypedInput()
     }
 
     /// Whether the word under the cursor is one the user has backspaced into.

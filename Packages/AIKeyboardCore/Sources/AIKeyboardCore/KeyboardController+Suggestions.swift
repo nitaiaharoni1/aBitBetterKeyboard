@@ -236,7 +236,9 @@ extension KeyboardController {
         let space = store.storedSpaceOnIdle
         guard complete || space else { return }
 
-        if complete, store.storedPredictions, let candidate = idleCompletion(for: prefix) {
+        if complete, !isCorrectingWordByHand, store.storedPredictions,
+            let candidate = idleCompletion(for: prefix)
+        {
             if space {
                 apply(candidate)
             } else {
@@ -272,12 +274,14 @@ extension KeyboardController {
         return suggestions.first { SuggestionEngine.comparable($0.text) != typed }
     }
 
-    /// A credential field, a recording, a hand repair, a selection, or the
+    /// A credential field, a recording, a grouped word, a selection, or the
     /// emoji panel: none of those is a pause in ordinary typing.
+    ///
+    /// A hand repair is not in this list. Space on pause has to fire after
+    /// backspace; `performIdleTyping` skips completing the word, and
+    /// `insertSpace` already skips autocorrect, so the letters they kept stay.
     private var idleTypingMayRun: Bool {
-        guard overlay == .none, !isDictating, !grouped.isTyping, !isCorrectingWordByHand,
-            selection == nil
-        else {
+        guard overlay == .none, !isDictating, !grouped.isTyping, selection == nil else {
             return false
         }
         return SecureField.permitsRead(
