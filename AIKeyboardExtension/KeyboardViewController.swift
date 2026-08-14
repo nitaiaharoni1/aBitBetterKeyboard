@@ -30,6 +30,14 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        // Face ID phones draw Apple's dictation microphone in a strip under a
+        // third-party keyboard unless we say we already have one. We do — the
+        // orange microphone in the action row — and leaving this false is the
+        // large empty band with Apple's glyph sitting under the space row.
+        // Public API (`UIInputViewController.hasDictationKey`); do not go
+        // looking for the system view.
+        hasDictationKey = true
+
         // `store.load()` is what puts the palette into `Theme` at launch, through
         // `brandPalette`'s `didSet` — so there is deliberately no
         // `applyBrandPalette()` here. It is `viewWillAppear` that needs it, for
