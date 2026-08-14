@@ -11,7 +11,7 @@ struct DictionaryView: View {
             AmbientBackground()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: Theme.Space.lg) {
+                VStack(alignment: .leading, spacing: Theme.Space.md) {
                     addField
 
                     if store.personalDictionary.isEmpty {

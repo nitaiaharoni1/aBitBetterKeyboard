@@ -112,6 +112,25 @@ public enum SlotWidth: Codable, Hashable, Sendable {
     public static func clampedUnits(_ value: CGFloat) -> SlotWidth {
         .units(min(maximumUnits, max(minimumUnits, value)))
     }
+
+    /// Half-unit steps, then fill once the drag clears the last step.
+    public static func snapped(from rawUnits: CGFloat) -> SlotWidth {
+        if rawUnits > maximumUnits + 0.35 { return .fill }
+        return clampedUnits((rawUnits * 2).rounded() / 2)
+    }
+
+    /// Finger delta on a handle, in letter-key units.
+    public static func proposed(
+        start: SlotWidth, startPixels: CGFloat, translation: CGFloat, unit: CGFloat
+    ) -> SlotWidth {
+        let unit = max(unit, 1)
+        let startUnits: CGFloat
+        switch start {
+        case .fill: startUnits = max(minimumUnits, startPixels / unit)
+        case .units(let value): startUnits = value
+        }
+        return snapped(from: startUnits + translation / unit)
+    }
 }
 
 // MARK: - One editable key

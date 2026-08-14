@@ -11,7 +11,6 @@ import SwiftUI
 final class AppSearch: ObservableObject {
     @Published var query = ""
     @Published var showsPlayground = false
-    @Published var homePush: AppSearchHomePush?
     @Published var languagesPush: AppSearchLanguagesPush?
     @Published var keysPush: AppSearchKeysPush?
     @Published var settingsPush: AppSearchSettingsPush?
@@ -45,7 +44,6 @@ final class AppSearch: ObservableObject {
         query = ""
         highlightedRow = nil
         highlightedLanguage = nil
-        homePush = nil
         languagesPush = nil
         keysPush = nil
         settingsPush = nil
@@ -54,7 +52,6 @@ final class AppSearch: ObservableObject {
         highlightClear?.cancel()
         stackEpoch += 1
 
-        var nextHome: AppSearchHomePush?
         var nextLanguages: AppSearchLanguagesPush?
         var nextKeys: AppSearchKeysPush?
         var nextSettings: AppSearchSettingsPush?
@@ -65,10 +62,6 @@ final class AppSearch: ObservableObject {
         switch item.destination {
         case .tab(_):
             break
-        case .dictation:
-            nextHome = .dictation
-        case .screenContext:
-            nextHome = .screenContext
         case .playground:
             nextPlayground = true
         case .subscription:
@@ -77,8 +70,6 @@ final class AppSearch: ObservableObject {
             nextLanguages = .dictionary
         case .layout:
             nextKeys = .layout
-        case .cloudModel:
-            nextSettings = .cloudModel
         case .language(let language):
             nextLanguage = language
         case .row(let row):
@@ -93,9 +84,8 @@ final class AppSearch: ObservableObject {
         // The stacks are rebuilt by `stackEpoch`. Setting the push in the same
         // turn is a binding that never *changes* on the new stack, so
         // `navigationDestination(item:)` does not fire. Next turn it does.
-        if nextHome != nil || nextLanguages != nil || nextKeys != nil || nextSettings != nil {
+        if nextLanguages != nil || nextKeys != nil || nextSettings != nil {
             DispatchQueue.main.async {
-                self.homePush = nextHome
                 self.languagesPush = nextLanguages
                 self.keysPush = nextKeys
                 self.settingsPush = nextSettings
@@ -105,52 +95,31 @@ final class AppSearch: ObservableObject {
         scheduleHighlightClear()
     }
 
-    /// Deep link landing. Same navigation as `open(_:)` for `.screenContext`,
-    /// without searching the catalog: Home's subtitle also contains those words.
+    /// Deep link landing. Home hosts the broadcast picker, so this only
+    /// switches tab and washes the Screen Context row.
     func openScreenContext() {
-        query = ""
-        highlightedRow = nil
-        highlightedLanguage = nil
-        homePush = nil
-        languagesPush = nil
-        keysPush = nil
-        settingsPush = nil
-        showsPlayground = false
-        pendingTab = nil
-        highlightClear?.cancel()
-        stackEpoch += 1
-
-        pendingTab = .home
-        DispatchQueue.main.async {
-            self.homePush = .screenContext
-            self.languagesPush = nil
-            self.keysPush = nil
-            self.settingsPush = nil
-        }
+        landOnHomeRow(.screenContext)
     }
 
-    /// Deep link landing. Same navigation as `open(_:)` for `.dictation`,
-    /// without searching the catalog: Home's subtitle also contains those words.
+    /// Deep link landing. Home hosts the start/stop control, so this only
+    /// switches tab and washes the Dictation row.
     func openDictation() {
+        landOnHomeRow(.dictation)
+    }
+
+    private func landOnHomeRow(_ row: AppSearchRow) {
         query = ""
-        highlightedRow = nil
         highlightedLanguage = nil
-        homePush = nil
         languagesPush = nil
         keysPush = nil
         settingsPush = nil
         showsPlayground = false
-        pendingTab = nil
         highlightClear?.cancel()
         stackEpoch += 1
 
         pendingTab = .home
-        DispatchQueue.main.async {
-            self.homePush = .dictation
-            self.languagesPush = nil
-            self.keysPush = nil
-            self.settingsPush = nil
-        }
+        highlightedRow = row
+        scheduleHighlightClear()
     }
 
     private var highlightClear: Task<Void, Never>?
@@ -170,12 +139,6 @@ final class AppSearch: ObservableObject {
 
 // MARK: - Destinations
 
-enum AppSearchHomePush: String, Identifiable {
-    case dictation
-    case screenContext
-    var id: String { rawValue }
-}
-
 enum AppSearchLanguagesPush: String, Identifiable {
     case dictionary
     var id: String { rawValue }
@@ -188,13 +151,14 @@ enum AppSearchKeysPush: String, Identifiable {
 
 enum AppSearchSettingsPush: String, Identifiable {
     case subscription
-    case cloudModel
     var id: String { rawValue }
 }
 
-/// A Languages, Keys, or Settings row that has no screen of its own. Search
-/// scrolls to it rather than pushing.
+/// A Home, Languages, Keys, or Settings row that has no screen of its own.
+/// Search scrolls to it rather than pushing.
 enum AppSearchRow: String, Hashable {
+    case screenContext
+    case dictation
     case autocorrect
     case completeOnPause
     case spaceOnPause
@@ -213,6 +177,8 @@ enum AppSearchRow: String, Hashable {
 
     var tab: MainTab {
         switch self {
+        case .screenContext, .dictation:
+            return .home
         case .mixing:
             return .languages
         case .groupedKeys, .numberRow, .palette, .haptics, .keySounds:
@@ -227,13 +193,10 @@ enum AppSearchRow: String, Hashable {
 
 enum AppSearchDestination: Hashable {
     case tab(MainTab)
-    case dictation
-    case screenContext
     case playground
     case subscription
     case dictionary
     case layout
-    case cloudModel
     case language(KeyboardLanguage)
     case row(AppSearchRow)
 
@@ -242,8 +205,8 @@ enum AppSearchDestination: Hashable {
     var tab: MainTab {
         switch self {
         case .tab(let tab): return tab
-        case .dictation, .screenContext, .playground: return .home
-        case .subscription, .cloudModel: return .settings
+        case .playground: return .home
+        case .subscription: return .settings
         case .language, .dictionary: return .languages
         case .layout: return .keys
         case .row(let row): return row.tab
@@ -279,7 +242,7 @@ struct AppSearchItem: Identifiable {
     }
 
     private static var screens: [AppSearchItem] {
-        var items: [AppSearchItem] = [
+        let items: [AppSearchItem] = [
             item(
                 "Home", "Setup, Screen Context, Dictation", icon: "house.fill",
                 keywords: ["setup", "full access", "add keyboard"],
@@ -287,7 +250,7 @@ struct AppSearchItem: Identifiable {
             item(
                 "Dictation", "Start a session to dictate from the keyboard", icon: "mic.fill",
                 keywords: ["microphone", "speech", "voice"],
-                .dictation),
+                .row(.dictation)),
             item(
                 "Languages", "Which layouts the globe key cycles", icon: "globe",
                 keywords: ["languages", "globe"],
@@ -302,7 +265,7 @@ struct AppSearchItem: Identifiable {
             item(
                 "Screen Context", "Reply to what's on screen", icon: "eye",
                 keywords: ["capture", "broadcast", "reply"],
-                .screenContext),
+                .row(.screenContext)),
             item(
                 "Try the keyboard", "Type here without leaving the app", icon: "keyboard",
                 keywords: ["playground"],
@@ -322,14 +285,6 @@ struct AppSearchItem: Identifiable {
                 keywords: ["upgrade", "paywall", "pro"],
                 .subscription)
         ]
-        #if DEBUG
-        items.append(
-            item(
-                "Cloud model", "Where Fix, Rewrite, Tone and Reply send work",
-                icon: "cloud",
-                keywords: ["backend", "server", "ai"],
-                .cloudModel))
-        #endif
         return items
     }
 

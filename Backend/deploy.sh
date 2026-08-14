@@ -18,7 +18,7 @@ PROJECT="${PROJECT:-handi-project}"
 # is a release; changing it here is a flag. Keep them equal.
 REGION="${REGION:-europe-west1}"
 SERVICE="${SERVICE:-aikeyboard-backend}"
-MODEL="${MODEL:-gemini-2.5-flash}"
+MODEL="${MODEL:-gemini-3.5-flash-lite}"
 
 cd "$(dirname "$0")"
 

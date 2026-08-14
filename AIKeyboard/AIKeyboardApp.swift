@@ -123,10 +123,10 @@ struct RootView: View {
             }
         }
         // The app watches the same capture channel the keyboard does, as an
-        // observer: it reads the status page so Home and the Screen Context
-        // screen show what the capture session is actually doing, and it never
-        // writes `intent.keyboardVisible`, because the keyboard is the only
-        // thing that can honestly claim to be on screen.
+        // observer: it reads the status page so Home shows what the capture
+        // session is actually doing, and it never writes
+        // `intent.keyboardVisible`, because the keyboard is the only thing
+        // that can honestly claim to be on screen.
         .onAppear {
             ScreenContextSession.shared.startConsuming(.shared, as: .observer)
             // Cold-launch fallback: the keyboard wrote a handoff before the app
@@ -169,10 +169,9 @@ struct RootView: View {
     /// the return value: an arbitrary external open of this URL with no fresh
     /// shared request must not auto-start the mic.
     ///
-    /// Lands on Home and pushes Dictation. The session still starts here, in
-    /// the foreground, because that is the OS boundary: the keyboard cannot
-    /// open the microphone, and an app cannot *begin* recording from the
-    /// background.
+    /// Lands on Home and starts the session. The microphone still opens here,
+    /// in the foreground, because that is the OS boundary: the keyboard cannot
+    /// open it, and an app cannot *begin* recording from the background.
     private func beginDictationHandoffIfFresh() {
         guard SharedStore.shared.consumeDictationHandoff() else { return }
         selectedMainTab = .home

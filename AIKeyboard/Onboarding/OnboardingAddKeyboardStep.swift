@@ -32,7 +32,7 @@ struct AddKeyboardStep: View {
             }
 
             if setup.keyboardAdded != .confirmed {
-                VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
                     ExplainerStepRow(
                         number: 1,
                         title: "Open Settings",
@@ -67,6 +67,7 @@ struct AddKeyboardStep: View {
                     )
                     .padding(.vertical, Theme.Space.sm)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 // The numbered rows above carry the path from the top of
                 // Settings; this button promises nothing more than getting there.

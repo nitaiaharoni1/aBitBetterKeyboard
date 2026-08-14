@@ -11,14 +11,11 @@
 
 import { buildResponseSchema } from "./schema.js";
 
-// Measured, not a style choice. 0 turns thinking off entirely, and off is
-// what breaks this product: the model transliterates Latin-script loanwords
-// into Hebrew (`sync` becomes `סִינְק`) with no instruction able to talk it
-// out of that. Unbounded thinking scored 42–45/58 on the text corpus with a
-// 17–18s cloud tail; capped at 512 it scored 46 and 49 with a 4.4s tail and
-// the same loanword preservation. See `VertexTransport.swift`'s comment on
-// `thinkingBudget` for the full numbers this backend has to match.
-const THINKING_BUDGET = 512;
+// Off. Measured 2026-08-14 on `gemini-3.5-flash-lite` against the 22 Hebrew
+// and mixed Fix/Rewrite entries: thinking 0 kept Latin loanwords (`sync`,
+// `document`, `API key`) and cut Fix from ~2.6s to ~1.2s. The 512 cap was
+// for `gemini-2.5-flash`, where 0 transliterated `sync` into `סִינְק`.
+const THINKING_BUDGET = 0;
 
 // **`temperature` is set for screen reads and deliberately left unset for text,
 // because that is what each side was actually scored at.** This is not symmetry

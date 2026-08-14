@@ -1,15 +1,7 @@
 import AIKeyboardCore
 import SwiftUI
 
-/// The "AI" settings card: cloud model row, default tone picker, and optional
-/// custom tone field.
-///
-/// **The cloud row leads, because without it most of this section does
-/// nothing.** Apple's on-device model has no Hebrew, so on a stock install
-/// every Fix, Rewrite, Tone and Reply in the keyboard's primary language fails
-/// with "no cloud model is set up" — and this screen used to answer that with a
-/// tone picker and a "Prefer on-device" switch nothing read. See `CloudModelView`
-/// for why the setting lives here rather than on Screen Context.
+/// The "AI" settings card: default tone picker and optional custom tone field.
 struct SettingsAISection: View {
     @EnvironmentObject private var store: SharedStore
 
@@ -18,18 +10,6 @@ struct SettingsAISection: View {
             SectionHeader(title: "AI")
             Card {
                 VStack(spacing: Theme.Space.sm) {
-                    // **Not a setting, and it stopped being one when the token
-                    // stopped being typed.** What is behind this row is a server
-                    // address and, in Debug, an access token. A shipping install
-                    // has neither to give: `AppAttestation` connects it, and the
-                    // only thing the row could tell that user is that a component
-                    // they have never heard of is in a state they cannot change.
-                    // "Not set up" against a keyboard that connects itself is the
-                    // exact claim `SetupState` exists to stop.
-                    #if DEBUG
-                    CloudModelRow()
-                    Divider.themed
-                    #endif
                     HStack(spacing: Theme.Space.sm) {
                         IconBadge(systemName: "slider.horizontal.3")
                         Text("Default tone")
@@ -67,8 +47,7 @@ struct SettingsAISection: View {
         }
     }
 
-    /// Production users never see `CloudModelRow`. This is the door that names
-    /// what actually leaves the device, matching `RoutedIntelligence` and
+    /// Names what actually leaves the device, matching `RoutedIntelligence` and
     /// `CloudScreenReader` rather than a privacy-policy claim.
     private static let cloudRewriteDetail =
         "Fix, Rewrite, Tone and Reply send the current text to a server when Apple's on-device model cannot run them. That includes Hebrew. Languages Apple lists can stay on the device. Screen context sends one screenshot per Reply tap and gets back the sender, the message and its language. The picture is not saved."

@@ -6,14 +6,14 @@ import SwiftUI
 /// Shared shell for one feature row in the home screen's graphite features card
 /// (Screen Context, Dictation). Handles the 38pt icon chip (flat orange with a
 /// white glyph, the direction's feature-card mark; red when a session is live),
-/// title + optional status capsule, detail text, and chevron. The grouping card
-/// itself lives in `HomeView`, so rows sit flush against each other with a
-/// hairline between.
+/// title + optional status capsule, detail text, and a trailing control. The
+/// grouping card itself lives in `HomeView`, so rows sit flush against each
+/// other with a hairline between.
 ///
 /// The labels ride on `Theme.Keys.labelOnFunction`, the token the keyboard
 /// pairs with its graphite function keys — it is exactly this pairing, white
 /// copy on graphite, so the card needs no local colours of its own.
-private struct HomeFeatureCard<Destination: View>: View {
+private struct HomeFeatureCard<Trailing: View>: View {
     let icon: String
     let activeIcon: String
     let isActive: Bool
@@ -21,58 +21,53 @@ private struct HomeFeatureCard<Destination: View>: View {
     let detail: String
     var badge: (text: String, colour: Color)?
     let accessibilityID: String
-    @ViewBuilder let destination: () -> Destination
+    @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {
-        NavigationLink {
-            destination()
-        } label: {
-            HStack(spacing: Theme.Space.sm) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .fill(isActive ? Theme.Semantic.record : Theme.Brand.action)
-                        .frame(width: 38, height: 38)
+        HStack(spacing: Theme.Space.sm) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(isActive ? Theme.Semantic.record : Theme.Brand.action)
+                    .frame(width: 38, height: 38)
 
-                    Image(systemName: isActive ? activeIcon : icon)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(Theme.Text.onBrand)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: Theme.Space.xxs) {
-                        Text(title)
-                            .font(Theme.Fonts.headline)
-                            .foregroundStyle(Theme.Keys.labelOnFunction)
-
-                        if let badge {
-                            StatusCapsule(text: badge.text, colour: badge.colour)
-                        }
-                    }
-
-                    Text(detail)
-                        .font(Theme.Fonts.callout)
-                        .foregroundStyle(Theme.Keys.labelOnFunction.opacity(0.62))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 0)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.Keys.labelOnFunction.opacity(0.45))
+                Image(systemName: isActive ? activeIcon : icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Theme.Text.onBrand)
             }
-            .padding(.vertical, Theme.Space.xs)
-            .contentShape(Rectangle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: Theme.Space.xxs) {
+                    Text(title)
+                        .font(Theme.Fonts.headline)
+                        .foregroundStyle(Theme.Keys.labelOnFunction)
+                        .accessibilityIdentifier(accessibilityID)
+
+                    if let badge {
+                        StatusCapsule(text: badge.text, colour: badge.colour)
+                    }
+                }
+
+                Text(detail)
+                    .font(Theme.Fonts.callout)
+                    .foregroundStyle(Theme.Keys.labelOnFunction.opacity(0.62))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+
+            trailing()
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(accessibilityID)
+        .padding(.vertical, Theme.Space.xs)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .contain)
     }
 }
 
 // MARK: - HomeScreenContextCard
 
-/// Navigation card linking to `ScreenContextView`. Shows LIVE when a capture
-/// session is running and SAMPLE over the scripted demo.
+/// Starts a broadcast from Home. The record icon is paint; the tap target
+/// is `RPSystemBroadcastPickerView` stretched over it. A SwiftUI button
+/// cannot open that sheet.
 struct HomeScreenContextCard: View {
     @StateObject private var session = ScreenContextSession.shared
 
@@ -83,39 +78,36 @@ struct HomeScreenContextCard: View {
             isActive: isCapturing,
             title: "Screen Context",
             detail: screenContextDetail,
-            badge: badge,
+            badge: isCapturing ? ("LIVE", Theme.Semantic.record) : nil,
             accessibilityID: "home-screen-context"
         ) {
-            ScreenContextView()
+            HomeSessionLabel(icon: "record.circle", isStop: false)
+                .overlay {
+                    BroadcastPickerButton.overlay(
+                        label: "Start a screen broadcast",
+                        hint: "Opens the iOS screen broadcast picker.",
+                        identifier: "screen-context-start-broadcast")
+                }
         }
+        .searchTarget(.screenContext)
     }
 
-    /// LIVE means a capture session is running, and only that. The sample
-    /// conversation gets its own badge; a red LIVE over a scripted demo says the
-    /// screen is being watched when nothing is.
     private var isCapturing: Bool { session.source == .capture && session.isLive }
 
-    private var badge: (text: String, colour: Color)? {
-        if isCapturing { return ("LIVE", Theme.Semantic.record) }
-        if session.source == .scripted { return ("SAMPLE", Theme.Text.tertiary) }
-        return nil
-    }
-
     private var screenContextDetail: String {
-        switch session.source {
-        case .capture: return "The keyboard can reply to what's on screen"
-        case .scripted: return "Playing a sample conversation"
-        case .none: return "Let the keyboard answer the message you're looking at"
-        }
+        if isCapturing { return "Sharing. The keyboard can reply to what's on screen." }
+        return "Share the screen so Reply can read it"
     }
 }
 
 // MARK: - HomeDictationCard
 
-/// Navigation card linking to `DictationView`. Shows LIVE while a dictation
-/// session is running in the app.
+/// Starts and stops a dictation session from Home. The microphone can only
+/// open in this process, which is why the control lives here and not on the
+/// keyboard.
 struct HomeDictationCard: View {
     @ObservedObject private var dictation = DictationService.shared
+    @State private var starting = false
 
     var body: some View {
         HomeFeatureCard(
@@ -123,13 +115,67 @@ struct HomeDictationCard: View {
             activeIcon: "mic.fill",
             isActive: dictation.isRunning,
             title: "Dictation",
-            detail: dictation.isRunning
-                ? "Swipe back to the app you were writing in. The mic key works now."
-                : "Start a session here to dictate from the keyboard",
+            detail: dictationDetail,
             badge: dictation.isRunning ? ("LIVE", Theme.Semantic.record) : nil,
             accessibilityID: "home-dictation"
         ) {
-            DictationView()
+            HomeSessionButton(
+                icon: dictation.isRunning ? "stop.fill" : "mic.fill",
+                isStop: dictation.isRunning,
+                isEnabled: !starting
+            ) {
+                if dictation.isRunning {
+                    dictation.stop()
+                } else {
+                    starting = true
+                    Task {
+                        await dictation.start(minutes: 0)
+                        starting = false
+                    }
+                }
+            }
+            .accessibilityLabel(dictation.isRunning ? "Stop dictation" : "Start dictation")
+            .accessibilityIdentifier(dictation.isRunning ? "dictation-stop" : "dictation-start")
         }
+        .searchTarget(.dictation)
+    }
+
+    private var dictationDetail: String {
+        if dictation.isRunning {
+            return "The mic key works now. Switch to the app you're writing in."
+        }
+        if !dictation.lastError.isEmpty { return dictation.lastError }
+        return "Start a session to dictate from the keyboard"
+    }
+}
+
+// MARK: - HomeSessionButton
+
+private struct HomeSessionLabel: View {
+    let icon: String
+    let isStop: Bool
+
+    var body: some View {
+        Image(systemName: icon)
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(isStop ? Theme.Semantic.record : Theme.Brand.action)
+            .frame(width: 38, height: 38)
+            .background(Circle().fill(Theme.Text.onBrand))
+    }
+}
+
+private struct HomeSessionButton: View {
+    let icon: String
+    let isStop: Bool
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HomeSessionLabel(icon: icon, isStop: isStop)
+        }
+        .pressable()
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
     }
 }

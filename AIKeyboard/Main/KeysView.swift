@@ -12,7 +12,7 @@ struct KeysView: View {
 
                 ScrollViewReader { proxy in
                     ScrollView {
-                        VStack(alignment: .leading, spacing: Theme.Space.lg) {
+                        VStack(alignment: .leading, spacing: Theme.Space.md) {
                             if search.isSearching {
                                 AppSearchResults()
                             } else {
@@ -51,7 +51,7 @@ struct KeysView: View {
         section("Layout") {
             NavigationRow(
                 title: "Layout",
-                subtitle: "Presets, key size, and what each key does",
+                subtitle: "Drag keys around. Unused ones sit in a tray.",
                 icon: "square.grid.3x2",
                 badge: layoutSummary
             ) {

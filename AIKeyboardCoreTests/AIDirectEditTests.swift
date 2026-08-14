@@ -524,6 +524,21 @@ final class WorkingProgressBarTests: XCTestCase {
         XCTAssertGreaterThan(
             Theme.Metrics.recordingWaveformHeight, Theme.Metrics.progressBarHeight)
     }
+
+    /// **The strip is the open microphone, not the key's red cap.**
+    /// `dictationKeyState.isRecording` is true through `.finishing` on purpose.
+    /// The strip used that flag and stayed up until the transcript landed.
+    @MainActor
+    func testTheStripHidesWhileTheKeyIsStillFinishing() {
+        let controller = KeyboardController(target: MockTextTarget(text: ""))
+        controller.isDictating = true
+        controller.pendingDictationInsert = true
+        controller.isDictating = false
+        XCTAssertEqual(controller.dictationKeyState, .finishing)
+        XCTAssertFalse(
+            WorkingProgressBar(controller: controller).showsWaveform,
+            "the strip followed the key's finishing red")
+    }
 }
 
 // MARK: - Helpers

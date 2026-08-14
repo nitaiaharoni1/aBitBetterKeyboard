@@ -66,10 +66,11 @@ final class CloudModelSettingNameTests: XCTestCase {
     /// its own at launch, on foreground and on a background wake-up, so the
     /// sentence reports that instead of assigning it.
     ///
-    /// `settingsPath` still names a real row, because the Debug URL and token
-    /// fields are still there and still reached that way.
+    /// `settingsPath` is leftover. Nothing may send a person there.
     func testTheRecoveryReportsRatherThanInstructs() {
-        XCTAssertEqual(BackendTransport.settingsPath, "Settings › AI › Cloud model")
+        XCTAssertFalse(
+            BackendTransport.setUpRecovery.contains(BackendTransport.settingsPath),
+            "recovery still points at a settings row that does not exist")
         XCTAssertEqual(
             BackendTransport.setUpRecovery, "aBitBetterKeyboard is reconnecting. Try again in a moment.")
         XCTAssertFalse(

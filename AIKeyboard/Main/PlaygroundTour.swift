@@ -43,7 +43,7 @@ enum PlaygroundTourStep: Int, CaseIterable {
         case .languageSwitch:
             return "Swipe sideways across the space bar to switch languages."
         case .reply:
-            return "Tap Reply to answer the sample message shown by the keyboard."
+            return "Tap Reply to answer what's on screen. Start screen context from Home first."
         case .send:
             return "Tap the orange send button. Then keep chatting as much as you like."
         }

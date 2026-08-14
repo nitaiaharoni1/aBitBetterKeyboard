@@ -3,16 +3,13 @@ import AIKeyboardCore
 
 struct PlaygroundView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("playgroundTourProgress") private var tourProgress = 0
-    @ObservedObject private var screenContext = ScreenContextSession.shared
     @StateObject private var target: MockTextTarget
     @StateObject private var controller: KeyboardController
 
     @State private var messages: [PlaygroundMessage] = []
     @State private var pendingAICompletion: PlaygroundTourStep?
     @State private var delayedAdvance: Task<Void, Never>?
-    @State private var originalScreenContextAllowed: Bool
 
     init() {
         let progress = UserDefaults.standard.integer(forKey: "playgroundTourProgress")
@@ -21,9 +18,6 @@ struct PlaygroundView: View {
         _target = StateObject(wrappedValue: document)
         _controller = StateObject(
             wrappedValue: KeyboardController(target: document, language: .english)
-        )
-        _originalScreenContextAllowed = State(
-            initialValue: SharedStore.shared.screenContextAllowed
         )
     }
 
@@ -52,28 +46,8 @@ struct PlaygroundView: View {
                         .font(Theme.Fonts.body.weight(.semibold))
                 }
             }
-            .onAppear(perform: prepareReplyDemoIfNeeded)
             .onDisappear {
                 delayedAdvance?.cancel()
-                if screenContext.source == .scripted {
-                    screenContext.stop()
-                }
-                restoreScreenContextPreference()
-            }
-            // **`onDisappear` is not the last word on a persisted setting.** The
-            // reply task switches `screenContextAllowed` on so the keyboard will
-            // offer Reply against the scripted session, and puts it back when the
-            // task ends or the sheet closes. Neither of those runs if iOS kills
-            // the app while this step is on screen, and what is left behind is a
-            // stored yes to screen context from somebody who only came to look at
-            // the playground. Backgrounding is the last moment guaranteed to run,
-            // so the flag goes back there and comes back on return.
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active {
-                    prepareReplyDemoIfNeeded()
-                } else {
-                    restoreScreenContextPreference()
-                }
             }
             .onChange(of: controller.lastInteraction) { _, interaction in
                 handle(interaction)
@@ -226,45 +200,22 @@ struct PlaygroundView: View {
     private func moveToNextTask() {
         guard let currentStep else { return }
         pendingAICompletion = nil
-        if currentStep == .reply, screenContext.source == .scripted {
-            screenContext.stop()
-        }
-        if currentStep == .reply {
-            restoreScreenContextPreference()
-        }
         controller.dismissOverlay()
         let next = currentStep.next
         tourProgress = next?.rawValue ?? PlaygroundTourStep.allCases.count
         target.text = next?.seedText ?? ""
         controller.refreshSuggestions()
-        prepareReplyDemoIfNeeded()
     }
 
     private func resetTour() {
         delayedAdvance?.cancel()
         pendingAICompletion = nil
         messages.removeAll()
-        if screenContext.source == .scripted {
-            screenContext.stop()
-        }
-        restoreScreenContextPreference()
         controller.dismissOverlay()
         controller.language = .english
         tourProgress = PlaygroundTourStep.fix.rawValue
         target.text = PlaygroundTourStep.fix.seedText
         controller.refreshSuggestions()
-    }
-
-    private func prepareReplyDemoIfNeeded() {
-        guard currentStep == .reply else { return }
-        SharedStore.shared.screenContextAllowed = true
-        if screenContext.source != .capture {
-            screenContext.start()
-        }
-    }
-
-    private func restoreScreenContextPreference() {
-        SharedStore.shared.screenContextAllowed = originalScreenContextAllowed
     }
 
     /// Shared with onboarding's last step so the two places that hand the user a

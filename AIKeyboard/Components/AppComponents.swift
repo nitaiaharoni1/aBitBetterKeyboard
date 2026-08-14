@@ -200,7 +200,7 @@ struct StatusCapsule: View {
 /// The small square icon tile that leads rows and info blocks. Resting state
 /// is the direction's small-icon-button look: a graphite glyph on an inset
 /// warm-canvas well with a hairline, matching the field/chip language of
-/// `CloudModelFieldSection` and the layout editor. Pass `tint` for state and
+/// the layout editor. Pass `tint` for state and
 /// AI moments — recording red, or brand orange where the row *is* the feature.
 struct IconBadge: View {
     let systemName: String

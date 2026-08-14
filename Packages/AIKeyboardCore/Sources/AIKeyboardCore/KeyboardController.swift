@@ -150,7 +150,14 @@ public final class KeyboardController: ObservableObject {
     /// `ScreenContextSession.lastReadWentUnanswered`.
     @Published public var screenReadWentUnanswered = false
 
-    @Published public var isDictating = false
+    /// The microphone is open and samples are being kept.
+    @Published public var isDictating = false {
+        didSet {
+            if !isDictating, !dictationLevels.isEmpty {
+                dictationLevels = []
+            }
+        }
+    }
     @Published public var dictationTranscript = ""
 
     /// Which way the transcript reads.
@@ -310,6 +317,8 @@ public final class KeyboardController: ObservableObject {
     /// `KeyboardController.replaceStreamedDictation`.
     var streamedDictation = ""
 
+    var isReplacingStreamedDictation = false
+
     /// True once the field has moved out from under what this recording streamed —
     /// the user typed, moved the caret, or the host rewrote it. No more partials
     /// are written after that, because each would land as a fresh copy rather than
@@ -333,7 +342,6 @@ public final class KeyboardController: ObservableObject {
     /// Spellings whose automatic swap the user already undid this session.
     /// Space must not put the same correction back. Folded, no timestamps.
     var undoneAutocorrectSpellings: Set<String> = []
-
 
     /// The last word written into the learned store, folded. Stops Return,
     /// a full stop, and the keyboard going away from counting the same open
@@ -446,16 +454,7 @@ public final class KeyboardController: ObservableObject {
         dictation.$levelTick
             .sink { [weak self] _ in
                 guard let self else { return }
-                guard self.isDictating else {
-                    // Freeze the last reading through `.finishing`, then drop it
-                    // once the key is idle again. Clearing on `!isDictating` made
-                    // the strip a flat dashed line for the second the words were
-                    // in flight.
-                    if !self.isDictationActive, !self.dictationLevels.isEmpty {
-                        self.dictationLevels = []
-                    }
-                    return
-                }
+                guard self.isDictating else { return }
                 var levels = self.dictationLevels
                 levels.append(self.dictation.level)
                 if levels.count > Self.dictationLevelHistory { levels.removeFirst() }
@@ -519,17 +518,19 @@ public final class KeyboardController: ObservableObject {
     ///
     /// A layout that is still unusable after the repair falls all the way back to
     /// the default, because a keyboard that cannot draw itself is not a state the
-    /// user can get out of from inside the keyboard.
-    public func apply(_ layout: KeyboardCustomization) {
+    /// user can get out of from inside the keyboard. A preview
+    /// (`allowingIncomplete`) skips the globe repair so the editor canvas matches
+    /// the model. The real keyboard still inserts it.
+    public func apply(_ layout: KeyboardCustomization, allowingIncomplete: Bool = false) {
         var repaired = layout
         let hasGlobe = (repaired.bottomRow + repaired.cursorRow).contains { $0.action == .globe }
-        if showsGlobeKey, !hasGlobe {
+        if showsGlobeKey, !hasGlobe, !allowingIncomplete {
             // Second from the start: beside the plane key and away from the space
             // bar, which is where it stood before `.settings` took that slot.
             let index = min(1, repaired.bottomRow.count)
             repaired.bottomRow.insert(SlotSpec(action: .globe, width: .units(1.0)), at: index)
         }
-        guard LayoutValidator.isUsable(repaired) else {
+        guard allowingIncomplete || LayoutValidator.isUsable(repaired) else {
             customization = .default
             return
         }

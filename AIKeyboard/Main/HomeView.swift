@@ -18,32 +18,33 @@ struct HomeView: View {
             ZStack {
                 AmbientBackground()
 
-                ScrollView {
-                    VStack(spacing: Theme.Space.lg) {
-                        if search.isSearching {
-                            AppSearchResults()
-                        } else {
-                            if !setup.isReady { setupCard }
-                            featureCard
-                            playgroundCard
-                            if !store.isSubscribed { upgradeCard }
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: Theme.Space.md) {
+                            if search.isSearching {
+                                AppSearchResults()
+                            } else {
+                                if !setup.isReady { setupCard }
+                                featureCard
+                                playgroundCard
+                                if !store.isSubscribed { upgradeCard }
+                            }
                         }
+                        .padding(.horizontal, Theme.Space.md)
+                        .padding(.bottom, Theme.Space.xl)
                     }
-                    .padding(.horizontal, Theme.Space.md)
-                    .padding(.bottom, Theme.Space.xl)
+                    .scrollDismissesKeyboard(.immediately)
+                    .onChange(of: search.highlightedRow) { _, row in
+                        guard let row, row.tab == .home else { return }
+                        scrollToHighlight(proxy)
+                    }
+                    .onAppear { scrollToHighlight(proxy) }
                 }
-                .scrollDismissesKeyboard(.immediately)
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
                 AppSearchHeader(title: "aBitBetterKeyboard", searchAccessibilityID: "app-search")
             }
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(item: $search.homePush) { push in
-                switch push {
-                case .dictation: DictationView()
-                case .screenContext: ScreenContextView()
-                }
-            }
             .sheet(isPresented: $search.showsPlayground) {
                 PlaygroundView()
             }
@@ -117,7 +118,8 @@ struct HomeView: View {
                     StatusRow(
                         title: "Add aBitBetterKeyboard",
                         detail: setup.keyboardAddedDetail,
-                        check: setup.keyboardAdded
+                        check: setup.keyboardAdded,
+                        singleLineDetail: true
                     )
                 }
 
@@ -125,7 +127,8 @@ struct HomeView: View {
                     StatusRow(
                         title: "Allow Full Access",
                         detail: "Settings › General › Keyboard › Keyboards › aBitBetterKeyboard",
-                        check: setup.fullAccess
+                        check: setup.fullAccess,
+                        singleLineDetail: true
                     )
                 }
 
@@ -206,5 +209,14 @@ struct HomeView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private func scrollToHighlight(_ proxy: ScrollViewProxy) {
+        guard let row = search.highlightedRow, row.tab == .home else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            withAnimation(Theme.Motion.quick) {
+                proxy.scrollTo(row, anchor: .center)
+            }
+        }
     }
 }

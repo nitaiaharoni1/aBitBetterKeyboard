@@ -278,10 +278,9 @@ public struct BackendTransport: CloudTransport {
     /// writer, a field titled "Where the screen is read" on the Screen Context
     /// screen. So a Hebrew Fix, Rewrite, Tone or Reply failed with "no cloud model
     /// is set up" and named nowhere to go, while the one place that could fix it
-    /// said it was about screen reading. `CloudModelView` is the row this names.
-    /// **Survives `setUpRecovery` sending users to the app instead of here**: the
-    /// URL field is still real, and it is what the Debug token row still sits
-    /// beside.
+    /// said it was about screen reading. The screen that name pointed at is
+    /// gone. Keep the string so old comments and the name test still resolve;
+    /// do not print it. Recovery is `setUpRecovery`.
     public static let settingsPath = "Settings › AI › Cloud model"
 
     /// The whole sentence, for the failures that have to say it:

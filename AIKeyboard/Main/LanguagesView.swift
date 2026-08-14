@@ -19,7 +19,7 @@ struct LanguagesView: View {
 
                 ScrollViewReader { proxy in
                     ScrollView {
-                        VStack(alignment: .leading, spacing: Theme.Space.lg) {
+                        VStack(alignment: .leading, spacing: Theme.Space.md) {
                             if search.isSearching {
                                 AppSearchResults(
                                     includeLanguages: false,

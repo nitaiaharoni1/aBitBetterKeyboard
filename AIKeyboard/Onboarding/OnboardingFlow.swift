@@ -120,36 +120,38 @@ struct OnboardingFlow: View {
         .padding(.top, Theme.Space.sm)
     }
 
+    /// Skip exists so a step that cannot be proven done can still be passed.
+    /// Palette hides it because a palette is always set, so Skip and Continue
+    /// would do the same thing. Welcome shows it, and that Skip leaves the tour.
+    private var showsSkip: Bool {
+        step != paletteStep && step < stepCount - 1
+    }
+
     private var footer: some View {
         VStack(spacing: 0) {
             Divider.themed
 
-            VStack(spacing: 0) {
+            HStack(spacing: Theme.Space.sm) {
+                if showsSkip {
+                    SecondaryButton(title: "Skip") {
+                        skipAction()
+                    }
+                }
                 PrimaryButton(title: primaryTitle) {
                     primaryAction()
-                }
-
-                // Skipping stays available even now that two of these steps can be
-                // verified, because the third cannot and because a user who has done
-                // the work in Settings but not yet switched to the keyboard has
-                // nothing the app can see. A step that cannot be proven done must not
-                // become a step that cannot be passed.
-                //
-                // The palette step is the exception, and it is the opposite case:
-                // there is nothing there to leave undone. A palette is always set,
-                // orange is the shipped default, and the step opens on it — so Skip
-                // and Continue would be two buttons doing exactly the same thing.
-                if step > 0 && step != paletteStep && step < stepCount - 1 {
-                    SecondaryButton(title: "Skip for now") {
-                        withAnimation { step += 1 }
-                    }
-                } else {
-                    Color.clear.frame(height: 48)
                 }
             }
             .padding(.horizontal, Theme.Space.lg)
             .padding(.top, Theme.Space.md)
             .padding(.bottom, Theme.Space.xs)
+        }
+    }
+
+    private func skipAction() {
+        if step == 0 {
+            store.hasCompletedOnboarding = true
+        } else {
+            withAnimation { step += 1 }
         }
     }
 

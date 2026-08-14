@@ -48,25 +48,27 @@ struct StatusRow: View {
     let check: SetupCheck
     var actionTitle = "Settings"
     var action: (() -> Void)?
+    var singleLineDetail = false
 
     var body: some View {
-        HStack(spacing: Theme.Space.sm) {
+        HStack(spacing: Theme.Space.xs) {
             Image(systemName: symbol)
                 .font(.system(size: 18))
                 .foregroundStyle(tint)
-                .frame(width: 24, alignment: .leading)
+                .frame(width: 18)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
                     .font(Theme.Fonts.body.weight(.medium))
                     .foregroundStyle(Theme.Text.primary)
                 Text(detail)
-                    .font(Theme.Fonts.caption)
+                    .font(singleLineDetail ? Theme.Fonts.micro : Theme.Fonts.caption)
                     .foregroundStyle(Theme.Text.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(singleLineDetail ? 1 : nil)
+                    .minimumScaleFactor(singleLineDetail ? 0.75 : 1)
+                    .fixedSize(horizontal: false, vertical: !singleLineDetail)
             }
-
-            Spacer(minLength: Theme.Space.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if check != .confirmed, let action {
                 Button(actionTitle, action: action)

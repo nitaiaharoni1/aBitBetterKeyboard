@@ -171,6 +171,13 @@ extension KeyboardController {
         recordDictationHandoff()
     }
 
+    func stopDictationIfHostSent(hadText: Bool) {
+        guard !isReplacingStreamedDictation else { return }
+        guard hadText, !documentHasText, deletedWordPrefix == nil else { return }
+        guard isDictating || pendingDictationInsert else { return }
+        stopDictation(insert: false)
+    }
+
     public func stopDictation(insert: Bool) {
         if insert, isDictating {
             pendingDictationInsert = true
@@ -325,6 +332,8 @@ extension KeyboardController {
         // deletes in.
         let old = streamedText
         let shared = old.commonPrefix(with: text)
+        isReplacingStreamedDictation = true
+        defer { isReplacingStreamedDictation = false }
         deleteBackward(utf16Units: old.utf16.count - shared.utf16.count)
         let fresh = String(text.dropFirst(shared.count))
         if !fresh.isEmpty { target?.insertText(fresh) }

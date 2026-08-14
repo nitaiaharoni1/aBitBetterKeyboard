@@ -82,6 +82,17 @@ extension KeyboardLayout {
             heightBias: -Theme.Metrics.rowHeightBias)
     }
 
+    /// The same `KeySpec` the keyboard would draw for this action, so the
+    /// editor's unused-key tray can show the real cap.
+    public static func previewKey(
+        for action: SlotAction, language: KeyboardLanguage = .english
+    ) -> KeySpec? {
+        compile(
+            [SlotSpec(action: action)], id: 0, language: language, plane: .letters,
+            showsGlobe: true
+        ).keys.first
+    }
+
     /// One editable row.
     ///
     /// **The plane keys are resolved here, not stored.** A stored

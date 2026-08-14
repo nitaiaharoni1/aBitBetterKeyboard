@@ -261,8 +261,7 @@ the app ships pointing at it — `BackendTransport.bundledDefaultURL`, which
 the state this paragraph used to describe, where every Hebrew AI action failed on
 every install for want of anywhere to send. What still does not ship is the
 **access token**: it gates that server, a bundle cannot hold a secret, and it is
-typed in at `Settings › AI › Cloud model` (`BackendTransport.settingsPath`)
-beside the address. So a fresh install is "not finished" rather than "not set up",
+filled by `AppAttestation`, not typed in. So a fresh install is "not finished" rather than "not set up",
 and the question every surface asks is `BackendTransport.isReady()` — *would a
 call be accepted* — not `configured() != nil`, which is true from the first launch
 and would credit a keyboard that 401s on every action. Every surface that depends

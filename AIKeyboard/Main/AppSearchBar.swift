@@ -40,7 +40,8 @@ struct AppSearchHeader: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Theme.Space.md)
-            .padding(.vertical, Theme.Space.xxs)
+            .padding(.top, Theme.Space.xxs)
+            .padding(.bottom, Theme.Space.xs)
 
             Rectangle()
                 .fill(Theme.Surface.separator)

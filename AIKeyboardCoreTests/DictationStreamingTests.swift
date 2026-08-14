@@ -236,6 +236,23 @@ final class DictationStreamingTests: XCTestCase {
             controller.streamedDictation, "",
             "the next recording would try to delete text this one no longer owns")
     }
+
+    func testAFullRewriteDoesNotLookLikeSendWhenTheHostReenters() {
+        let target = ReentrantEmptyTarget()
+        let controller = KeyboardController(target: target)
+        controller.isDictating = true
+        controller.streamDictation("hi")
+        XCTAssertEqual(target.text, "hi")
+        XCTAssertTrue(controller.documentHasText)
+
+        target.onEmptied = { controller.refreshSuggestions() }
+        controller.streamDictation("bye")
+
+        XCTAssertTrue(
+            controller.isDictating,
+            "a stream rewrite was taken as Send and cancelled the recording")
+        XCTAssertEqual(target.text, "bye", "the second reading never landed")
+    }
 }
 
 // MARK: - A field the keyboard can only partly read back
@@ -266,5 +283,23 @@ private final class WindowedTextTarget: TextTarget {
 
     func insertText(_ newText: String) { text.append(newText) }
     func deleteBackward() { if !text.isEmpty { text.removeLast() } }
+    func adjustTextPosition(byCharacterOffset offset: Int) {}
+}
+
+private final class ReentrantEmptyTarget: TextTarget {
+    var text = ""
+    var onEmptied: (() -> Void)?
+
+    var documentContextBeforeInput: String? { text }
+    var documentContextAfterInput: String? { "" }
+    var selectedText: String? { nil }
+    var isSecureTextEntry: Bool? { false }
+    var textContentType: UITextContentType?? { .some(.none) }
+
+    func insertText(_ newText: String) { text.append(newText) }
+    func deleteBackward() {
+        if !text.isEmpty { text.removeLast() }
+        if text.isEmpty { onEmptied?() }
+    }
     func adjustTextPosition(byCharacterOffset offset: Int) {}
 }

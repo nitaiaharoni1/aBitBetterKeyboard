@@ -23,8 +23,8 @@ import os
 /// the keyboard then opens and closes utterances inside a session that is
 /// already live. When no session is running, the keyboard's Open app
 /// chip asks the extension host to open this app via
-/// `extensionContext?.open(_:)`, and Home's Dictation screen starts the session
-/// automatically on arrival.
+/// `extensionContext?.open(_:)`, and Home starts the session automatically
+/// on arrival.
 ///
 /// **What has actually run.** The channel, the gate, the encoder and the
 /// transcription are exercised by tests and by `Bar/dictation/`. The

@@ -35,7 +35,10 @@ public struct WorkingProgressBar: View {
     ///
     /// A recording wins if both are somehow true, which they should not be:
     /// `run(_:)` and `runTone(_:)` both refuse while one is open.
-    var isRecording: Bool { controller.dictationKeyState.isRecording }
+    ///
+    /// `isDictating` only. The key's `isRecording` stays true through
+    /// `.finishing` so it does not flash Record. This strip must not.
+    var showsWaveform: Bool { controller.isDictating }
 
     /// **The same reserved slot, showing sound instead of progress — and taller,
     /// because three points cannot.** A recording has nothing to say about how
@@ -125,7 +128,7 @@ public struct WorkingProgressBar: View {
 
     public var body: some View {
         GeometryReader { geo in
-            if isRecording {
+            if showsWaveform {
                 waveform(width: geo.size.width)
             } else {
                 sweep(width: geo.size.width)
@@ -135,7 +138,7 @@ public struct WorkingProgressBar: View {
         .frame(height: barHeight)
         // Reserved at `recordingWaveformHeight` while the banner is down, so a
         // recording cannot move the keys. See `Theme.Metrics.recordingWaveformHeight`.
-        .opacity(controller.isWorking || isRecording ? 1 : 0)
+        .opacity(controller.isWorking || showsWaveform ? 1 : 0)
         .padding(.horizontal, Theme.Space.sm)
         // Pinned like every other control row in this keyboard: a slide along the
         // space bar changes language mid-call, and a bar that swept the other way
@@ -144,7 +147,7 @@ public struct WorkingProgressBar: View {
         .environment(\.layoutDirection, .leftToRight)
         .animation(Theme.Motion.quick, value: controller.isWorking)
         .animation(Theme.Motion.quick, value: controller.showsActionBanner)
-        .animation(Theme.Motion.press, value: isRecording)
+        .animation(showsWaveform ? Theme.Motion.press : nil, value: showsWaveform)
         .animation(.easeOut(duration: 0.08), value: controller.dictationLevels)
         // **The one thing a VoiceOver user lost with the strip.** The banner said
         // "Fix, working" out loud; a sweeping capsule says nothing at all, and the
@@ -155,9 +158,9 @@ public struct WorkingProgressBar: View {
         // on the container alone has nothing to attach to and the row stays absent
         // from the tree — the same silence it is here to fix.
         .accessibilityElement(children: .ignore)
-        .accessibilityHidden(!controller.isWorking && !isRecording)
+        .accessibilityHidden(!controller.isWorking && !showsWaveform)
         .accessibilityLabel(
-            isRecording ? "Recording" : "\(controller.runningAction?.title ?? "Working"), working"
+            showsWaveform ? "Recording" : "\(controller.runningAction?.title ?? "Working"), working"
         )
         .accessibilityIdentifier("bar-working")
     }

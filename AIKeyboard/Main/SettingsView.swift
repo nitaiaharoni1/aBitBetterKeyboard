@@ -18,7 +18,7 @@ struct SettingsView: View {
 
                 ScrollViewReader { proxy in
                     ScrollView {
-                        VStack(alignment: .leading, spacing: Theme.Space.lg) {
+                        VStack(alignment: .leading, spacing: Theme.Space.md) {
                             if search.isSearching {
                                 AppSearchResults()
                             } else {
@@ -58,7 +58,6 @@ struct SettingsView: View {
             .navigationDestination(item: $search.settingsPush) { push in
                 switch push {
                 case .subscription: SubscriptionView()
-                case .cloudModel: CloudModelView()
                 }
             }
         }

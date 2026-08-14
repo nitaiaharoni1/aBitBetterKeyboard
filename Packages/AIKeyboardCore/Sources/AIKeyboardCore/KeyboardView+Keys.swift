@@ -25,10 +25,12 @@ extension KeyboardView {
                 columns: columns
             )
             let available = gridWidth - Theme.Metrics.sideInset * 2
+            // The editor still draws a globe the user placed from the tray. The
+            // device flag stays false so `apply` does not invent one.
             let rows = KeyboardLayout.rows(
                 for: controller.language,
                 plane: controller.plane,
-                showsGlobe: controller.showsGlobeKey,
+                showsGlobe: controller.showsGlobeKey || isEditingLayout,
                 customization: layout,
                 grouping: grouping
             )
@@ -286,6 +288,14 @@ extension KeyboardView {
                 onAlternate: alternateHandler(for: key),
                 onSpaceTouch: key.cap == .space ? { controller.spaceBarTouch($0) } : nil
             )
+            .modifier(
+                LayoutJiggle(
+                    enabled: isEditingLayout
+                        && (row.id == KeyboardLayout.RowID.bottom
+                            || row.id == KeyboardLayout.RowID.cursor),
+                    phase: index
+                )
+            )
             .background {
                 GeometryReader { proxy in
                     Color.clear.preference(
@@ -318,5 +328,23 @@ extension KeyboardView {
             controller.deleteBackward()
             controller.press(.character(alternate))
         }
+    }
+}
+
+/// Small repeating tilt on editable keys. Letters stay still. Preference
+/// frames are measured outside this rotation so `KeyFramesKey` stays stable.
+private struct LayoutJiggle: ViewModifier {
+    let enabled: Bool
+    let phase: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var outward = false
+
+    func body(content: Content) -> some View {
+        let active = enabled && !reduceMotion
+        let sign: Double = phase.isMultiple(of: 2) ? 1 : -1
+        content
+            .rotationEffect(.degrees(active ? (outward ? 1.2 : -1.2) * sign : 0))
+            .animation(active ? Theme.Motion.jiggle : nil, value: outward)
+            .onAppear { outward = true }
     }
 }

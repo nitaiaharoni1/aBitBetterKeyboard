@@ -49,7 +49,7 @@ struct SubscriptionView: View {
             AmbientBackground()
 
             ScrollView {
-                VStack(spacing: Theme.Space.lg) {
+                VStack(spacing: Theme.Space.md) {
                     hero
                     featureList
                     planPicker

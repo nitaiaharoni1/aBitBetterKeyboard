@@ -21,7 +21,7 @@ struct StepLayout<Content: View>: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
-                HStack(alignment: .top, spacing: Theme.Space.md) {
+                VStack(alignment: .leading, spacing: Theme.Space.md) {
                     if let icon {
                         iconWell(icon)
                     }

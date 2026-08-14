@@ -28,7 +28,7 @@ struct SwitchStep: View {
             }
 
             if !setup.switchAcknowledged {
-                VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
                     ExplainerStepRow(
                         number: 1,
                         title: "Open any app with a text field",
@@ -54,6 +54,7 @@ struct SwitchStep: View {
                     )
                     .padding(.vertical, Theme.Space.sm)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }

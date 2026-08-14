@@ -239,31 +239,12 @@ final class DemoWalkthroughTests: XCTestCase {
 
         capture("home-context-off")
 
-        tap(element("home-screen-context"), "screen context card")
-        settle(1.0)
-        capture("screen-context-off")
-
-        // The sample conversation, not a real session: starting one of those
-        // needs `RPSystemBroadcastPickerView`, whose button is system-vended and
-        // does nothing here — the simulator runtime ships no `replayd`, so no
-        // broadcast can start on this destination at all.
-        let sample = app.buttons["Play a sample conversation"]
-        XCTAssertTrue(sample.waitForExistence(timeout: 6), "missing element: sample conversation")
-        if !sample.isHittable { app.swipeUp() }
-        tap(sample, "play the sample conversation")
-        settle(3.2)
-        capture("screen-context-live")
-
-        // Back to home, then into the keyboard with the session running.
-        tap(app.navigationBars.buttons.element(boundBy: 0), "back")
-        settle(1.0)
-        capture("home-context-live")
+        XCTAssertTrue(
+            element("screen-context-start-broadcast").waitForExistence(timeout: 6),
+            "missing element: screen context start")
 
         tap(element("home-playground"), "playground card")
         settle(1.4)
-        // The banner, not a separate strip. `ScreenContextStrip` was a 30pt row
-        // that appeared and disappeared with the session; `ActionBanner` carries
-        // the live reading when there is one (and is omitted while idle).
         capture("keyboard-context-banner")
 
         // And Reply is a key in the action row rather than a button inside the
@@ -283,9 +264,10 @@ final class DemoWalkthroughTests: XCTestCase {
         app.launch()
         skipOnboardingIfPresent()
 
-        tap(element("home-dictation"), "Dictation row")
-        settle()
-        capture("dictation")
+        XCTAssertTrue(
+            element("dictation-start").waitForExistence(timeout: 6),
+            "missing element: dictation start")
+        capture("home-dictation")
 
         tap(app.tabBars.buttons["Languages"], "Languages tab")
         settle()

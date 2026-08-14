@@ -32,11 +32,11 @@ sets no temperature at all, so `/v1/screen` and `/v1/audio` send it and
 That asymmetry is the point; sending 0 on all three would look tidier and would
 mean every text action ran a configuration the ai-text corpus never graded.
 Shared by all three: a `responseSchema` built from `fields` with `propertyOrdering` preserved
-(`src/schema.js`), and `thinkingConfig.thinkingBudget: 512` — capped, not off:
-0 breaks the Hebrew/English code-switching this product exists for, and
-unbounded pushes the tail to 17–18s (see `VertexTransport.swift`'s comment on
-`thinkingBudget` for the numbers that measurement produced; `src/vertexClient.js`
-matches it).
+(`src/schema.js`), and `thinkingConfig.thinkingBudget: 0` on
+`gemini-3.5-flash-lite` — measured 2026-08-14, thinking off kept Latin
+loanwords and cut Fix to ~1.2s. On `gemini-2.5-flash`, 0 transliterated
+`sync` into `סִינְק`; that is a different model. `src/vertexClient.js`
+and `VertexTransport.swift` match.
 
 Vertex's response comes back as one JSON object. Every value in it is either
 already a string or gets `JSON.stringify`'d into one before it reaches the
@@ -80,7 +80,7 @@ way: both decode to the identical `AIEngineError.refused`.
 ```bash
 cd Backend
 gcloud auth login                      # once — the token this borrows is yours
-PROJECT=handi-project node server.js   # PROJECT defaults to handi-project, MODEL to gemini-2.5-flash
+PROJECT=handi-project node server.js   # PROJECT defaults to handi-project, MODEL to gemini-3.5-flash-lite
 ```
 
 Whichever account `gcloud auth print-access-token` resolves to needs
@@ -120,8 +120,8 @@ BACKEND_TOKEN=... PROJECT=handi-project REGION=europe-west1 ./deploy.sh
 **Live since 2026-08-10** at
 `https://aikeyboard-backend-cq6zxsdx5a-ew.a.run.app`, in `handi-project`,
 `europe-west1`. That address is the one the app ships pointing at
-(`BackendTransport.bundledDefaultURL`); the token is not in the bundle and is
-typed into `Settings › AI › Cloud model`. Deploying it took two grants this
+(`BackendTransport.bundledDefaultURL`); the token is not in the bundle.
+`AppAttestation` fills it. Deploying it took two grants this
 README did not mention and `deploy.sh` does not make: `cloudbuild.googleapis.com`
 had never been enabled on the project, and the Cloud Build default service
 account (`<projectNumber>-compute@developer.gserviceaccount.com`) needed

@@ -25,9 +25,11 @@ public struct KeyboardView: View {
     // would compile only while the keys lived in this same file.
     @ObservedObject var controller: KeyboardController
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    var isEditingLayout: Bool
 
-    public init(controller: KeyboardController) {
+    public init(controller: KeyboardController, isEditingLayout: Bool = false) {
         self.controller = controller
+        self.isEditingLayout = isEditingLayout
     }
 
     public var body: some View {

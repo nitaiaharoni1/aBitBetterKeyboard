@@ -33,7 +33,7 @@
 #
 # The token is passed in, never stored here. It is the service's own bearer
 # (`Backend/src/gate.js`), the same value that goes into the app under
-# `Settings › AI › Cloud model`, and it is deliberately not in the repo for the
+# the Cloud Run service, and it is deliberately not in the repo for the
 # same reason it is not in the bundle.
 
 set -uo pipefail

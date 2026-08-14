@@ -181,6 +181,18 @@ final class CustomKeyActionTests: XCTestCase {
         XCTAssertFalse(controller.customization.bottomRow.contains { $0.action == .globe })
     }
 
+    /// The editor canvas is a preview. Inventing a globe there draws a key the
+    /// model does not own, so drops land one slot to the right of the finger.
+    func testAPreviewApplyDoesNotInventAGlobe() {
+        let (controller, _) = controller()
+        var without = KeyboardCustomization.default
+        without.bottomRow.removeAll { $0.action == .globe }
+        controller.apply(without, allowingIncomplete: true)
+        XCTAssertFalse(
+            controller.customization.bottomRow.contains { $0.action == .globe },
+            "a preview apply inserted a globe the editor does not own")
+    }
+
     /// **`showsGlobeKey = false`, because no preset carries a globe any more.**
     /// With it left true, `apply` correctly inserts one and this test fails for the
     /// repair rather than for the thing it is about, which is that a layout needing

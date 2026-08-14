@@ -16,7 +16,7 @@ function okResponse(fieldsObject = {}) {
   );
 }
 
-test("the request matches the measured shape: endpoint, systemInstruction, one user turn, no temperature on the text path, capped thinking, propertyOrdering, bearer token", async () => {
+test("the request matches the measured shape: endpoint, systemInstruction, one user turn, no temperature on the text path, thinking off, propertyOrdering, bearer token", async () => {
   let captured;
   const fetchImpl = async (url, init) => {
     captured = { url, init };
@@ -47,7 +47,7 @@ test("the request matches the measured shape: endpoint, systemInstruction, one u
   // which sets none. See the dedicated test at the end of this file.
   assert.ok(!("temperature" in body.generationConfig));
   assert.equal(body.generationConfig.responseMimeType, "application/json");
-  assert.equal(body.generationConfig.thinkingConfig.thinkingBudget, 512);
+  assert.equal(body.generationConfig.thinkingConfig.thinkingBudget, 0);
   assert.deepEqual(body.generationConfig.responseSchema.propertyOrdering, ["reply"]);
   assert.equal(captured.init.headers.authorization, "Bearer test-token");
 });
@@ -224,8 +224,8 @@ test("a screen read sends temperature 0 and a text action sends none", async () 
     "the ai-text corpus was scored with no temperature set; sending 0 ships an ungraded config"
   );
   // The knob that IS shared, so this test cannot pass by dropping both.
-  assert.equal(bodies[0].generationConfig.thinkingConfig.thinkingBudget, 512);
-  assert.equal(bodies[1].generationConfig.thinkingConfig.thinkingBudget, 512);
+  assert.equal(bodies[0].generationConfig.thinkingConfig.thinkingBudget, 0);
+  assert.equal(bodies[1].generationConfig.thinkingConfig.thinkingBudget, 0);
 });
 
 // MARK: - The audio path

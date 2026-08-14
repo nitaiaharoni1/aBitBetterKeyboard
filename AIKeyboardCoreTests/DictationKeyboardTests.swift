@@ -467,6 +467,77 @@ final class DictationKeyboardTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(recorder.request()).wantsRecording())
     }
 
+    func testSendWhileRecordingDoesNotInsertTheTranscript() throws {
+        let id = beginLiveSession()
+        session.poll()
+        controller.startDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+
+        try recorder.publishPartial(
+            DictationPartialRecord(
+                sessionID: id, utterance: utterance, sequence: 1, text: "hi", seconds: 1.5))
+        session.poll()
+        XCTAssertFalse(target.text.isEmpty, "nothing was streamed, so emptying proves nothing")
+        XCTAssertTrue(controller.isDictating)
+
+        target.text = ""
+        controller.refreshSuggestions()
+
+        XCTAssertFalse(controller.isDictating)
+
+        try recorder.publish(
+            DictationTranscriptRecord(
+                sessionID: id, utterance: utterance, text: "hi there",
+                recordedAt: 1, completedAt: 2, seconds: 3))
+        session.poll()
+
+        XCTAssertEqual(target.text, "", "the cloud sentence landed in a field the host had emptied")
+    }
+
+    func testSendWhileFinishingDoesNotInsertTheTranscript() throws {
+        let id = beginLiveSession()
+        session.poll()
+        controller.startDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+
+        try recorder.publishPartial(
+            DictationPartialRecord(
+                sessionID: id, utterance: utterance, sequence: 1, text: "hi", seconds: 1.5))
+        session.poll()
+        XCTAssertFalse(target.text.isEmpty, "nothing was streamed, so emptying proves nothing")
+
+        controller.stopDictation(insert: true)
+        target.text = ""
+        controller.refreshSuggestions()
+
+        try recorder.publish(
+            DictationTranscriptRecord(
+                sessionID: id, utterance: utterance, text: "hi there",
+                recordedAt: 1, completedAt: 2, seconds: 3))
+        session.poll()
+
+        XCTAssertEqual(target.text, "", "a finishing insert typed a sent message back")
+    }
+
+    func testBackspaceToEmptyKeepsTheRecording() throws {
+        let id = beginLiveSession()
+        session.poll()
+        controller.startDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+
+        try recorder.publishPartial(
+            DictationPartialRecord(
+                sessionID: id, utterance: utterance, sequence: 1, text: "hi", seconds: 1.5))
+        session.poll()
+        XCTAssertFalse(target.text.isEmpty, "nothing was streamed, so the delete proves nothing")
+
+        controller.deletePreviousWord()
+        XCTAssertEqual(target.text, "")
+        XCTAssertTrue(
+            controller.isDictating,
+            "backspace-to-empty stopped the recording as if it were Send")
+    }
+
     /// **`dismissOverlay()` calls `stopDictation` on every panel close**, so
     /// closing the emoji grid used to take the channel's write lock and bump a
     /// sequence in a shared page. It must do nothing at all when dictation was
@@ -569,6 +640,29 @@ final class DictationKeyboardTests: XCTestCase {
                 recordedAt: 1, completedAt: 2, seconds: 1))
         session.poll()
         XCTAssertEqual(target.text, "noted", "the ignored tap threw the sentence away")
+    }
+
+    /// **The red strip is the open microphone, not the transcription in flight.**
+    /// `dictationKeyState.isRecording` stays true through `.finishing` so the
+    /// key does not flash Record. The strip used that same flag, so pause left
+    /// a frozen waveform up until the cloud transcript landed.
+    func testTheRecordingStripHidesTheMomentPauseIsTapped() throws {
+        beginLiveSession()
+        session.poll()
+        controller.toggleDictation()
+        recorder.setLevel(0.1)
+        session.poll()
+        XCTAssertFalse(
+            controller.dictationLevels.isEmpty, "the recording never reached the waveform")
+
+        controller.toggleDictation()
+        XCTAssertEqual(controller.dictationKeyState, .finishing)
+        XCTAssertFalse(
+            WorkingProgressBar(controller: controller).showsWaveform,
+            "the red strip stayed up while the last words were in flight")
+        XCTAssertTrue(
+            controller.dictationLevels.isEmpty,
+            "frozen levels kept the last waveform drawn through finishing")
     }
 
     /// **`$level` is Equatable and drops a held note.** The waveform is a history

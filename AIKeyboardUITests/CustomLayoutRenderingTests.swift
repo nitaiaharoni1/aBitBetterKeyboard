@@ -119,25 +119,18 @@ final class CustomLayoutRenderingTests: XCTestCase {
             "one-handed Left hugged the right under Hebrew: the alignment mirrored")
     }
 
-    /// The editor refuses to remove the key iOS requires, and says why. The
-    /// refusal has to be visible *before* the tap, not as an error after it.
-    func testTheGlobeKeyCannotBeRemoved() throws {
+    /// Space is required. The X badge is absent, not disabled after the tap.
+    func testTheSpaceBarCannotBeRemoved() throws {
         try openLayoutEditor()
-
-        // The row is one accessibility element, not a container with buttons in
-        // it: SwiftUI merges the label, the two move buttons and the width into a
-        // single Button, so a nested `.buttons` query finds nothing to tap.
-        let globeRow = element("slot-Next keyboard")
-        XCTAssertTrue(globeRow.waitForExistence(timeout: 5), "the globe row is not listed")
-        globeRow.tap()
-
-        let remove = element("inspector-remove")
-        XCTAssertTrue(remove.waitForExistence(timeout: 5), "the inspector never opened")
-        XCTAssertFalse(remove.isEnabled, "the globe key offered to remove itself")
         XCTAssertTrue(
-            app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'iOS requires'"))
-                .firstMatch.exists,
-            "the refusal does not say why")
+            element("canvas-Space").waitForExistence(timeout: 5),
+            "the space bar is not on the canvas")
+        XCTAssertTrue(
+            element("remove-Settings").waitForExistence(timeout: 5),
+            "no remove badges drew, so a missing Space X proves nothing")
+        XCTAssertFalse(
+            element("remove-Space").exists,
+            "the space bar offered to remove itself")
     }
 
     // MARK: Driving the editor
@@ -149,24 +142,39 @@ final class CustomLayoutRenderingTests: XCTestCase {
             throw XCTSkip("the Layout row never appeared")
         }
         row.tap()
-        guard element("preset-default").waitForExistence(timeout: 10) else {
+        guard element("layout-done").waitForExistence(timeout: 10) else {
             throw XCTSkip("the layout editor never opened")
         }
     }
 
+    private func openOptions() {
+        let options = element("layout-options")
+        guard options.waitForExistence(timeout: 5) else { return }
+        options.tap()
+    }
+
+    private func closeOptions() {
+        let done = element("layout-options-done")
+        if done.waitForExistence(timeout: 3) { done.tap() }
+    }
+
     private func selectPreset(_ id: String) throws {
         try openLayoutEditor()
+        openOptions()
         let card = element("preset-\(id)")
         XCTAssertTrue(card.waitForExistence(timeout: 5), "no \(id) preset card")
         card.tap()
+        closeOptions()
         commitLayout()
     }
 
     private func setReach(_ label: String) throws {
         try openLayoutEditor()
+        openOptions()
         let picker = element("layout-reach")
         XCTAssertTrue(picker.waitForExistence(timeout: 5), "no one-handed picker")
         picker.buttons[label].tap()
+        closeOptions()
         commitLayout()
     }
 
@@ -275,11 +283,22 @@ final class CustomLayoutTypesIntoHostTests: KeyboardExtensionTestCase {
         }
         row.tap()
 
+        let options = app.descendants(matching: .any)
+            .matching(identifier: "layout-options").firstMatch
+        guard options.waitForExistence(timeout: 5) else {
+            throw XCTSkip("the Options button never appeared")
+        }
+        options.tap()
+
         let card = app.descendants(matching: .any).matching(identifier: "preset-power").firstMatch
         guard card.waitForExistence(timeout: 10) else {
             throw XCTSkip("the layout editor never opened")
         }
         card.tap()
+
+        let sheetDone = app.descendants(matching: .any)
+            .matching(identifier: "layout-options-done").firstMatch
+        if sheetDone.waitForExistence(timeout: 3) { sheetDone.tap() }
 
         let done = app.descendants(matching: .any).matching(identifier: "layout-done").firstMatch
         XCTAssertTrue(done.waitForExistence(timeout: 5))

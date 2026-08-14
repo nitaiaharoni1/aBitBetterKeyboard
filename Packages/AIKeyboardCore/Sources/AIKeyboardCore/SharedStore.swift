@@ -410,9 +410,9 @@ public final class SharedStore: ObservableObject {
     /// Opens the containing app directly on its Settings tab.
     public static let settingsURL = URL(string: "aikeyboard://settings")!
 
-    /// Opens the containing app on the Screen Context screen, where the user
-    /// can tap Apple's Start Broadcast button. The keyboard cannot present
-    /// that picker over itself.
+    /// Opens the containing app on Home, where the user can tap Apple's
+    /// Start Broadcast button. The keyboard cannot present that picker
+    /// over itself.
     public static let screenContextURL = URL(string: "aikeyboard://screen-context")!
 
     /// Records a timestamped intent for the app to start a dictation session.

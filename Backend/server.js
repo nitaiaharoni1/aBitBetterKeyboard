@@ -16,7 +16,7 @@ import { createVertexClient } from "./src/vertexClient.js";
 const execFileAsync = promisify(execFile);
 
 const project = process.env.PROJECT || "handi-project";
-const model = process.env.MODEL || "gemini-2.5-flash";
+const model = process.env.MODEL || "gemini-3.5-flash-lite";
 const port = Number(process.env.PORT) || 8080;
 
 const tokenProvider = createTokenProvider({

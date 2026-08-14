@@ -8,8 +8,8 @@ import Foundation
 /// the app talks to `BackendTransport` instead and lets a backend own the key.
 /// It lives under `Bar/`, which no target compiles.
 ///
-/// Model choice is deliberate: `gemini-2.5-flash`, thinking on but capped. See
-/// `thinkingBudget` for why both halves of that matter.
+/// Model choice matches the shipping backend: `gemini-3.5-flash-lite`,
+/// thinking off. See `thinkingBudget`.
 struct VertexTransport: CloudTransport {
     let projectID: String
     let accessToken: String
@@ -19,7 +19,7 @@ struct VertexTransport: CloudTransport {
     init(
         projectID: String,
         accessToken: String,
-        model: String = "gemini-2.5-flash",
+        model: String = "gemini-3.5-flash-lite",
         session: URLSession = .shared
     ) {
         self.projectID = projectID
@@ -38,7 +38,7 @@ struct VertexTransport: CloudTransport {
         return VertexTransport(
             projectID: project,
             accessToken: token,
-            model: environment["VERTEX_MODEL"] ?? "gemini-2.5-flash"
+            model: environment["VERTEX_MODEL"] ?? "gemini-3.5-flash-lite"
         )
     }
 
@@ -46,17 +46,12 @@ struct VertexTransport: CloudTransport {
     /// overrides it; `-1` is Vertex's own value for dynamic thinking, which is
     /// what the model does when no budget is set at all.
     ///
-    /// 512 is measured, and it is a cap rather than an off switch. Turning
-    /// thinking off entirely (`0`) is what breaks this product: the model then
-    /// transliterates Latin-script loanwords into Hebrew — `sync` becomes
-    /// `סִינְק` — and no instruction talks it out of that. Capping it does not.
-    /// Over the full corpus, dynamic thinking scored 42 to 45 out of 58 with the
-    /// cloud tail at 17 to 18 seconds; capped at 512 it scored 46 and 49 with
-    /// the cloud tail at 4.4 seconds and loanword preservation unchanged. The
-    /// tail is why this matters: eighteen seconds inside a keyboard is not a
-    /// feature, and it turned out to cost nothing to remove.
+    /// Off, matching `Backend/src/vertexClient.js`. Measured 2026-08-14 on
+    /// `gemini-3.5-flash-lite`: thinking 0 kept Latin loanwords and cut Fix
+    /// to ~1.2s. On `gemini-2.5-flash`, 0 transliterated `sync` into `סִינְק`
+    /// and a 512 cap was the fix; do not put that 512 back on Lite.
     static var thinkingBudget: Int {
-        ProcessInfo.processInfo.environment["VERTEX_THINKING_BUDGET"].flatMap(Int.init) ?? 512
+        ProcessInfo.processInfo.environment["VERTEX_THINKING_BUDGET"].flatMap(Int.init) ?? 0
     }
 
     func send(_ request: CloudRequest) async throws -> [String: String] {
