@@ -36,6 +36,7 @@ final class AppSearch: ObservableObject {
     }
 
     func dismiss() {
+        guard isSearching else { return }
         query = ""
         resignFocus += 1
     }

@@ -2,11 +2,29 @@ import AIKeyboardCore
 import SwiftUI
 import UIKit
 
-enum MainTab: Hashable {
+enum MainTab: Hashable, CaseIterable {
     case home
     case languages
     case keys
     case settings
+
+    var title: String {
+        switch self {
+        case .home: "Home"
+        case .languages: "Languages"
+        case .keys: "Keys"
+        case .settings: "Settings"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .home: "house.fill"
+        case .languages: "globe"
+        case .keys: "keyboard.fill"
+        case .settings: "gearshape.fill"
+        }
+    }
 }
 
 private struct SelectedMainTabKey: EnvironmentKey {
@@ -25,25 +43,17 @@ struct MainTabView: View {
     @EnvironmentObject private var search: AppSearch
 
     var body: some View {
-        TabView(selection: $selection) {
-            HomeView()
-                .tabItem { Label("Home", systemImage: "house.fill") }
-                .tag(MainTab.home)
-
-            LanguagesView()
-                .tabItem { Label("Languages", systemImage: "globe") }
-                .tag(MainTab.languages)
-
-            KeysView()
-                .tabItem { Label("Keys", systemImage: "keyboard.fill") }
-                .tag(MainTab.keys)
-
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape.fill") }
-                .tag(MainTab.settings)
+        ZStack {
+            tab(.home) { HomeView() }
+            tab(.languages) { LanguagesView() }
+            tab(.keys) { KeysView() }
+            tab(.settings) { SettingsView() }
         }
-        .background(TabTransitionDisabler())
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            MainTabBar(selection: $selection)
+        }
         .environment(\.selectedMainTab, selection)
+        .animation(nil, value: selection)
         .onChange(of: search.pendingTab) { _, tab in
             guard let tab else { return }
             selection = tab
@@ -58,165 +68,98 @@ struct MainTabView: View {
             }
         }
     }
+
+    /// Pages stay mounted. `TabView` is the system crossfade, and that is the flicker.
+    private func tab<Content: View>(
+        _ tab: MainTab, @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .opacity(selection == tab ? 1 : 0)
+            .allowsHitTesting(selection == tab)
+            .accessibilityHidden(selection != tab)
+    }
 }
 
-private struct TabTransitionDisabler: UIViewControllerRepresentable {
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
+private struct MainTabBar: View {
+    @Binding var selection: MainTab
 
-    func makeUIViewController(context: Context) -> ProbeViewController {
-        ProbeViewController { controller in
-            context.coordinator.attach(from: controller)
-        }
-    }
-
-    func updateUIViewController(_ controller: ProbeViewController, context: Context) {
-        DispatchQueue.main.async { [weak controller, weak coordinator = context.coordinator] in
-            guard let controller, let coordinator else { return }
-            coordinator.attach(from: controller)
-        }
-    }
-
-    static func dismantleUIViewController(
-        _ controller: ProbeViewController, coordinator: Coordinator
-    ) {
-        coordinator.dismantle()
-    }
-
-    final class Coordinator: NSObject {
-        private let delegate = TabBarDelegateProxy()
-        private weak var tabBarController: UITabBarController?
-        private var isDismantled = false
-
-        func attach(from controller: UIViewController) {
-            guard !isDismantled, controller.parent != nil else { return }
-            guard let tabBarController = findTabBarController(from: controller) else { return }
-            guard
-                self.tabBarController !== tabBarController
-                    || tabBarController.delegate !== delegate
-            else { return }
-
-            detach()
-            delegate.previousDelegate = tabBarController.delegate
-            tabBarController.delegate = delegate
-            self.tabBarController = tabBarController
-        }
-
-        func dismantle() {
-            isDismantled = true
-            detach()
-        }
-
-        func detach() {
-            guard let tabBarController else { return }
-            if tabBarController.delegate === delegate {
-                tabBarController.delegate = delegate.previousDelegate
-            }
-            delegate.previousDelegate = nil
-            self.tabBarController = nil
-        }
-
-        private func findTabBarController(
-            from controller: UIViewController
-        )
-            -> UITabBarController?
-        {
-            var ancestor: UIViewController? = controller
-            while let current = ancestor {
-                if let tabBarController = current as? UITabBarController {
-                    return tabBarController
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(MainTab.allCases, id: \.self) { tab in
+                Button {
+                    selection = tab
+                } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: tab.systemImage)
+                            .font(.system(size: 17, weight: .semibold))
+                        Text(tab.title)
+                            .font(Theme.Fonts.micro)
+                    }
+                    .foregroundStyle(selection == tab ? Theme.Brand.solid : Theme.Text.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Theme.Space.xs)
+                    .background {
+                        if selection == tab {
+                            Capsule().fill(Theme.Brand.solid.opacity(0.12))
+                        }
+                    }
+                    .contentShape(Rectangle())
                 }
-                ancestor = current.parent
+                .buttonStyle(.plain)
+                .accessibilityLabel(tab.title)
+                .accessibilityAddTraits(selection == tab ? [.isSelected] : [])
             }
-
-            return findTabBarController(in: controller.viewIfLoaded?.window?.rootViewController)
         }
-
-        private func findTabBarController(
-            in controller: UIViewController?
-        )
-            -> UITabBarController?
-        {
-            guard let controller else { return nil }
-            if let tabBarController = controller as? UITabBarController {
-                return tabBarController
-            }
-            for child in controller.children {
-                if let tabBarController = findTabBarController(in: child) {
-                    return tabBarController
-                }
-            }
-            return findTabBarController(in: controller.presentedViewController)
-        }
+        .background { TabBarAccessibilityProbe() }
+        .padding(Theme.Space.xxs)
+        .tabBarGlass()
+        .padding(.horizontal, Theme.Space.md)
+        .padding(.bottom, -Theme.Space.sm)
     }
+}
 
-    final class ProbeViewController: UIViewController {
-        private let attach: (UIViewController) -> Void
-
-        init(attach: @escaping (UIViewController) -> Void) {
-            self.attach = attach
-            super.init(nibName: nil, bundle: nil)
-            view.isUserInteractionEnabled = false
-        }
-
-        @available(*, unavailable)
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) is unavailable")
-        }
-
-        override func didMove(toParent parent: UIViewController?) {
-            super.didMove(toParent: parent)
-            attach(self)
-        }
-
-        override func viewDidAppear(_ animated: Bool) {
-            super.viewDidAppear(animated)
-            attach(self)
+private extension View {
+    @ViewBuilder
+    func tabBarGlass() -> some View {
+        if #available(iOS 26, *) {
+            self.glassEffect(.regular.interactive(), in: Capsule())
+        } else {
+            self.background(.ultraThinMaterial, in: Capsule())
         }
     }
 }
 
-/// Swaps the page instead of letting iOS animate it.
-///
-/// **A zero-duration `UIViewControllerAnimatedTransitioning` is the wrong tool
-/// here, measured rather than assumed.** It swaps the page out of band while
-/// UIKit still runs its own pass, and the recording of that build shows the
-/// target tab, then the tab you left, then the target again. Taking the
-/// selection instead means there is one swap and nothing to animate.
-private final class TabBarDelegateProxy: NSObject, UITabBarControllerDelegate {
-    weak var previousDelegate: UITabBarControllerDelegate?
-
-    func tabBarController(
-        _ tabBarController: UITabBarController, shouldSelect viewController: UIViewController
-    ) -> Bool {
-        if previousDelegate?.tabBarController?(tabBarController, shouldSelect: viewController)
-            == false
-        {
-            return false
-        }
-        guard
-            let index = tabBarController.viewControllers?.firstIndex(of: viewController),
-            index != tabBarController.selectedIndex
-        else { return false }
-
-        // Assigning `selectedIndex` does not consult this method again, and it
-        // does call `didSelect`, which is what carries the change back into
-        // SwiftUI's `TabView` selection binding.
-        UIView.performWithoutAnimation {
-            tabBarController.selectedIndex = index
-        }
-        return false
+/// XCUITest finds `app.tabBars.buttons["Languages"]` on a real tab bar trait.
+private struct TabBarAccessibilityProbe: UIViewRepresentable {
+    func makeUIView(context: Context) -> TabBarTraitView {
+        TabBarTraitView()
     }
 
-    override func responds(to selector: Selector!) -> Bool {
-        super.responds(to: selector) || previousDelegate?.responds(to: selector) == true
+    func updateUIView(_ view: TabBarTraitView, context: Context) {
+        view.apply()
+    }
+}
+
+private final class TabBarTraitView: UIView {
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        backgroundColor = .clear
     }
 
-    override func forwardingTarget(for selector: Selector!) -> Any? {
-        if previousDelegate?.responds(to: selector) == true {
-            return previousDelegate
-        }
-        return super.forwardingTarget(for: selector)
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is unavailable")
+    }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        apply()
+    }
+
+    func apply() {
+        guard let superview else { return }
+        superview.accessibilityTraits.insert(.tabBar)
+        superview.isAccessibilityElement = false
     }
 }

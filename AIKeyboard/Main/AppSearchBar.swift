@@ -57,6 +57,7 @@ struct AppSearchHeader: View {
 struct AppSearchField: View {
     var fieldIdentifier: String = "app-search"
     @EnvironmentObject private var search: AppSearch
+    @Environment(\.selectedMainTab) private var selectedTab
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -100,6 +101,7 @@ struct AppSearchField: View {
         )
         .onChange(of: search.stackEpoch) { _, _ in focused = false }
         .onChange(of: search.resignFocus) { _, _ in focused = false }
+        .onChange(of: selectedTab) { _, _ in focused = false }
     }
 }
 
