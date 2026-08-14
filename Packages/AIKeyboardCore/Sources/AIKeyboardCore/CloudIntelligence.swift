@@ -23,7 +23,7 @@ public struct CloudIntelligence: TextIntelligence {
     /// entire reason this path exists.
     public func canHandle(_ text: String, action: AIAction) -> Bool { true }
 
-    public func fix(_ text: String) async throws -> String {
+    public func fix(_ text: String, style: FixStyle = .proofread) async throws -> String {
         let source = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !source.isEmpty else { return text }
         // `corrections` is answered before `text` and is there to be answered
@@ -32,18 +32,9 @@ public struct CloudIntelligence: TextIntelligence {
         // corrected message to the list it just wrote. Same fields, same order,
         // as the on-device `FixDraft`.
         let fields = try await run(
-            instructions: Prompts.fix(for: source),
+            instructions: Prompts.fix(for: source, style: style),
             prompt: "Message:\n\(source)",
-            fields: [
-                CloudField(
-                    "corrections",
-                    "Every spelling and grammar mistake in the whole message, as `wrong -> right`, comma separated. Multi-word grammar counts as one: `dont -> don't`, `its not -> it doesn't`. Words stuck together with no space are a mistake: `hellothere -> hello there`, `מהקורה -> מה קורה`. Not mistakes: a correctly spelled word, an alternative accepted Hebrew spelling, slang, an abbreviation, an already-correct contraction, a deliberate lowercase, and a missing full stop. A missing apostrophe is a mistake. 'none' when nothing is wrong."
-                ),
-                CloudField(
-                    "text",
-                    "The whole message with exactly those corrections applied and nothing else changed, in its original language and script. Never return only the last sentence or a fragment."
-                )
-            ]
+            fields: Self.fixFields(style: style)
         )
         let corrections = fields["corrections"]?.trimmed ?? ""
         guard let corrected = fields["text"]?.trimmed, !corrected.isEmpty else { throw AIEngineError.empty }
@@ -54,7 +45,53 @@ public struct CloudIntelligence: TextIntelligence {
         // error banner.
         guard EditScope.declaresNothing(corrections) || !EditScope.isFragment(corrected, of: source)
         else { throw AIEngineError.empty }
-        return EditScope.applied(corrected, to: source, corrections: corrections)
+        let scoped = EditScope.applied(corrected, to: source, corrections: corrections)
+        // Punctuate and Polish ask for marks the model will not name as a word
+        // mistake. `applied` on `none` returns the source, which is right for a
+        // tap and wrong for a pass whose whole job is the period. Keep the
+        // candidate only when the words themselves did not move.
+        if style.allowsUnnamedPunctuation, scoped == source, EditScope.sameWords(corrected, as: source)
+        {
+            // `repaired` still strips an added Hebrew full stop, which Punctuate
+            // and Polish are told not to add and which the corpus refuses.
+            return EditScope.repaired(corrected, to: source)
+        }
+        return scoped
+    }
+
+    /// Proofread's two descriptions are load-bearing and must stay byte for
+    /// byte: tests pin the apostrophe wording and the jammed-word examples,
+    /// and a rewrite here is how those silently died once already. The other
+    /// styles only change what the list is allowed to contain.
+    private static func fixFields(style: FixStyle) -> [CloudField] {
+        let corrections: String
+        let text: String
+        switch style {
+        case .proofread:
+            corrections =
+                "Every spelling and grammar mistake in the whole message, as `wrong -> right`, comma separated. Multi-word grammar counts as one: `dont -> don't`, `its not -> it doesn't`. Words stuck together with no space are a mistake: `hellothere -> hello there`, `מהקורה -> מה קורה`. Not mistakes: a correctly spelled word, an alternative accepted Hebrew spelling, slang, an abbreviation, an already-correct contraction, a deliberate lowercase, and a missing full stop. A missing apostrophe is a mistake. 'none' when nothing is wrong."
+            text =
+                "The whole message with exactly those corrections applied and nothing else changed, in its original language and script. Never return only the last sentence or a fragment."
+        case .spelling:
+            corrections =
+                "Every spelling mistake in the whole message, as `wrong -> right`, comma separated. A missing apostrophe is spelling: `dont -> don't`. Words stuck together are spelling: `hellothere -> hello there`, `מהקורה -> מה קורה`. Not mistakes: grammar, punctuation, slang, an abbreviation, a deliberate lowercase, a missing full stop. 'none' when nothing is misspelled."
+            text =
+                "The whole message with exactly those spelling corrections applied and nothing else changed, in its original language and script. Never return only the last sentence or a fragment."
+        case .punctuate:
+            corrections =
+                "Word changes: 'none'. This pass does not correct spelling or grammar. If a word is wrong it stays."
+            text =
+                "The whole message with missing punctuation, question marks and sentence capitals added, and every word left as it was, in its original language and script. Never return only the last sentence or a fragment."
+        case .polish:
+            corrections =
+                "Every spelling and grammar mistake in the whole message, as `wrong -> right`, comma separated. Multi-word grammar counts as one: `dont -> don't`, `its not -> it doesn't`. Words stuck together with no space are a mistake: `hellothere -> hello there`, `מהקורה -> מה קורה`. A missing apostrophe is a mistake. A lowercase first word of an English sentence is a mistake. A missing full stop on an English statement is a mistake. Not mistakes: slang, an abbreviation, an already-correct contraction, an alternative accepted Hebrew spelling, a missing full stop on a Hebrew message. 'none' when nothing is wrong."
+            text =
+                "The whole message with those corrections applied and looking finished — first word capitalised, a statement ended, a question marked — in its original language and script. Never return only the last sentence or a fragment."
+        }
+        return [
+            CloudField("corrections", corrections),
+            CloudField("text", text)
+        ]
     }
 
     /// The engine that can honour a user-authored register, because the cloud

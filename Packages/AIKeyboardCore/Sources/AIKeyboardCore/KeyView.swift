@@ -21,6 +21,10 @@ public struct KeyView: View {
     /// `enabledLanguages` is: the list comes from a stored setting in another
     /// process and a `KeySpec` is a value that cannot read one.
     let toneAlternates: [String]
+    /// The Fix passes a long press offers, proofread first. Empty on every
+    /// other key. Same shape as `toneAlternates`: the list lives on the
+    /// controller, and a `KeySpec` is a value that cannot read one.
+    let fixAlternates: [String]
     /// Whether the emoji grid is open, which is the only thing that changes what
     /// the Emoji key says. Passed in for the same reason `toneAlternates` is: it
     /// is controller state, and a `KeySpec` is a value that cannot read any.
@@ -86,6 +90,7 @@ public struct KeyView: View {
         indication: LanguageSwitchIndication? = nil,
         enabledLanguages: [KeyboardLanguage] = [],
         toneAlternates: [String] = [],
+        fixAlternates: [String] = [],
         isEmojiOpen: Bool = false,
         showsActionCaption: Bool = true,
         usesNeutralActionTint: Bool = false,
@@ -106,6 +111,7 @@ public struct KeyView: View {
         self.indication = indication
         self.enabledLanguages = enabledLanguages
         self.toneAlternates = toneAlternates
+        self.fixAlternates = fixAlternates
         self.isEmojiOpen = isEmojiOpen
         self.showsActionCaption = showsActionCaption
         self.usesNeutralActionTint = usesNeutralActionTint

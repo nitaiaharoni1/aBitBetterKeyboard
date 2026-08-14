@@ -162,6 +162,56 @@ final class CloudIntelligenceTests: XCTestCase {
         XCTAssertEqual(transport.lastRequest?.fields.map(\.name), ["corrections", "text"])
     }
 
+    /// Punctuate names no word mistakes on purpose. `applied` on `none` would
+    /// throw the period away, which is right for a tap and wrong for a pass
+    /// whose whole job is the period.
+    func testPunctuateKeepsPunctuationWhenTheModelNamedNothing() async throws {
+        let transport = StubTransport(
+            reply: ["corrections": "none", "text": "hello world."])
+        let result = try await CloudIntelligence(transport: transport).fix(
+            "hello world", style: .punctuate)
+
+        XCTAssertEqual(result, "hello world.")
+        XCTAssertEqual(
+            transport.lastRequest?.instructions,
+            Prompts.fix(for: "hello world", style: .punctuate))
+        let corrections = try XCTUnwrap(
+            transport.lastRequest?.fields.first { $0.name == "corrections" })
+        XCTAssertTrue(
+            corrections.description.contains("Word changes: 'none'"),
+            "punctuate still asked the model to name word mistakes")
+    }
+
+    /// A word the punctuate pass was not asked to change still goes back, even
+    /// when the model also added a period.
+    func testPunctuateDoesNotKeepAWordChange() async throws {
+        let transport = StubTransport(
+            reply: ["corrections": "none", "text": "hello there."])
+        let result = try await CloudIntelligence(transport: transport).fix(
+            "hello world", style: .punctuate)
+        XCTAssertEqual(result, "hello world")
+    }
+
+    func testASpellingPassSendsTheSpellingPrompt() async throws {
+        let transport = StubTransport(
+            reply: ["corrections": "teh -> the", "text": "the meeting"])
+        _ = try await CloudIntelligence(transport: transport).fix(
+            "teh meeting", style: .spelling)
+        XCTAssertEqual(
+            transport.lastRequest?.instructions,
+            Prompts.fix(for: "teh meeting", style: .spelling))
+    }
+
+    /// Polish may look finished in English. It may not add a full stop to
+    /// Hebrew, even when the model wrote one and named nothing.
+    func testPolishDoesNotAddAHebrewFullStop() async throws {
+        let transport = StubTransport(
+            reply: ["corrections": "none", "text": "יאללה סבבה."])
+        let result = try await CloudIntelligence(transport: transport).fix(
+            "יאללה סבבה", style: .polish)
+        XCTAssertEqual(result, "יאללה סבבה")
+    }
+
     /// The cloud engine exists to serve the scripts the on-device model refuses,
     /// so it must never decline one itself.
     func testCloudAcceptsEveryScript() {

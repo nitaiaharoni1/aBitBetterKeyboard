@@ -249,6 +249,9 @@ extension KeyboardView {
                 // from a setting the app writes: a `KeySpec` is a value and
                 // cannot read the store. Same shape as `enabledLanguages`.
                 toneAlternates: key.cap == .quickTone ? controller.toneAlternates : [],
+                // Only Fix, and only because the list lives on the controller
+                // the way the registers do. Same shape as `toneAlternates`.
+                fixAlternates: key.cap == .aiFix ? controller.fixAlternates : [],
                 // Only the Emoji key changes what it says when the grid opens,
                 // and only it is told. Same shape as `toneAlternates` above.
                 isEmojiOpen: key.cap == .emoji && controller.overlay.isEmoji,
@@ -311,12 +314,16 @@ extension KeyboardView {
     /// A letter has already inserted its character on finger-down, so picking an
     /// accent is a replacement: delete, then type the alternate. A grouped key
     /// has already appended a stroke, so picking a letter pins that stroke. The
-    /// one-tap rewrite key has deliberately run nothing yet (see
-    /// `KeyView.runsOnLift`), so picking a register is the whole action.
+    /// rewrite key and Fix have deliberately run nothing yet (see
+    /// `KeyView.runsOnLift`), so picking a style is the whole action.
     func alternateHandler(for key: KeySpec) -> ((String) -> Void)? {
         if key.cap == .quickTone {
             return controller.toneAlternates.count > 1
                 ? { controller.selectTone(named: $0) } : nil
+        }
+        if key.cap == .aiFix {
+            return controller.fixAlternates.count > 1
+                ? { controller.selectFix(named: $0) } : nil
         }
         guard !key.alternates.isEmpty else { return nil }
         // Finger-down already appended a grouped stroke. Delete-then-retype

@@ -132,12 +132,12 @@ public struct FoundationModelsEngine: TextIntelligence {
 
     // MARK: Fix
 
-    public func fix(_ text: String) async throws -> String {
+    public func fix(_ text: String, style: FixStyle = .proofread) async throws -> String {
         let source = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !source.isEmpty else { return text }
 
         let draft: FixDraft = try await generate(
-            instructions: Prompts.fix(for: source),
+            instructions: Prompts.fix(for: source, style: style),
             prompt: "Message:\n\(source)",
             source: source
         )

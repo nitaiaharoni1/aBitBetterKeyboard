@@ -4,8 +4,70 @@ extension Prompts {
 
     // MARK: Fix
 
-    static func fix(for text: String) -> String {
-        isHebrew(text) ? hebrewFix : (englishFix + scriptDirective(for: text))
+    static func fix(for text: String, style: FixStyle = .proofread) -> String {
+        let base = isHebrew(text) ? hebrewFix : (englishFix + scriptDirective(for: text))
+        // Proofread is the measured prompt. The other three append a pass that
+        // narrows or widens what counts as a mistake, rather than replacing the
+        // base — replacing it would drop the jammed-word examples and the
+        // Hebrew loanword rule, both of which were earned against the corpus.
+        guard let extra = isHebrew(text) ? hebrewFixDirection(style) : englishFixDirection(style)
+        else { return base }
+        return base + "\n\n" + extra
+    }
+
+    private static func englishFixDirection(_ style: FixStyle) -> String? {
+        switch style {
+        case .proofread:
+            return nil
+        case .spelling:
+            return """
+                This pass corrects spelling only. Leave grammar, punctuation, \
+                capitalisation and register untouched. A missing apostrophe is \
+                spelling (`dont` → `don't`). A subject-verb error is grammar and \
+                stays. Words jammed together are spelling (`hellothere` → \
+                `hello there`).
+                """
+        case .punctuate:
+            return """
+                This pass does not change any word. Add missing punctuation, \
+                question marks and sentence capitals only. A misspelling stays. \
+                A missing apostrophe stays. Do not add a greeting or a sign-off.
+                """
+        case .polish:
+            return """
+                Correct spelling, grammar and punctuation, then make the message \
+                look finished: capitalise the first word of a sentence, end a \
+                statement with a full stop and a question with a question mark. \
+                Keep slang, contractions, abbreviations and emoji. Do not add a \
+                greeting, a sign-off or a reason that was not in the message.
+                """
+        }
+    }
+
+    private static func hebrewFixDirection(_ style: FixStyle) -> String? {
+        switch style {
+        case .proofread:
+            return nil
+        case .spelling:
+            return """
+                המעבר הזה מתקן כתיב בלבד. דקדוק, פיסוק, רישיות וסגנון נשארים. \
+                מילים שנדבקו בלי רווח הן כתיב (`מהקורה` → `מה קורה`). שגיאת \
+                התאם היא דקדוק והיא נשארת.
+                """
+        case .punctuate:
+            return """
+                המעבר הזה לא משנה אף מילה. הוסף רק פיסוק חסר, סימני שאלה \
+                ורישיות של תחילת משפט. שגיאת כתיב נשארת. אל תוסיף פנייה או \
+                ברכה. הודעה בעברית לא מקבלת נקודה בסוף אלא אם הכותב כתב אחת.
+                """
+        case .polish:
+            return """
+                תקן כתיב ודקדוק, ואז תן להודעה להיראות גמורה: רישיות בתחילת \
+                משפט באנגלית, סימן שאלה על שאלה. הודעה בעברית לא מקבלת נקודה \
+                בסוף. שמור על סלנג, קיצורים ואימוג'י. אל תוסיף פנייה, ברכה \
+                או נימוק שלא היו בהודעה.
+                """
+        }
     }
 
     private static let englishFix = """

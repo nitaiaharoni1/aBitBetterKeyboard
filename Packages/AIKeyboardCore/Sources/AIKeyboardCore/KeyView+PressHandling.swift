@@ -8,18 +8,25 @@ extension KeyView {
     /// keyed off this defers rather than committing on finger-down.
     var slidesForLanguage: Bool { spec.cap == .space && onSpaceTouch != nil }
 
-    /// The one-tap rewrite key, when it has registers to offer.
+    /// The one-tap rewrite key and Fix, when they have styles to offer.
     ///
-    /// **It commits on lift rather than on finger-down, and it is the only key
-    /// besides the space bar that does.** Every other key acts immediately because
-    /// that is what makes typing feel instant, and for a letter a long press that
-    /// picks an alternate simply replaces the character already inserted. This key
-    /// runs a *model call*: firing on finger-down would spend one on the default
-    /// tone every time the user held the key to choose a different one, and
-    /// `beginWork` cancels its predecessor, so the answer being paid for would be
-    /// thrown away by the register that was actually wanted. A tap still runs the
-    /// default — it just runs it 100ms later, on the lift, which no thumb can feel.
-    var runsOnLift: Bool { spec.cap == .quickTone && toneAlternates.count > 1 }
+    /// **They commit on lift rather than on finger-down, and they are the only
+    /// keys besides the space bar that do.** Every other key acts immediately
+    /// because that is what makes typing feel instant, and for a letter a long
+    /// press that picks an alternate simply replaces the character already
+    /// inserted. These two run a *model call*: firing on finger-down would
+    /// spend one on the default pass every time the user held the key to
+    /// choose a different one, and `beginWork` cancels its predecessor, so
+    /// the answer being paid for would be thrown away by the style that was
+    /// actually wanted. A tap still runs the default — it just runs it 100ms
+    /// later, on the lift, which no thumb can feel.
+    var runsOnLift: Bool {
+        switch spec.cap {
+        case .quickTone: return toneAlternates.count > 1
+        case .aiFix: return fixAlternates.count > 1
+        default: return false
+        }
+    }
 
     /// **The disabled check the key makes for itself, rather than trusting
     /// `.disabled()` to make it.**
@@ -82,10 +89,10 @@ extension KeyView {
                         canvasWidth: keyboardCanvasWidth) : alternateRestIndex
             }
             .onEnded { value in
-                // Not just a mirror of the `onChanged` guard: `runsOnLift` means
-                // this is the *only* place the one-tap rewrite key ever fires, so a
-                // disabled Rewrite key with a guard on one half and not the other
-                // would still run on every tap.
+        // Not just a mirror of the `onChanged` guard: `runsOnLift` means
+        // this is the *only* place the rewrite and Fix keys ever fire, so a
+        // disabled key with a guard on one half and not the other
+        // would still run on every tap.
                 guard acceptsTouches else {
                     endPress()
                     return
@@ -197,14 +204,13 @@ extension KeyView {
     /// keyboard. Nothing happens for a key that has none, which is most of them.
     private func startAlternatesIfNeeded() {
         // `hasAlternates` reads `alternateItems` rather than `spec.alternates`,
-        // because the one-tap rewrite key's registers do not live on the spec —
-        // they come from a setting in the containing app. For a letter the two say
+        // because the rewrite key's registers and Fix's passes do not live on
+        // the spec — they come from the controller. For a letter the two say
         // the same thing: the list is the character plus its alternates, so "more
         // than one" is exactly "has alternates".
         //
-        // `acceptsTouches` first: the one-tap rewrite key is both the key that has
-        // registers on a long press and one of the two that go disabled on an empty
-        // field, so without this a disabled key would still open its popup — and a
+        // `acceptsTouches` first: both keys are disabled on an empty field,
+        // so without this a disabled key would still open its popup — and a
         // popup pick reaches `onAlternate` on a path of its own.
         guard acceptsTouches, hasAlternates else { return }
         // Here rather than at the end of the wait below, so a finger that slides
