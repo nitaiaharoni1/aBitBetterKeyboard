@@ -10,7 +10,9 @@
 #   0. The extension sets `hasDictationKey`. Face ID phones otherwise draw
 #      Apple's dictation strip under our space row, even though we already
 #      have a microphone. Source-level: the property is the public API and
-#      a build that drops the assignment is the broken one.
+#      a build that drops the assignment is the broken one. The assignment
+#      has to live in a method `init` / `viewDidLoad` / `viewWillAppear`
+#      can all call — a one-shot in `viewDidLoad` is the weaker form.
 #   1. The keyboard extension does NOT link AVFoundation. It cannot open the
 #      microphone — Apple's guidance says so and the runtime answers 561145187 —
 #      so a build in which it tries is a build that has misunderstood the design.
