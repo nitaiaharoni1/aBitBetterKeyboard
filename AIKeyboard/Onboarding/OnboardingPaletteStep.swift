@@ -23,7 +23,7 @@ struct PaletteStep: View {
                 PalettePicker()
             }
 
-            Text("You can change this later in Settings.")
+            Text("You can change this later in Keys.")
                 .font(Theme.Fonts.caption)
                 .foregroundStyle(Theme.Text.tertiary)
         }

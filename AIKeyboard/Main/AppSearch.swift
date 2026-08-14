@@ -200,7 +200,7 @@ enum AppSearchRow: String, Hashable {
     case pauseLength
     case autocapitalise
     case predictions
-    case learnAsYouType
+    case forgetLearned
     case groupedKeys
     case numberRow
     case defaultTone
@@ -217,8 +217,8 @@ enum AppSearchRow: String, Hashable {
         case .groupedKeys, .numberRow, .palette, .haptics, .keySounds:
             return .keys
         case .autocorrect, .completeOnPause, .spaceOnPause, .pauseLength,
-            .autocapitalise, .predictions, .learnAsYouType, .defaultTone,
-            .replayOnboarding:
+            .autocapitalise, .predictions, .forgetLearned,
+            .defaultTone, .replayOnboarding:
             return .settings
         }
     }
@@ -358,11 +358,6 @@ struct AppSearchItem: Identifiable {
                 keywords: ["suggestions"],
                 .row(.predictions)),
             item(
-                "Learn as you type", "Remembers words and word pairs on this device",
-                icon: "brain",
-                keywords: ["personal", "model"],
-                .row(.learnAsYouType)),
-            item(
                 "Grouped keys", "Bigger keys holding several letters",
                 icon: "rectangle.grid.1x2",
                 .row(.groupedKeys)),
@@ -390,6 +385,11 @@ struct AppSearchItem: Identifiable {
                 "Replay onboarding", "Walk through setup again",
                 icon: "arrow.counterclockwise",
                 .row(.replayOnboarding)),
+            item(
+                "Forget what it learned", "Clear remembered words on this device",
+                icon: "trash",
+                keywords: ["forget", "clear", "learned", "reset"],
+                .row(.forgetLearned)),
             item(
                 "Mixing languages", "Code switching is always on",
                 icon: "arrow.left.arrow.right",

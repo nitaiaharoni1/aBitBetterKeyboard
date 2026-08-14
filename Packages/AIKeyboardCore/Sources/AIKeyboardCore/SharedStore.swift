@@ -78,7 +78,6 @@ public final class SharedStore: ObservableObject {
         static let predictions = "predictions"
         static let haptics = "haptics"
         static let keySounds = "keySounds"
-        static let learnsFromTyping = "learnsFromTyping"
         static let groupedLevel = "groupedLevel"
         static let defaultTone = "defaultTone"
         /// The two `BackendTransport.configured` reads. It declares them inline in
@@ -135,7 +134,7 @@ public final class SharedStore: ObservableObject {
     /// implemented — off would have meant "always prefer the cloud", which is a
     /// feature nobody asked for and which does nothing at all on the language this
     /// keyboard exists for, since Apple's model has no Hebrew either way.
-    static let retiredKeys = ["screenContextCloudReplies", "onDeviceAI"]
+    static let retiredKeys = ["screenContextCloudReplies", "onDeviceAI", "learnsFromTyping"]
 
     /// Takes the retired keys out of a store. Static and explicit about its
     /// argument so a test can drive it against a scratch suite; the singleton's
@@ -320,19 +319,6 @@ public final class SharedStore: ObservableObject {
 
     @Published public var predictions = true { didSet { defaults.set(predictions, forKey: Key.predictions) } }
 
-    /// Whether the keyboard may remember the words this person types.
-    ///
-    /// On by default, and that is a deliberate call rather than an oversight: with
-    /// it off the suggestion bar is the same for everybody and never learns a name,
-    /// which is most of what makes a keyboard feel like it knows you. What makes
-    /// the default defensible is the shape of what is kept — `PersonalLanguageModel`
-    /// stores word counts and word-pair counts and nothing longer, never leaves the
-    /// device, and never records in a credential field. The Settings row says so in
-    /// those words, and the button next to it empties the store.
-    @Published public var learnsFromTyping = true {
-        didSet { defaults.set(learnsFromTyping, forKey: Key.learnsFromTyping) }
-    }
-
     /// How many letters share one key. `.off` ships, and that is not timidity:
     /// `Bar/grouped/` measured the trade and the gentlest setting still costs
     /// about a point and a half of accuracy, which nobody should be opted into.
@@ -349,16 +335,6 @@ public final class SharedStore: ObservableObject {
     public var storedGroupedLevel: GroupedKeys.Level {
         guard defaults.object(forKey: Key.groupedLevel) != nil else { return groupedLevel }
         return GroupedKeys.Level(rawValue: defaults.integer(forKey: Key.groupedLevel)) ?? .off
-    }
-
-    /// Same cross-process rule as `storedAutocorrect`: the toggle is in the app and
-    /// every word it gates is committed in the keyboard extension, so reading the
-    /// `@Published` copy alone keeps learning after the user switched it off.
-    public var storedLearnsFromTyping: Bool {
-        if defaults.object(forKey: Key.learnsFromTyping) != nil {
-            return defaults.bool(forKey: Key.learnsFromTyping)
-        }
-        return learnsFromTyping
     }
 
     /// Whether the suggestion bar is shown at all.

@@ -27,12 +27,14 @@ final class CaptureChannelEndTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set(true, forKey: "screenContextCloudReplies")
         defaults.set(true, forKey: "onDeviceAI")
+        defaults.set(false, forKey: "learnsFromTyping")
         defaults.set(true, forKey: "screenContextAllowed")
 
         SharedStore.removeRetiredKeys(from: defaults)
 
         XCTAssertNil(defaults.object(forKey: "screenContextCloudReplies"))
         XCTAssertNil(defaults.object(forKey: "onDeviceAI"))
+        XCTAssertNil(defaults.object(forKey: "learnsFromTyping"))
         XCTAssertNotNil(
             defaults.object(forKey: "screenContextAllowed"),
             "a key the store still reads is not debris")

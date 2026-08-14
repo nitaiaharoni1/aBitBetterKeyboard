@@ -434,10 +434,10 @@ extension KeyboardController {
                 ?? language,
             // The same question `SecureField` answers for a screen read, asked
             // again here because "may I keep this word" and "may I send this
-            // screen" have the same answer for a password.
-            permitted: store.storedLearnsFromTyping
-                && SecureField.permitsRead(
-                    secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
+            // screen" have the same answer for a password. Learning itself is
+            // always on; the only refusal left is a credential field.
+            permitted: SecureField.permitsRead(
+                secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
         )
         if wrote {
             lastLearnedFolded = folded

@@ -42,7 +42,7 @@ public enum BrandPalette: String, CaseIterable, Sendable {
         case .orange: return "The signature warm orange"
         case .pink: return "Brighter, and the loudest of the four"
         case .blue: return "Cool and closest to the system"
-        case .monochrome: return "No colour at all — graphite only"
+        case .monochrome: return "No colour at all, graphite only"
         }
     }
 

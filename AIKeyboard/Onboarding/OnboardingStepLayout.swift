@@ -21,7 +21,7 @@ struct StepLayout<Content: View>: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
-                VStack(alignment: .leading, spacing: Theme.Space.lg) {
+                HStack(alignment: .top, spacing: Theme.Space.md) {
                     if let icon {
                         iconWell(icon)
                     }
@@ -61,27 +61,41 @@ struct StepLayout<Content: View>: View {
         .scrollBounceBehavior(.basedOnSize)
     }
 
-    /// The one marketing headline in onboarding. The circled word sits on its
-    /// own line so the pen mark has a steady frame to wrap — the same
-    /// explicit breaking the mock's h1 uses — and the two parts combine back
-    /// into one accessibility element so the sentence reads whole.
+    /// The one marketing headline in onboarding. The circled word stays on
+    /// the last line with the words before it so the pen mark wraps that
+    /// word, not a stacked leftover, and the two parts combine back into
+    /// one accessibility element so the sentence reads whole.
     private func heroTitle(word: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title.dropLast(word.count))
-                .font(.system(size: 28, weight: .heavy))
-                .tracking(-1.4)
-                .foregroundStyle(Theme.Text.primary)
-                .fixedSize(horizontal: false, vertical: true)
+        let parts = String(title.dropLast(word.count))
+            .trimmingCharacters(in: .whitespaces)
+            .split(separator: " ")
+        let head = parts.dropLast(2).joined(separator: " ")
+        let tail = parts.suffix(2).joined(separator: " ")
 
-            Text(word)
-                .font(.system(size: 28, weight: .heavy))
-                .tracking(-1.4)
-                .foregroundStyle(Theme.Text.primary)
-                .overlay {
-                    DoodleCircle()
-                        .padding(.horizontal, -10)
-                        .padding(.vertical, -12)
-                }
+        return VStack(alignment: .leading, spacing: 2) {
+            if !head.isEmpty {
+                Text(head)
+                    .font(.system(size: 28, weight: .heavy))
+                    .tracking(-1.4)
+                    .foregroundStyle(Theme.Text.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(tail + " ")
+                    .font(.system(size: 28, weight: .heavy))
+                    .tracking(-1.4)
+                    .foregroundStyle(Theme.Text.primary)
+                Text(word)
+                    .font(.system(size: 28, weight: .heavy))
+                    .tracking(-1.4)
+                    .foregroundStyle(Theme.Text.primary)
+                    .overlay {
+                        DoodleCircle()
+                            .padding(.horizontal, -10)
+                            .padding(.vertical, -12)
+                    }
+            }
         }
         .accessibilityElement(children: .combine)
     }
