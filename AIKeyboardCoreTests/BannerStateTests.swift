@@ -12,10 +12,10 @@ import XCTest
 /// is the one ordered place that decides, so this is where the order is pinned.
 ///
 /// **Two of those states no longer draw anything, and the order still matters for
-/// them.** A running call is `WorkingProgressBar` and a live recording is the
-/// microphone key; both resolve to the idle state here, and both have to keep
-/// their place ahead of the branches below, or a recording started after a Fix
-/// would put that Fix's leftover answer back on screen.
+/// them.** A running call is a sweep on the action key and a live recording is
+/// a waveform on the microphone; both resolve to the idle state here, and both
+/// have to keep their place ahead of the branches below, or a recording started
+/// after a Fix would put that Fix's leftover answer back on screen.
 ///
 /// Every case here is written to reject a plausible wrong ordering rather than to
 /// restate the implementation.
@@ -53,13 +53,14 @@ final class BannerStateTests: XCTestCase {
     /// **A recording draws no strip, and it still has to outrank everything under
     /// it.**
     ///
-    /// Neither a recording nor a model call earns a row any more — one is on the
-    /// microphone key, the other is `WorkingProgressBar` — so the interesting
-    /// question is no longer which of the two is drawn. It is that a recording
-    /// started while the previous action's answers are still in `options` must not
-    /// let those answers back onto the screen: `resolve` reaches the option branch
-    /// by falling through, and a recording that fell through with it would put a
-    /// Use button over three replies from before the user started speaking.
+    /// Neither a recording nor a model call earns a row any more — one is a
+    /// waveform on the microphone, the other is a sweep on the action key — so
+    /// the interesting question is no longer which of the two is drawn. It is
+    /// that a recording started while the previous action's answers are still in
+    /// `options` must not let those answers back onto the screen: `resolve`
+    /// reaches the option branch by falling through, and a recording that fell
+    /// through with it would put a Use button over three replies from before the
+    /// user started speaking.
     ///
     /// Asserting `!isPresented` is what rejects that build. Asserting `.hint`
     /// alone would not, because `.hint` is also what a *correct* fall-through to
@@ -205,8 +206,9 @@ final class BannerStateTests: XCTestCase {
     /// Two entries here changed direction rather than being added: a model call
     /// and a live recording used to present, and now do not. They are the two most
     /// frequent states in the feature, and both were spending 69 points of a
-    /// 368-point keyboard on a word that a three-point progress bar and a red key
-    /// say without moving anything. What survives is the set of states with a
+    /// 368-point keyboard on a word that a sweep on the action key and a
+    /// waveform on the microphone say without moving anything. What survives is
+    /// the set of states with a
     /// *sentence* in them.
     func testOnlyTheStatesWithSomethingToSayEarnARow() {
         XCTAssertFalse(resolve().isPresented)

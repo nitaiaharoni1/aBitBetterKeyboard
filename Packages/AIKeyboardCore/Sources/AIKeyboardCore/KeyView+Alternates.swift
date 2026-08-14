@@ -136,11 +136,14 @@ extension KeyView {
 
     /// **Words stack, glyphs run along a row.** Seven registers at a readable size
     /// is about 1,000 points of width on a 393-point screen, so the strip that
-    /// works for five accented `e`s cannot hold them. Stacking also puts the list
-    /// where the thumb already is: these keys sit in the action row at the bottom
-    /// of the keyboard, so the popup opens upward over the keys, which is empty
-    /// space for as long as the finger is down.
-    private var alternatesAreStacked: Bool {
+    /// works for five accented `e`s cannot hold them.
+    ///
+    /// The stack grows *up* from the key: index 0 (the rest item) sits nearest
+    /// the finger and the other names climb away from it. Drawing the list in
+    /// array order hung it the other way — default at the top, later passes
+    /// dropping toward the key — which is a dropdown, and these keys sit in the
+    /// action row *above* the letters, not at the bottom.
+    var alternatesAreStacked: Bool {
         spec.cap == .quickTone || spec.cap == .aiFix
     }
 
@@ -155,6 +158,18 @@ extension KeyView {
             : alternateItemWidth * CGFloat(max(1, alternateItems.count))
     }
 
+    /// Negative: every popup sits above its key. Stacked menus measure from
+    /// the key's top (see `alternatesPopupAlignment`) so a 136-point Fix list
+    /// cannot hang down through the letters. A letter strip still measures
+    /// from the key's bottom, the way the balloon does.
+    var alternatesPopupOffsetY: CGFloat {
+        alternatesAreStacked ? -(alternatesHeight + 6) : -height - 6
+    }
+
+    var alternatesPopupAlignment: Alignment {
+        alternatesAreStacked ? .top : .bottom
+    }
+
     private var alternatesHeight: CGFloat {
         alternatesAreStacked
             ? alternateItemHeight * CGFloat(max(1, alternateItems.count))
@@ -167,13 +182,14 @@ extension KeyView {
     /// strip that would draw past the keyboard stays inside it. The period popup
     /// is also aligned so the period sits over the key. A stack sits directly
     /// above the key: its bottom edge is 6 points above the key's top, so it
-    /// spans `-(6 + height)` to `-6` and the index runs downward from there.
+    /// spans `-(6 + height)` to `-6`. Index 0 is the near edge (just above the
+    /// key); later items are further up.
     func alternateIndex(
         at point: CGPoint, keyMinX: CGFloat = 0, canvasWidth: CGFloat = 0
     ) -> Int {
         let index: Int
         if alternatesAreStacked {
-            index = Int(((point.y + 6 + alternatesHeight) / alternateItemHeight).rounded(.down))
+            index = Int(((-point.y - 6) / alternateItemHeight).rounded(.down))
         } else {
             let overhang = (alternatesWidth - width) / 2
             let dx = alternatesStripOffset(keyMinX: keyMinX, canvasWidth: canvasWidth)
@@ -220,7 +236,9 @@ extension KeyView {
             Group {
                 if alternatesAreStacked {
                     VStack(spacing: 0) {
-                        ForEach(Array(alternateItems.enumerated()), id: \.offset) { index, item in
+                        ForEach(
+                            Array(alternateItems.enumerated().reversed()), id: \.offset
+                        ) { index, item in
                             alternateItem(item, index: index)
                         }
                     }
@@ -244,7 +262,7 @@ extension KeyView {
             )
             .offset(
                 x: alternatesStripOffset(keyMinX: keyMinXInCanvas, canvasWidth: keyboardCanvasWidth),
-                y: -height - 6
+                y: alternatesPopupOffsetY
             )
             .allowsHitTesting(false)
             .transition(Theme.Motion.pop(reduceMotion: reduceMotion))

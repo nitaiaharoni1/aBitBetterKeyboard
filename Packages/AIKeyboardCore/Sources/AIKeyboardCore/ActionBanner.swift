@@ -15,10 +15,10 @@ import SwiftUI
 /// a failure and an answer nothing could apply, and for nothing else. The default
 /// "Type, or pick an action below" instruction is what the action row already says
 /// by existing — and a **model call** and a **live recording**, which were the two
-/// states this was up for most, now report where nothing has to move: the
-/// reserved `WorkingProgressBar` slot above the candidates, and the
-/// microphone key itself in record red. A 69pt row that appeared on a tap and left
-/// on the answer was relaying out the whole keyboard twice per Fix.
+/// states this was up for most, now report on the control that started them: a
+/// sweep on the action key, and a waveform on the microphone. A 69pt row that
+/// appeared on a tap and left on the answer was relaying out the whole keyboard
+/// twice per Fix.
 ///
 /// Its height while shown is still constant: a strip that grew when an answer
 /// arrived would move the three candidates under the thumb mid-choice. The host

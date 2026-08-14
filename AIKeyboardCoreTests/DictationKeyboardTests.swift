@@ -644,11 +644,11 @@ final class DictationKeyboardTests: XCTestCase {
         XCTAssertEqual(target.text, "noted", "the ignored tap threw the sentence away")
     }
 
-    /// **The red strip is the open microphone, not the transcription in flight.**
+    /// **The waveform is the open microphone, not the transcription in flight.**
     /// `dictationKeyState.isRecording` stays true through `.finishing` so the
-    /// key does not flash Record. The strip used that same flag, so pause left
-    /// a frozen waveform up until the cloud transcript landed.
-    func testTheRecordingStripHidesTheMomentPauseIsTapped() throws {
+    /// key does not flash Record. Activity follows `isDictating`, so pause
+    /// leaves the pause icon and no bars.
+    func testTheWaveformHidesTheMomentPauseIsTapped() throws {
         beginLiveSession()
         session.poll()
         controller.toggleDictation()
@@ -659,9 +659,10 @@ final class DictationKeyboardTests: XCTestCase {
 
         controller.toggleDictation()
         XCTAssertEqual(controller.dictationKeyState, .finishing)
-        XCTAssertFalse(
-            WorkingProgressBar(controller: controller).showsWaveform,
-            "the red strip stayed up while the last words were in flight")
+        XCTAssertEqual(
+            KeyActivity.resolve(for: .dictation, controller: controller),
+            .idle,
+            "the waveform stayed up while the last words were in flight")
         XCTAssertTrue(
             controller.dictationLevels.isEmpty,
             "frozen levels kept the last waveform drawn through finishing")

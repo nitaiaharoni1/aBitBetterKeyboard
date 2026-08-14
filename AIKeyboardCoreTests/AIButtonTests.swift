@@ -369,11 +369,11 @@ final class ToneButtonTapTests: XCTestCase {
             SuggestionBar.toneTap(hasTextToWorkWith: true, isWorking: false), .rewrite)
     }
 
-    /// **The one state a tap may be ignored in is the one the button is a spinner
-    /// in.** `beginWork` cancels its predecessor, so a second tap would throw away
+    /// **The one state a tap may be ignored in is a call already in flight.**
+    /// `beginWork` cancels its predecessor, so a second tap would throw away
     /// the answer the first is waiting on — and the user can see a call is running,
     /// which is what makes ignoring it honest rather than silent.
-    func testATapIsOnlyEverIgnoredWhileTheButtonIsASpinner() {
+    func testATapIsOnlyEverIgnoredWhileACallIsInFlight() {
         for hasText in [false, true] {
             XCTAssertNotEqual(
                 SuggestionBar.toneTap(hasTextToWorkWith: hasText, isWorking: false), .ignore,

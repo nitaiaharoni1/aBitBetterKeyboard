@@ -85,17 +85,18 @@ extension KeyView {
                 .foregroundStyle(labelColor)
 
         case .dictation:
-            // **This key is the whole of the recording notice now**, so it has two
-            // appearances: waves at rest, pause while the microphone is on. The
-            // × that cancelled a transcription in flight is gone. The glyph, the
-            // word and the record-red cap are all resolved from one value — see
-            // `DictationKeyState` and `KeyView.capKind` — so the key can never end
-            // up filled red while captioned Record.
+            // **This key is the whole of the recording notice now.** Idle is
+            // waves; finishing is pause so the thumb has one shape to go back
+            // to. While `isDictating` the icon is the live waveform — the same
+            // drawing the reserved strip used, clipped to the icon slot. The
+            // word and the record-red cap still come from `DictationKeyState`
+            // so the key can never end up filled red while captioned Record.
             actionLabel(
                 icon: dictationState.icon,
                 title: dictationState.title,
                 tint: Theme.Brand.solid,
-                showsCaption: showsActionCaption)
+                showsCaption: showsActionCaption,
+                waveform: recordingLevels)
 
         case .emoji:
             // **One key, two jobs, and the cap is what says which.** With the grid
@@ -262,14 +263,16 @@ extension KeyView {
         icon: String,
         title: String,
         tint: Color,
-        showsCaption: Bool = true
+        showsCaption: Bool = true,
+        waveform: [Double]? = nil
     ) -> some View {
         let resolvedTint = actionTint(tint)
 
         if showsCaption, width >= Self.captionMinimumWidth {
             VStack(spacing: 1) {
-                Image(systemName: icon)
-                    .font(Theme.Glyph.medium(15))
+                actionIcon(
+                    icon: icon, size: 15, tint: resolvedTint, waveform: waveform,
+                    showsCaption: true)
                 Text(title)
                     .font(Font(SuggestionBar.toneLabelFont))
                     .lineLimit(1)
@@ -278,9 +281,36 @@ extension KeyView {
             .foregroundStyle(resolvedTint)
             .padding(.horizontal, Theme.Space.xxs)
         } else {
+            actionIcon(
+                icon: icon, size: 16, tint: resolvedTint, waveform: waveform,
+                showsCaption: false)
+        }
+    }
+
+    /// Live loudness while `isDictating`. Nil on every other state, including
+    /// finishing: that key keeps the pause icon.
+    var recordingLevels: [Double]? {
+        if case .recording(let levels) = activity { return levels }
+        return nil
+    }
+
+    @ViewBuilder
+    func actionIcon(
+        icon: String, size: CGFloat, tint: Color, waveform: [Double]?,
+        showsCaption: Bool
+    ) -> some View {
+        if let levels = waveform {
+            // Captioned keys keep the 20 pt icon slot. Icon-only (the shipped
+            // action-row mic) uses more of the cap so the wave is the notice,
+            // not a small glyph in a large red key.
+            let full = showsCaption ? ControlWaveform.iconSlotHeight : 28
+            ControlWaveform(levels: levels, full: full, color: tint)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 4)
+        } else {
             Image(systemName: icon)
-                .font(Theme.Glyph.medium(16))
-                .foregroundStyle(resolvedTint)
+                .font(Theme.Glyph.medium(size))
+                .foregroundStyle(tint)
         }
     }
 }

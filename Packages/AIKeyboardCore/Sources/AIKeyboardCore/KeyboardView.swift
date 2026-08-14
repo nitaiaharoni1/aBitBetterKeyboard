@@ -35,29 +35,22 @@ public struct KeyboardView: View {
     public var body: some View {
         VStack(spacing: 0) {
             // **One strip when there is something to say, nothing the rest of the
-            // time — and "the rest of the time" now includes the two states it was
+            // time — and "the rest of the time" includes the two states it was
             // most often up for.** `ScreenContextStrip` occupied a 30pt row only
             // while a capture session was live, and every AI answer arrived in a
-            // panel over the keys; the banner was both. A running call is the
-            // progress bar below instead, and a live recording is the microphone
-            // key drawn in record red, so what is left here is a live reading, a
-            // refusal and a failure. See `BannerState.isPresented`.
+            // panel over the keys; the banner was both. A running call is a sweep
+            // on the key that started it, and a live recording is a waveform on
+            // the microphone, so what is left here is a live reading, a refusal
+            // and a failure. See `BannerState.isPresented`.
             if controller.showsActionBanner {
                 ActionBanner(controller: controller)
                     .transition(.opacity)
             }
 
-            // Between the banner and the candidates, and present in every state:
-            // the waveform slot reserved whenever the banner is down, so a call
-            // or a recording starting cannot move the keys. See `WorkingProgressBar`.
-            VStack(spacing: 0) {
-                WorkingProgressBar(controller: controller)
-
-                SuggestionBar(controller: controller)
-            }
-            .contentShape(Rectangle())
-            .drawerDismiss { controller.press(.hideKeyboard) }
-            .accessibilityIdentifier("keyboard-dismiss-chrome")
+            SuggestionBar(controller: controller)
+                .contentShape(Rectangle())
+                .drawerDismiss { controller.press(.hideKeyboard) }
+                .accessibilityIdentifier("keyboard-dismiss-chrome")
 
             // **Nothing covers the whole key area any more.** This was a `ZStack`
             // with a `fullKeyAreaPanel` over it, and the three panels that used it —

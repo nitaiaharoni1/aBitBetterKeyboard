@@ -491,53 +491,77 @@ final class DictationKeyStateTests: XCTestCase {
     }
 }
 
-/// The three-point strip above the candidates, and the reason a live microphone
-/// showed a dashed line that never moved.
-final class WorkingProgressBarTests: XCTestCase {
+/// In-control activity: speech must still read as taller than silence, and
+/// finishing is not a recording.
+final class KeyActivityTests: XCTestCase {
 
     /// **Typical speech has to be taller than silence.** The linear `level * 2.2`
     /// drawing landed every corpus-like frame on the 0.28 floor, so a live
     /// microphone was a static dashed line. 0.05 RMS is a quiet spoken frame
     /// (`SpeechGate.peakFloor` is 0.01; the quietest clip peaks at 0.208).
     func testASpokenFrameIsTallerThanSilence() {
-        let full: CGFloat = Theme.Metrics.recordingWaveformHeight
-        let silent = WorkingProgressBar.waveHeight(level: 0, full: full)
-        let spoken = WorkingProgressBar.waveHeight(level: 0.05, full: full)
+        let full: CGFloat = ControlWaveform.iconSlotHeight
+        let silent = ControlWaveform.waveHeight(level: 0, full: full)
+        let spoken = ControlWaveform.waveHeight(level: 0.05, full: full)
         XCTAssertGreaterThan(
             spoken, silent,
-            "a spoken frame draws the same height as silence: the strip cannot move")
+            "a spoken frame draws the same height as silence: the waveform cannot move")
     }
 
-    /// **The recording strip has to be taller than the idle hairline.** Drawn
-    /// into three points, even amplified speech is a dashed line. A quiet spoken
-    /// frame (0.05 RMS) in the recording height must clear that hairline or the
-    /// user still cannot see the voice.
-    func testASpokenFrameIsTallerThanTheIdleHairline() {
-        let spoken = WorkingProgressBar.waveHeight(
-            level: 0.05, full: Theme.Metrics.recordingWaveformHeight)
-        XCTAssertGreaterThan(
-            spoken, Theme.Metrics.progressBarHeight,
-            "speech still fits inside the three-point hairline")
+    /// Drawn into three points, even amplified speech is a dashed line. A quiet
+    /// spoken frame in the icon slot must clear that hairline or the user still
+    /// cannot see the voice.
+    func testASpokenFrameIsTallerThanAHairline() {
+        let spoken = ControlWaveform.waveHeight(
+            level: 0.05, full: ControlWaveform.iconSlotHeight)
+        XCTAssertGreaterThan(spoken, 3, "speech still fits inside a three-point hairline")
     }
 
-    func testTheRecordingWaveformIsTallerThanTheHairline() {
-        XCTAssertGreaterThan(
-            Theme.Metrics.recordingWaveformHeight, Theme.Metrics.progressBarHeight)
-    }
-
-    /// **The strip is the open microphone, not the key's red cap.**
+    /// **The waveform is the open microphone, not the key's red cap.**
     /// `dictationKeyState.isRecording` is true through `.finishing` on purpose.
-    /// The strip used that flag and stayed up until the transcript landed.
+    /// Activity follows `isDictating`, so pause leaves the pause icon and no
+    /// bars.
     @MainActor
-    func testTheStripHidesWhileTheKeyIsStillFinishing() {
+    func testFinishingIsNotRecordingActivity() {
         let controller = KeyboardController(target: MockTextTarget(text: ""))
         controller.isDictating = true
         controller.pendingDictationInsert = true
         controller.isDictating = false
         XCTAssertEqual(controller.dictationKeyState, .finishing)
-        XCTAssertFalse(
-            WorkingProgressBar(controller: controller).showsWaveform,
-            "the strip followed the key's finishing red")
+        XCTAssertEqual(
+            KeyActivity.resolve(for: .dictation, controller: controller),
+            .idle,
+            "finishing followed the key's red cap and kept drawing bars")
+    }
+
+    /// The tone button used to treat every `isWorking` as its own. Fix and
+    /// Reply light their keys; this control only sweeps for rewrite or tone.
+    func testToneActivityIgnoresFixAndReply() {
+        XCTAssertEqual(
+            KeyActivity.resolveTone(runningAction: .fix, isWorking: true, workingPhase: 0.2),
+            .idle)
+        XCTAssertEqual(
+            KeyActivity.resolveTone(runningAction: .reply, isWorking: true, workingPhase: 0.2),
+            .idle)
+        XCTAssertEqual(
+            KeyActivity.resolveTone(runningAction: .rewrite, isWorking: true, workingPhase: 0.2),
+            .working(phase: 0.2))
+        XCTAssertEqual(
+            KeyActivity.resolveTone(runningAction: .tone, isWorking: true, workingPhase: 0.4),
+            .working(phase: 0.4))
+    }
+
+    /// The bar's Rewrite chip already goes dim for any call. The Rewrite key
+    /// used to stay lit through Fix, which is two copies of one control.
+    @MainActor
+    func testSiblingActionKeysDimWhileACallIsRunning() {
+        let controller = KeyboardController(target: MockTextTarget(text: "hello"))
+        controller.isWorking = true
+        controller.runningAction = .fix
+        XCTAssertFalse(controller.isActionKeyDisabled(.aiFix), "the live key must stay the notice")
+        XCTAssertTrue(controller.isActionKeyDisabled(.quickTone))
+        XCTAssertTrue(controller.isActionKeyDisabled(.aiReply))
+        XCTAssertEqual(controller.actionKeyDisabledReason(.quickTone), "Not while a call is running")
     }
 }
 

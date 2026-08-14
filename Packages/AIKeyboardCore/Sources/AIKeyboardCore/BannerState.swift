@@ -44,12 +44,11 @@ public struct BannerOption: Identifiable, Equatable, Sendable {
 /// somebody happened to write the `if`s in.
 ///
 /// **Two of the states it used to carry are no longer sentences.** A model call in
-/// flight is `WorkingProgressBar`, the reserved slot above the candidates, and
-/// a live recording is the microphone key itself in record red — both say what
-/// they were saying without spending a 69pt row that appears and leaves. They are
-/// still *resolved* here, because the order these questions are asked in is the
-/// whole value of this type; they simply resolve to the idle state, which draws
-/// nothing.
+/// flight is a sweep on the key that started it, and a live recording is a
+/// waveform on the microphone — both say what they were saying without spending
+/// a 69pt row that appears and leaves. They are still *resolved* here, because
+/// the order these questions are asked in is the whole value of this type; they
+/// simply resolve to the idle state, which draws nothing.
 public enum BannerState: Equatable {
 
     /// Nothing has been asked for. Carries what to say about that, which is the
@@ -179,7 +178,7 @@ public enum BannerState: Equatable {
         // dictation is first: that is a recording running in another process.
         if let block { return .blocked(block) }
 
-        // **A call in flight is the progress bar, and it is asked here for the
+        // **A call in flight is a sweep on the key, and it is asked here for the
         // same reason the recording above is.** `beginWork` clears `aiError` and
         // sets `isWorking` in the same breath, so a retry tested below this line
         // would flash the failure it is retrying.
@@ -236,8 +235,8 @@ public enum BannerState: Equatable {
     /// **A model call and a recording used to be on this list and are the reason
     /// it is worth stating.** Both are constant, frequent states, and both were
     /// spending 69 points of a 368-point keyboard on a word: the row appeared, the
-    /// keys moved down, and it left again a second later. They report in the
-    /// progress bar and on the microphone key now, where nothing has to move.
+    /// keys moved down, and it left again a second later. They report on the
+    /// control that started them now, where nothing has to move.
     public var isPresented: Bool {
         switch self {
         case .hint: return false

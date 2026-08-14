@@ -423,25 +423,21 @@ final class CustomLayoutTests: XCTestCase {
             Theme.Metrics.keyAreaHeight(for: LayoutPreset.named("compact")!.customization))
     }
 
-    /// The tallest total is the key area plus the three constant rows above it —
-    /// that is what the fingerprint crop and the layout editor's ceiling both
-    /// read. The live host height can omit the banner; see
-    /// `totalHeight(for:showsBanner:)`.
-    ///
-    /// **The progress bar is the third, and the banner-on form still uses the
-    /// three-point hairline.** The live banner-off height reserves the taller
-    /// waveform slot instead; see `testTheWaveformSlotIsReservedWhileTheBannerIsDown`.
-    func testTheTotalIsTheKeyAreaPlusTheThreeConstantRows() {
+    /// The tallest total is the key area plus the banner and the suggestion
+    /// bar. That is what the fingerprint crop and the layout editor's ceiling
+    /// both read. The live host height can omit the banner; see
+    /// `totalHeight(for:showsBanner:)`. Status no longer reserves a row.
+    func testTheTotalIsTheKeyAreaPlusTheBannerAndTheSuggestionBar() {
         XCTAssertEqual(
             Theme.Metrics.totalHeight(for: .default),
             Theme.Metrics.keyAreaHeight(for: .default)
-                + Theme.Metrics.bannerHeight + Theme.Metrics.progressBarHeight
+                + Theme.Metrics.bannerHeight
                 + Theme.Metrics.suggestionBarHeight,
             accuracy: 0.001)
     }
 
-    /// **The shipped keyboard sits exactly on the measured fingerprint cliff, with
-    /// nothing left over, and this is the assertion that says so out loud.**
+    /// **The shipped keyboard must stay under the measured fingerprint cliff,
+    /// and this is the assertion that says so out loud.**
     ///
     /// `FrameReduction.Band.maximumOwnUI` is `368/874`: past 368 points the band
     /// the capture process fingerprints starts eating the host's own message lines
@@ -450,9 +446,10 @@ final class CustomLayoutTests: XCTestCase {
     /// default is not a choice anybody made in the editor, and it must never cross
     /// silently.
     ///
-    /// The margin is zero, which is the point. A taller key or a bigger banner
-    /// has to be paid for by shrinking something else, and this is what
-    /// fails when it is not.
+    /// Deleting the reserved progress slot opened 3 pt under the cliff. Do not
+    /// spend it on taller keys: a taller key or a bigger banner still has to be
+    /// paid for by shrinking something else, and this is what fails when it is
+    /// not.
     func testTheShippedLayoutStillFitsUnderTheFingerprintCliff() {
         XCTAssertLessThanOrEqual(
             Theme.Metrics.totalHeight(for: .default),
@@ -464,31 +461,28 @@ final class CustomLayoutTests: XCTestCase {
             "the default layout warns about itself")
     }
 
-    /// Omitting the banner also swaps the three-point hairline for the reserved
-    /// waveform slot, so the live height drops by the banner minus that extra
-    /// twenty-one points rather than by the banner alone.
+    /// Omitting the banner drops exactly the banner. A running call and a
+    /// recording no longer swap in a reserved slot.
     func testOmittingTheBannerShortensTheLiveHeightByTheBanner() {
         XCTAssertEqual(
             Theme.Metrics.totalHeight(for: .default, showsBanner: true)
                 - Theme.Metrics.totalHeight(for: .default, showsBanner: false),
-            Theme.Metrics.bannerHeight + Theme.Metrics.progressBarHeight
-                - Theme.Metrics.recordingWaveformHeight,
+            Theme.Metrics.bannerHeight,
             accuracy: 0.001)
     }
 
-    /// The waveform slot is reserved while the banner is down, so opening the
-    /// microphone cannot move the keys. Paid out of the banner-off budget: the
-    /// fingerprint cliff is the banner-on total, which this slot does not reach.
-    func testTheWaveformSlotIsReservedWhileTheBannerIsDown() {
+    /// Banner-off height is the suggestion bar plus the keys. Opening the
+    /// microphone cannot move them because nothing about a recording is a row.
+    func testBannerOffHeightIsTheSuggestionBarAndTheKeys() {
         let live = Theme.Metrics.totalHeight(for: .default, showsBanner: false)
         XCTAssertEqual(
-            live - Theme.Metrics.keyAreaHeight(for: .default)
-                - Theme.Metrics.suggestionBarHeight,
-            Theme.Metrics.recordingWaveformHeight,
+            live,
+            Theme.Metrics.keyAreaHeight(for: .default)
+                + Theme.Metrics.suggestionBarHeight,
             accuracy: 0.001)
         XCTAssertLessThan(
             live, Theme.Metrics.totalHeight(for: .default),
-            "the reserved waveform slot must stay under the tallest form")
+            "banner-off must stay under the tallest form")
     }
 
     /// Across layouts, the tallest-form total still differs only by the key area.

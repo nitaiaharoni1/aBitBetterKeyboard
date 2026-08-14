@@ -31,7 +31,7 @@ extension SuggestionBar {
         /// A call is already in flight. `beginWork` cancels its predecessor, so a
         /// second tap would throw away the answer being waited on — and this is
         /// the one state where ignoring a tap is honest, because the button is
-        /// showing a spinner rather than an icon.
+        /// already the thing being waited on.
         case ignore
     }
 
@@ -96,9 +96,11 @@ extension SuggestionBar {
     /// glyph fades to the same `KeyView.disabledLabelOpacity` the Rewrite key in
     /// the action row fades to, and it takes no tap — the two are one control in
     /// two places and used to disagree about what an empty field means, which is
-    /// D8's own defect. A call in flight replaces the icon with a spinner. A call
-    /// that *failed* needs nothing here: `beginWork` puts the reason in `aiError`
-    /// and `ActionBanner` is already showing it, one row up.
+    /// D8's own defect. A rewrite or tone call in flight keeps the icon and
+    /// sweeps the filled cap; Fix and Reply leave this button alone and light
+    /// their own keys. A call that *failed* needs nothing here: `beginWork` puts
+    /// the reason in `aiError` and `ActionBanner` is already showing it, one row
+    /// up.
     ///
     /// **The question is asked of `isActionKeyDisabled` rather than of
     /// `documentHasText`, so this button and the Rewrite key cannot answer it
@@ -113,10 +115,17 @@ extension SuggestionBar {
         let isBusy = controller.isWorking
         let tap = Self.toneTap(
             hasTextToWorkWith: !controller.isActionKeyDisabled(.quickTone), isWorking: isBusy)
+        let activity = KeyActivity.resolveTone(
+            runningAction: controller.runningAction,
+            isWorking: isBusy,
+            workingPhase: controller.workingPhase)
+        let isToneWorking = activity != .idle
 
-        let tint =
-            tap == .rewrite
-            ? Theme.Brand.solid : Theme.Keys.label.opacity(KeyView.disabledLabelOpacity)
+        let tint: Color = {
+            if isToneWorking { return Theme.Text.onBrand }
+            if tap == .rewrite { return Theme.Brand.solid }
+            return Theme.Keys.label.opacity(KeyView.disabledLabelOpacity)
+        }()
 
         return Button {
             // Only one state can be reached by a tap now; the other two are
@@ -128,41 +137,39 @@ extension SuggestionBar {
             case .needsText, .ignore: break
             }
         } label: {
-            // The spinner replaces the glyph and not the label: a bare spinner in
-            // a 68pt slot is an unlabelled box, and the button is being waited on
-            // precisely when the user most wants to know what they tapped.
-            VStack(spacing: 1) {
-                Group {
-                    if isBusy {
-                        ProgressView()
-                            .controlSize(.mini)
-                            .tint(Theme.Brand.solid)
-                    } else {
-                        Image(systemName: Self.toneButtonSymbol)
-                            .font(Theme.Glyph.medium(15))
-                            .foregroundStyle(tint)
-                    }
-                }
-                .frame(height: 18)
-
-                Text(tone.title)
-                    .font(Font(Self.toneLabelFont))
-                    .foregroundStyle(tint)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, Self.toneButtonInset)
-            .frame(width: Self.toneButtonWidth, height: 40)
-            .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+                    .fill(Theme.Brand.action)
+                    .opacity(isToneWorking ? 1 : 0)
                 RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                     .fill(Theme.Brand.softGradient)
-                    .opacity(tap == .rewrite ? 1 : 0)
+                    .opacity(tap == .rewrite && !isToneWorking ? 1 : 0)
+                ControlActivityChrome(activity: activity, cornerRadius: Theme.Radius.chip)
+                VStack(spacing: 1) {
+                    Image(systemName: Self.toneButtonSymbol)
+                        .font(Theme.Glyph.medium(15))
+                        .frame(height: 18)
+                    Text(tone.title)
+                        .font(Font(Self.toneLabelFont))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(tint)
+                .padding(.horizontal, Self.toneButtonInset)
+            }
+            .clipShape(
+                RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
             )
+            .frame(width: Self.toneButtonWidth, height: 40)
             .contentShape(Rectangle())
         }
         .pressable()
         .disabled(tap != .rewrite)
         .accessibilityIdentifier("bar-tone")
-        .accessibilityLabel("Rewrite as \(tone.title)")
+        .accessibilityLabel(
+            isToneWorking
+                ? "\(controller.runningAction?.title ?? AIAction.rewrite.title), working"
+                : "Rewrite as \(tone.title)"
+        )
         .accessibilityHint(toneHint(tap))
     }
 

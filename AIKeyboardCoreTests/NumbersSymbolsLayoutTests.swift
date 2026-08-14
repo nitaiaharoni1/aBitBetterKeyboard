@@ -110,8 +110,14 @@ final class NumbersSymbolsLayoutTests: LanguageCatalogueTestFixture {
         XCTAssertEqual(KeyboardCustomization.default.rowCount, 5)
         XCTAssertEqual(
             Theme.Metrics.totalHeight(for: .default),
-            368,
+            Theme.Metrics.keyAreaHeight(for: .default)
+                + Theme.Metrics.bannerHeight
+                + Theme.Metrics.suggestionBarHeight,
             accuracy: 0.001)
+        XCTAssertLessThanOrEqual(
+            Theme.Metrics.totalHeight(for: .default),
+            LayoutValidator.screenContextHeightLimit,
+            "the extra symbols row grew the shipped keyboard past the fingerprint cliff")
     }
 
     /// `extraSymbols` is 5 because 3 is the space row. Two rows with one id is

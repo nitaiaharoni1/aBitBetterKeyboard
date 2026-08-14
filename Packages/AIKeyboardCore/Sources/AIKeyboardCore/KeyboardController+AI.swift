@@ -339,8 +339,8 @@ extension KeyboardController {
         // the ordinary outcome of running Fix over a sentence that is already
         // right. Re-typing the same characters would move the cursor and leave a
         // revert button offering to change nothing. Telling the user "Nothing to
-        // change" is a 69pt strip for a tap that did its job. The progress bar
-        // ending is the signal; the field is already what they wanted.
+        // change" is a 69pt strip for a tap that did its job. The sweep on the
+        // key ending is the signal; the field is already what they wanted.
         guard answer != previous else {
             clearBannerState()
             return
@@ -433,7 +433,7 @@ extension KeyboardController {
     ///
     /// `clearBannerState()` alone is not enough: a cancelled `beginWork` returns at
     /// its own `Task.isCancelled` guard without ever reaching the line that clears
-    /// `isWorking`, so the progress bar would run for ever.
+    /// `isWorking`, so the sweep on the key would run for ever.
     func cancelAIWork() {
         workingTask?.cancel()
         workingTask = nil

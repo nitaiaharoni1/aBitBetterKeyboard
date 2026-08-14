@@ -285,25 +285,65 @@ final class AlternatesPopupTests: XCTestCase {
         XCTAssertEqual(fix.alternateRestIndex, 0)
     }
 
-    /// Same standing-finger rule as a letter, on a stack: the point under a
-    /// finger that never moved is not item 0, so rest has to keep Fix.
+    /// Same standing-finger rule as a letter, on a stack. The key sits
+    /// *below* the stack, so the raw point on the cap clamps to index 0.
+    /// A letter's centred strip is the opposite: the cap maps to the middle
+    /// item, which is why `hasSlid` exists. Lifting without a slide still
+    /// keeps Fix either way.
     func testAStandingFingerOnFixKeepsProofread() {
         let view = recordingKey(
-            KeySpec(.aiFix), fixes: ["Fix", "Spelling", "Punctuate", "Polish"]).0
+            KeySpec(.aiFix), fixes: ["Fix", "Spelling", "Punctuate", "Polish"]
+        ).0
         XCTAssertTrue(view.runsOnLift)
         XCTAssertEqual(view.alternateItems, ["Fix", "Spelling", "Punctuate", "Polish"])
         let centre = CGPoint(x: 17, y: 22)
-        XCTAssertNotEqual(view.alternateIndex(at: centre), 0)
+        XCTAssertEqual(view.alternateIndex(at: centre), 0)
         XCTAssertEqual(
             view.alternateIndexOnLift(
                 popupIsVisible: true, translation: .zero, location: centre),
             0)
+        let spelling = CGPoint(x: 17, y: -57)
+        XCTAssertEqual(view.alternateIndex(at: spelling), 1)
         XCTAssertEqual(
             view.alternateIndexOnLift(
                 popupIsVisible: true,
-                translation: CGSize(width: 0, height: -20),
-                location: CGPoint(x: 17, y: -20)),
-            view.alternateIndex(at: CGPoint(x: 17, y: -20)))
+                translation: CGSize(width: 0, height: -79),
+                location: spelling),
+            1)
+    }
+
+    /// **The measurement that rejects a dropdown.** Drawing the passes in list
+    /// order put Fix at the top of the stack and Polish next to the key, so the
+    /// menu hung down toward the finger. Index 0 is the near edge: just above
+    /// the key. The last pass is further up. A positive offset is the other
+    /// half of the same defect — the list sitting on the letters.
+    func testTheFixPopupGrowsUpFromTheKey() {
+        let view = recordingKey(
+            KeySpec(.aiFix), fixes: ["Fix", "Spelling", "Punctuate", "Polish"]
+        ).0
+        XCTAssertTrue(view.alternatesAreStacked)
+        XCTAssertEqual(view.alternatesPopupAlignment, .top)
+        XCTAssertEqual(view.alternatesPopupOffsetY, -(34 * 4 + 6))
+        XCTAssertEqual(view.alternateIndex(at: CGPoint(x: 17, y: -7)), 0)
+        XCTAssertEqual(view.alternateIndex(at: CGPoint(x: 17, y: -125)), 3)
+
+        let rewrite = recordingKey(
+            KeySpec(.quickTone), tones: ["Clearer", "Friendly", "Casual"]
+        ).0
+        XCTAssertTrue(rewrite.alternatesAreStacked)
+        XCTAssertEqual(rewrite.alternatesPopupAlignment, .top)
+        XCTAssertEqual(rewrite.alternatesPopupOffsetY, -(34 * 3 + 6))
+        XCTAssertEqual(rewrite.alternateIndex(at: CGPoint(x: 17, y: -7)), 0)
+    }
+
+    /// A letter strip is the other shape: still a row, still above the key,
+    /// still aligned to the key's bottom. Collapsing both popups onto `.top`
+    /// would lift every accent strip by a key-height.
+    func testALetterPopupIsNotAStack() throws {
+        let letter = try letterKey("a", in: .english)
+        XCTAssertFalse(letter.alternatesAreStacked)
+        XCTAssertEqual(letter.alternatesPopupAlignment, .bottom)
+        XCTAssertEqual(letter.alternatesPopupOffsetY, -letter.height - 6)
     }
 
     // MARK: Handler path — shipping delete-then-retype route

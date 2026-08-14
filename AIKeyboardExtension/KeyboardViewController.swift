@@ -121,12 +121,13 @@ final class KeyboardViewController: UIInputViewController {
         )
 
         // The action banner appears for a live reading, a refusal or a failure,
-        // so the height we ask the host for has to follow it. Recording does not:
-        // the waveform slot is already reserved in the banner-off height.
-        // `objectWillChange` fires before the property lands; defer one turn so
-        // the read sees the new state. Presence is compared only after that turn:
-        // every keystroke and every loudness tick publishes, and the constraint
-        // must not move unless the strip actually appeared.
+        // so the height we ask the host for has to follow it. A model call and a
+        // recording do not: they report on the control, so the host height stays
+        // at the banner-off total. `objectWillChange` fires before the property
+        // lands; defer one turn so the read sees the new state. Presence is
+        // compared only after that turn: every keystroke and every loudness tick
+        // publishes, and the constraint must not move unless the strip actually
+        // appeared.
         controller.objectWillChange
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -200,6 +201,13 @@ final class KeyboardViewController: UIInputViewController {
         host.view.insetsLayoutMarginsFromSafeArea = false
         host.view.backgroundColor = .clear
         host.view.translatesAutoresizingMaskIntoConstraints = false
+        // Fix and Rewrite stacks grow up from the action row, through the
+        // suggestion bar and into the host, the way a system key preview does.
+        // The default clip cuts them off at the keyboard's top edge, and the
+        // only room left is over the letters — which is how those two menus
+        // read as opening downward.
+        view.clipsToBounds = false
+        host.view.clipsToBounds = false
 
         addChild(host)
         view.addSubview(host.view)
@@ -398,8 +406,8 @@ final class KeyboardViewController: UIInputViewController {
         // Banner presence plus the layout. The fingerprint crop still uses the
         // tallest form — see `ownUIHeightFraction()` — so a mid-read resize
         // cannot move the band even though the host height follows the strip.
-        // Recording does not change this: the waveform slot is reserved while
-        // the banner is down.
+        // A recording or a model call does not change this: neither reserves a
+        // row.
         let showsBanner = controller.showsActionBanner
         lastShowsActionBanner = showsBanner
         let height = Theme.Metrics.totalHeight(

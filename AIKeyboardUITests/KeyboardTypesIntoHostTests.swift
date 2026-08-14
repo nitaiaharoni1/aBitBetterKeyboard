@@ -198,12 +198,11 @@ final class KeyboardTypesIntoHostTests: KeyboardExtensionTestCase {
     /// banner to be fully on screen and hittable, then dismiss it.
     ///
     /// Height check: `app.keyboards.firstMatch` is the UIKit keyboard window the
-    /// extension occupies. Appearing the banner also swaps the reserved waveform
-    /// slot (24 pt) for the three-point hairline, so net growth is 37 pt
-    /// (`bannerHeight + progressBarHeight - recordingWaveformHeight`). Assert
+    /// extension occupies. Appearing the banner adds `bannerHeight` (58 pt).
+    /// Status no longer reserves a row, so there is no 24-for-3 swap. Assert
     /// that number with a few points of simulator rounding, not a lower bound:
     /// a missed idle keyboard reports height 0 and would pass any `> 30` check
-    /// against a real after-height, and the old 58 pt growth would pass it too.
+    /// against a real after-height.
     func testARefusalGrowsTheRealExtensionToFitTheBanner() throws {
         _ = try standExtensionOverARealTextField()
 
@@ -230,10 +229,10 @@ final class KeyboardTypesIntoHostTests: KeyboardExtensionTestCase {
 
         let afterHeight = keyboard.frame.height
         XCTAssertEqual(
-            afterHeight - beforeHeight, CGFloat(37), accuracy: 8,
+            afterHeight - beforeHeight, CGFloat(58), accuracy: 8,
             """
             Extension grew \(afterHeight - beforeHeight) pt after the banner appeared; \
-            expected ~37 pt. The height-constraint wiring in KeyboardViewController \
+            expected ~58 pt. The height-constraint wiring in KeyboardViewController \
             may not be reaching the host.
             """)
 

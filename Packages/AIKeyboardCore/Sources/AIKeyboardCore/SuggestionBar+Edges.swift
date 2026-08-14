@@ -86,7 +86,8 @@ extension SuggestionBar {
                 value: controller.dictationKeyState.accessibilityValue,
                 isActive: true,
                 activeFill: controller.dictationKeyState.isRecording
-                    ? Theme.Semantic.record : Theme.Brand.action
+                    ? Theme.Semantic.record : Theme.Brand.action,
+                activity: KeyActivity.resolve(for: .dictation, controller: controller)
             ) {
                 controller.press(.dictation)
             }
@@ -103,7 +104,8 @@ extension SuggestionBar {
                         ? cap.accessibilityLabel(
                             isRightToLeft: controller.language.isRightToLeft)
                         : nil,
-                    isActive: controller.isActionKeyActive(cap)
+                    isActive: controller.isActionKeyActive(cap),
+                    activity: KeyActivity.resolve(for: cap, controller: controller)
                 ) {
                     controller.press(cap)
                 }
@@ -128,23 +130,43 @@ extension SuggestionBar {
         value: String = "",
         isActive: Bool,
         activeFill: Color = Theme.Brand.action,
+        activity: KeyActivity = .idle,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(Theme.Glyph.font(19))
-                .foregroundStyle(isActive ? Theme.Text.onBrand : Theme.Keys.secondaryLabel)
-                .frame(width: 44, height: 40)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
-                        .fill(isActive ? activeFill : .clear)
-                )
-                .contentShape(Rectangle())
+        let workingLabel: String? = {
+            if case .working = activity { return "\(label), working" }
+            return nil
+        }()
+        return Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+                    .fill(isActive ? activeFill : .clear)
+                ControlActivityChrome(activity: activity, cornerRadius: Theme.Radius.chip)
+                edgeGlyph(systemImage: systemImage, activity: activity, isActive: isActive)
+            }
+            .clipShape(
+                RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+            )
+            .frame(width: 44, height: 40)
+            .contentShape(Rectangle())
         }
         .pressable()
         .accessibilityIdentifier("bar-\(label.lowercased())")
-        .accessibilityLabel(spokenLabel ?? label)
+        .accessibilityLabel(workingLabel ?? spokenLabel ?? label)
         .accessibilityValue(value)
+    }
+
+    @ViewBuilder
+    private func edgeGlyph(systemImage: String, activity: KeyActivity, isActive: Bool) -> some View {
+        let tint = isActive ? Theme.Text.onBrand : Theme.Keys.secondaryLabel
+        if case .recording(let levels) = activity {
+            ControlWaveform(levels: levels, color: tint)
+                .padding(.horizontal, 6)
+        } else {
+            Image(systemName: systemImage)
+                .font(Theme.Glyph.font(19))
+                .foregroundStyle(tint)
+        }
     }
 
     // MARK: Undo

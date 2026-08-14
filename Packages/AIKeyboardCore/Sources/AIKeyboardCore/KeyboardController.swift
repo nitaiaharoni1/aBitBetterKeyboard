@@ -202,18 +202,14 @@ public final class KeyboardController: ObservableObject {
     /// times a second to redraw the same three characters.
     @Published public private(set) var dictationRemainingSeconds: Double?
 
-    /// The last few loudness readings, oldest first, for the sliver of waveform
-    /// the strip above the candidates draws while somebody is speaking.
+    /// The last few loudness readings, oldest first, for the waveform the
+    /// microphone key (and its bar copy) draw while somebody is speaking.
     ///
     /// **A history rather than the current level, because one number is not a
     /// wave.** `DictationSession.level` is a single peak per poll; drawing it
     /// alone gives one bar pumping in place, which reads as a progress indicator
     /// rather than as sound. Keeping the last `dictationLevelHistory` of them and
     /// scrolling them leftwards is what makes it look like a voice.
-    ///
-    /// It is short on purpose: three points of height and about thirty bars is all
-    /// the reserved strip has, and the whole point of that strip is that it costs
-    /// nothing when nothing is happening.
     @Published public private(set) var dictationLevels: [Double] = []
 
     /// How many readings the sliver keeps. At the session's 10 Hz poll this is

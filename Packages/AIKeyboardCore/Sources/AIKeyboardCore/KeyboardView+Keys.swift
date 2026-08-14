@@ -97,6 +97,9 @@ extension KeyboardView {
                             .transition(panelTransition)
                         }
                     }
+                    // Above the letter block so a stack that grows up from
+                    // Fix or Rewrite is not painted under the QWERTY row.
+                    .zIndex(1)
                 }
 
                 ZStack(alignment: .top) {
@@ -279,6 +282,16 @@ extension KeyboardView {
                 // candidates. Same shape as `toneAlternates` and `isEmojiOpen`
                 // above: state the `KeySpec` cannot reach on its own.
                 dictationState: key.cap == .dictation ? controller.dictationKeyState : .idle,
+                // Only the microphone and the three text actions. Letter keys
+                // stay `.idle` so a 60 Hz `workingPhase` tick cannot be the
+                // reason they rebuild.
+                activity: {
+                    let cap = key.cap
+                    if cap == .dictation || KeyActivity.hostsWorkingSweep(cap) {
+                        return KeyActivity.resolve(for: cap, controller: controller)
+                    }
+                    return .idle
+                }(),
                 onPress: { controller.press($0, at: $1) },
                 // Held backspace deletes words through `deletePreviousWord`, which
                 // still clicks and still intercepts emoji search. Forward-delete

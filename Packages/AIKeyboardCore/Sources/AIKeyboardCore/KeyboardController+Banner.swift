@@ -33,9 +33,9 @@ extension KeyboardController {
     /// **Asked of the controller rather than of the strip, because the strip is
     /// no longer up for the two states this most has to answer.** It used to read
     /// `BannerState.activeActionKey`, which worked only for as long as every live
-    /// state had a row of its own; a running call and a live recording draw no
-    /// strip now, and a key that stopped lighting for them would leave the user
-    /// with nothing at all saying which of the five they had tapped.
+    /// state had a row of its own; a running call and a live recording now light
+    /// the control itself, and a key that stopped lighting for them would leave
+    /// the user with nothing at all saying which of the five they had tapped.
     public func isActionKeyActive(_ cap: KeyCap) -> Bool {
         if case .emoji = cap { return overlay.isEmoji }
         if cap == .dictation {
@@ -107,8 +107,9 @@ extension KeyboardController {
     /// place the user is already looking, without spending a strip and a Dismiss
     /// tap on a sentence they can work out from an empty field. The words survive
     /// for anyone who cannot see it: `KeyView` reads `actionKeyDisabledReason` as
-    /// the key's accessibility hint — one of two sentences now, since a recording
-    /// in progress disables these keys as well as an empty field — and
+    /// the key's accessibility hint — one of three sentences now, since a recording
+    /// in progress and a call already running disable these keys as well as an
+    /// empty field — and
     /// `refuseForEmptyField` is still there behind every route that is not a key.
     /// **A recording disables all three, including the one that needs no text.**
     /// The field is being written into a couple of words at a time while somebody
@@ -122,6 +123,12 @@ extension KeyboardController {
         if isDictationActive {
             return cap == .aiFix || cap == .quickTone || cap == .aiReply
         }
+        // A call in flight owns one key. The others must look off, or the bar's
+        // Rewrite chip goes dim (it already ignores every `isWorking`) while the
+        // Rewrite key stays lit — D8 on the two copies of one control.
+        if isWorking, KeyActivity.hostsWorkingSweep(cap), !isActionKeyActive(cap) {
+            return true
+        }
         switch cap {
         case .aiFix, .quickTone: return !documentHasText
         default: return false
@@ -133,13 +140,15 @@ extension KeyboardController {
     ///
     /// **A dimmed cap says "not now" to somebody who can see it and nothing at all
     /// to somebody who cannot**, so the reason has to survive in words — and there
-    /// are two reasons now. "Type something first" was the only one for as long as
+    /// are three reasons now. "Type something first" was the only one for as long as
     /// an empty field was the only thing that could disable these keys, and reading
-    /// it out over a live recording would be telling the user to do the one thing
-    /// they are already doing.
+    /// it out over a live recording or another call would be telling the user to
+    /// do the one thing they are already doing.
     public func actionKeyDisabledReason(_ cap: KeyCap) -> String {
         guard isActionKeyDisabled(cap) else { return "" }
-        return isDictationActive ? "Not while you're dictating" : "Type something first"
+        if isDictationActive { return "Not while you're dictating" }
+        if isWorking { return "Not while a call is running" }
+        return "Type something first"
     }
 
     /// Clears every published field the banner reads for an AI answer.

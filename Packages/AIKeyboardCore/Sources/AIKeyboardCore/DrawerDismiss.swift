@@ -14,8 +14,8 @@ import SwiftUI
 /// letter is already in the document by the time the finger has travelled far
 /// enough to look like a dismiss. Wrapping the grid would type `q` and then hide
 /// the keyboard, which is two things the user did not ask for from one touch.
-/// Chrome does not insert. The progress bar and the suggestion strip are the
-/// band a downward swipe can mean dismiss without a letter already being owed.
+/// Chrome does not insert. The suggestion strip is the band a downward swipe
+/// can mean dismiss without a letter already being owed.
 ///
 /// **The banner is not in this file's call site either.** `ActionBanner` hosts
 /// `RPSystemBroadcastPickerView`, whose pressable area is the system `UIButton`

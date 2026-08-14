@@ -53,6 +53,9 @@ public struct KeyView: View {
     /// are: it is resolved from a recording running in another process, and a
     /// `KeySpec` is a value that can read none of that. See `DictationKeyState`.
     let dictationState: DictationKeyState
+    /// Live work on this key, if it is the one that started it. `.idle` on
+    /// every other key so a 60 Hz phase tick does not rebuild the grid.
+    let activity: KeyActivity
     let onPress: (KeyCap, CGPoint) -> Void
     let onRepeat: (() -> Void)?
     let onAlternate: ((String) -> Void)?
@@ -98,6 +101,7 @@ public struct KeyView: View {
         isDisabled: Bool = false,
         disabledHint: String = "",
         dictationState: DictationKeyState = .idle,
+        activity: KeyActivity = .idle,
         onPress: @escaping (KeyCap, CGPoint) -> Void,
         onRepeat: (() -> Void)? = nil,
         onAlternate: ((String) -> Void)? = nil,
@@ -119,6 +123,7 @@ public struct KeyView: View {
         self.isDisabled = isDisabled
         self.disabledHint = disabledHint
         self.dictationState = dictationState
+        self.activity = activity
         self.onPress = onPress
         self.onRepeat = onRepeat
         self.onAlternate = onAlternate
@@ -139,6 +144,8 @@ public struct KeyView: View {
                     x: 0, y: isPressed ? Self.pressAmbientY : Self.restAmbientY
                 )
 
+            activityChrome
+
             label
         }
         .frame(width: width, height: height)
@@ -152,7 +159,7 @@ public struct KeyView: View {
         // `isPressed`. Without this, that insertion is SwiftUI's default
         // animation, and a tap is over before the letter is readable.
         .animation(nil, value: isTouching)
-        .overlay(alignment: .bottom) { alternatesPopup }
+        .overlay(alignment: alternatesPopupAlignment) { alternatesPopup }
         .overlay(alignment: .bottom) { languageCallout }
         // Instant on the way down: even an 80ms ease-out is longer than a tap,
         // so the pressed fill the tokens specify was a colour the thumb never
@@ -249,6 +256,9 @@ public struct KeyView: View {
         // A grouped letter key is the other one: it is `.character("qw\nas")`, and
         // only the layout that built it knows that is four letters rather than a
         // snippet. See `KeySpec.spokenLabel`.
+        if case .working = activity {
+            return "\(workingTitle(for: cap)), working"
+        }
         if let spoken = spec.spokenLabel { return spoken }
         switch cap {
         case .dictation:
@@ -256,6 +266,26 @@ public struct KeyView: View {
         default:
             return cap.accessibilityLabel(isRightToLeft: language.isRightToLeft)
         }
+    }
+
+    /// The action's own title, so VoiceOver names the thing that is running
+    /// rather than the key's idle name ("One-tap rewrite, working").
+    func workingTitle(for cap: KeyCap) -> String {
+        switch cap {
+        case .aiFix: return AIAction.fix.title
+        case .aiReply: return AIAction.reply.title
+        case .quickTone: return AIAction.rewrite.title
+        default:
+            return spec.spokenLabel
+                ?? cap.accessibilityLabel(isRightToLeft: language.isRightToLeft)
+        }
+    }
+
+    /// Sweep under the label, clipped to the cap. Recording draws in the
+    /// icon slot instead — see `actionLabel`.
+    @ViewBuilder
+    var activityChrome: some View {
+        ControlActivityChrome(activity: activity, cornerRadius: Theme.Radius.key)
     }
 
     var hint: String {

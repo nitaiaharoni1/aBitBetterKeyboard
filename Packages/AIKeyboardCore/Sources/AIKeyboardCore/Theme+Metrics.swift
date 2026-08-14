@@ -10,54 +10,23 @@ extension Theme {
     public enum Metrics {
         public static let suggestionBarHeight: CGFloat = 36
 
-        /// The hairline above the suggestion bar that says a model call is
-        /// running. See `WorkingProgressBar`.
-        ///
-        /// **Its height is spent whether or not anything is running, and that is
-        /// the whole point of it.** A strip that appeared with the call would move
-        /// the three candidates and the whole key grid under the thumb twice per
-        /// tap — which is exactly what the banner did while it carried the
-        /// shimmer, and why it is not carrying it any more.
-        ///
-        /// **The three points came out of the banner rather than out of the
-        /// total.** `FrameReduction.Band.maximumOwnUI` is `368/874`: 368 is the
-        /// measured cliff past which the frame fingerprint stops telling two
-        /// conversations apart, so a row that is added has to be paid for by a row
-        /// that shrinks. See `bannerHeight` below.
-        public static let progressBarHeight: CGFloat = 3
-
-        /// How tall the recording waveform is allowed to grow.
-        ///
-        /// **The hairline above cannot show loudness.** Three points with a floor
-        /// is a dashed line; speech needs vertical room or every frame looks the
-        /// same. 24 is the `WaveformView` in the companion app at a size that
-        /// still fits under the fingerprint cliff.
-        ///
-        /// **Spent whenever the banner is down, not only while the microphone is
-        /// on.** Swapping 3 for 24 at the start of a recording moved every key
-        /// under the thumb, and swapping back at stop moved them again. The
-        /// banner-off live height therefore always includes this slot; a model
-        /// call keeps the three-point sweep centred inside it. The fingerprint
-        /// crop still reads the tallest form (banner on, three-point hairline),
-        /// which this reserved slot does not exceed: 24 sits 37 points under
-        /// `bannerHeight + progressBarHeight`.
-        public static let recordingWaveformHeight: CGFloat = 24
-
         /// The strip above the suggestion bar: what the keyboard is doing, and the
         /// answer when it has one. See `ActionBanner`.
         ///
-        /// **Constant while shown, omitted for everything the keys and the
-        /// progress bar can say themselves.** A running call is the bar above; a
-        /// live recording is the microphone key, drawn in record red. What is left
-        /// is a live screen reading, a refusal and a failure — sentences with
-        /// nowhere else to go. See `BannerState.isPresented`. The fingerprint crop
-        /// does not follow it: `KeyboardGeometry.ownUIHeightFraction` still reports
-        /// the tallest form so a mid-read resize cannot move the band.
+        /// **Constant while shown, omitted for everything the keys can say
+        /// themselves.** A running call is a sweep on the key that started it; a
+        /// live recording is a waveform on the microphone. What is left is a live
+        /// screen reading, a refusal and a failure — sentences with nowhere else
+        /// to go. See `BannerState.isPresented`. The fingerprint crop does not
+        /// follow it: `KeyboardGeometry.ownUIHeightFraction` still reports the
+        /// tallest form so a mid-read resize cannot move the band.
         ///
         /// **58, paid down from 69 so the letter keys could grow.** Title plus
-        /// two lines of detail still fit. The total may not move, because the
+        /// two lines of detail still fit. The total may not grow, because the
         /// cliff between 368 and 370 (`FrameReduction.Band.maximumOwnUI`) is
-        /// measured rather than chosen.
+        /// measured rather than chosen. Deleting the reserved progress slot
+        /// shrinks the tallest form by 3 pt; that space is not spent on taller
+        /// keys.
         ///
         /// The height of this keyboard is a constraint now, not a taste: another
         /// row, or a taller banner, costs a conversation switch on every screen
@@ -66,8 +35,8 @@ extension Theme {
         public static let keyHeight: CGFloat = 43
         /// Points the numbers row gives the space row.
         ///
-        /// **A transfer, not a growth.** The shipped total sits on the 368 pt
-        /// fingerprint cliff, so the space bar can only get taller if another row
+        /// **A transfer, not a growth.** The shipped total sits 3 pt under the
+        /// 368 pt fingerprint cliff, so the space bar can only get taller if another row
         /// in the same grid gets shorter by the same amount. Applied when the
         /// digits are on screen: the optional number row, and the top row of the
         /// 123 / `#+=` planes. Letter rows stay at `keyHeight`.
@@ -135,16 +104,13 @@ extension Theme {
         ///
         /// The banner is omitted for everything the keys can say themselves
         /// (`showsBanner: false`). Ordinary typing, a running model call, and a
-        /// live recording all use that form. The progress slot is in every form
-        /// of this: `progressBarHeight` under a banner, and
-        /// `recordingWaveformHeight` whenever the banner is down, recording or
-        /// not, so opening the microphone cannot move the keys. The fingerprint
-        /// crop still reads the tallest form (banner on, hairline).
+        /// live recording all use that form: status lives on the control, so
+        /// none of those states reserve a row. The fingerprint crop still reads
+        /// the tallest form (banner on).
         public static func totalHeight(
             for layout: KeyboardCustomization, showsBanner: Bool
         ) -> CGFloat {
-            let progress = showsBanner ? progressBarHeight : recordingWaveformHeight
-            return (showsBanner ? bannerHeight : 0) + progress + suggestionBarHeight
+            return (showsBanner ? bannerHeight : 0) + suggestionBarHeight
                 + keyAreaHeight(for: layout)
         }
 
