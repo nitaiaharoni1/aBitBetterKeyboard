@@ -42,9 +42,11 @@ progress.
 The score at the time of writing is **72/76 judged**, from 47/76 before the engine
 was made context-aware. It read 73/76 under the scorer that did not measure the
 commit column; the same engine scored 71/76 the first time it was measured
-honestly, and the entry that closed the gap is `he-comp-07`. The one commit
-failure left in `acceptable-closed` is `en-comp-03`, where `respon` commits
-`respond` against a closed list of `response`/`responses`.
+honestly, and the entry that closed the gap is `he-comp-07`. `en-comp-03` used
+to commit `respond` for `Thanks for the quick respon` against a closed list of
+`response`/`responses`; the unfinished-stem rule now leaves a bare `respon`
+alone and commits `response` when `the quick` is the context. Re-run the
+harness on a simulator before treating that as a headline move.
 
 `corpus.json` is **the exam**: 90 frozen moments mid-typing, each one a context, a
 word in progress, and a note saying what it is probing. It never changes once a

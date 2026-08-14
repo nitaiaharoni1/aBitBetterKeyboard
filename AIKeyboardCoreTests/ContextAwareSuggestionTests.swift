@@ -173,6 +173,52 @@ final class ContextAwareSuggestionTests: XCTestCase {
         }
     }
 
+    /// **The four-letter gate used to finish other people's words.** `respon` is
+    /// `respond`, `response` and `responsible` — three readings, none of them a
+    /// typo — and space committed `respond` because it sits first in the seed.
+    /// Corpus `en-comp-03` is `Thanks for the quick respon`, whose closed list
+    /// is the noun. The old default is what this rejects: a verb nobody asked
+    /// for. `schedule` / `scheduled` is the control, one lexeme with a tail,
+    /// and still commits.
+    func testAnAmbiguousUnfinishedStemIsNotCommitted() {
+        XCTAssertTrue(
+            SuggestionEngine.hasDistinctLexemes(["respond", "response", "responsible"]),
+            "respond/response are two words; a helper that treated any shared prefix "
+                + "as one lexeme would let the four-letter gate keep committing respond")
+        XCTAssertFalse(
+            SuggestionEngine.hasDistinctLexemes(["schedule", "scheduled"]),
+            "scheduled is schedule with a tail — the four-letter gate must still "
+                + "commit schedule for sched")
+
+        let results = SuggestionEngine.suggestions(
+            prefix: "respon", context: "", languages: [.english], personal: emptyPersonal())
+        XCTAssertEqual(
+            results.first(where: \.isDefault)?.text, "respon",
+            "space would finish an unfinished word: \(results.map(\.text))")
+        XCTAssertTrue(
+            results.contains { $0.text.lowercased() == "respond" }
+                || results.contains { $0.text.lowercased() == "response" },
+            "the readings still have to be tappable: \(results.map(\.text))")
+    }
+
+    /// The sentence is allowed to pick. `the quick` is followed by `response` in
+    /// the seed, so the noun takes the bold slot and space commits it — the
+    /// same context climb `לקבוע תו` already uses for `תור`. Without the
+    /// bigram the frequency prior still ranks `respond` first and this would
+    /// look like the test above.
+    func testContextPicksTheNounReadingOfAnAmbiguousStem() {
+        XCTAssertEqual(
+            SeedLanguageModel.followers(after: ["the", "quick"], in: .english).first,
+            "response")
+
+        let results = SuggestionEngine.suggestions(
+            prefix: "respon", context: "Thanks for the quick ",
+            languages: [.english], personal: emptyPersonal())
+        XCTAssertEqual(
+            results.first(where: \.isDefault)?.text.lowercased(), "response",
+            "got \(results.map(\.text)) — the old bar committed respond here")
+    }
+
     // MARK: Hebrew morphology
 
     /// One seed entry for `עבודה` has to serve `לעבודה`, `בעבודה` and `מהעבודה`,
