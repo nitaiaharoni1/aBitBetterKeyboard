@@ -80,6 +80,7 @@ extension KeyboardController {
             // The line is finished, so any word on it was finished with it — the
             // same close-out `insertSpace` does. See `isCorrectingWordByHand`.
             deletedWordPrefix = nil
+            pendingAutocorrectUndo = nil
             shift = store.storedAutocapitalise ? .on : .off
             refreshSuggestions()
         case .dictation:
@@ -137,12 +138,14 @@ extension KeyboardController {
             Feedback.keyPress()
             clearRevertibleEdit()
             deletedWordPrefix = nil
+            pendingAutocorrectUndo = nil
             target?.adjustTextPosition(byCharacterOffset: -1)
             refreshSuggestions()
         case .cursorRight:
             Feedback.keyPress()
             clearRevertibleEdit()
             deletedWordPrefix = nil
+            pendingAutocorrectUndo = nil
             target?.adjustTextPosition(byCharacterOffset: 1)
             refreshSuggestions()
         case .deleteForward:
@@ -195,6 +198,7 @@ extension KeyboardController {
         // that answer was written into, and putting the old text back would take
         // the new characters with it.
         clearRevertibleEdit()
+        pendingAutocorrectUndo = nil
         // **A cap never types a line break.** The only newline any cap carries is
         // the one a banded grouped cap uses to say where its second row of letters
         // starts, and `.ret` is the key that inserts a line. Reachable only in the
@@ -256,6 +260,7 @@ extension KeyboardController {
             lastSpaceTapAt = nil
             shift = store.storedAutocapitalise ? .on : .off
             _ = consumeGroupedSkipLearn()
+            pendingAutocorrectUndo = nil
             refreshSuggestions()
             return
         }
@@ -274,14 +279,18 @@ extension KeyboardController {
         // both here and there: slot zero being the literal is a fact about
         // `SuggestionEngine`, and the space bar should not be the thing that breaks
         // if it ever stops being one.
+        let original = currentWordPrefix
+        var swapped: (original: String, replacement: String)?
         if store.storedAutocorrect,
             !isCorrectingWordByHand,
             selection == nil,
             let candidate = suggestions.first(where: \.isDefault),
-            !currentWordPrefix.isEmpty,
-            candidate.text.lowercased() != currentWordPrefix.lowercased()
+            !original.isEmpty,
+            candidate.text.lowercased() != original.lowercased(),
+            !undoneAutocorrectSpellings.contains(SeedLanguageModel.fold(original))
         {
             replaceCurrentWord(with: candidate.text)
+            swapped = (original, Self.restoringEdgeMarks(of: original, to: candidate.text))
         }
 
         // After any correction, so what gets remembered is the word that ended up
@@ -293,6 +302,9 @@ extension KeyboardController {
         // The repair is over: this word is committed and the next one is nobody's
         // correction yet.
         deletedWordPrefix = nil
+        // A new space closes any earlier undo. Only this swap, if there was one,
+        // can be taken back by the next delete.
+        pendingAutocorrectUndo = swapped
         refreshSuggestions()
     }
 
@@ -307,6 +319,7 @@ extension KeyboardController {
         // one leaves a word the remaining keystrokes cannot produce, and the next
         // press then decodes against a code that no longer matches the field.
         if deleteGroupedStroke() { return }
+        if undoAutocorrectIfPending() { return }
         target?.deleteBackward()
         // **Read after the delete, because the word that matters is the one now
         // standing in the field.** This is the whole record of "the user is
@@ -316,6 +329,39 @@ extension KeyboardController {
         refreshSuggestions()
         // The letters just deleted armed a wait on a prefix that is gone.
         noteTypedInput()
+    }
+
+    /// The first delete after space swapped a word restores the keystrokes.
+    ///
+    /// Gboard and the system keyboard do this. We used to eat the trailing
+    /// space and leave the wrong word standing. Only the automatic replacement
+    /// is undone; the bar still offers the correction. The same spelling is
+    /// not swapped again this session.
+    @discardableResult
+    func undoAutocorrectIfPending() -> Bool {
+        guard let pending = pendingAutocorrectUndo,
+            !pending.replacement.isEmpty,
+            contextBefore.hasSuffix(pending.replacement + " ")
+        else { return false }
+        target?.deleteBackward()
+        replaceCurrentWord(with: pending.original)
+        undoneAutocorrectSpellings.insert(SeedLanguageModel.fold(pending.original))
+        pendingAutocorrectUndo = nil
+        deletedWordPrefix = pending.original
+        refreshSuggestions()
+        noteTypedInput()
+        return true
+    }
+
+    /// A caret that is no longer sitting after the swapped word has moved on.
+    /// Asked from `refreshSuggestions`, which is also what a host caret tap
+    /// runs. Safe during our own insert: pending is assigned after the text
+    /// lands, so the first refresh still sees `replacement `.
+    func expirePendingAutocorrectUndoIfCaretMoved() {
+        guard let pending = pendingAutocorrectUndo else { return }
+        if pending.replacement.isEmpty || !contextBefore.hasSuffix(pending.replacement + " ") {
+            pendingAutocorrectUndo = nil
+        }
     }
 
     /// Held backspace. Each tick removes a word, including the spaces that

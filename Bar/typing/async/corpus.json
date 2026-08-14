@@ -1,0 +1,207 @@
+{
+  "schema": 1,
+  "name": "AIKeyboard async typing corpus",
+  "device": "iPhone 17 Pro",
+  "generated": "2026-08-14",
+  "notes": [
+    "Async-tier exam. Same shape as Bar/typing/corpus.json, plus optional pauseMs and screen.",
+    "pauseMs is the idle the PredictiveRefiner is asked after. The local 72/76 headline does not include these entries.",
+    "Foundation Models cannot predict Hebrew. A Hebrew next-word skip is measured, not a corpus failure.",
+    "were is not in the contraction table. apos-09 is this tier's named job."
+  ],
+  "entries": [
+    {
+      "id": "apos-09",
+      "category": "missing-apostrophe",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Tomorrow ",
+      "prefix": "were",
+      "intended": "we're",
+      "pauseMs": 300,
+      "probes": "were is a common word. The local tier must leave it alone; the sentence is the async tier's job."
+    },
+    {
+      "id": "en-next-02",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Thank you so ",
+      "prefix": "",
+      "pauseMs": 300,
+      "probes": "Trigram with essentially one continuation.",
+      "acceptable": [
+        "much"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-next-03",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "See you ",
+      "prefix": "",
+      "pauseMs": 300,
+      "probes": "Several good answers (tomorrow, soon, there); tests spread, not a single hit.",
+      "acceptable": [
+        "tomorrow",
+        "soon",
+        "there",
+        "later",
+        "then"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-next-04",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I'm on my ",
+      "prefix": "",
+      "pauseMs": 300,
+      "probes": "Idiom completion where the literal reading is much weaker.",
+      "acceptable": [
+        "way"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "async-screen-01",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "",
+      "prefix": "",
+      "pauseMs": 300,
+      "screen": {
+        "appName": "Messages",
+        "appIcon": "message",
+        "sender": "Dana",
+        "message": "Are you free for lunch tomorrow?",
+        "language": "en"
+      },
+      "probes": "Empty field, a question on screen. The async tier is the only thing that can see it.",
+      "acceptable": [
+        "Yes",
+        "Sure",
+        "Tomorrow",
+        "Maybe"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-next-01",
+      "category": "hebrew-next-word",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "בוקר ",
+      "prefix": "",
+      "pauseMs": 300,
+      "probes": "The Hebrew equivalent of Happy ___. Foundation Models cannot predict Hebrew; a skip here is measured, not a corpus failure.",
+      "acceptable": [
+        "טוב"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-comp-tomor",
+      "category": "english-completion",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "See you ",
+      "prefix": "tomor",
+      "pauseMs": 300,
+      "probes": "English mid-word with a pause. Local already has tomorrow; the model should not replace it with something else.",
+      "acceptable": [
+        "tomorrow"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-comp-approv",
+      "category": "english-completion",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I'm still waiting on the ",
+      "prefix": "approv",
+      "pauseMs": 300,
+      "probes": "Stem shared by approve, approval, approved; context favours the noun. A second English mid-word pause.",
+      "acceptable": [
+        "approval",
+        "approvals"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-next-05",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Sorry for the ",
+      "prefix": "",
+      "pauseMs": 300,
+      "probes": "Apology frame; delay, confusion, late are all defensible.",
+      "acceptable": [
+        "delay",
+        "confusion",
+        "inconvenience",
+        "trouble",
+        "wait"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-next-01",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Happy ",
+      "prefix": "",
+      "pauseMs": 300,
+      "probes": "Strongest bigram in the language; a blank bar here is disqualifying.",
+      "acceptable": [
+        "birthday",
+        "anniversary",
+        "holidays",
+        "new"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "async-screen-02",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I ",
+      "prefix": "",
+      "pauseMs": 300,
+      "screen": {
+        "appName": "Messages",
+        "appIcon": "message",
+        "sender": "Ilan",
+        "message": "What time should we meet?",
+        "language": "en"
+      },
+      "probes": "Short prefix already typed, a question on screen. The model can see both.",
+      "acceptable": [
+        "think",
+        "can",
+        "am",
+        "will"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    }
+  ]
+}

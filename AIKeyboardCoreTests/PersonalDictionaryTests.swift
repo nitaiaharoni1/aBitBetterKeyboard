@@ -246,18 +246,23 @@ final class PersonalDictionaryTests: XCTestCase {
     func testTheSameWordsPlusAMarkAreStillDestroyedWithNoList() {
         SharedStore.shared.personalDictionary = []
 
-        // `Handi,` used to be destroyed as `Handy,` and is now destroyed as
-        // `Handing,`, which is what plain `Handi` has always given: the comma is
-        // trimmed before the lookups, so a word with a mark after it and the same
-        // word without one are now corrected identically. That agreement is the
-        // point of the change, and either answer serves this test, which is about
-        // the word being at risk at all.
-        XCTAssertEqual(committed("Hi Nitai,", in: .english), "Hi Nit, ")
-        XCTAssertEqual(committed("Hi Handi,", in: .english), "Hi Handing, ")
+        // The exact wrong word is `UITextChecker`'s, not ours, and it has
+        // already moved once (`Handy` → `Handing` → `Handicap`). This test
+        // is about the word being at risk at all, and about the mark surviving.
+        let nitai = committed("Hi Nitai,", in: .english)
+        XCTAssertNotEqual(nitai, "Hi Nitai, ", "the empty list left the name alone")
+        XCTAssertTrue(nitai.hasSuffix(", "), "the comma was eaten: \(nitai)")
+        let handi = committed("Hi Handi,", in: .english)
+        XCTAssertNotEqual(handi, "Hi Handi, ", "the empty list left the name alone")
+        XCTAssertTrue(handi.hasSuffix(", "), "the comma was eaten: \(handi)")
         // And the possessive survives being corrected — `wordCore` strips `'s` to
         // do the lookup and `restoringEdgeMarks` puts it back, or this line would
-        // read `Hi Nit ` and the user would have lost two characters they typed.
-        XCTAssertEqual(committed("Hi Nitai's", in: .english), "Hi Nit's ")
+        // drop two characters the user typed.
+        let possessive = committed("Hi Nitai's", in: .english)
+        XCTAssertNotEqual(possessive, "Hi Nitai's ", "the empty list left the name alone")
+        XCTAssertTrue(
+            possessive.contains("'") || possessive.contains("\u{2019}"),
+            "the possessive was eaten: \(possessive)")
         XCTAssertEqual(committed("שלום סאפא,", in: .hebrew), "שלום ספא, ")
     }
 

@@ -288,6 +288,92 @@ final class CandidateCommitTests: XCTestCase {
             "Return still turned shift on after Auto-capitalise was switched off")
     }
 
+    // MARK: First backspace undoes a space-bar swap
+
+    /// Gboard and the system keyboard restore the keystrokes when delete
+    /// follows a space that just corrected. We used to eat the space and
+    /// leave the wrong word.
+    ///
+    /// The control half types the same letters and stops at space, so a build
+    /// that simply turned Autocorrect off fails both sides.
+    func testFirstBackspaceAfterSpaceRestoresTheKeystrokes() {
+        let control = CursorTextTarget(before: "helo")
+        let live = KeyboardController(target: control, language: .english)
+        live.refreshSuggestions()
+        live.press(.space)
+        XCTAssertEqual(
+            control.document, "hello ",
+            "the correction has to be live, or the undo proves nothing")
+
+        let target = CursorTextTarget(before: "helo")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.refreshSuggestions()
+        controller.press(.space)
+        XCTAssertEqual(target.document, "hello ", "space did not swap, so delete cannot undo it")
+        controller.press(.backspace)
+        XCTAssertEqual(
+            target.document, "helo",
+            "delete left the correction standing: \(target.document)")
+    }
+
+    /// Space must not put the same correction back after the user undid it.
+    func testSpaceDoesNotRepeatAnUndoneAutocorrect() {
+        let control = CursorTextTarget(before: "helo")
+        let live = KeyboardController(target: control, language: .english)
+        live.refreshSuggestions()
+        live.press(.space)
+        XCTAssertEqual(control.document, "hello ", "the correction has to be live")
+
+        let target = CursorTextTarget(before: "helo")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.refreshSuggestions()
+        controller.press(.space)
+        controller.press(.backspace)
+        XCTAssertEqual(target.document, "helo")
+        controller.press(.space)
+        XCTAssertEqual(
+            target.document, "helo ",
+            "space put the undone correction back: \(target.document)")
+    }
+
+    /// A later letter closes the undo. Delete then eats that letter, not the
+    /// swapped word.
+    func testALaterLetterClearsAutocorrectUndo() {
+        let control = CursorTextTarget(before: "helo")
+        let live = KeyboardController(target: control, language: .english)
+        live.refreshSuggestions()
+        live.press(.space)
+        XCTAssertEqual(control.document, "hello ", "the correction has to be live")
+
+        let target = CursorTextTarget(before: "helo")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.shift = .off
+        controller.refreshSuggestions()
+        controller.press(.space)
+        controller.press(.character("x"))
+        controller.press(.backspace)
+        XCTAssertEqual(
+            target.document, "hello ",
+            "delete undid an earlier word: \(target.document)")
+    }
+
+    /// Autocorrect-off never swapped, so delete is an ordinary backspace.
+    func testAutocorrectOffHasNoUndoPath() {
+        SharedStore.shared.userDefaults.set(false, forKey: SharedStore.Key.autocorrect)
+        XCTAssertTrue(SharedStore.shared.autocorrect)
+        XCTAssertFalse(SharedStore.shared.storedAutocorrect)
+
+        let target = CursorTextTarget(before: "helo")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.refreshSuggestions()
+        controller.press(.space)
+        XCTAssertEqual(target.document, "helo ", "space swapped while Autocorrect was off")
+        controller.press(.backspace)
+        XCTAssertEqual(
+            target.document, "helo",
+            "delete restored a swap that never happened: \(target.document)")
+    }
+
     /// A tap in the host field moves the caret without a key. `selectionDidChange`
     /// is what calls `refreshSuggestions` for that; without it the bar keeps
     /// scoring the word the caret just left.

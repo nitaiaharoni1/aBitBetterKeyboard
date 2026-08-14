@@ -324,6 +324,17 @@ public final class KeyboardController: ObservableObject {
     /// purpose, and the space bar must not overrule them. See `isCorrectingWordByHand`.
     var deletedWordPrefix: String?
 
+    /// The last space-bar swap, while it can still be taken back. Nil when
+    /// space did not replace anything, or once a later word, a caret jump,
+    /// Return, a tap, or another space has moved on. Not `revertibleEdit`:
+    /// that slot is Fix / Rewrite.
+    var pendingAutocorrectUndo: (original: String, replacement: String)?
+
+    /// Spellings whose automatic swap the user already undid this session.
+    /// Space must not put the same correction back. Folded, no timestamps.
+    var undoneAutocorrectSpellings: Set<String> = []
+
+
     /// The last word written into the learned store, folded. Stops Return,
     /// a full stop, and the keyboard going away from counting the same open
     /// word three times; cleared once a terminator has moved on to the next

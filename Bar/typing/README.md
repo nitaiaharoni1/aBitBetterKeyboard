@@ -39,12 +39,37 @@ declining to complete is conservative, not wrong. An entry with an empty prefix 
 not asked at all, because `insertSpace` commits nothing where no word is in
 progress.
 
-The score at the time of writing is **72/76 judged**, from 47/76 before the engine
+The score at the time of writing is **73/76 judged**, from 47/76 before the engine
 was made context-aware. It read 73/76 under the scorer that did not measure the
 commit column; the same engine scored 71/76 the first time it was measured
-honestly, and the entry that closed the gap is `he-comp-07`. The one commit
-failure left in `acceptable-closed` is `en-comp-03`, where `respon` commits
-`respond` against a closed list of `response`/`responses`.
+honestly, and the entry that closed the gap is `he-comp-07`. Two identical-code
+simulator runs hold 73/76 with zero slot flips. `en-comp-03` commits `response`
+after `the quick`. `cs-05` commits `screenshot` (`screenshot` / `screenshots`
+are in `codeSwitchVocabulary`). `apos-09`, `typo-10` and `typo-11` stay red on
+the local run on purpose. That 73/76 is the local engine only. The async corpus
+is a different number.
+
+Key proximity re-ranks neighbour *offers* by +50 when the differing letters sit
+on adjacent keys. It does not change what space commits.
+
+## Async corpus
+
+`async/corpus.json` is ~11 paused moments for the on-device refiner, including
+`apos-09` (`were` → `we're`; `were` is not in the contraction table), English
+next-word lines, one Hebrew next-word that Foundation Models cannot serve, and a
+Messages screen question.
+
+```bash
+ASYNC_TYPING_OUT=/tmp/async.json Bar/typing/async/run.sh
+# or: Bar/typing/async/run.sh /tmp/async.json
+```
+
+That runs `AIKeyboardCoreTests/AsyncTypingCorpusTests` on the simulator UDID in
+the script, then scores with `TYPING_CORPUS` pointed at `async/corpus.json`.
+`score.py` reads `TYPING_CORPUS` and defaults to `Bar/typing/corpus.json`.
+Two runs here were 5/6 both times with `engineAvailable: false`. That is the
+local tier of those entries. Foundation Models did not run. Do not quote it as
+a model quality number.
 
 `corpus.json` is **the exam**: 90 frozen moments mid-typing, each one a context, a
 word in progress, and a note saying what it is probing. It never changes once a

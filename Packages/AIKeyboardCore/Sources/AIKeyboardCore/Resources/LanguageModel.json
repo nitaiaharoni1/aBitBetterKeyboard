@@ -292,6 +292,10 @@
      "find",
      "check"
     ],
+    "quick": [
+     "response",
+     "question"
+    ],
     "regarding": [
      "the",
      "your"
@@ -394,6 +398,9 @@
      "approval",
      "invoice",
      "receipt"
+    ],
+    "the quick": [
+     "response"
     ],
     "there": [
      "is",

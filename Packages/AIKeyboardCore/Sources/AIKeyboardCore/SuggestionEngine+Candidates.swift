@@ -32,6 +32,10 @@ extension SuggestionEngine {
         /// frequency model, but its order is not nothing, and where this engine
         /// knows nothing it should keep what it was given.
         var ordinal: Int = 0
+        /// The typed word and this neighbour differ by one key that sits next
+        /// to the one that was pressed. Ranking only; `shouldAutocorrect`
+        /// still refuses a same-length substitution that is not a transposition.
+        var keyAdjacent: Bool = false
     }
 
     /// Where a candidate came from, ordered worst to best so the raw value can
@@ -127,6 +131,9 @@ extension SuggestionEngine {
         // alphabetical tie-break when neither is.
         total -= Double(candidate.ordinal) * 8
         total -= Double(candidate.cliticDepth) * 500
+        // Below frequency and context, above the source-list ordinal. A
+        // fat-finger re-ranks two neighbours; it does not commit one.
+        if candidate.keyAdjacent { total += 50 }
         return total
     }
 

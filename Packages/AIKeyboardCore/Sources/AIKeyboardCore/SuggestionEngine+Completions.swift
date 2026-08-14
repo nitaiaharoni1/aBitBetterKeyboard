@@ -76,8 +76,8 @@ extension SuggestionEngine {
     private static let codeSwitchVocabulary: [String] = [
         "backlog", "brief", "call", "deadline", "demo", "deploy", "deployment", "design",
         "document", "feedback", "follow-up", "invite", "meeting", "presentation", "product",
-        "review", "roadmap", "scope", "slack", "sprint", "standup", "sync", "template",
-        "ticket", "update"
+        "review", "roadmap", "scope", "screenshot", "screenshots", "slack", "sprint",
+        "standup", "sync", "template", "ticket", "update"
     ]
 
     /// Every candidate for the word in progress, ranked, three deep.
@@ -250,17 +250,16 @@ extension SuggestionEngine {
 
         out += checkerCandidates(for: core, in: context, typedLanguage: typedLanguage)
 
-        // The sentence gets its say last, over everything already collected, so a
-        // word the previous word is known to be followed by climbs whichever
-        // source it happened to arrive from. The field is asked too: a name that
-        // followed this word earlier in the message is context the seed table
-        // has never seen.
+        // The field gets its say last, over everything already collected, so a
+        // word any earlier pair is known to be followed by climbs whichever
+        // source it happened to arrive from. The last two tokens still lead;
+        // earlier sentences are how `the quick` still reaches `response` after
+        // two more words have landed.
         let followers = Set(
-            (SeedLanguageModel.followers(after: previousWords, in: typedLanguage)
-                + personal.followers(after: previousWords.last ?? "", in: typedLanguage, limit: 4)
-                + documentFollowers(
-                    after: previousWords.last ?? "", in: context, limit: 4))
-                .map(SeedLanguageModel.fold))
+            contextFollowers(
+                last: previousWords, field: documentWords(in: context), context: context,
+                language: typedLanguage, personal: personal
+            ).map(SeedLanguageModel.fold))
         if !followers.isEmpty {
             for index in out.indices where followers.contains(SeedLanguageModel.fold(out[index].text)) {
                 out[index].followsContext = true
@@ -477,7 +476,9 @@ extension SuggestionEngine {
                 .map {
                     Candidate(
                         text: matchCase(of: word, applyingTo: $0.element, in: typedLanguage),
-                        language: typedLanguage, source: .neighbour, ordinal: $0.offset)
+                        language: typedLanguage, source: .neighbour, ordinal: $0.offset,
+                        keyAdjacent: KeyProximity.isAdjacentSubstitution(
+                            word, $0.element, in: typedLanguage))
                 }
         }
 
@@ -549,7 +550,8 @@ extension SuggestionEngine {
     /// characters are known to be wrong; everything else keeps what they keyed.
     @MainActor
     static func shouldAutocorrect(
-        _ prefix: String, previousWords: [String], typedLanguage: KeyboardLanguage,
+        _ prefix: String, previousWords: [String], context: String = "",
+        typedLanguage: KeyboardLanguage,
         results: [Suggestion], supplementary: [String], personal: PersonalLanguageModel
     ) -> Bool {
         guard results.count > 1 else { return false }
@@ -657,8 +659,71 @@ extension SuggestionEngine {
         let sameLengthSubstitution =
             neighbourMatch && typedFolded.count == winner.count
             && !SeedLanguageModel.isTransposition(winner, of: word)
+        // Seed completions of the typed letters, most common first. Asked
+        // before the neighbour return because `respond` is one insertion from
+        // `respon` and used to skip the unfinished-stem check entirely.
+        let continuations = SeedLanguageModel.words(
+            startingWith: word, in: typedLanguage, limit: 3)
+        let ambiguousStem = hasDistinctLexemes(continuations)
+        // `helo` → `hello` is a missing letter, not a prefix. `respon` →
+        // `respond` is the letters so far plus one more. Only the second is
+        // an unfinished word, and only that one must reach the stem check.
+        let prefixCompletion =
+            typedFolded.count < winner.count && winner.hasPrefix(typedFolded)
 
-        if neighbourMatch, !sameLengthSubstitution { return true }
+        if neighbourMatch {
+            // Same-length substitutions are a Hebrew word still being typed
+            // (`מכונ` → `נכון`). Measured at 2/35 Hebrew keystrokes and 0/24
+            // English. `definately` → `definitely` is English and must still
+            // commit. An ambiguous prefix completion (`respon` → `respond`)
+            // is not a slip in any language.
+            let hebrewUnfinished = sameLengthSubstitution && typedLanguage.script == .hebrew
+            if !hebrewUnfinished, !(prefixCompletion && ambiguousStem) {
+                return true
+            }
+        }
+
+        // **An unfinished word with two different endings is not a typo.**
+        // `respon` is the start of `respond`, `response` and `responsible`.
+        // The four-letter gate used to commit whichever the seed ranked first
+        // (`respond`), which is a guess about a word still being typed — corpus
+        // `en-comp-03`, `Thanks for the quick respon`. Inflections of one
+        // lexeme (`schedule` / `scheduled`) still commit: they are one word
+        // with a tail, not two readings. Context can still pick: if the
+        // previous words are known to be followed by the winner, that is the
+        // same sentence signal the Hebrew path already uses, applied only to
+        // this unfinished-stem case rather than to valid English words.
+        if ambiguousStem {
+            let contextual = Set(
+                contextFollowers(
+                    last: previousWords, field: documentWords(in: context), context: context,
+                    language: typedLanguage, personal: personal
+                ).map(SeedLanguageModel.fold))
+            if !contextual.contains(winner) { return false }
+        }
+
+        // **A Latin stem inside a Hebrew sentence is unfinished the same way,
+        // and the seed list cannot say so.** `screensh` is not in the seed, so
+        // the block above never sees `screenshotted` / `screenshotting` — two
+        // endings the checker offered, neither of them a typo, and space
+        // committed the first. Corpus `cs-05`. Asking the offered slots rather
+        // than the seed is what finds them, and only here: the same test in
+        // an English sentence is `Handi` → `Handing`, which the personal
+        // dictionary is what stops, and which this must not spare when the
+        // list is empty.
+        if prefixCompletion, typedLanguage.script == .latin,
+            SuggestionEngine.dominantLanguage(in: context)?.script == .hebrew
+        {
+            let offered = Array(results.dropFirst().map(\.text))
+            if hasDistinctLexemes(offered) {
+                let contextual = Set(
+                    contextFollowers(
+                        last: previousWords, field: documentWords(in: context), context: context,
+                        language: typedLanguage, personal: personal
+                    ).map(SeedLanguageModel.fold))
+                if !contextual.contains(winner) { return false }
+            }
+        }
 
         // **Four letters, not three, and the three-letter typos are covered
         // above.** Lowering this to three did fix `teh` → `the`, and it also let a
@@ -668,10 +733,26 @@ extension SuggestionEngine {
         // matters is not length but *kind* — a same-length neighbour is a slip and
         // a longer completion is a guess about a word still being typed — and the
         // neighbour rule above draws it, so `teh` still corrects with this back at
-        // four. The same-length *substitution* half is excluded here too, or the
+        // four. The same-length *substitution* half is Hebrew-only, or the
         // four-letter gate would commit `נכון` for `מכונ` the moment the neighbour
         // clause stopped doing it.
-        return word.count >= 4 && !known && !sameLengthSubstitution
+        return word.count >= 4 && !known
+            && !(sameLengthSubstitution && typedLanguage.script == .hebrew)
+    }
+
+    /// Whether these completions are more than one word with a suffix stuck on.
+    ///
+    /// `schedule` / `scheduled` is one lexeme. `respond` / `response` is two:
+    /// neither string begins with the other. Asked of the seed list's own
+    /// answers, most-common first, so the head is the one the four-letter gate
+    /// would have committed.
+    static func hasDistinctLexemes(_ words: [String]) -> Bool {
+        guard words.count >= 2 else { return false }
+        let folded = words.map(SeedLanguageModel.fold)
+        let head = folded[0]
+        return folded.dropFirst().contains { other in
+            !other.hasPrefix(head) && !head.hasPrefix(other)
+        }
     }
 
     /// The word inside what was typed, with the marks that sit at its edges

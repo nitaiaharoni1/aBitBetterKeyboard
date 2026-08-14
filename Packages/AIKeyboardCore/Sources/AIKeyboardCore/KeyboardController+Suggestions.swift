@@ -9,7 +9,10 @@ extension KeyboardController {
         // in whatever state they were in for anyone who has turned the suggestion
         // bar off. This function is the one thing every document change already
         // goes through, including the host's own `textDidChange`.
+        let hadText = documentHasText
         refreshDocumentState()
+        expirePendingAutocorrectUndoIfCaretMoved()
+        stopDictationIfHostSent(hadText: hadText)
         // The field already holds the decoder's guess. Scoring that as typed
         // text replaces the grouped bar and lets space commit a third word.
         if grouped.isTyping {
@@ -361,6 +364,7 @@ extension KeyboardController {
         // Committed on purpose, so the hand repair this word may have been under is
         // over — the same line `insertSpace` ends on, for the same reason.
         deletedWordPrefix = nil
+        pendingAutocorrectUndo = nil
         refreshSuggestions()
         reportInteraction(.suggestion)
     }

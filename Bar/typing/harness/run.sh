@@ -34,7 +34,8 @@ trap 'rm -rf "$build"' EXIT
 # ai-text harness lists its files and drifts every time one is added.
 cp "$core"/SuggestionEngine*.swift "$build/"
 for source in Models.swift LanguageDetector.swift SeedLanguageModel.swift \
-    HebrewMorphology.swift LayoutTransposition.swift PersonalLanguageModel.swift; do
+    HebrewMorphology.swift LayoutTransposition.swift PersonalLanguageModel.swift \
+    KeyProximity.swift; do
     cp "$core/$source" "$build/"
 done
 # Both targets have a `LanguageDetector.swift`, one half each, and they land in

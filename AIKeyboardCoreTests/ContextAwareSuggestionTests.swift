@@ -173,6 +173,143 @@ final class ContextAwareSuggestionTests: XCTestCase {
         }
     }
 
+    /// **The four-letter gate used to finish other people's words.** `respon` is
+    /// `respond`, `response` and `responsible` — three readings, none of them a
+    /// typo — and space committed `respond` because it sits first in the seed.
+    /// Corpus `en-comp-03` is `Thanks for the quick respon`, whose closed list
+    /// is the noun. The old default is what this rejects: a verb nobody asked
+    /// for. `schedule` / `scheduled` is the control, one lexeme with a tail,
+    /// and still commits.
+    func testAnAmbiguousUnfinishedStemIsNotCommitted() {
+        XCTAssertTrue(
+            SuggestionEngine.hasDistinctLexemes(["respond", "response", "responsible"]),
+            "respond/response are two words; a helper that treated any shared prefix "
+                + "as one lexeme would let the four-letter gate keep committing respond")
+        XCTAssertFalse(
+            SuggestionEngine.hasDistinctLexemes(["schedule", "scheduled"]),
+            "scheduled is schedule with a tail — the four-letter gate must still "
+                + "commit schedule for sched")
+
+        let results = SuggestionEngine.suggestions(
+            prefix: "respon", context: "", languages: [.english], personal: emptyPersonal())
+        XCTAssertEqual(
+            results.first(where: \.isDefault)?.text, "respon",
+            "space would finish an unfinished word: \(results.map(\.text))")
+        XCTAssertTrue(
+            results.contains { $0.text.lowercased() == "respond" }
+                || results.contains { $0.text.lowercased() == "response" },
+            "the readings still have to be tappable: \(results.map(\.text))")
+
+        let scheduled = SuggestionEngine.suggestions(
+            prefix: "sched", context: "", languages: [.english], personal: emptyPersonal())
+        XCTAssertEqual(
+            scheduled.first(where: \.isDefault)?.text.lowercased(), "schedule",
+            "schedule/scheduled is one lexeme and must still commit: \(scheduled.map(\.text))")
+    }
+
+    /// **Code-switch offered endings are an unfinished stem the seed cannot
+    /// see.** `screensh` is not in the seed, so the seed-lexeme check never
+    /// fires, and the four-letter gate committed `screenshotted`. Corpus
+    /// `cs-05`. The offered slots are what names the two endings, and only
+    /// inside a Hebrew sentence: the same test on `Hi Handi` is the English
+    /// destruction `PersonalDictionaryTests` still has to prove. The checker's
+    /// current guess for that stem moves (`Handing`, `Handicap`); the control
+    /// only needs the typed letters not to stay bold.
+    func testACodeSwitchAmbiguousStemIsNotCommitted() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "screensh", context: "אני מצרף ", languages: [.english, .hebrew],
+            personal: emptyPersonal())
+        XCTAssertNotEqual(
+            results.first(where: \.isDefault)?.text.lowercased(), "screenshotted",
+            "space would finish an unfinished code-switch stem: \(results.map(\.text))")
+        XCTAssertTrue(
+            results.contains { $0.text.lowercased() == "screenshot" },
+            "the closed list's word has to be tappable: \(results.map(\.text))")
+
+        let english = SuggestionEngine.suggestions(
+            prefix: "Handi", context: "Hi ", languages: [.english], personal: emptyPersonal())
+        let englishDefault = english.first(where: \.isDefault)?.text
+        XCTAssertNotEqual(
+            englishDefault, "Handi",
+            "English-only context must still replace Handi when the list is empty: "
+                + "\(english.map(\.text))")
+        XCTAssertNotNil(englishDefault)
+    }
+
+    /// The sentence is allowed to pick. `the quick` is followed by `response` in
+    /// the seed, so the noun takes the bold slot and space commits it — the
+    /// same context climb `לקבוע תו` already uses for `תור`. Without the
+    /// bigram the frequency prior still ranks `respond` first and this would
+    /// look like the test above.
+    func testContextPicksTheNounReadingOfAnAmbiguousStem() {
+        XCTAssertEqual(
+            SeedLanguageModel.followers(after: ["the", "quick"], in: .english).first,
+            "response")
+
+        let results = SuggestionEngine.suggestions(
+            prefix: "respon", context: "Thanks for the quick ",
+            languages: [.english], personal: emptyPersonal())
+        XCTAssertEqual(
+            results.first(where: \.isDefault)?.text.lowercased(), "response",
+            "got \(results.map(\.text)) — the old bar committed respond here")
+    }
+
+    /// **The last two words are not the field.** `followers(after:)` only reads
+    /// the tail, so two more words after `the quick` made the collocation
+    /// invisible and `respon` fell back to `respond`. Sliding the seed table
+    /// over the whole token list is what keeps the noun in front. One-word
+    /// keys stay at the end: `the` in the middle of a sentence must not mark
+    /// `way` as context.
+    func testSeedFollowersReadTheWholeFieldNotOnlyTheLastWords() {
+        XCTAssertTrue(
+            SeedLanguageModel.followers(
+                mentionedIn: ["Thanks", "for", "the", "quick", "turnaround", "I'll", "send", "a"],
+                in: .english
+            ).contains("response"),
+            "the quick was two words back and the seed never saw it")
+        XCTAssertFalse(
+            SeedLanguageModel.followers(
+                mentionedIn: ["the", "quick", "turnaround"], in: .english
+            ).contains("way"),
+            "the interior `the` leaked its one-word row")
+        XCTAssertEqual(
+            SeedLanguageModel.followers(mentionedIn: ["See", "you"], in: .english).first,
+            "tomorrow",
+            "the last pair still has to win: see you beats you")
+    }
+
+    /// A collocation two sentences back is still this message. Space committing
+    /// `respond` here is the same unfinished-stem miss as `en-comp-03`, just
+    /// with two more words in the way.
+    func testACollocationEarlierInTheFieldStillRanksTheCompletion() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "respon",
+            context: "Thanks for the quick turnaround. I'll send a ",
+            languages: [.english], personal: emptyPersonal())
+        XCTAssertEqual(
+            results.first(where: \.isDefault)?.text.lowercased(), "response",
+            "got \(results.map(\.text)) — the last two words hid the quick")
+    }
+
+    /// Next-word stays inside the current sentence. A newline still closes
+    /// the thought — that is `testANewlineClosesTheThoughtAsAFullStopDoes` —
+    /// but pairs earlier *in this sentence* still count.
+    func testNextWordReadsEarlierPairsInThisSentence() {
+        let later = SuggestionEngine.suggestions(
+            prefix: "", context: "Thanks for the quick turnaround and ",
+            languages: [.english], personal: emptyPersonal())
+        XCTAssertTrue(
+            later.contains { $0.text.lowercased() == "response" },
+            "got \(later.map(\.text)) — next-word only asked the last two tokens")
+
+        let afterBreak = SuggestionEngine.suggestions(
+            prefix: "", context: "See you\n",
+            languages: [.english], personal: emptyPersonal())
+        XCTAssertFalse(
+            afterBreak.contains { $0.text.lowercased() == "tomorrow" },
+            "got \(afterBreak.map(\.text)) — a newline must not leak the previous line")
+    }
+
     // MARK: Hebrew morphology
 
     /// One seed entry for `עבודה` has to serve `לעבודה`, `בעבודה` and `מהעבודה`,

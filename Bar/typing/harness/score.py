@@ -8,6 +8,7 @@ of 90, so it is reported separately and never folded into the headline.
 
     Bar/typing/harness/score.py                       # scores engine_outputs.json
     Bar/typing/harness/score.py before.json after.json  # diffs two runs
+    TYPING_CORPUS=Bar/typing/async/corpus.json score.py  # grades a different exam
 
 Three things are counted, and they are not the same question:
 
@@ -33,11 +34,18 @@ punish good suggestions for not being on a list that never claimed to be closed.
 """
 
 import json
+import os
 import pathlib
 import sys
 import unicodedata
 
 BAR = pathlib.Path(__file__).resolve().parent.parent
+
+
+def corpus_path():
+    if override := os.environ.get("TYPING_CORPUS"):
+        return pathlib.Path(override)
+    return BAR / "corpus.json"
 
 
 def strip_marks(text):
@@ -188,7 +196,7 @@ def failures(rows):
 
 
 def main():
-    corpus = load(BAR / "corpus.json")
+    corpus = load(corpus_path())
     args = sys.argv[1:]
     if len(args) == 2:
         before = score(load(args[0]), corpus)
