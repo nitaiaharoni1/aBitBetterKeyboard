@@ -11,7 +11,6 @@ extension SharedStore {
             Key.hasCompletedOnboarding, Key.enabledLanguages, Key.autocorrect,
             Key.completeOnIdle, Key.spaceOnIdle, Key.idleDelayMs,
             Key.autocapitalise, Key.predictions, Key.haptics, Key.keySounds,
-            Key.learnsFromTyping,
             Key.defaultTone, Key.customToneInstruction, Key.dictationSessionMinutes,
             Key.prefersCustomTone, Key.personalDictionary,
             Key.isSubscribed, Key.screenContextAllowed, Key.keyboardLayout,
@@ -42,7 +41,6 @@ extension SharedStore {
         idleDelayMs = 300
         autocapitalise = true
         predictions = true
-        learnsFromTyping = true
         haptics = true
         keySounds = true
         defaultTone = .clearer
@@ -96,9 +94,6 @@ extension SharedStore {
         }
         if defaults.object(forKey: Key.predictions) != nil {
             predictions = defaults.bool(forKey: Key.predictions)
-        }
-        if defaults.object(forKey: Key.learnsFromTyping) != nil {
-            learnsFromTyping = defaults.bool(forKey: Key.learnsFromTyping)
         }
         if let level = GroupedKeys.Level(rawValue: defaults.integer(forKey: Key.groupedLevel)) {
             groupedLevel = level

@@ -270,8 +270,8 @@ final class ContextAwareSuggestionTests: XCTestCase {
         XCTAssertEqual(personal.followers(after: "ask", in: .english, limit: 3), ["tzachi"])
     }
 
-    /// `permitted: false` is how the credential-field refusal and the settings
-    /// toggle both reach the store. Nothing is written, not a shorter version of it.
+    /// `permitted: false` is how the credential-field refusal reaches the store.
+    /// Nothing is written, not a shorter version of it.
     func testNothingIsRecordedWhenRecordingIsRefused() {
         let personal = emptyPersonal()
         for _ in 0..<5 {

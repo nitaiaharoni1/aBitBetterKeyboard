@@ -53,7 +53,7 @@ struct WelcomeStep: View {
             .offset(y: appeared ? 0 : 12)
         }
         .onAppear {
-            withAnimation(Theme.Motion.quick.delay(0.1)) { appeared = true }
+            withAnimation(Theme.Motion.quick) { appeared = true }
         }
     }
 

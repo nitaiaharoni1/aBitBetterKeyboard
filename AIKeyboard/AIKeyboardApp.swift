@@ -111,7 +111,7 @@ struct RootView: View {
                 OnboardingFlow()
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: store.hasCompletedOnboarding)
+        .animation(Theme.Motion.quick, value: store.hasCompletedOnboarding)
         .onOpenURL { url in
             if url == SharedStore.settingsURL {
                 selectedMainTab = .settings

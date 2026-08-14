@@ -5,8 +5,14 @@
 #
 #   Scripts/prove-dictation.sh ['platform=iOS Simulator,name=iPhone 17 Pro']
 #
-# Four checks, each able to fail on its own:
+# Five checks, each able to fail on its own:
 #
+#   0. The extension sets `hasDictationKey`. Face ID phones otherwise draw
+#      Apple's dictation strip under our space row, even though we already
+#      have a microphone. Source-level: the property is the public API and
+#      a build that drops the assignment is the broken one. The assignment
+#      has to live in a method `init` / `viewDidLoad` / `viewWillAppear`
+#      can all call — a one-shot in `viewDidLoad` is the weaker form.
 #   1. The keyboard extension does NOT link AVFoundation. It cannot open the
 #      microphone — Apple's guidance says so and the runtime answers 561145187 —
 #      so a build in which it tries is a build that has misunderstood the design.
@@ -20,6 +26,10 @@
 #
 # WHAT THIS DOES NOT PROVE, and nothing in this repo does yet:
 #
+#   * that Apple's dictation strip actually disappears on a Face ID phone.
+#     Check 0 only proves the assignment is in the source. The property is
+#     documented to suppress the system button; the leftover gap, if any,
+#     is a device layout question.
 #   * that `AVAudioEngine` records anything. `DictationChannelProbe` replaces the
 #     microphone with a fixed sentence, because a UI test cannot speak.
 #   * that a recording session survives backgrounding under jetsam, or that an
@@ -52,6 +62,19 @@ LOG="$(mktemp -t dictation)"
 
 pass() { printf '  \033[32mPASS\033[0m %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m %s\n' "$1"; exit 1; }
+
+# 0 -----------------------------------------------------------------------
+# Face ID phones draw Apple's microphone under a third-party keyboard unless
+# the extension says it already has one. The assignment is the public API;
+# a comment that mentions the property without setting it is the broken build.
+echo "==> 0. The extension tells iOS it already has a dictation key"
+if grep -qE 'hasDictationKey[[:space:]]*=[[:space:]]*true' \
+    AIKeyboardExtension/KeyboardViewController.swift
+then
+  pass "KeyboardViewController sets hasDictationKey"
+else
+  fail "KeyboardViewController does not set hasDictationKey; Face ID devices will draw Apple's dictation strip under the space row"
+fi
 
 echo "==> Building for $DESTINATION"
 xcodebuild build -project "$PROJECT" -scheme "$SCHEME" -destination "$DESTINATION" > "$LOG" 2>&1 \

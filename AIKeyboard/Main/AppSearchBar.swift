@@ -23,7 +23,6 @@ struct PageTitle: View {
                         .offset(y: 5)
                 }
         }
-        .padding(.bottom, 8)
     }
 }
 
@@ -34,13 +33,20 @@ struct AppSearchHeader: View {
     var searchAccessibilityID: String = "app-search"
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            PageTitle(title: title)
-            AppSearchField(fieldIdentifier: searchAccessibilityID)
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                PageTitle(title: title)
+                AppSearchField(fieldIdentifier: searchAccessibilityID)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Theme.Space.md)
+            .padding(.vertical, Theme.Space.xxs)
+
+            Rectangle()
+                .fill(Theme.Surface.separator)
+                .frame(height: 1)
+                .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, Theme.Space.md)
-        .padding(.vertical, Theme.Space.xxs)
         .background(Theme.Surface.background.opacity(0.96))
     }
 }
@@ -51,6 +57,7 @@ struct AppSearchHeader: View {
 struct AppSearchField: View {
     var fieldIdentifier: String = "app-search"
     @EnvironmentObject private var search: AppSearch
+    @Environment(\.selectedMainTab) private var selectedTab
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -94,6 +101,7 @@ struct AppSearchField: View {
         )
         .onChange(of: search.stackEpoch) { _, _ in focused = false }
         .onChange(of: search.resignFocus) { _, _ in focused = false }
+        .onChange(of: selectedTab) { _, _ in focused = false }
     }
 }
 

@@ -294,34 +294,34 @@ public enum Theme {
     // MARK: Motion
 
     public enum Motion {
-        private static var reduce: Bool { UIAccessibility.isReduceMotionEnabled }
+        /// Shared beat. Long enough to register a change, short enough that a
+        /// language swipe is a blink rather than a wait. 180ms and the 300ms
+        /// swipe spring both felt like watching the keys arrive.
+        public static let duration: TimeInterval = 0.08
 
-        /// Standard state change. Fast enough to feel instant, slow enough to be read.
+        /// Standard state change.
         public static var quick: Animation {
-            .easeOut(duration: reduce ? 0.08 : 0.18)
+            .easeOut(duration: duration)
         }
-        /// Finger-down on a key. Faster than `quick` so the press reads as a click.
-        public static let press = Animation.easeOut(duration: 0.10)
+        /// Finger-down on a key. Same beat as everything else: a tap is over
+        /// before a longer ease-out finishes, so the pressed fill would never
+        /// show. KeyView still skips animation on the way down.
+        public static let press = Animation.easeOut(duration: duration)
         /// Panels sliding in and out over the key rows. A keyboard overlay, not a
-        /// sheet: 0.22s, not the 0.34s this used to spend opening emoji.
+        /// sheet, and not a spring: 0.22s opening emoji was already a wait.
         public static var panel: Animation {
-            reduce
-                ? .easeOut(duration: 0.12)
-                : .spring(response: 0.22, dampingFraction: 0.92)
+            .easeOut(duration: duration)
         }
         /// Content appearing inside a panel that is already open.
         public static var content: Animation {
-            reduce
-                ? .easeOut(duration: 0.12)
-                : .spring(response: 0.28, dampingFraction: 0.9)
+            .easeOut(duration: duration)
         }
-        /// A language switch: the letter keys slide with the swipe. Longer than
-        /// `quick` so the incoming layout can be read, still under 300ms so it
-        /// never feels like waiting. Reduce Motion keeps the crossfade.
+        /// A language switch: the letter keys still slide the way the strip
+        /// points, on the same 80ms beat as every other change. Reduce Motion
+        /// keeps the crossfade (`SpaceSwipe.letterTransition`); the duration
+        /// does not grow.
         public static var swipe: Animation {
-            reduce
-                ? .easeOut(duration: 0.12)
-                : .spring(response: 0.30, dampingFraction: 0.90)
+            .easeOut(duration: duration)
         }
 
         /// A balloon growing out of a key. Opacity alone under Reduce Motion.

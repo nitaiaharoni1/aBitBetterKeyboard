@@ -154,11 +154,11 @@ public struct KeyView: View {
         .animation(nil, value: isTouching)
         .overlay(alignment: .bottom) { alternatesPopup }
         .overlay(alignment: .bottom) { languageCallout }
-        // Instant on the way down: `Motion.press` is 100ms, and a tap is over
-        // before that ease-out finishes, so the pressed fill the tokens specify
-        // was a colour the thumb never saw. The release still eases, so the
-        // flash is the full grey rather than a smear back to white. After the
-        // overlays so a hold that opens the strip is in the same transaction.
+        // Instant on the way down: even an 80ms ease-out is longer than a tap,
+        // so the pressed fill the tokens specify was a colour the thumb never
+        // saw. The release still eases, so the flash is the full grey rather
+        // than a smear back to white. After the overlays so a hold that opens
+        // the strip is in the same transaction.
         .animation(isPressed ? nil : Theme.Motion.press, value: isPressed)
         // High enough that a balloon wider than the key sits above every
         // neighbour, not only the ones SwiftUI happened to draw first.

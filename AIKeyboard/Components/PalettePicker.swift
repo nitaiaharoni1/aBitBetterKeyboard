@@ -1,82 +1,99 @@
 import AIKeyboardCore
 import SwiftUI
 
-/// The four accent choices, as a list of rows.
+/// One implementation shared by onboarding and Keys › Look, because two
+/// pickers for one setting drift.
 ///
-/// One implementation for both places the choice is offered — the second
-/// onboarding step and Keys › Look — because two pickers for one setting is
-/// two things to keep agreeing about which palettes exist.
-///
-/// The caller supplies the container. Both current callers wrap this in a
-/// `Card`, which is why the rows carry no background of their own.
+/// The caller supplies the `Card`. Swatches each draw their own palette's
+/// gradient. The preview strip reads `Theme.Brand` because it previews
+/// the chosen one.
 struct PalettePicker: View {
     @EnvironmentObject private var store: SharedStore
 
     var body: some View {
-        VStack(spacing: Theme.Space.sm) {
-            ForEach(Array(BrandPalette.allCases.enumerated()), id: \.element) { index, palette in
-                if index > 0 { Divider.themed }
-                row(palette)
+        VStack(alignment: .leading, spacing: Theme.Space.md) {
+            HStack(spacing: 0) {
+                ForEach(BrandPalette.allCases, id: \.self) { palette in
+                    swatch(palette)
+                    if palette != BrandPalette.allCases.last {
+                        Spacer()
+                    }
+                }
             }
+            .padding(5)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(store.brandPalette.title)
+                    .font(Theme.Fonts.callout.weight(.semibold))
+                    .foregroundStyle(store.brandPalette.color(.solid))
+                Text(store.brandPalette.subtitle)
+                    .font(Theme.Fonts.caption)
+                    .foregroundStyle(Theme.Text.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityHidden(true)
+
+            Divider.themed
+
+            HStack(spacing: Theme.Space.sm) {
+                Image(systemName: "sparkles")
+                    .font(Theme.Glyph.medium(14))
+                    .foregroundStyle(Theme.Text.onBrand)
+                    .frame(width: 30, height: 30)
+                    .background(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(Theme.Brand.gradient)
+                    )
+
+                Image(systemName: "return")
+                    .font(Theme.Glyph.medium(13))
+                    .foregroundStyle(Theme.Text.onBrand)
+                    .frame(width: 40, height: 30)
+                    .background(
+                        RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
+                            .fill(Theme.Brand.action)
+                    )
+
+                Text("Aa")
+                    .font(Theme.Fonts.headline)
+                    .foregroundStyle(Theme.Brand.solid)
+
+                Spacer(minLength: 0)
+            }
+            .accessibilityHidden(true)
         }
     }
 
-    private func row(_ palette: BrandPalette) -> some View {
-        Button {
+    private func swatch(_ palette: BrandPalette) -> some View {
+        let isSelected = palette == store.brandPalette
+        return Button {
             guard palette != store.brandPalette else { return }
             Feedback.actionPress()
             withAnimation(Theme.Motion.quick) { store.brandPalette = palette }
         } label: {
-            HStack(spacing: Theme.Space.sm) {
-                swatch(palette)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(palette.title)
-                        .font(.system(size: 16))
-                        .foregroundStyle(Theme.Text.primary)
-                    Text(palette.subtitle)
-                        .font(Theme.Fonts.caption)
-                        .foregroundStyle(Theme.Text.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            Circle()
+                .fill(palette.gradient)
+                .frame(width: 44, height: 44)
+                .overlay {
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(Theme.Text.onBrand)
+                    }
                 }
-
-                Spacer(minLength: Theme.Space.xs)
-
-                tick(palette)
-            }
-            .contentShape(Rectangle())
+                .overlay {
+                    if isSelected {
+                        Circle()
+                            .strokeBorder(palette.color(.solid), lineWidth: 2.5)
+                            .padding(-5)
+                    }
+                }
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .pressable()
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("palette-\(palette.rawValue)")
         .accessibilityLabel("\(palette.title). \(palette.subtitle)")
-        .accessibilityAddTraits(palette == store.brandPalette ? [.isButton, .isSelected] : .isButton)
-    }
-
-    /// The AI gradient under the glyph that actually wears it, at the size of an
-    /// `IconBadge`, so the preview is the product rather than a colour chip.
-    ///
-    /// **Every row names its own palette rather than reading `Theme.Brand`**,
-    /// which would give four identical swatches in whichever colour is currently
-    /// chosen. It is still the honest preview: `BrandPalette.gradient` is built
-    /// exactly the way `Theme.Brand.gradient` is, from the same two roles, so
-    /// there is no second copy of a hex here to drift.
-    private func swatch(_ palette: BrandPalette) -> some View {
-        Image(systemName: "sparkles")
-            .font(Theme.Glyph.medium(16))
-            .foregroundStyle(Theme.Text.onBrand)
-            .frame(width: 36, height: 36)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
-                    .fill(palette.gradient)
-            )
-    }
-
-    private func tick(_ palette: BrandPalette) -> some View {
-        let isSelected = palette == store.brandPalette
-        return Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-            .font(.system(size: 22, weight: isSelected ? .semibold : .light))
-            .foregroundStyle(isSelected ? palette.color(.solid) : Theme.Surface.separator)
+        .accessibilityIdentifier("palette-\(palette.rawValue)")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }

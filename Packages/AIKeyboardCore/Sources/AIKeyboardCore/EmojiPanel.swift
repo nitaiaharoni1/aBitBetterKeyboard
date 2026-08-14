@@ -38,9 +38,9 @@ public struct EmojiPanel: View {
     static let rowCount = 5
 
     /// How long a tap keeps its tab orange while the strip is still jumping.
-    /// Covers `Theme.Motion.quick` with a little slack, so a still-visible
+    /// Covers `Theme.Motion.duration` with a little slack, so a still-visible
     /// Recent cell cannot paint Recents orange again before the jump lands.
-    static let pinHold: TimeInterval = 0.25
+    static let pinHold: TimeInterval = Theme.Motion.duration + 0.04
 
     /// What a column wants to be. The real width is this rounded to a whole
     /// number of columns across the panel, so the strip never rests showing a
