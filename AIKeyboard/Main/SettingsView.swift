@@ -4,12 +4,6 @@ import AIKeyboardCore
 struct SettingsView: View {
     @EnvironmentObject private var store: SharedStore
     @EnvironmentObject private var search: AppSearch
-    @Environment(\.selectedMainTab) private var selectedTab
-    @Environment(\.scenePhase) private var scenePhase
-
-    /// Walks the whole store. Refreshed when this tab is shown, not every redraw.
-    @State private var learnedWordCount = 0
-    @State private var confirmForget = false
 
     var body: some View {
         NavigationStack {
@@ -25,9 +19,6 @@ struct SettingsView: View {
                                 SettingsTypingSection()
                                 SettingsAISection()
                                 accountSection
-                                if learnedWordCount > 0 || search.highlightedRow == .forgetLearned {
-                                    dangerSection
-                                }
                                 footer
                             }
                         }
@@ -39,16 +30,7 @@ struct SettingsView: View {
                         guard let row, row.tab == .settings else { return }
                         scrollToHighlight(proxy)
                     }
-                    .onAppear {
-                        refreshLearnedWordCount()
-                        scrollToHighlight(proxy)
-                    }
-                    .onChange(of: selectedTab) { _, tab in
-                        if tab == .settings { refreshLearnedWordCount() }
-                    }
-                    .onChange(of: scenePhase) { _, phase in
-                        if phase == .active { refreshLearnedWordCount() }
-                    }
+                    .onAppear { scrollToHighlight(proxy) }
                 }
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
@@ -93,45 +75,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: Danger zone
-
-    /// Only shown once there is something to clear. A row that always reads
-    /// "0 words" invites the user to press it to find out what it does, and
-    /// this is the one press here that cannot be undone.
-    private var dangerSection: some View {
-        section("Danger zone") {
-            Button(role: .destructive) {
-                confirmForget = true
-            } label: {
-                HStack(spacing: Theme.Space.sm) {
-                    IconBadge(systemName: "trash", tint: Theme.Semantic.record)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Forget what it learned")
-                        Text("\(learnedWordCount) words remembered on this device")
-                            .font(Theme.Fonts.caption)
-                            .foregroundStyle(Theme.Text.secondary)
-                    }
-                    Spacer(minLength: 0)
-                }
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(Theme.Semantic.record)
-            .searchTarget(.forgetLearned)
-            .confirmationDialog(
-                "Forget what it learned?",
-                isPresented: $confirmForget,
-                titleVisibility: .visible
-            ) {
-                Button("Forget \(learnedWordCount) words", role: .destructive) {
-                    PersonalLanguageModel.shared.clear()
-                    learnedWordCount = 0
-                }
-            } message: {
-                Text("Removes the words remembered on this device. This cannot be undone.")
-            }
-        }
-    }
-
     private var footer: some View {
         VStack(spacing: Theme.Space.xxs) {
             Text("aBitBetterKeyboard 0.1")
@@ -150,10 +93,6 @@ struct SettingsView: View {
     }
 
     // MARK: Scaffolding
-
-    private func refreshLearnedWordCount() {
-        learnedWordCount = PersonalLanguageModel.shared.learnedWordCount
-    }
 
     private func scrollToHighlight(_ proxy: ScrollViewProxy) {
         guard let row = search.highlightedRow, row.tab == .settings else { return }

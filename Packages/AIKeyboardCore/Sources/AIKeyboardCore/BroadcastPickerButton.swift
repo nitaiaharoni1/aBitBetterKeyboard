@@ -159,7 +159,13 @@ private struct BroadcastPickerUIView: UIViewRepresentable {
         case .chip(let size):
             return CGSize(width: size, height: size)
         case .overlay:
-            return CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+            if let width = proposal.width, let height = proposal.height, width > 0, height > 0 {
+                return CGSize(width: width, height: height)
+            }
+            let bounds = uiView.bounds.size
+            if bounds.width > 0, bounds.height > 0 { return bounds }
+            return proposal.replacingUnspecifiedDimensions(
+                by: CGSize(width: 44, height: 44))
         }
     }
 

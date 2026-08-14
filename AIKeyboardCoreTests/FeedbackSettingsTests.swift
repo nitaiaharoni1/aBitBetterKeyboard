@@ -70,24 +70,33 @@ final class FeedbackSettingsTests: XCTestCase {
         XCTAssertTrue(SharedStore.shared.storedHaptics)
     }
 
-    /// The mock damped every letter to 0.6 of `.light`. Asking only "is there a
-    /// generator" would pass against that build; these two numbers are what
-    /// changed.
-    func testLetterKeysHitHarderThanTheMockDid() {
+    /// The mock damped every letter to 0.6 of `.light`. `.rigid` at 1.0 was the
+    /// next stop and still read as a miss. Asking only "is there a generator"
+    /// would pass against both; these two numbers are what changed.
+    func testEveryPressIsFullHeavy() {
         XCTAssertNotEqual(
-            Feedback.keyPressStyle, .light,
-            "light at 0.6 was the mock; a letter has to land as a click")
-        XCTAssertEqual(Feedback.keyPressStyle, .rigid)
-        XCTAssertGreaterThan(
-            Feedback.keyPressIntensity, 0.6,
-            "the mock damped every letter to 0.6 of light")
-        XCTAssertEqual(Feedback.keyPressIntensity, 1.0)
+            Feedback.impactStyle, .light,
+            "light at 0.6 was the mock; a letter has to land as a thud")
+        XCTAssertNotEqual(
+            Feedback.impactStyle, .rigid,
+            "rigid at 1.0 was the previous click and still read as a miss")
+        XCTAssertEqual(Feedback.impactStyle, .heavy)
+        XCTAssertEqual(Feedback.impactIntensity, 1.0)
+        XCTAssertEqual(Feedback.keyPressStyle, Feedback.impactStyle)
+        XCTAssertEqual(Feedback.modifierPressStyle, Feedback.impactStyle)
+        XCTAssertEqual(Feedback.actionPressStyle, Feedback.impactStyle)
+        XCTAssertEqual(Feedback.keyPressIntensity, Feedback.impactIntensity)
+        XCTAssertEqual(Feedback.actionPressIntensity, Feedback.impactIntensity)
     }
 
-    /// Reply / Fix / Dictate have to stay a step above a character, or the
-    /// stronger letter click swallows them.
-    func testActionsLandHarderThanLetters() {
-        XCTAssertEqual(Feedback.actionPressStyle, .heavy)
-        XCTAssertNotEqual(Feedback.actionPressStyle, Feedback.keyPressStyle)
+    /// The aliases above would still pass if `modifierPress` went back to
+    /// `selectionChanged()`. This count is what `playImpact` produces and
+    /// a picker tick does not.
+    func testModifierPressIsAnImpactNotASelectionTick() {
+        let before = Feedback.impactCount
+        Feedback.modifierPress()
+        XCTAssertEqual(
+            Feedback.impactCount, before + 1,
+            "modifierPress went back to a selection tick")
     }
 }

@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 
 @testable import AIKeyboardCore
@@ -67,6 +68,18 @@ final class FixAlternatesTests: XCTestCase {
         XCTAssertEqual(Set(list).count, list.count, "a pass is offered twice: \(list)")
         XCTAssertEqual(list, FixStyle.allCases.map(\.title))
         XCTAssertEqual(list, ["Fix", "Spelling", "Punctuate", "Polish"])
+    }
+
+    /// A missing symbol draws an empty mark next to the pass name, which is
+    /// how a list of four words with no pictures used to read.
+    func testEveryPassHasItsOwnRealIcon() {
+        let icons = FixStyle.allCases.map(\.icon)
+        XCTAssertEqual(Set(icons).count, icons.count, "two passes share a mark: \(icons)")
+        for style in FixStyle.allCases {
+            XCTAssertFalse(style.icon.contains("sparkle"), "\(style.title) wears a sparkle")
+            XCTAssertNotNil(
+                UIImage(systemName: style.icon), "\(style.title): no such symbol \(style.icon)")
+        }
     }
 
     // MARK: Running one

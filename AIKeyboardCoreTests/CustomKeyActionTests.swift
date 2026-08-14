@@ -106,6 +106,16 @@ final class CustomKeyActionTests: XCTestCase {
         XCTAssertEqual(controller.overlay, .none)
     }
 
+    func testCopyclipKeyTogglesThePanel() {
+        let before = SharedStore.shared.copyclipRecord
+        defer { SharedStore.shared.copyclipRecord = before }
+        let (controller, _) = controller()
+        controller.press(.copyclip)
+        XCTAssertEqual(controller.overlay, .copyclip)
+        controller.press(.copyclip)
+        XCTAssertEqual(controller.overlay, .none)
+    }
+
     /// On an empty field the one-tap key says why rather than running a rewrite,
     /// which is the same three-way answer the bar's button gives. The two must not
     /// diverge; that drift has already shipped once between the bar and the panel

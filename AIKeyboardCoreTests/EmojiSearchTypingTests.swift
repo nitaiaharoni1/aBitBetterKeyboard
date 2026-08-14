@@ -62,9 +62,14 @@ final class EmojiSearchTypingTests: XCTestCase {
         XCTAssertEqual(target.text, "hello")
 
         // Empty now: the next one leaves search, still without touching the text.
+        SharedStore.shared.haptics = true
+        let impacts = Feedback.impactCount
         controller.press(.backspace)
         XCTAssertEqual(controller.overlay, .emoji)
         XCTAssertEqual(target.text, "hello", "backspace fell through to the document")
+        XCTAssertEqual(
+            Feedback.impactCount, impacts + 1,
+            "empty-query backspace buzzed twice: keyPress then show")
     }
 
     func testForwardDeleteDoesNotTouchTheDocumentOrCloseSearch() {
@@ -161,6 +166,10 @@ final class EmojiSearchTypingTests: XCTestCase {
         // remaining case of this enum is an emoji one, which is the point of that
         // change rather than a gap in this test.
         XCTAssertFalse(KeyboardOverlay.none.isEmoji)
+        XCTAssertFalse(KeyboardOverlay.copyclip.isEmoji)
+        XCTAssertFalse(KeyboardOverlay.copyclipSearch.isEmoji)
+        XCTAssertTrue(KeyboardOverlay.copyclip.isCopyClip)
+        XCTAssertTrue(KeyboardOverlay.copyclipSearch.isCopyClip)
     }
 
     // MARK: Recents

@@ -967,7 +967,7 @@ final class GroupedKeysTests: XCTestCase {
                 GroupedInput.interrupts(cap), "\(cap) should let the word carry on")
         }
         for cap in [
-            KeyCap.space, .ret, .globe, .emoji, .settings, .dictation, .cursorLeft,
+            KeyCap.space, .ret, .globe, .emoji, .copyclip, .settings, .dictation, .cursorLeft,
             .cursorRight, .quickTone, .hideKeyboard, .plane(.numbers, label: "123")
         ] {
             XCTAssertTrue(GroupedInput.interrupts(cap), "\(cap) should end the word")

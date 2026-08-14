@@ -74,7 +74,7 @@ final class SparkleReachabilityTests: XCTestCase {
     }
 
     /// Tapping Reply on an empty field with nothing running reaches the banner that
-    /// explains screen context and, when a session could start, opens the app.
+    /// explains screen context and, when a session could start, hosts ReplayKit.
     /// This is the other end of the same route, and it is what makes the
     /// assertions above more than a statement about a boolean: there really is
     /// something behind that button in the state it was shut in.
@@ -99,11 +99,11 @@ final class SparkleReachabilityTests: XCTestCase {
             "the refusal has to say which of the four refusals it is")
     }
 
-    /// **The host callback fires on the first no-session tap**, not only when the
-    /// banner button is tapped. The Reply key no longer overlays ReplayKit; the
-    /// tap reaches `run(.reply)` and hands off the way dictation does.
+    /// Reply with no session hosts ReplayKit on the key. Opening the app is
+    /// how this used to fail: the extension often cannot open a URL, and the
+    /// key itself did nothing.
     @MainActor
-    func testReplyWithNoSessionOpensTheContainingApp() {
+    func testReplyWithNoSessionHostsThePickerAndDoesNotOpenTheApp() {
         let restore = preparePickerReadyStore()
         defer { restore() }
 
@@ -120,6 +120,9 @@ final class SparkleReachabilityTests: XCTestCase {
         XCTAssertTrue(
             controller.screenContextPrompt.offersPicker,
             "Reply would refuse, but the prompt is not offering a start")
+        XCTAssertNotNil(
+            controller.replyKeyBroadcastPrompt,
+            "the Reply key is not hosting ReplayKit in the state it exists for")
 
         var openedURLs: [URL] = []
         controller.onOpenContainingApp = { openedURLs.append($0) }
@@ -130,26 +133,20 @@ final class SparkleReachabilityTests: XCTestCase {
         XCTAssertEqual(controller.overlay, .none, "the keys must stay visible")
         XCTAssertEqual(controller.block?.action, .reply)
         XCTAssertEqual(controller.block?.title, "Screen context is off")
-        if case .openApp(let url) = controller.block?.remedy {
-            XCTAssertEqual(url, SharedStore.screenContextURL, "remedy must carry the screen-context URL")
-        } else {
-            XCTFail(
-                "expected .openApp remedy, got \(String(describing: controller.block?.remedy))")
-        }
-        XCTAssertEqual(openedURLs.count, 1, "exactly one open request on the first no-session tap")
         XCTAssertEqual(
-            openedURLs.first, SharedStore.screenContextURL,
-            "the URL must be the stable screen-context deep link")
+            controller.block?.remedy, .broadcastPicker,
+            "expected the sentence to host ReplayKit, got \(String(describing: controller.block?.remedy))")
+        XCTAssertTrue(openedURLs.isEmpty, "Reply opened the app instead of hosting the picker")
         XCTAssertFalse(
             SharedStore.shared.consumeDictationHandoff(),
             "Reply wrote a dictation handoff, which would start the microphone")
     }
 
     /// Reply during dictation used to still start a broadcast because the overlay
-    /// sat outside `KeyView`'s `.disabled`. The overlay is gone; the tap must not
-    /// open the app either.
+    /// sits outside `KeyView`'s `.disabled`. The prompt must be nil so the
+    /// overlay is not drawn, and the tap must not open the app either.
     @MainActor
-    func testReplyDoesNotOpenTheAppWhileDictating() {
+    func testReplyDoesNotHostThePickerWhileDictating() {
         let restore = preparePickerReadyStore()
         defer { restore() }
 
@@ -160,10 +157,32 @@ final class SparkleReachabilityTests: XCTestCase {
         var openedURLs: [URL] = []
         controller.onOpenContainingApp = { openedURLs.append($0) }
 
+        XCTAssertNil(
+            controller.replyKeyBroadcastPrompt,
+            "the overlay is back on a dim Reply key over a live recording")
         controller.run(.reply)
 
         XCTAssertTrue(openedURLs.isEmpty, "Reply opened the app over a live recording")
         XCTAssertNil(controller.block)
+    }
+
+    /// The overlay's touch-up cannot reach `press(.aiReply)`, so this is the
+    /// only path that prints the refusal after the system button is pressed.
+    @MainActor
+    func testTheReplyKeyOverlayPrintsTheSameRefusalAsRunReply() {
+        let restore = preparePickerReadyStore()
+        defer { restore() }
+
+        let controller = KeyboardController(target: MockTextTarget(text: ""))
+        controller.screenContext = .off
+        controller.screenContextSource = .none
+        XCTAssertNotNil(controller.replyKeyBroadcastPrompt)
+
+        controller.acknowledgeReplyBroadcastTap()
+
+        XCTAssertEqual(controller.block?.action, .reply)
+        XCTAssertEqual(controller.block?.remedy, .broadcastPicker)
+        XCTAssertEqual(controller.block?.title, "Screen context is off")
     }
 
     /// Unrestartable ending and no backend are the two `offersPicker == false`
@@ -187,6 +206,7 @@ final class SparkleReachabilityTests: XCTestCase {
 
         controller.screenContext = .ended(.notConfigured)
         XCTAssertFalse(controller.screenContextPrompt.offersPicker)
+        XCTAssertNil(controller.replyKeyBroadcastPrompt)
         controller.run(.reply)
         XCTAssertEqual(controller.block?.remedy, .none)
         XCTAssertTrue(openedURLs.isEmpty, "an unrestartable ending still opened the app")
@@ -196,6 +216,7 @@ final class SparkleReachabilityTests: XCTestCase {
         SharedStore.shared.cloudBackendToken = ""
         SharedStore.shared.cloudSessionToken = ""
         XCTAssertFalse(controller.screenContextPrompt.offersPicker)
+        XCTAssertNil(controller.replyKeyBroadcastPrompt)
         controller.run(.reply)
         XCTAssertEqual(
             controller.block?.remedy, .none,
@@ -240,8 +261,8 @@ final class SparkleReachabilityTests: XCTestCase {
         controller.screenContextSource = .none
         controller.run(.reply)
         XCTAssertEqual(
-            controller.block?.remedy, .openApp(SharedStore.screenContextURL),
-            "the state under test is the open-app strip")
+            controller.block?.remedy, .broadcastPicker,
+            "the state under test is the picker strip")
 
         controller.screenContext = .starting
         XCTAssertNil(
@@ -443,6 +464,9 @@ final class ToneIconTests: XCTestCase {
             XCTAssertNotNil(UIImage(systemName: tone.icon), "\(tone.title): no such symbol \(tone.icon)")
         }
         XCTAssertNotNil(UIImage(systemName: SparkleMark.symbolName))
+        XCTAssertNotNil(
+            UIImage(systemName: ToneSetting.customIcon),
+            "My tone: no such symbol \(ToneSetting.customIcon)")
     }
 
     /// Two tones sharing an icon is the same defect one step along, so the six are

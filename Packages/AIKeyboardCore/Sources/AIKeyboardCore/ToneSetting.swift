@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - The tone
 
-/// The tone the keyboard rewrites in when nobody picks one: one of the six
+/// The tone the keyboard rewrites in when nobody picks one: one of the
 /// built-in registers, or a short instruction the user wrote themselves.
 ///
 /// It sits beside `ToneStyle` rather than inside it. `ToneStyle` is a
@@ -65,6 +65,10 @@ public enum ToneSetting: Equatable, Sendable {
 
     /// Named once so the settings picker and the keyboard cannot drift apart.
     public static let customTitle = "My tone"
+
+    /// The mark next to `customTitle` in Settings and on the Rewrite hold menu.
+    /// Not used on the one-tap bar button, which keeps a fixed rewrite glyph.
+    public static let customIcon = "pencil"
 
     /// What Settings prints under the field where the user writes their own tone.
     ///

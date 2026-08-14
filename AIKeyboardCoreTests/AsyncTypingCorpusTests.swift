@@ -102,7 +102,7 @@ final class AsyncTypingCorpusTests: XCTestCase {
     private func refine(_ request: PredictiveRefiner.Request) -> [String]? {
         var applied: [String]?
         var arrived: XCTestExpectation?
-        let refiner = PredictiveRefiner.standard(cloud: nil) { words, _ in
+        let refiner = PredictiveRefiner.standard { words, _ in
             applied = words
             arrived?.fulfill()
         }

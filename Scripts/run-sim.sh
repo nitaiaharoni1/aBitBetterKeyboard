@@ -92,11 +92,18 @@ cycle() {
         return 1
     fi
 
-    # Terminate before install. Installing over a running app leaves the old
+    # Kill before install. Installing over a running app leaves the old
     # process serving the old binary until something kills it.
     xcrun simctl terminate "$udid" "$APP_ID" >/dev/null 2>&1 || true
     xcrun simctl install "$udid" "$APP_PATH"
-    xcrun simctl launch "$udid" "$APP_ID" >/dev/null
+    # Reinstall drops the extension from Apple's enabled list. The UI tests
+    # already document this. Write it back so the next tap on a field still
+    # has a keyboard to open.
+    restore_enabled_keyboards "$udid"
+    if ! launch_app "$udid"; then
+        printf 'launch failed\n'
+        return 1
+    fi
 
     for host in "${HOSTS[@]:-}"; do
         [[ -n "$host" ]] || continue
@@ -105,6 +112,36 @@ cycle() {
     done
 
     printf 'installed and launched\n'
+}
+
+restore_enabled_keyboards() {
+    local udid="$1"
+    xcrun simctl spawn "$udid" defaults write .GlobalPreferences AppleKeyboards -array \
+        "en_US@sw=QWERTY;hw=Automatic" \
+        "he_IL@sw=Hebrew;hw=Automatic" \
+        "emoji@sw=Emoji" \
+        "com.nitai.aikeyboard.keyboard" >/dev/null
+}
+
+# SpringBoard denies a launch that arrives while it is still tearing down the
+# previous process (`SBMainWorkspace` / `FBSOpenApplicationServiceErrorDomain`).
+# One atomic handoff, then two retries, beats terminate-and-immediately-launch.
+launch_app() {
+    local udid="$1"
+    local err
+    err="$(mktemp)"
+    local attempt
+    for attempt in 1 2 3; do
+        if xcrun simctl launch --terminate-running-process "$udid" "$APP_ID" \
+            >/dev/null 2>"$err"; then
+            rm -f "$err"
+            return 0
+        fi
+        sleep 0.6
+    done
+    cat "$err" >&2
+    rm -f "$err"
+    return 1
 }
 
 # Every Swift file's mtime, plus the project file, as one number. Cheap enough to
@@ -122,7 +159,11 @@ mkdir -p "$DERIVED"
 UDID="$(resolve_device)"
 echo "· simulator $UDID"
 
-cycle "$UDID" || [[ $WATCH -eq 1 ]] || exit 1
+# `cycle || …` would disable `set -e` inside the function, so a failed
+# launch still printed "installed and launched".
+if ! cycle "$UDID"; then
+    [[ $WATCH -eq 1 ]] || exit 1
+fi
 
 if [[ $WATCH -eq 0 ]]; then
     exit 0
@@ -146,5 +187,7 @@ while true; do
 
     LAST="$NOW"
     printf '\n· change detected %s\n' "$(date '+%H:%M:%S')"
-    cycle "$UDID" || true
+    if ! cycle "$UDID"; then
+        :
+    fi
 done

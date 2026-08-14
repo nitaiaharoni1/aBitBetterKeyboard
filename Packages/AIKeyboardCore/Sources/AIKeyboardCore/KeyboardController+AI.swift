@@ -153,21 +153,28 @@ extension KeyboardController {
         }
     }
 
+    /// The Reply-key overlay steals the gesture, so this path never reaches
+    /// `press(.aiReply)`. Same click and haptic that path already plays.
+    func acknowledgeReplyBroadcastTap() {
+        Feedback.keyClick(KeyCap.aiReply.clickSound)
+        Feedback.actionPress()
+        guard let prompt = replyKeyBroadcastPrompt else { return }
+        refuseForScreenContext(prompt)
+    }
+
+    /// One refusal for `runReply` and the overlay's touch-up, so the two taps
+    /// cannot print different sentences for one prompt.
+    ///
     /// `offersPicker` still means a session started now could get somewhere.
-    /// The consumer is open-app, not the in-keyboard ReplayKit overlay: that
-    /// picker does not present over a keyboard.
+    /// The consumer is the ReplayKit overlay on the key and on this sentence.
+    /// Opening the app is a fallback the Home row already hosts.
     private func refuseForScreenContext(_ prompt: ScreenContextPrompt) {
-        let remedy: BannerState.Block.Remedy =
-            prompt.offersPicker ? .openApp(SharedStore.screenContextURL) : .none
         refuse(
             .init(
                 action: .reply,
                 title: prompt.title,
                 detail: prompt.detail,
-                remedy: remedy))
-        if case .openApp(let url) = remedy {
-            onOpenContainingApp?(url)
-        }
+                remedy: prompt.offersPicker ? .broadcastPicker : .none))
     }
 
     /// Runs one model call. The latency here is the model's, not a sleep: the

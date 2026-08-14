@@ -6,7 +6,7 @@ import XCTest
 ///
 /// `ActionBanner` renders a title, a sentence and a dismiss × off this — it
 /// was `AIResultPanel` until that panel was deleted — and the sentence is the
-/// one worth pinning: when `offersPicker` is true a tap opens the app to start
+/// one worth pinning: when `offersPicker` is true a tap starts
 /// a **real screen recording**, with iOS's own countdown and its own red
 /// indicator, and a broadcast started with no cloud model behind it is refused
 /// by `SampleHandler.broadcastStarted` inside a second
@@ -41,24 +41,21 @@ final class ScreenContextPromptTests: XCTestCase {
 
     /// The other half, and it is not redundant: a version that simply never
     /// offered the start would pass the test above and leave Reply a dead end.
-    /// The start is in the app. `offersPicker` is whether we should send them
-    /// there.
+    /// The start is ReplayKit on the Reply key. `offersPicker` is whether
+    /// that overlay is worth drawing.
     func testThePickerIsOfferedWhenABroadcastCouldActuallyRun() {
         let ready = prompt()
         XCTAssertTrue(ready.offersPicker)
         XCTAssertEqual(ready.title, "Screen context is off")
-        XCTAssertFalse(
+        XCTAssertTrue(
             ready.detail.contains("Start Broadcast"),
-            "the sentence still describes the in-keyboard picker: \(ready.detail)")
-        XCTAssertFalse(
+            "the sentence no longer names the system sheet: \(ready.detail)")
+        XCTAssertTrue(
             ready.detail.hasPrefix("Tap"),
-            "the sentence still tells them to tap the picker: \(ready.detail)")
+            "the sentence no longer tells them to tap: \(ready.detail)")
         XCTAssertTrue(
             ready.detail.contains("aBitBetterKeyboard"),
             "the way in is not named: \(ready.detail)")
-        XCTAssertTrue(
-            ready.detail.contains("swipe back"),
-            "the way back is not described: \(ready.detail)")
     }
 
     /// Three refusals, three different pieces of work, in three different places.

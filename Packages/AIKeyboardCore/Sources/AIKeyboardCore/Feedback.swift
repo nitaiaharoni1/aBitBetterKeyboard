@@ -13,47 +13,68 @@ public enum Feedback {
     public static var hapticsEnabled: Bool { SharedStore.shared.storedHaptics }
     public static var soundEnabled: Bool { SharedStore.shared.storedKeySounds }
 
-    /// Letter keys. `.light` at 0.6 was the mock and reads as a miss; `.rigid`
-    /// at full intensity is a defined click without `.heavy`'s thud on every
-    /// character.
-    static let keyPressStyle: UIImpactFeedbackGenerator.FeedbackStyle = .rigid
-    static let keyPressIntensity: CGFloat = 1.0
+    /// One collision for every press kind. `.light` at 0.6 was the mock;
+    /// `.rigid` at 1.0 was a defined click that still read as a miss on device.
+    /// `.heavy` at full intensity is the hardest impact UIKit will play.
+    static let impactStyle: UIImpactFeedbackGenerator.FeedbackStyle = .heavy
+    static let impactIntensity: CGFloat = 1.0
 
-    /// Action-row confirmation. A heavier collision than a letter so Reply /
-    /// Fix / Dictate land harder than a character.
-    static let actionPressStyle: UIImpactFeedbackGenerator.FeedbackStyle = .heavy
+    static let keyPressStyle = impactStyle
+    static let keyPressIntensity = impactIntensity
+    static let modifierPressStyle = impactStyle
+    static let actionPressStyle = impactStyle
+    static let actionPressIntensity = impactIntensity
 
-    private static let key = UIImpactFeedbackGenerator(style: keyPressStyle)
-    private static let action = UIImpactFeedbackGenerator(style: actionPressStyle)
-    private static let selection = UISelectionFeedbackGenerator()
-    private static let notification = UINotificationFeedbackGenerator()
+    /// Incremented by `playImpact` only. A `modifierPress` that went back to
+    /// `selectionChanged()` would leave this still.
+    static var impactCount = 0
+
+    private static var impact = UIImpactFeedbackGenerator(style: impactStyle)
+    private static var notification = UINotificationFeedbackGenerator()
+    private static weak var attachedView: UIView?
+
+    /// Bind the generators to the keyboard's own view.
+    ///
+    /// A generator with no view is a free-floating motor. In a keyboard
+    /// extension that is the usual reason the first taps are late or missing.
+    /// iOS 17.5 is when UIKit grew the view-associated initialisers; below that
+    /// this still warms the unbound pair. Same view twice only prepares: a new
+    /// generator on every SwiftUI pass would go cold mid-burst.
+    static func attach(to view: UIView) {
+        if attachedView === view {
+            prepare()
+            return
+        }
+        if #available(iOS 17.5, *) {
+            impact = UIImpactFeedbackGenerator(style: impactStyle, view: view)
+            notification = UINotificationFeedbackGenerator(view: view)
+        }
+        attachedView = view
+        prepare()
+    }
 
     /// Call before a burst of taps so the Taptic engine is warm and the first
-    /// tap is not late.
+    /// tap is not late. Each play also prepares the next one.
     public static func prepare() {
-        key.prepare()
-        action.prepare()
-        selection.prepare()
+        impact.prepare()
+        notification.prepare()
     }
 
-    public static func keyPress() {
-        guard hapticsEnabled else { return }
-        key.impactOccurred(intensity: keyPressIntensity)
-    }
-
-    public static func modifierPress() {
-        guard hapticsEnabled else { return }
-        selection.selectionChanged()
-    }
-
-    public static func actionPress() {
-        guard hapticsEnabled else { return }
-        action.impactOccurred()
-    }
+    public static func keyPress() { playImpact() }
+    public static func modifierPress() { playImpact() }
+    public static func actionPress() { playImpact() }
 
     public static func success() {
         guard hapticsEnabled else { return }
         notification.notificationOccurred(.success)
+        notification.prepare()
+    }
+
+    private static func playImpact() {
+        guard hapticsEnabled else { return }
+        impactCount += 1
+        impact.impactOccurred(intensity: impactIntensity)
+        impact.prepare()
     }
 
     /// The system key click. Only plays with Full Access; without it this is a
@@ -99,7 +120,7 @@ extension KeyCap {
             return .tock
         case .backspace, .deleteForward:
             return .delete
-        case .shift, .plane, .globe, .settings, .dictation, .emoji, .quickTone,
+        case .shift, .plane, .globe, .settings, .dictation, .emoji, .copyclip, .quickTone,
             .cursorLeft, .cursorRight, .hideKeyboard, .aiReply, .aiFix:
             return .modifier
         }

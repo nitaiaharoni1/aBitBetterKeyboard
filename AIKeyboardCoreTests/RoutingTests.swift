@@ -158,10 +158,12 @@ final class RoutedIntelligenceTests: XCTestCase {
         XCTAssertEqual(cloud.calls.count, 1)
     }
 
-    /// The first failure is the informative one — "Apple Intelligence is off"
-    /// tells the user something; the cloud's "no key" does not.
-    func testFirstFailureIsTheOneReported() async {
-        let onDevice = StubEngine(answer: "on-device", failure: .appleIntelligenceOff)
+    /// An engine that cannot run is not the informative failure. The simulator
+    /// always throws `modelNotReady`, the cloud then 401s, and reporting the
+    /// first of those printed "Still downloading" over a keyboard whose real
+    /// problem was the token.
+    func testAnAvailabilityMissDoesNotMaskTheCloudError() async {
+        let onDevice = StubEngine(answer: "on-device", failure: .modelNotReady)
         let cloud = StubEngine(answer: "cloud", failure: .cloudNotConfigured)
         let router = RoutedIntelligence(onDevice: onDevice, cloud: cloud)
 
@@ -169,7 +171,7 @@ final class RoutedIntelligenceTests: XCTestCase {
             _ = try await router.fix("the meeting is tomorrow")
             XCTFail("expected an error")
         } catch let error as AIEngineError {
-            XCTAssertEqual(error, .appleIntelligenceOff)
+            XCTAssertEqual(error, .cloudNotConfigured)
         } catch {
             XCTFail("unexpected error \(error)")
         }
@@ -190,7 +192,7 @@ final class RoutedIntelligenceTests: XCTestCase {
         let router = RoutedIntelligence(onDevice: onDevice, cloud: cloud)
 
         let output = try await router.variants(
-            for: "hey can you send me the deck", tone: .friendly,
+            for: "hey can you send me the deck", tone: .casual,
             instruction: "קצר וישיר, בלי נימוסים")
 
         XCTAssertEqual(output.provenance, .onDevice)

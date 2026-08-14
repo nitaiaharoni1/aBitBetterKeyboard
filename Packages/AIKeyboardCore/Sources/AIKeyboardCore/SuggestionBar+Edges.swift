@@ -13,7 +13,7 @@ extension SuggestionBar {
     /// wired in `KeyView`, which does not draw this bar — an edge button would
     /// delete once per tap and look broken beside the real one.
     public static let barCatalogue: [SlotAction] = [
-        .emoji, .quickTone, .dictation, .cursorLeft, .cursorRight,
+        .emoji, .copyclip, .quickTone, .dictation, .cursorLeft, .cursorRight,
         .hideKeyboard, .globe
     ]
 

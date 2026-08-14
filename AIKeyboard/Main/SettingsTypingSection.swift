@@ -2,7 +2,7 @@ import AIKeyboardCore
 import SwiftUI
 
 /// The "Typing" settings card: autocorrect, pause actions, auto-capitalise,
-/// and predictions. Learning is always on; Forget lives in the Danger zone.
+/// and predictions. Learned words and Forget live on Personal dictionary.
 struct SettingsTypingSection: View {
     @EnvironmentObject private var store: SharedStore
 

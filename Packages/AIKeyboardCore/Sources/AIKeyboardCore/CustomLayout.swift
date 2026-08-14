@@ -5,10 +5,10 @@ import Foundation
 
 /// The job assigned to one editable key.
 ///
-/// Thirteen of these are things `KeyboardController` already did before this
-/// feature existed, which is why the catalogue is this size and not larger: a
-/// keyboard that can be rearranged into an action nothing implements is worse
-/// than one that cannot be rearranged at all.
+/// Each of these is something `KeyboardController` already does, which is why
+/// the catalogue is this size and not larger: a keyboard that can be rearranged
+/// into an action nothing implements is worse than one that cannot be
+/// rearranged at all.
 public enum SlotAction: Codable, Hashable, Sendable {
     case shift
     case backspace
@@ -20,6 +20,7 @@ public enum SlotAction: Codable, Hashable, Sendable {
     case ret
     case dictation
     case emoji
+    case copyclip
     case quickTone
     case cursorLeft
     case cursorRight
@@ -59,6 +60,7 @@ public enum SlotAction: Codable, Hashable, Sendable {
         case .ret: return "Return"
         case .dictation: return "Dictation"
         case .emoji: return "Emoji"
+        case .copyclip: return "CopyClip"
         case .quickTone: return "One-tap rewrite"
         case .cursorLeft: return "Cursor left"
         case .cursorRight: return "Cursor right"
@@ -77,7 +79,7 @@ public enum SlotAction: Codable, Hashable, Sendable {
     /// is already there, and a second space bar is not a layout anybody wants.
     public static let catalogue: [SlotAction] = [
         .backspace, .ret, .shift, .numbersPlane, .symbolsPlane, .globe, .settings,
-        .dictation, .emoji, .reply, .fix, .quickTone, .punctuation,
+        .dictation, .emoji, .copyclip, .reply, .fix, .quickTone, .punctuation,
         .cursorLeft, .cursorRight, .deleteForward, .hideKeyboard,
         .text(","), .text("?"), .text("!"), .text("@"), .text(".com")
     ]

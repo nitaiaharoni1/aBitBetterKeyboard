@@ -99,6 +99,7 @@ public final class SharedStore: ObservableObject {
         static let dictationSessionMinutes = "dictationSessionMinutes"
         static let keyboardLayout = "keyboardLayout"
         static let recentEmoji = "recentEmoji"
+        static let copyclipHistory = "copyclipHistory"
         static let hasAcknowledgedKeyboardSwitch = "hasAcknowledgedKeyboardSwitch"
         static let brandPalette = "brandPalette"
         /// A Unix timestamp written by the keyboard when it wants the app to start
@@ -374,7 +375,7 @@ public final class SharedStore: ObservableObject {
 
     // MARK: AI
 
-    @Published public var defaultTone: ToneStyle = .clearer {
+    @Published public var defaultTone: ToneStyle = .normal {
         didSet { defaults.set(defaultTone.rawValue, forKey: Key.defaultTone) }
     }
 
@@ -559,6 +560,47 @@ public final class SharedStore: ObservableObject {
     /// their recents meant it.
     public var storedRecentEmoji: [String] {
         defaults.array(forKey: Key.recentEmoji) as? [String] ?? recentEmoji
+    }
+
+    // MARK: CopyClip
+
+    /// Copied texts plus the last pasteboard generation this keyboard saw.
+    ///
+    /// **JSON `CopyclipRecord`, not `[String]`, because swipe-delete needs a
+    /// stable id and Clear must survive a killed extension.** A string list
+    /// cannot tell two identical copies apart after a move-to-front. Leaving
+    /// `lastChangeCount` in session memory would re-add the current board
+    /// after Clear the next time iOS tore the keyboard down. The write is in
+    /// `didSet` the way `recentEmoji` and the layout already are.
+    @Published public var copyclipRecord: CopyclipRecord = .empty {
+        didSet { writeCopyclipRecord(copyclipRecord) }
+    }
+
+    public static let copyclipHistoryKey = Key.copyclipHistory
+
+    /// Re-read at the moment of use. An empty stored list is a list the user
+    /// cleared, not a missing key.
+    public var storedCopyclipRecord: CopyclipRecord {
+        Self.decodeCopyclipRecord(from: defaults)
+    }
+
+    static func decodeCopyclipRecord(from defaults: UserDefaults) -> CopyclipRecord {
+        guard let data = defaults.data(forKey: Key.copyclipHistory) else { return .empty }
+        if let record = try? JSONDecoder().decode(CopyclipRecord.self, from: data) {
+            return record
+        }
+        if let clips = try? JSONDecoder().decode([Clip].self, from: data) {
+            return CopyclipRecord(clips: clips, lastChangeCount: -1)
+        }
+        return .empty
+    }
+
+    func writeCopyclipRecord(_ record: CopyclipRecord) {
+        guard let data = try? JSONEncoder().encode(record) else {
+            Self.log.error("copyclip history could not be encoded, the change was not saved")
+            return
+        }
+        defaults.set(data, forKey: Key.copyclipHistory)
     }
 
     // MARK: Keyboard layout

@@ -323,16 +323,17 @@ public enum Theme {
         public static var swipe: Animation {
             .easeOut(duration: duration)
         }
-        /// A loop, not a state change. Period is longer than `duration` on purpose.
-        public static var jiggle: Animation {
-            .easeInOut(duration: 0.14).repeatForever(autoreverses: true)
-        }
 
         /// A balloon growing out of a key. Opacity alone under Reduce Motion.
-        public static func pop(reduceMotion: Bool) -> AnyTransition {
+        ///
+        /// `anchor` is the edge nearest the key: `.bottom` for a strip that
+        /// sits above it, `.top` for a stack that drops below.
+        public static func pop(
+            reduceMotion: Bool, anchor: UnitPoint = .bottom
+        ) -> AnyTransition {
             guard !reduceMotion else { return .opacity }
             return .asymmetric(
-                insertion: .scale(scale: 0.6, anchor: .bottom).combined(with: .opacity),
+                insertion: .scale(scale: 0.6, anchor: anchor).combined(with: .opacity),
                 removal: .opacity
             )
         }

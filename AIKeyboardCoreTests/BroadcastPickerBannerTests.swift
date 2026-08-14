@@ -9,15 +9,15 @@ import XCTest
 /// `UIButton` has to fill the host bounds. Asserting "a picker is offered"
 /// would pass against a 10-pt-smaller chip.
 ///
-/// Reply with no session now opens the app (`.openApp`). `.broadcastPicker`
-/// remains for that overlay type.
+/// Reply with no session hosts ReplayKit on the key and on the sentence
+/// (`.broadcastPicker`). `.openApp` remains for dictation.
 final class BroadcastPickerBannerTests: XCTestCase {
 
     private let noSession = BannerState.Block(
         action: .reply,
         title: "Screen context is off",
-        detail: "Start it in aBitBetterKeyboard — swipe back to continue.",
-        remedy: .openApp(SharedStore.screenContextURL))
+        detail: "Tap to pick aBitBetterKeyboard, then Start Broadcast.",
+        remedy: .broadcastPicker)
 
     private let needsAccess = BannerState.Block(
         action: .reply,
@@ -31,16 +31,13 @@ final class BroadcastPickerBannerTests: XCTestCase {
         detail: "Tap to pick aBitBetterKeyboard, then Start Broadcast.",
         remedy: .broadcastPicker)
 
-    /// Reply with no session opens the app. Trailing is × plus the Open chip.
-    /// `.broadcastPicker` still exists for the app's overlay and still dismisses
-    /// with × only, which is why this is not "every refusal is × plus Open".
+    /// Reply with no session hosts ReplayKit on the sentence. Trailing is ×.
+    /// Dictation still uses × plus the Open chip.
     func testABroadcastRefusalDismissesWithXRatherThanTheRecordChip() {
-        guard case .dismissAndOpenApp(let url) = ActionBanner.blockedTrailing(for: noSession.remedy)
-        else { return XCTFail("the open-app chip was dropped for screen context") }
-        XCTAssertEqual(url, SharedStore.screenContextURL)
-        XCTAssertFalse(
+        XCTAssertEqual(ActionBanner.blockedTrailing(for: noSession.remedy), .dismiss)
+        XCTAssertTrue(
             noSession.startsBroadcastFromMessage,
-            "the no-session sentence still hosts ReplayKit")
+            "the no-session sentence is inert; only a chip would start a broadcast")
 
         XCTAssertEqual(ActionBanner.blockedTrailing(for: needsAccess.remedy), .dismiss)
         XCTAssertFalse(

@@ -31,8 +31,8 @@ extension FoundationModelsEngine: TextPrediction {
     /// this model, labelled `onDeviceBestEffort`, because a flawed fix is worth
     /// more than no fix. Prediction is the opposite: three wrong-language words
     /// sitting above the keys are not a degraded answer, they are noise the
-    /// user has to read past on every keystroke. So Hebrew goes to the cloud or
-    /// nowhere, and this returns a plain false rather than a hedge.
+    /// user has to read past on every keystroke. Hebrew has no on-device
+    /// predictor, and the bar does not ask the cloud, so this returns false.
     public func canPredict(in language: KeyboardLanguage) -> Bool {
         guard unavailableReason == nil else { return false }
         return supportsScript(language.script)

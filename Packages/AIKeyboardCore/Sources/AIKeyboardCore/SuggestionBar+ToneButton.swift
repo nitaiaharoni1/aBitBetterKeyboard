@@ -83,7 +83,7 @@ extension SuggestionBar {
     /// nothing else, so a user with Casual selected got a small waving stick figure
     /// (`figure.wave`) in a keyboard, which says nothing about rewriting, nothing
     /// about AI, and reads as a profile or contacts button. The fact it *was*
-    /// carrying — which of six tones a tap runs, otherwise unknowable without
+    /// carrying — which tone a tap runs, otherwise unknowable without
     /// opening a panel — is real and is kept, just moved into the label under the
     /// glyph where it can be read rather than guessed. `ToneStyle.icon` is still the
     /// per-tone symbol and still used, in the tone picker and on a result variant,

@@ -21,15 +21,29 @@ extension KeyboardController {
             && (screenContext.isLive || screenContext.context != nil)
     }
 
+    /// Non-nil only when the Reply key must become ReplayKit's real button.
+    ///
+    /// Dictation is excluded because the overlay sits *outside* `KeyView`, past
+    /// `.disabled`, so a dim Reply key would still start a broadcast while
+    /// somebody is speaking.
+    var replyKeyBroadcastPrompt: ScreenContextPrompt? {
+        guard !isDictationActive, !hasUsableReplyContext else { return nil }
+        let prompt = screenContextPrompt
+        return prompt.offersPicker ? prompt : nil
+    }
+
     /// `BannerState.resolve` prefers `block` over a reading, so once a session
-    /// is actually live the "Screen context is off" open-app sentence is a lie
-    /// sitting on top of a Reply that would generate.
+    /// is actually live the "Screen context is off" sentence is a lie sitting
+    /// on top of a Reply that would generate.
     func dropStaleReplyBroadcastRefusal() {
         guard screenContext.isLive else { return }
-        guard block?.action == .reply,
-            block?.remedy == .openApp(SharedStore.screenContextURL)
-        else { return }
-        block = nil
+        guard block?.action == .reply else { return }
+        switch block?.remedy {
+        case .broadcastPicker, .openApp(SharedStore.screenContextURL):
+            block = nil
+        default:
+            return
+        }
     }
 
     /// The ending on the record, if the last thing that happened was one.
@@ -74,9 +88,9 @@ extension KeyboardController {
     /// was a 30pt row that appeared and disappeared with the session; the banner is
     /// always drawn and already shows the reading itself, so the only part that
     /// needed a home was the five states that are not a reading. The strip's own
-    /// restart button is not reproduced: Reply with no session hands off to
-    /// Home, where the feature row hosts the real picker —
-    /// `ScreenContextPrompt.offersPicker` is whether that trip is worth making.
+    /// restart button is not reproduced: Reply with no session hosts the
+    /// picker on the key itself. `ScreenContextPrompt.offersPicker` is
+    /// whether that overlay is worth drawing.
     ///
     /// `.off` returns nil rather than a sentence, because a phone that has never
     /// started a broadcast is not in an error state and the banner has an ordinary

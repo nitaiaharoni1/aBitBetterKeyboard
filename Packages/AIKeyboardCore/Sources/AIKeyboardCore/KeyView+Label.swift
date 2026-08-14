@@ -131,6 +131,17 @@ extension KeyView {
                     showsCaption: showsActionCaption)
             }
 
+        case .copyclip:
+            // `ABC` / `אבג` promises the letters are coming back. CopyClip
+            // never needs them, so the open key stays a clipboard. Filled
+            // while the panel is up; the word stays because the glyph alone
+            // is not a name people already know.
+            actionLabel(
+                icon: isCopyClipOpen ? "clipboard.fill" : "clipboard",
+                title: "CopyClip",
+                tint: Theme.Keys.label,
+                showsCaption: showsActionCaption)
+
         case .quickTone:
             // `AIAction.rewrite`'s own icon, and never a sparkle in any count —
             // see `SuggestionBar.toneButtonSymbol` and `ToneIconTests` for the
@@ -229,9 +240,9 @@ extension KeyView {
     /// An action drawn as a key: its glyph, and its name under it when there is
     /// room.
     ///
-    /// Reply, Fix and Rewrite keep captions in the shipped action row. Emoji and
-    /// Dictate deliberately use their familiar glyphs alone there, but regain
-    /// captions when moved to another wide row.
+    /// Reply, Fix, Rewrite and CopyClip keep captions in the shipped action row.
+    /// Emoji and Dictate deliberately use their familiar glyphs alone there, but
+    /// regain captions when moved to another wide row.
     ///
     /// The tint `actionLabel` resolves, against the cap the key is wearing.
     ///

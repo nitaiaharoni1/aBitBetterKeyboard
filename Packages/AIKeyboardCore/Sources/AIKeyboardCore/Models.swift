@@ -52,7 +52,7 @@ public enum KeyboardPlane: Sendable {
     case symbols
 }
 
-/// What is drawn over the key grid, and it is only ever emoji now.
+/// What is drawn over the letter keys. The action row stays.
 ///
 /// **Three cases were deleted rather than taught to behave.** `.aiMenu`,
 /// `.aiResult` and `.dictation` each painted over every key row to say one or two
@@ -61,8 +61,8 @@ public enum KeyboardPlane: Sendable {
 /// opened. All four of those paths are `BannerState.blocked` now, so the keys stay
 /// visible and the strip does the talking. See `.claude/rules/keyboard-layout.md`.
 ///
-/// Both emoji cases stay, because neither breaks that rule: the grid is drawn inside
-/// the letter area and search hands the letters back and takes only the action row.
+/// Emoji and CopyClip stay, because neither breaks that rule: both panels sit
+/// inside the letter area. Each has a search twin that needs the letters back.
 public enum KeyboardOverlay: Equatable, Sendable {
     case none
     case emoji
@@ -73,9 +73,27 @@ public enum KeyboardOverlay: Equatable, Sendable {
     /// needs the letters back to type into the box. Making it a case means the
     /// compiler names every place that has to decide.
     case emojiSearch
+    /// Clipboard history over the letter keys. The action row stays, the way
+    /// `.emoji` does.
+    case copyclip
+    /// CopyClip with the search box open. Same swap as `.emojiSearch`: the
+    /// panel goes, the letters come back, and the action row becomes matches.
+    case copyclipSearch
 
     /// Either emoji state. What the Emoji key reads to know it should say `אבג`.
     public var isEmoji: Bool { self == .emoji || self == .emojiSearch }
+
+    public var isCopyClip: Bool { self == .copyclip || self == .copyclipSearch }
+
+    /// Letters (and the space row) are on screen. Hidden, not removed, while a
+    /// panel covers them so the overlay keeps the same height.
+    public var showsLetterKeys: Bool {
+        self == .none || self == .emojiSearch || self == .copyclipSearch
+    }
+
+    /// The action row is on screen. Hidden during search, which spends that
+    /// band on results.
+    public var showsActionRow: Bool { self == .none || self == .emoji || self == .copyclip }
 }
 
 public enum ShiftState: Sendable {

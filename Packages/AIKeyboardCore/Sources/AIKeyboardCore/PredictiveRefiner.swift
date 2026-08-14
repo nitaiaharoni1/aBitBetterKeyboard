@@ -1,12 +1,14 @@
 import Foundation
 
-/// The second tier of the suggestion bar: a model, asked once the user pauses.
+/// The second tier of the suggestion bar: the on-device model, asked once the
+/// user pauses.
 ///
 /// The local tier fills all three slots on every keystroke. This runs hundreds
 /// of milliseconds later and may replace the side words *and* the bold one.
 /// Slot 0 stays the typed keystrokes. Space still only inserts the bold word
 /// when Autocorrect is on; Complete on pause and Space on pause are separate
-/// switches.
+/// switches. There is no cloud engine here. Hebrew has no on-device predictor,
+/// so this tier is silent there and the dictionary stands.
 ///
 /// **When it runs.** On a 300 ms idle after the last keystroke, and only when the
 /// answer could plausibly beat what is already on screen. The guards are in
@@ -37,7 +39,7 @@ public final class PredictiveRefiner {
 
     private static let cacheLimit = 128
 
-    private let predictors: [any TextPrediction]
+    private let predictor: (any TextPrediction)?
     /// Answers already paid for, keyed by exactly what was asked, oldest evicted
     /// first once `cacheLimit` is reached.
     ///
@@ -64,23 +66,20 @@ public final class PredictiveRefiner {
 
     public init(
         onDevice: (any TextPrediction)? = nil,
-        cloud: (any TextPrediction)? = nil,
         apply: @escaping ([String], String) -> Void
     ) {
-        // On-device first where it can serve the language, because it is free and
-        // it is faster. There is no third best-effort branch — see
-        // `FoundationModelsEngine.canPredict`.
-        self.predictors = [onDevice, cloud].compactMap { $0 }
+        self.predictor = onDevice
         self.apply = apply
     }
 
-    /// The shipping configuration, matching `RoutedIntelligence.standard`.
+    /// The shipping configuration: Apple's on-device model where it lists the
+    /// script, and silence everywhere else (Hebrew included).
     public static func standard(
-        cloud: (any TextPrediction)? = nil, apply: @escaping ([String], String) -> Void
+        apply: @escaping ([String], String) -> Void
     ) -> PredictiveRefiner {
         var local: (any TextPrediction)?
         if #available(iOS 26.0, macOS 26.0, *) { local = FoundationModelsEngine() }
-        return PredictiveRefiner(onDevice: local, cloud: cloud, apply: apply)
+        return PredictiveRefiner(onDevice: local, apply: apply)
     }
 
     /// Everything the refiner needs to decide whether to run and what to ask.
@@ -175,7 +174,7 @@ public final class PredictiveRefiner {
     ///   same three openers the local tier already has.
     func shouldRefine(_ request: Request) -> Bool {
         guard request.permitted else { return false }
-        guard predictors.contains(where: { $0.canPredict(in: request.language) }) else {
+        guard let predictor, predictor.canPredict(in: request.language) else {
             return false
         }
         let hasText = !request.textBefore.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -183,7 +182,7 @@ public final class PredictiveRefiner {
         return true
     }
 
-    /// The first engine that can serve this language, and no fallback chain.
+    /// The on-device engine, or silence. No fallback chain.
     ///
     /// A failure here is silent on purpose. The bar is already full — the local
     /// tier filled it before this was ever asked — so there is nothing to report
@@ -191,16 +190,14 @@ public final class PredictiveRefiner {
     /// errors because the user pressed a button and is waiting; nobody pressed
     /// anything here.
     private func ask(_ request: Request) async -> [String]? {
+        guard let predictor, predictor.canPredict(in: request.language) else { return nil }
         let text = Self.tail(of: request.textBefore + request.wordInProgress)
-        for predictor in predictors where predictor.canPredict(in: request.language) {
-            guard
-                let words = try? await predictor.continuations(
-                    after: text, replyingTo: request.screenContext, language: request.language)
-            else { continue }
-            let cleaned = Self.cleaned(words, continuing: request.wordInProgress)
-            if !cleaned.isEmpty { return cleaned }
-        }
-        return nil
+        guard
+            let words = try? await predictor.continuations(
+                after: text, replyingTo: request.screenContext, language: request.language)
+        else { return nil }
+        let cleaned = Self.cleaned(words, continuing: request.wordInProgress)
+        return cleaned.isEmpty ? nil : cleaned
     }
 
     /// What survives of a model's answer.

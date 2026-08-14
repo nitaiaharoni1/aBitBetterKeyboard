@@ -81,8 +81,8 @@ final class PromptSelectionTests: XCTestCase {
 
     func testToneDirectionIsAppendedPerRegister() {
         let shorter = Prompts.tone(.shorter, for: "the meeting is tomorrow")
-        let friendly = Prompts.tone(.friendly, for: "the meeting is tomorrow")
-        XCTAssertNotEqual(shorter, friendly)
+        let casual = Prompts.tone(.casual, for: "the meeting is tomorrow")
+        XCTAssertNotEqual(shorter, casual)
         XCTAssertTrue(shorter.contains("strictly fewer words"))
     }
 

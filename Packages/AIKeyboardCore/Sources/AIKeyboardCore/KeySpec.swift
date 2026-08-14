@@ -22,6 +22,7 @@ public enum KeyCap: Equatable, Sendable {
     /// `KeySpec`. Drawing them here also means one implementation: a control
     /// cannot behave differently depending on which of the two places it was put.
     case emoji
+    case copyclip
     case quickTone
     case cursorLeft
     case cursorRight
@@ -59,6 +60,7 @@ public enum KeyCap: Equatable, Sendable {
         case .ret: return "Return"
         case .dictation: return "Record"
         case .emoji: return "Emoji"
+        case .copyclip: return "CopyClip"
         case .quickTone: return "One-tap rewrite"
         case .cursorLeft: return "Cursor left"
         case .cursorRight: return "Cursor right"
@@ -205,6 +207,7 @@ public struct KeySpec: Identifiable, Equatable, Sendable {
         case .ret: return "return"
         case .dictation: return "dictation"
         case .emoji: return "emoji"
+        case .copyclip: return "copyclip"
         case .quickTone: return "quick-tone"
         case .cursorLeft: return "cursor-left"
         case .cursorRight: return "cursor-right"

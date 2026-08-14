@@ -22,7 +22,7 @@ final class DefaultToneSettingsTests: XCTestCase {
     func testTheSettingsNoteNamesAButtonThatExists() {
         let notes = [
             ToneSetting.builtIn(.clearer).settingsNote,
-            ToneSetting.custom(instruction: "short and blunt", nearest: .friendly).settingsNote
+            ToneSetting.custom(instruction: "short and blunt", nearest: .casual).settingsNote
         ]
         for note in notes {
             XCTAssertFalse(note.contains("✦"), "Settings points at a glyph nothing draws: \(note)")
@@ -61,17 +61,17 @@ final class DefaultToneSettingsTests: XCTestCase {
     /// picks at random.
     func testTheInstructionReplacesTheBuiltInDirectionInThePrompt() {
         let asked = "short, blunt, no pleasantries"
-        let prompt = Prompts.tone(.friendly, for: "could you possibly take a look", instruction: asked)
+        let prompt = Prompts.tone(.casual, for: "could you possibly take a look", instruction: asked)
         XCTAssertTrue(prompt.contains(asked))
         XCTAssertFalse(
-            prompt.contains("Warmer and more personal"),
+            prompt.contains("The way you would message a colleague"),
             "the built-in direction is still in the prompt alongside the user's")
         // The rules the register must not overrule are still ahead of it.
         XCTAssertTrue(prompt.contains("Same language as the message. Never translate."))
         // An empty register is not a register.
         XCTAssertEqual(
-            Prompts.tone(.friendly, for: "take a look", instruction: "   "),
-            Prompts.tone(.friendly, for: "take a look"))
+            Prompts.tone(.casual, for: "take a look", instruction: "   "),
+            Prompts.tone(.casual, for: "take a look"))
     }
 
     /// **A register in one language must never be quoted inside an instruction set
@@ -87,12 +87,12 @@ final class DefaultToneSettingsTests: XCTestCase {
     /// cloud path merging the two languages with nothing to stop it.
     func testARegisterInAScriptTheInstructionSetDoesNotSpeakIsDropped() {
         let hebrewRegister = "קצר וישיר, בלי נימוסים"
-        let english = Prompts.tone(.friendly, for: "can you send me the deck", instruction: hebrewRegister)
+        let english = Prompts.tone(.casual, for: "can you send me the deck", instruction: hebrewRegister)
         XCTAssertFalse(
             english.contains(hebrewRegister),
             "a Hebrew register was quoted inside the English instruction set")
         XCTAssertTrue(
-            english.contains("Warmer and more personal"),
+            english.contains("The way you would message a colleague"),
             "the built-in register has to run when the user's own one cannot")
 
         // Cyrillic, Greek and Arabic registers go the same way, and so does a
@@ -102,12 +102,12 @@ final class DefaultToneSettingsTests: XCTestCase {
             Prompts.tone(.shorter, for: "send me the deck", instruction: "коротко и по делу")
                 .contains("коротко"))
         let hebrewMessage = Prompts.tone(
-            .friendly, for: "אפשר לשלוח לי את המצגת?", instruction: "short and blunt")
+            .casual, for: "אפשר לשלוח לי את המצגת?", instruction: "short and blunt")
         XCTAssertTrue(
             hebrewMessage.contains("short and blunt"),
             "the Hebrew set speaks Latin and should have kept a Latin register")
         XCTAssertTrue(
-            Prompts.tone(.friendly, for: "אפשר לשלוח לי את המצגת?", instruction: hebrewRegister)
+            Prompts.tone(.casual, for: "אפשר לשלוח לי את המצגת?", instruction: hebrewRegister)
                 .contains(hebrewRegister))
     }
 
@@ -219,7 +219,7 @@ final class DefaultToneSettingsTests: XCTestCase {
 
         XCTAssertEqual(store.customTone, "", "a reset left the user's own tone in the store")
         XCTAssertFalse(store.prefersCustomTone)
-        XCTAssertEqual(store.toneSetting, .builtIn(.clearer))
+        XCTAssertEqual(store.toneSetting, .builtIn(.normal))
     }
 
     /// **Settings runs in the other process, so the built-in register has to be

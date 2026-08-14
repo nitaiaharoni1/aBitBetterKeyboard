@@ -58,16 +58,16 @@ private struct HomeFeatureCard<Trailing: View>: View {
             trailing()
         }
         .padding(.vertical, Theme.Space.xs)
-        .contentShape(Rectangle())
         .accessibilityElement(children: .contain)
     }
 }
 
 // MARK: - HomeScreenContextCard
 
-/// Starts a broadcast from Home. The record icon is paint; the tap target
-/// is `RPSystemBroadcastPickerView` stretched over it. A SwiftUI button
-/// cannot open that sheet.
+/// Starts a broadcast from Home. The record icon is paint. The tap
+/// target is `RPSystemBroadcastPickerView` stretched over the whole
+/// row, the same way the Reply banner hosts it: a 38pt chip left
+/// "Share the screen" inert. A SwiftUI button cannot open that sheet.
 struct HomeScreenContextCard: View {
     @StateObject private var session = ScreenContextSession.shared
 
@@ -81,13 +81,16 @@ struct HomeScreenContextCard: View {
             badge: isCapturing ? ("LIVE", Theme.Semantic.record) : nil,
             accessibilityID: "home-screen-context"
         ) {
-            HomeSessionLabel(icon: "record.circle", isStop: false)
-                .overlay {
-                    BroadcastPickerButton.overlay(
-                        label: "Start a screen broadcast",
-                        hint: "Opens the iOS screen broadcast picker.",
-                        identifier: "screen-context-start-broadcast")
-                }
+            HomeSessionLabel(icon: "record.circle", isStop: isCapturing)
+        }
+        .accessibilityHidden(!isCapturing)
+        .overlay {
+            if !isCapturing {
+                BroadcastPickerButton.overlay(
+                    label: "Start a screen broadcast",
+                    hint: "Opens the iOS screen broadcast picker.",
+                    identifier: "screen-context-start-broadcast")
+            }
         }
         .searchTarget(.screenContext)
     }

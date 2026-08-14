@@ -165,7 +165,6 @@ enum AppSearchRow: String, Hashable {
     case pauseLength
     case autocapitalise
     case predictions
-    case forgetLearned
     case groupedKeys
     case numberRow
     case defaultTone
@@ -184,7 +183,7 @@ enum AppSearchRow: String, Hashable {
         case .groupedKeys, .numberRow, .palette, .haptics, .keySounds:
             return .keys
         case .autocorrect, .completeOnPause, .spaceOnPause, .pauseLength,
-            .autocapitalise, .predictions, .forgetLearned,
+            .autocapitalise, .predictions,
             .defaultTone, .replayOnboarding:
             return .settings
         }
@@ -271,9 +270,12 @@ struct AppSearchItem: Identifiable {
                 keywords: ["playground"],
                 .playground),
             item(
-                "Personal dictionary", "Names and words we should never correct",
+                "Personal dictionary", "Names you add, plus words from typing",
                 icon: "character.book.closed",
-                keywords: ["words", "names", "your words"],
+                keywords: [
+                    "words", "names", "your words", "learned", "remembered",
+                    "frequency", "counts", "remember"
+                ],
                 .dictionary),
             item(
                 "Keyboard layout", "Presets, key size, and what each key does",
@@ -342,10 +344,10 @@ struct AppSearchItem: Identifiable {
                 icon: "arrow.counterclockwise",
                 .row(.replayOnboarding)),
             item(
-                "Forget what it learned", "Clear remembered words on this device",
+                "Forget what it learned", "On Personal dictionary. Names you added stay.",
                 icon: "trash",
                 keywords: ["forget", "clear", "learned", "reset"],
-                .row(.forgetLearned)),
+                .dictionary),
             item(
                 "Mixing languages", "Code switching is always on",
                 icon: "arrow.left.arrow.right",

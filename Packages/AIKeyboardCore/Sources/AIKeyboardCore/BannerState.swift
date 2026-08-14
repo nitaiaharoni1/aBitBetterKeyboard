@@ -191,6 +191,12 @@ public enum BannerState: Equatable {
         guard let runningAction else { return idle(screenContext, idleHint) }
 
         if let error {
+            // An engine that cannot run is not a sentence the user can act on.
+            // The sweep on the key ending is the signal, same as a Fix that
+            // named no mistakes. "Still downloading" was the lie this rejects:
+            // the simulator never has the on-device model, the cloud 401'd, and
+            // the strip reported the first of those.
+            if error.isAvailabilityMiss { return idle(screenContext, idleHint) }
             return .failed(action: runningAction, title: error.title, detail: error.message)
         }
         if !options.isEmpty {
@@ -230,7 +236,9 @@ public enum BannerState: Equatable {
     ///
     /// The idle instruction does not: "Type, or pick an action below" is what the
     /// action row already says by existing. What is left all does — a live
-    /// reading, a refusal, a failure, an answer nothing could apply.
+    /// reading, a refusal, a content failure, an answer nothing could apply.
+    /// An engine that cannot run resolves to idle above, so it never reaches
+    /// this list.
     ///
     /// **A model call and a recording used to be on this list and are the reason
     /// it is worth stating.** Both are constant, frequent states, and both were

@@ -35,9 +35,10 @@ extension KeyboardController {
     /// `BannerState.activeActionKey`, which worked only for as long as every live
     /// state had a row of its own; a running call and a live recording now light
     /// the control itself, and a key that stopped lighting for them would leave
-    /// the user with nothing at all saying which of the five they had tapped.
+    /// the user with nothing at all saying which action they had tapped.
     public func isActionKeyActive(_ cap: KeyCap) -> Bool {
         if case .emoji = cap { return overlay.isEmoji }
+        if case .copyclip = cap { return overlay.isCopyClip }
         if cap == .dictation {
             // A dictation refusal carries no `AIAction` — that is what `nil`
             // means in `Block.action` — so it is the microphone it belongs to.

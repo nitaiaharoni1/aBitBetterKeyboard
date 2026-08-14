@@ -34,9 +34,10 @@ extension KeyboardController {
         // emoji-search branch, because a key typing into that box is still a key.
         Feedback.keyClick(cap.clickSound)
 
-        // The emoji search box is the one thing on this keyboard that types into
+        // A search box is the one thing on this keyboard that types into
         // something other than the document, so it gets first refusal on the key.
         if overlay == .emojiSearch, consumeForEmojiSearch(cap) { return }
+        if overlay == .copyclipSearch, consumeForCopyclipSearch(cap) { return }
 
         // A grouped word is a claim about the characters directly behind the
         // cursor, so anything that moves the cursor, opens a plane, switches
@@ -104,6 +105,9 @@ extension KeyboardController {
             // also the only way back: the category row has no `אבג` of its own,
             // deliberately — see `EmojiCategoryRow`.
             show(overlay.isEmoji ? .none : .emoji)
+        case .copyclip:
+            // Same as emoji: `show(_:)` already fires the haptic.
+            show(overlay.isCopyClip ? .none : .copyclip)
         case .aiReply:
             // Straight to the action. Reply is deliberately not guarded on
             // `hasTextToWorkWith` — answering a message you have not started
@@ -179,7 +183,9 @@ extension KeyboardController {
             pressGroupedKey(value, at: unitPoint)
             return
         }
-        if isGroupedTyping, pinGroupedLetter(value) { return }
+        if isGroupedTyping, pinGroupedLetter(value) {
+            return
+        }
         // A full stop is a commit, the same as space. Closing without the flag
         // would teach the decoder's guess; a letter that is not a grouped cap
         // just ends the claim.
@@ -215,7 +221,8 @@ extension KeyboardController {
         if Self.finishesWord(output), !consumeGroupedSkipLearn() {
             learnWordJustCommitted()
         }
-        target?.insertText(output.replacingOccurrences(of: "\n", with: ""))
+        let inserted = output.replacingOccurrences(of: "\n", with: "")
+        target?.insertText(inserted)
         if shift == .on { shift = .off }
         refreshSuggestions()
         noteTypedInput()
@@ -383,6 +390,15 @@ extension KeyboardController {
             }
             return
         }
+        if overlay == .copyclipSearch {
+            if copyclipQuery.isEmpty {
+                show(.copyclip)
+            } else {
+                let suffix = Self.previousWordSuffix(in: copyclipQuery)
+                setCopyclipQuery(String(copyclipQuery.dropLast(suffix.count)))
+            }
+            return
+        }
 
         Feedback.keyPress()
         block = nil
@@ -499,13 +515,15 @@ extension KeyboardController {
             setEmojiQuery(emojiQuery + " ")
             return true
         case .backspace:
-            Feedback.keyPress()
             // Backspacing past the start of an empty query closes search rather
             // than deleting from the user's message, which is the one thing a
             // delete key must never do while it is pointed somewhere else.
+            // `show` fires the haptic. A `keyPress` here would be two thuds
+            // for one tap, the same double the Emoji key used to have.
             if emojiQuery.isEmpty {
                 show(.emoji)
             } else {
+                Feedback.keyPress()
                 setEmojiQuery(String(emojiQuery.dropLast()))
             }
             return true
@@ -524,6 +542,41 @@ extension KeyboardController {
         emojiResults = EmojiSearch.results(for: query, recent: recentEmoji)
     }
 
+    func consumeForCopyclipSearch(_ cap: KeyCap) -> Bool {
+        switch cap {
+        case .character(let value):
+            Feedback.keyPress()
+            setCopyclipQuery(
+                copyclipQuery + (shift.isUppercase ? language.uppercased(value) : value))
+            if shift == .on { shift = .off }
+            return true
+        case .space:
+            Feedback.keyPress()
+            setCopyclipQuery(copyclipQuery + " ")
+            return true
+        case .backspace:
+            if copyclipQuery.isEmpty {
+                show(.copyclip)
+            } else {
+                Feedback.keyPress()
+                setCopyclipQuery(String(copyclipQuery.dropLast()))
+            }
+            return true
+        case .deleteForward:
+            return true
+        case .ret:
+            show(.copyclip)
+            return true
+        default:
+            return false
+        }
+    }
+
+    public func setCopyclipQuery(_ query: String) {
+        copyclipQuery = query
+        copyclipResults = ClipboardHistory.matching(query: query, in: clips)
+    }
+
     // MARK: Overlays
 
     public func show(_ newOverlay: KeyboardOverlay) {
@@ -534,6 +587,16 @@ extension KeyboardController {
         if newOverlay != .emojiSearch {
             emojiQuery = ""
             emojiResults = []
+        }
+        if newOverlay != .copyclipSearch {
+            copyclipQuery = ""
+            copyclipResults = []
+        }
+        if newOverlay == .copyclip || newOverlay == .copyclipSearch {
+            refreshCopyClip()
+        }
+        if newOverlay == .copyclipSearch {
+            setCopyclipQuery(copyclipQuery)
         }
         withAnimation(Theme.Motion.panel) { overlay = newOverlay }
     }

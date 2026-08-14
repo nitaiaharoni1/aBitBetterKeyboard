@@ -7,12 +7,9 @@
 #
 # Five checks, each able to fail on its own:
 #
-#   0. The extension sets `hasDictationKey`. Face ID phones otherwise draw
-#      Apple's dictation strip under our space row, even though we already
-#      have a microphone. Source-level: the property is the public API and
-#      a build that drops the assignment is the broken one. The assignment
-#      has to live in a method `init` / `viewDidLoad` / `viewWillAppear`
-#      can all call — a one-shot in `viewDidLoad` is the weaker form.
+#   0. The extension does not set `hasDictationKey = true`. Face ID phones
+#      may draw Apple's dictation mic in the system dock; that is wanted.
+#      A build that puts the assignment back is the broken one.
 #   1. The keyboard extension does NOT link AVFoundation. It cannot open the
 #      microphone — Apple's guidance says so and the runtime answers 561145187 —
 #      so a build in which it tries is a build that has misunderstood the design.
@@ -21,15 +18,13 @@
 #      which is the entire use case.
 #   3. Both processes run and the keyboard reports what it can see.
 #   4. The keyboard extension process — a separate process — receives a
-#      transcript published by the app process. This is the one that matters:
+#      partial published by the app process. This is the one that matters:
 #      the first three can all pass while the two processes see different pages.
+#      A stop after that partial keeps those words; it does not wait for a
+#      later cloud sentence.
 #
 # WHAT THIS DOES NOT PROVE, and nothing in this repo does yet:
 #
-#   * that Apple's dictation strip actually disappears on a Face ID phone.
-#     Check 0 only proves the assignment is in the source. The property is
-#     documented to suppress the system button; the leftover gap, if any,
-#     is a device layout question.
 #   * that `AVAudioEngine` records anything. `DictationChannelProbe` replaces the
 #     microphone with a fixed sentence, because a UI test cannot speak.
 #   * that a recording session survives backgrounding under jetsam, or that an
@@ -50,13 +45,9 @@ DESTINATION="${1:-platform=iOS Simulator,name=iPhone 17 Pro}"
 PROJECT="AIKeyboard.xcodeproj"
 SCHEME="AIKeyboard"
 APP_ID="com.nitai.aikeyboard"
-SENTENCE="בוא נעשה sync"
-# The reading the recorder publishes half a second in, before the full one, and
-# deliberately shorter than `SENTENCE` rather than equal to it: two greps looking
-# for the same string would both pass on a build that logged the transcript into
-# the partial's slot. Both are prefixes of `DictationChannelProbe.sentence`, and
-# the keyboard truncates what it logs to 24 characters, so each grep matches a
-# prefix rather than a whole sentence — see `DictationSession.report()`.
+# The reading the recorder publishes half a second in. A prefix of
+# `DictationChannelProbe.sentence`, and the keyboard truncates what it logs
+# to 24 characters — see `DictationSession.report()`.
 PARTIAL="בוא נעשה"
 LOG="$(mktemp -t dictation)"
 
@@ -64,16 +55,18 @@ pass() { printf '  \033[32mPASS\033[0m %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m %s\n' "$1"; exit 1; }
 
 # 0 -----------------------------------------------------------------------
-# Face ID phones draw Apple's microphone under a third-party keyboard unless
-# the extension says it already has one. The assignment is the public API;
-# a comment that mentions the property without setting it is the broken build.
-echo "==> 0. The extension tells iOS it already has a dictation key"
-if grep -qE 'hasDictationKey[[:space:]]*=[[:space:]]*true' \
-    AIKeyboardExtension/KeyboardViewController.swift
+# Setting hasDictationKey hides Apple's dock microphone. We want that mic.
+# Match an assignment line only, in any Swift file: a comment that names the
+# property must not trip this, and moving the line out of the view controller
+# must not hide it.
+echo "==> 0. The extension does not suppress Apple's dock microphone"
+if grep -R --include='*.swift' -nE \
+    '^[[:space:]]*(self\.)?hasDictationKey[[:space:]]*=[[:space:]]*true' \
+    AIKeyboardExtension Packages AIKeyboard
 then
-  pass "KeyboardViewController sets hasDictationKey"
+  fail "a Swift file sets hasDictationKey; that hides Apple's dock microphone"
 else
-  fail "KeyboardViewController does not set hasDictationKey; Face ID devices will draw Apple's dictation strip under the space row"
+  pass "no Swift file sets hasDictationKey"
 fi
 
 echo "==> Building for $DESTINATION"
@@ -153,19 +146,15 @@ echo "$WATCH" | grep -q "availability=listening" \
   && pass "the extension saw the other process's session and opened an utterance" \
   || fail "the extension never saw a live session"
 
-# **Streaming, and it is checked before the final transcript on purpose.** The
-# recorder publishes a reading of the utterance so far every couple of seconds and
-# the keyboard puts each one in the field, replacing the last; the final transcript
-# then replaces all of them. A build where the partial never crosses still passes
-# the transcript check below, and the user still gets their sentence — two seconds
-# after they stop speaking instead of while they speak, which is the whole feature.
+# **Streaming is the product now.** The recorder publishes a reading of the
+# utterance so far and the keyboard puts it in the field. A second tap keeps
+# those words and cancels the utterance, so a later cloud sentence is not
+# asked for and must not be required here. A build where the partial never
+# crosses leaves the field empty on stop, which is the defect this check
+# exists to catch.
 echo "$WATCH" | grep -q "partial=$PARTIAL" \
   && pass "the extension received a partial transcript while the utterance was open" \
   || fail "no partial crossed the App Group, so dictation does not stream"
-
-echo "$WATCH" | grep -q "transcript=$SENTENCE" \
-  && pass "the extension received the transcript the app process published" \
-  || fail "no transcript crossed the App Group"
 
 [ $RC -eq 0 ] \
   && pass "the UI driver also finished cleanly" \
@@ -173,7 +162,7 @@ echo "$WATCH" | grep -q "transcript=$SENTENCE" \
 [ $RC -eq 0 ] || echo "        report above is what proves the read. Full log: $LOG"
 
 echo
-echo "Dictation crosses the process boundary: the keyboard extension inserted words"
+echo "Dictation crosses the process boundary: the keyboard extension received words"
 echo "produced by a session it cannot itself hold."
 echo
 echo "Still unproved anywhere: that a microphone was ever opened. See the header."

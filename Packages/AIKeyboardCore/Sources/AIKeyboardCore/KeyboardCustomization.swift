@@ -56,7 +56,7 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
     /// candidates a user reads mid-word; dictation was a 1-unit glyph in the
     /// bottom row between space and the full stop; and Reply and Fix were not
     /// reachable at all without opening a panel that covered the keys. They are
-    /// now one row of five above the keys, which is the row the user asked
+    /// now one row above the keys, which is the row the user asked
     /// for and which the editor can rearrange like any other.
     ///
     /// Three consequences, all deliberate:
@@ -104,12 +104,13 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
     /// to stop, and it sits at the far end rather than next to the keys a thumb
     /// is already travelling between.
     ///
-    /// Every slot is `.fill`, so the five split the width evenly and stay even in
+    /// Every slot is `.fill`, so the six split the width evenly and stay even in
     /// all 64 languages — a row of fixed units would have to be checked against
     /// `KeyboardLayout.columns(for:plane:)` for each of them, which is the
     /// Bulgarian overrun `LayoutValidator` exists to catch.
     public static let actionRow: [SlotSpec] = [
         SlotSpec(action: .emoji, width: .fill),
+        SlotSpec(action: .copyclip, width: .fill),
         SlotSpec(action: .reply, width: .fill),
         SlotSpec(action: .fix, width: .fill),
         SlotSpec(action: .quickTone, width: .fill),

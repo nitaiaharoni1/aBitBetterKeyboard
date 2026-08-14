@@ -11,6 +11,7 @@ struct LanguagesView: View {
     /// every return to the foreground, like Home's copy, because the switch is
     /// thrown in Settings and nothing notifies the app.
     @State private var setup = SetupState()
+    @State private var learnedWordCount = 0
 
     var body: some View {
         NavigationStack {
@@ -59,9 +60,15 @@ struct LanguagesView: View {
             }
         }
         .id(search.stackEpoch)
-        .onAppear { setup = .current(store: store) }
+        .onAppear {
+            setup = .current(store: store)
+            refreshLearnedWordCount()
+        }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { setup = .current(store: store) }
+            if phase == .active {
+                setup = .current(store: store)
+                refreshLearnedWordCount()
+            }
         }
     }
 
@@ -114,13 +121,15 @@ struct LanguagesView: View {
         }
     }
 
-    /// Words belong with languages: the dictionary is the list of names this
-    /// keyboard should never correct, not a typing behaviour toggle.
+    /// Words belong with languages. This row opens the names this keyboard
+    /// should never correct, and the words it learned from typing.
     private var dictionaryRow: some View {
         Card {
             NavigationRow(
                 title: "Personal dictionary",
-                subtitle: "Names and words we should never correct",
+                subtitle: learnedWordCount == 0
+                    ? "Names you add, plus words from typing"
+                    : "Names you add, plus \(learnedWordCount) from typing",
                 icon: "character.book.closed",
                 badge: "\(store.personalDictionary.count)"
             ) {
@@ -143,6 +152,11 @@ struct LanguagesView: View {
         .overlay(Capsule().strokeBorder(Theme.Surface.separator, lineWidth: 1))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(language.displayName), on")
+    }
+
+    private func refreshLearnedWordCount() {
+        PersonalLanguageModel.shared.reload()
+        learnedWordCount = PersonalLanguageModel.shared.learnedWordCount
     }
 
     private func scrollToSearchHit(_ proxy: ScrollViewProxy) {

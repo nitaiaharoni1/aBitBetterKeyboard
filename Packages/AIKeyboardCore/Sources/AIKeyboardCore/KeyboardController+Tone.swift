@@ -28,7 +28,7 @@ extension KeyboardController {
     /// built-in register standing behind it. `AIResultPanel.toneChips` draws its
     /// custom chip on exactly the same condition, and the two surfaces disagreeing
     /// about which registers exist is drift this repo has shipped once already.
-    /// It cannot be a seventh `ToneStyle` either: that enum's raw values are the
+    /// It cannot be another `ToneStyle` either: that enum's raw values are the
     /// persisted setting. See `ToneSetting`.
     ///
     /// Read through the store rather than off a published copy, for the reason

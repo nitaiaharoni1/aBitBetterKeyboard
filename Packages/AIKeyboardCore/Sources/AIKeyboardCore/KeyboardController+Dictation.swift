@@ -100,17 +100,18 @@ extension KeyboardController {
     /// Starts a recording when none is open, and finishes the open one.
     ///
     /// **The microphone key's whole job, and it is the only control this feature
-    /// has.** Two modes: record starts, pause stops. The × that used to cancel a
-    /// transcription in flight is gone — the insert is already on its way, and
-    /// cancelling it threw away a sentence the user had just spoken.
+    /// has.** Two modes: record starts, pause stops. Words already in the field
+    /// stay as they are: the cloud must not rewrite them. An empty field still
+    /// waits for a transcript, because Apple's live draft is best-effort and a
+    /// short tap can beat the first partial.
     ///
-    /// `.finishing` is the window between the pause tap and the words arriving.
-    /// `isDictating` is already false there, so a tap that asked only that
-    /// question opened a **second** utterance on top of a transcription still in
-    /// flight. The tap is ignored instead: not a cancel, not a new recording.
+    /// `.finishing` is that empty-field wait. `isDictating` is already false
+    /// there, so a tap that asked only that question opened a **second**
+    /// utterance on top of a transcription still in flight. The tap is ignored
+    /// instead: not a cancel, not a new recording.
     public func toggleDictation() {
         switch dictationKeyState {
-        case .recording: stopDictation(insert: true)
+        case .recording: stopDictation(insert: streamedDictation.isEmpty)
         case .finishing: return
         case .idle: startDictation()
         }

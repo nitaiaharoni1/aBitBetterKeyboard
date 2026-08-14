@@ -407,6 +407,56 @@ final class ContextAwareSuggestionTests: XCTestCase {
         XCTAssertEqual(personal.followers(after: "ask", in: .english, limit: 3), ["tzachi"])
     }
 
+    /// A word this person uses must beat an unused neighbour in the same tier.
+    /// Seed rank is the only frequency `score` used to see, so a name you type
+    /// every day lost to a commoner word you have never written.
+    func testAFrequentlyUsedWordOutranksAnUnusedNeighbour() {
+        var used = SuggestionEngine.Candidate(
+            text: "zzused", language: .english, source: .neighbour)
+        used.personalCount = 8
+        let unused = SuggestionEngine.Candidate(
+            text: "zzrare", language: .english, source: .neighbour)
+        XCTAssertGreaterThan(
+            SuggestionEngine.score(used), SuggestionEngine.score(unused),
+            "personal count has to move rank inside a tier")
+    }
+
+    /// Habits cannot climb a source tier. A word typed forty times is still
+    /// a weaker claim than a completion that agrees with every key.
+    func testPersonalFrequencyCannotClimbASourceTier() {
+        var frequent = SuggestionEngine.Candidate(
+            text: "zzused", language: .english, source: .correction)
+        frequent.personalCount = 40
+        let completion = SuggestionEngine.Candidate(
+            text: "zzrare", language: .english, source: .neighbour)
+        XCTAssertGreaterThan(
+            SuggestionEngine.score(completion), SuggestionEngine.score(frequent),
+            "300 of habit must not beat 1000 of source")
+    }
+
+    /// A name the seed has never heard of, one key off, after two real uses.
+    /// One sighting still offers nothing — that is the typo floor.
+    func testALearnedWordIsOfferedFromAOneKeySlip() {
+        let personal = emptyPersonal()
+        personal.record(word: "Zorblin", previous: nil, language: .english, permitted: true)
+        XCTAssertEqual(
+            personal.neighbours(of: "Zorblim", in: .english, limit: 3), [],
+            "one sighting is not a neighbour")
+
+        personal.record(word: "Zorblin", previous: nil, language: .english, permitted: true)
+        XCTAssertEqual(personal.neighbours(of: "Zorblim", in: .english, limit: 3), ["zorblin"])
+
+        let results = SuggestionEngine.suggestions(
+            prefix: "Zorblim", context: "", languages: [.english], personal: personal)
+        XCTAssertTrue(
+            results.contains { $0.text.lowercased() == "zorblin" },
+            "the bar never offered the learned name: \(results.map(\.text))")
+        let slots = SuggestionBar.centeredSlots(results, typed: "Zorblim")
+        XCTAssertTrue(
+            slots.contains { $0?.text.lowercased() == "zorblin" },
+            "the learned neighbour was not drawn: \(slots.map { $0?.text })")
+    }
+
     /// `permitted: false` is how the credential-field refusal reaches the store.
     /// Nothing is written, not a shorter version of it.
     func testNothingIsRecordedWhenRecordingIsRefused() {
@@ -425,6 +475,89 @@ final class ContextAwareSuggestionTests: XCTestCase {
         personal.record(word: "0527", previous: nil, language: .english, permitted: true)
         personal.record(word: "a", previous: nil, language: .english, permitted: true)
         XCTAssertEqual(personal.learnedWordCount, 0)
+    }
+
+    /// Settings lists every stored word, including a single sighting. Ranking
+    /// still ignores those; `allWords` staying empty is what fails a listing
+    /// that reused the gated vocabulary.
+    func testLearnedWordsListsEverySightingIncludingOnce() {
+        let personal = emptyPersonal()
+        personal.record(word: "once", previous: nil, language: .english, permitted: true)
+        personal.record(word: "often", previous: nil, language: .english, permitted: true)
+        personal.record(word: "often", previous: nil, language: .english, permitted: true)
+        personal.record(word: "often", previous: nil, language: .english, permitted: true)
+        personal.record(word: "mid", previous: nil, language: .english, permitted: true)
+        personal.record(word: "mid", previous: nil, language: .english, permitted: true)
+        personal.record(word: "שלום", previous: nil, language: .hebrew, permitted: true)
+
+        let listed = personal.learnedWords()
+        XCTAssertEqual(
+            listed.map(\.word), ["often", "mid", "once", "שלום"],
+            "count desc, then English before Hebrew, then A–Z: \(listed.map(\.word))")
+        XCTAssertEqual(listed.map(\.count), [3, 2, 1, 1])
+        XCTAssertEqual(
+            personal.allWords(in: .english), ["often", "mid"],
+            "the gated vocabulary must not start listing singletons")
+        XCTAssertTrue(personal.allWords(in: .hebrew).isEmpty)
+    }
+
+    /// The app's in-memory copy is from launch. Without a re-read, Settings
+    /// would show what it knew this morning, not what the keyboard just wrote.
+    func testReloadRereadsTheFileTheKeyboardWrote() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plm-reload-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let writer = PersonalLanguageModel(url: url)
+        writer.record(word: "hello", previous: nil, language: .english, permitted: true)
+        writer.save()
+
+        let reader = PersonalLanguageModel(url: url)
+        XCTAssertEqual(reader.learnedWordCount, 1)
+
+        writer.record(word: "world", previous: nil, language: .english, permitted: true)
+        writer.save()
+        XCTAssertEqual(reader.learnedWordCount, 1, "reload is what picks up the new file")
+        reader.reload()
+        XCTAssertEqual(Set(reader.learnedWords().map(\.word)), ["hello", "world"])
+    }
+
+    /// Forget deletes the file. A keyboard that is still alive must not keep
+    /// ranking words the user just wiped.
+    func testReloadTreatsAMissingFileAsEmpty() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plm-gone-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let writer = PersonalLanguageModel(url: url)
+        writer.record(word: "hello", previous: nil, language: .english, permitted: true)
+        writer.save()
+
+        let reader = PersonalLanguageModel(url: url)
+        XCTAssertEqual(reader.learnedWordCount, 1)
+        writer.clear()
+        reader.reload()
+        XCTAssertEqual(reader.learnedWordCount, 0, "reload kept the wiped store")
+    }
+
+    /// One word, not the whole store. Pairs that used it go with it.
+    func testForgetRemovesOneWordAndItsPairs() {
+        let personal = emptyPersonal()
+        personal.record(word: "hello", previous: nil, language: .english, permitted: true)
+        personal.record(word: "hello", previous: nil, language: .english, permitted: true)
+        personal.record(word: "world", previous: "hello", language: .english, permitted: true)
+        personal.record(word: "world", previous: "hello", language: .english, permitted: true)
+        personal.record(word: "later", previous: nil, language: .english, permitted: true)
+        personal.record(word: "later", previous: nil, language: .english, permitted: true)
+
+        personal.forget("hello", in: .english)
+        XCTAssertEqual(personal.count(of: "hello", in: .english), 0)
+        XCTAssertEqual(personal.count(of: "world", in: .english), 2)
+        XCTAssertEqual(personal.count(of: "later", in: .english), 2)
+        XCTAssertEqual(
+            personal.followers(after: "hello", in: .english, limit: 3), [],
+            "the pair survived the word: \(personal.followers(after: "hello", in: .english, limit: 3))")
+        XCTAssertEqual(Set(personal.learnedWords().map(\.word)), ["later", "world"])
     }
 
     /// Typing a word and finishing it has to count, not only tapping a candidate.
@@ -907,7 +1040,7 @@ final class ContextAwareSuggestionTests: XCTestCase {
     /// with no message on screen has nothing to predict from.
     func testRefinementRefusesWhenThereIsNothingOrNoPermission() {
         let refiner = PredictiveRefiner(
-            onDevice: nil, cloud: AlwaysPredicts(), apply: { _, _ in })
+            onDevice: AlwaysPredicts(), apply: { _, _ in })
         func request(text: String, permitted: Bool) -> PredictiveRefiner.Request {
             PredictiveRefiner.Request(
                 textBefore: text, wordInProgress: "", language: .english, screenContext: nil,
@@ -922,7 +1055,7 @@ final class ContextAwareSuggestionTests: XCTestCase {
     /// the local tier's three slots stand.
     func testRefinementRefusesALanguageNoEngineSpeaks() {
         let refiner = PredictiveRefiner(
-            onDevice: nil, cloud: SpeaksOnly(.english), apply: { _, _ in })
+            onDevice: SpeaksOnly(.english), apply: { _, _ in })
         func request(_ language: KeyboardLanguage) -> PredictiveRefiner.Request {
             PredictiveRefiner.Request(
                 textBefore: "משהו", wordInProgress: "", language: language, screenContext: nil,
@@ -930,6 +1063,19 @@ final class ContextAwareSuggestionTests: XCTestCase {
         }
         XCTAssertTrue(refiner.shouldRefine(request(.english)))
         XCTAssertFalse(refiner.shouldRefine(request(.hebrew)))
+    }
+
+    /// The shipping refiner has no cloud engine, and Apple's on-device model
+    /// does not list Hebrew. A true here means someone wired `CloudIntelligence`
+    /// back into `standard()`.
+    func testTheShippingRefinerDoesNotServeHebrew() {
+        let refiner = PredictiveRefiner.standard { _, _ in }
+        let request = PredictiveRefiner.Request(
+            textBefore: "משהו", wordInProgress: "", language: .hebrew, screenContext: nil,
+            permitted: true)
+        XCTAssertFalse(
+            refiner.shouldRefine(request),
+            "Hebrew in the bar is a cloud call; the local tier already filled the slots")
     }
 
     /// The corpus harness copies this list rather than importing `SharedStore`,

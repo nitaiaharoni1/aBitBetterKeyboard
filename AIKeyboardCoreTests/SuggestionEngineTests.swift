@@ -315,34 +315,100 @@ extension SuggestionEngineTests {
         XCTAssertNotEqual(first, Suggestion(text: "hello", language: .english, isDefault: false))
     }
 
-    /// The engine pins the typed word at index 0. Drawing that array in order put
-    /// the default on the left. The bar now moves it to the middle; a build that
-    /// still draws `suggestions[slot]` fails the first assertion.
-    func testTheDefaultCandidateIsDrawnInTheMiddle() {
+    /// The engine pins the typed word at index 0. The bar does not draw that
+    /// echo: it is already in the field. A build that still puts `hel` in a
+    /// slot fails the first assertion.
+    func testTheTypedWordIsNotDrawn() {
         let typed = Suggestion(text: "hel", language: .english, isDefault: true)
         let hello = Suggestion(text: "hello", language: .english)
         let help = Suggestion(text: "help", language: .english)
-        let slots = SuggestionBar.centeredSlots([typed, hello, help])
-        XCTAssertEqual(slots[1]?.text, "hel")
-        XCTAssertEqual(slots[0]?.text, "hello")
-        XCTAssertEqual(slots[2]?.text, "help")
+        let slots = SuggestionBar.centeredSlots([typed, hello, help], typed: "hel")
+        XCTAssertFalse(slots.contains { $0?.text == "hel" })
+        XCTAssertEqual(slots[1]?.text, "hello")
+        XCTAssertEqual(slots[0]?.text, "help")
     }
 
-    /// Autocorrect already stores the default at index 1. Re-ordering that list
-    /// would swap the typed word into the middle and hide the correction.
+    /// Autocorrect already stores the default at index 1. Hiding the typed
+    /// echo must leave that correction in the middle.
     func testACorrectionAlreadyInTheMiddleStaysThere() {
         let typed = Suggestion(text: "sched", language: .english)
         let schedule = Suggestion(text: "schedule", language: .english, isDefault: true)
         let scheduled = Suggestion(text: "scheduled", language: .english)
-        let slots = SuggestionBar.centeredSlots([typed, schedule, scheduled])
-        XCTAssertEqual(slots.map { $0?.text }, ["sched", "schedule", "scheduled"])
+        let slots = SuggestionBar.centeredSlots(
+            [typed, schedule, scheduled], typed: "sched")
+        XCTAssertEqual(slots.map { $0?.text }, ["scheduled", "schedule", nil])
     }
 
-    /// One candidate used to occupy slot 0, so a lone word sat on the left third
-    /// of the bar with two empty columns beside it.
-    func testALoneCandidateSitsInTheMiddle() {
+    /// One leftover offer used to share the bar with the typed echo, so the
+    /// completion sat on the left third. Alone, it sits in the middle.
+    func testALoneOfferSitsInTheMiddle() {
+        let typed = Suggestion(text: "qwt", language: .english, isDefault: true)
+        let only = Suggestion(text: "qwtxyz", language: .english)
+        let slots = SuggestionBar.centeredSlots([typed, only], typed: "qwt")
+        XCTAssertEqual(slots.map { $0?.text }, [nil, "qwtxyz", nil])
+    }
+
+    /// A finished word with nothing to complete or correct leaves the slots
+    /// empty. Drawing the echo there was the old bar.
+    func testATypedWordWithNoOfferLeavesTheBarEmpty() {
         let only = Suggestion(text: "qwt", language: .english, isDefault: true)
-        let slots = SuggestionBar.centeredSlots([only])
-        XCTAssertEqual(slots.map { $0?.text }, [nil, "qwt", nil])
+        let slots = SuggestionBar.centeredSlots([only], typed: "qwt")
+        XCTAssertEqual(slots.map { $0?.text }, [nil, nil, nil])
+    }
+
+    /// Next-word has no typed echo, so the three predictions stay.
+    func testNextWordPredictionsAreNotFiltered() {
+        let see = Suggestion(text: "you", language: .english)
+        let you = Suggestion(text: "tomorrow", language: .english, isDefault: true)
+        let later = Suggestion(text: "soon", language: .english)
+        let slots = SuggestionBar.centeredSlots([see, you, later], typed: "")
+        XCTAssertEqual(slots.map { $0?.text }, ["you", "tomorrow", "soon"])
+    }
+
+    /// A comma used to hide neighbours from the engine. It must not hide the
+    /// echo from the bar, or `hello` never reaches a slot.
+    func testATrailingMarkStillHidesOnlyTheEcho() {
+        let typed = Suggestion(text: "hel,", language: .english, isDefault: true)
+        let hello = Suggestion(text: "hello,", language: .english)
+        let help = Suggestion(text: "help,", language: .english)
+        let slots = SuggestionBar.centeredSlots([typed, hello, help], typed: "hel,")
+        XCTAssertFalse(slots.contains { $0?.text == "hel," })
+        XCTAssertEqual(slots[1]?.text, "hello,")
+        XCTAssertEqual(slots[0]?.text, "help,")
+    }
+
+    /// The case this change exists for. A bar that still draws `טןב`, or that
+    /// never generated `טוב`, fails. The engine keeps the typo at index 0;
+    /// the bar must not.
+    func testANearbyHebrewTypoDrawsTheIntendedWord() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "טןב", context: "", languages: [.hebrew],
+            personal: PersonalLanguageModel(url: nil))
+        XCTAssertEqual(results.first?.text, "טןב", "slot 0 stays the keystrokes")
+        XCTAssertTrue(
+            results.contains { $0.text == "טוב" },
+            "the engine never offered טוב: \(results.map(\.text))")
+        let slots = SuggestionBar.centeredSlots(results, typed: "טןב")
+        XCTAssertFalse(
+            slots.contains { $0?.text == "טןב" },
+            "the typo was still drawn: \(slots.map { $0?.text })")
+        XCTAssertEqual(
+            slots[1]?.text, "טוב",
+            "טוב was not the middle offer: \(slots.map { $0?.text })")
+    }
+
+    /// Completions, not the prefix. A bar that still draws `hel` in any slot
+    /// fails even when `hello` is also present.
+    func testAnUnfinishedWordDrawsTheCompletionNotThePrefix() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "hel", context: "", languages: [.english],
+            personal: PersonalLanguageModel(url: nil))
+        let slots = SuggestionBar.centeredSlots(results, typed: "hel")
+        XCTAssertFalse(
+            slots.contains { $0?.text.lowercased() == "hel" },
+            "the prefix was still drawn: \(slots.map { $0?.text })")
+        XCTAssertTrue(
+            slots.contains { $0?.text.lowercased() == "hello" },
+            "hello was not drawn: \(slots.map { $0?.text })")
     }
 }

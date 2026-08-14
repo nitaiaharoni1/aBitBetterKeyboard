@@ -14,7 +14,7 @@ extension SharedStore {
             Key.defaultTone, Key.customToneInstruction, Key.dictationSessionMinutes,
             Key.prefersCustomTone, Key.personalDictionary,
             Key.isSubscribed, Key.screenContextAllowed, Key.keyboardLayout,
-            Key.recentEmoji, Key.hasAcknowledgedKeyboardSwitch,
+            Key.recentEmoji, Key.copyclipHistory, Key.hasAcknowledgedKeyboardSwitch,
             Key.dictationHandoffRequest, Key.dictationActiveLanguage,
             Key.brandPalette
             // Deliberately not `cloudBackendURL` or `cloudBackendToken`. A UI test
@@ -43,10 +43,11 @@ extension SharedStore {
         predictions = true
         haptics = true
         keySounds = true
-        defaultTone = .clearer
+        defaultTone = .normal
         dictationSessionMinutes = 5
         personalDictionary = Self.shippedPersonalDictionary
         recentEmoji = Self.shippedRecentEmoji
+        copyclipRecord = .empty
         isSubscribed = false
         screenContextAllowed = false
         // Assigned as well as removed, for the reason `personalDictionary` is:
@@ -118,6 +119,11 @@ extension SharedStore {
         // list is exactly the reset this key was added to stop.
         if let emoji = defaults.array(forKey: Key.recentEmoji) as? [String] {
             recentEmoji = emoji
+        }
+        // Absent key and unreadable JSON both stay empty. An empty stored
+        // record is a user who tapped Clear, and must not be treated as missing.
+        if defaults.data(forKey: Key.copyclipHistory) != nil {
+            copyclipRecord = Self.decodeCopyclipRecord(from: defaults)
         }
         if defaults.object(forKey: Key.isSubscribed) != nil {
             isSubscribed = defaults.bool(forKey: Key.isSubscribed)

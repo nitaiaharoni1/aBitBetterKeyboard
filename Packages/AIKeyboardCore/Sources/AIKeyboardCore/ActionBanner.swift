@@ -12,7 +12,9 @@ import SwiftUI
 /// every active moment, and the keys are never covered.
 ///
 /// **Absent unless it has a sentence.** It is drawn for a live reading, a refusal,
-/// a failure and an answer nothing could apply, and for nothing else. The default
+/// a content failure and an answer nothing could apply, and for nothing else.
+/// An engine that cannot run (`modelNotReady`, a 401, Apple Intelligence off)
+/// is not a sentence: the sweep on the key ending is the signal. The default
 /// "Type, or pick an action below" instruction is what the action row already says
 /// by existing — and a **model call** and a **live recording**, which were the two
 /// states this was up for most, now report on the control that started them: a

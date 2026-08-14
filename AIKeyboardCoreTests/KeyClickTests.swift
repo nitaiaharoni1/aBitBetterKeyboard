@@ -45,7 +45,7 @@ final class KeyClickTests: XCTestCase {
     func testEveryKeyThatChangesTheKeyboardPlaysTheModifierSound() {
         let caps: [KeyCap] = [
             .shift, .plane(.numbers, label: "123"), .globe, .settings, .dictation,
-            .emoji, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard, .aiReply, .aiFix
+            .emoji, .copyclip, .quickTone, .cursorLeft, .cursorRight, .hideKeyboard, .aiReply, .aiFix
         ]
         for cap in caps {
             XCTAssertEqual(cap.clickSound, .modifier, "\(cap.accessibilityLabel)")

@@ -36,6 +36,9 @@ extension SuggestionEngine {
         /// to the one that was pressed. Ranking only; `shouldAutocorrect`
         /// still refuses a same-length substitution that is not a transposition.
         var keyAdjacent: Bool = false
+        /// How often this person has committed this word. Stamped before
+        /// `rank` so `score` stays a pure function of the candidate.
+        var personalCount: Int = 0
     }
 
     /// Where a candidate came from, ordered worst to best so the raw value can
@@ -125,6 +128,13 @@ extension SuggestionEngine {
             // Rank 0 is worth the full 300 and it decays; the exact curve does not
             // matter, only that common beats rare inside a tier.
             total += 300 / (1 + Double(rank) / 60)
+        }
+        // The same 300 budget as the seed prior, for a word this person has
+        // actually used. Two sightings is the floor (`boostThreshold`): one
+        // may be a typo. Habits can outrank a commoner word they never type
+        // and cannot climb a source tier.
+        if candidate.personalCount >= PersonalLanguageModel.boostThreshold {
+            total += 300 / (1 + 4 / Double(candidate.personalCount))
         }
         // Small enough that one word being in the seed list still beats another
         // being earlier in its source's list, and large enough to survive the

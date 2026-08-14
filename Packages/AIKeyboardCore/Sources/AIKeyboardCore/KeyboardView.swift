@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Where each key ended up, keyed by `KeySpec.id`, in `KeyboardView.frameSpace`.
 ///
@@ -11,6 +12,20 @@ public struct KeyFramesKey: PreferenceKey {
     public static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
         value.merge(nextValue()) { _, new in new }
     }
+}
+
+/// Drawing order between the action row and the letter block.
+///
+/// **A permanent `zIndex(1)` on the action row hid every QWERTY callout.** The
+/// balloon grows up into Reply / Fix / Rewrite, and that row was painted after
+/// the letters on purpose so a Fix / Rewrite / CopyClip stack could cover
+/// QWERTY. Letters now sit above that rest layer; the action row climbs over
+/// them only while one of those stacks is open. The climb is a callback from
+/// the held key, not a preference, so the menu is already in front on the
+/// first frame it appears.
+enum KeyPopupLayer {
+    static let letters: Double = 2
+    static func actionRow(raised: Bool) -> Double { raised ? 3 : 1 }
 }
 
 /// The whole keyboard: suggestion strip, key grid, and whatever panel is covering
@@ -26,6 +41,7 @@ public struct KeyboardView: View {
     @ObservedObject var controller: KeyboardController
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     var isEditingLayout: Bool
+    @State var actionPopupRaised = false
 
     public init(controller: KeyboardController, isEditingLayout: Bool = false) {
         self.controller = controller
@@ -48,18 +64,15 @@ public struct KeyboardView: View {
             }
 
             SuggestionBar(controller: controller)
-                .contentShape(Rectangle())
-                .drawerDismiss { controller.press(.hideKeyboard) }
-                .accessibilityIdentifier("keyboard-dismiss-chrome")
 
             // **Nothing covers the whole key area any more.** This was a `ZStack`
             // with a `fullKeyAreaPanel` over it, and the three panels that used it —
             // the AI menu, the AI result and dictation — are deleted: every one of
             // them existed to say something the strip above now says, and they said
             // it with the keyboard hidden. What is left of overlays lives inside
-            // `keyGrid`: the emoji grid replaces the letters and leaves the action
-            // row above them, and emoji search hands the letters back and takes
-            // only that row.
+            // `keyGrid`: emoji and CopyClip replace the letters and leave the
+            // action row above them, and search hands the letters back and
+            // takes only that row.
             keyGrid
                 .frame(height: Theme.Metrics.keyAreaHeight(for: controller.customization))
         }
@@ -67,7 +80,11 @@ public struct KeyboardView: View {
         .environment(\.layoutDirection, controller.language.layoutDirection)
         .coordinateSpace(name: Self.frameSpace)
         .animation(Theme.Motion.quick, value: controller.showsActionBanner)
-        .onAppear { Feedback.prepare() }
+        .background(FeedbackAnchor())
+        .onAppear {
+            Feedback.prepare()
+            controller.refreshCopyClip()
+        }
     }
 
     /// How the emoji grid arrives. Still needed by `KeyboardView+Keys`, which is the
@@ -78,6 +95,32 @@ public struct KeyboardView: View {
             insertion: .move(edge: .bottom).combined(with: .opacity),
             removal: .opacity
         )
+    }
+}
+
+/// Binds `Feedback` to a real view once this keyboard is in a window.
+///
+/// A generator created with only a style is a free-floating motor. In the
+/// extension that is why the first taps of a session are late or missing.
+/// `didMoveToWindow` is the moment we have a view UIKit will actually drive.
+private struct FeedbackAnchor: UIViewRepresentable {
+    func makeUIView(context: Context) -> AnchorView { AnchorView() }
+    func updateUIView(_ uiView: AnchorView, context: Context) {}
+
+    final class AnchorView: UIView {
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+            backgroundColor = .clear
+        }
+
+        required init?(coder: NSCoder) { fatalError("storyboard") }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil else { return }
+            Feedback.attach(to: self)
+        }
     }
 }
 

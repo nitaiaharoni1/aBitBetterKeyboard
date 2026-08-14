@@ -50,8 +50,7 @@ public struct CloudIntelligence: TextIntelligence {
         // mistake. `applied` on `none` returns the source, which is right for a
         // tap and wrong for a pass whose whole job is the period. Keep the
         // candidate only when the words themselves did not move.
-        if style.allowsUnnamedPunctuation, scoped == source, EditScope.sameWords(corrected, as: source)
-        {
+        if style.allowsUnnamedPunctuation, scoped == source, EditScope.sameWords(corrected, as: source) {
             // `repaired` still strips an added Hebrew full stop, which Punctuate
             // and Polish are told not to add and which the corpus refuses.
             return EditScope.repaired(corrected, to: source)
@@ -207,11 +206,10 @@ public struct CloudIntelligence: TextIntelligence {
         )
     }
 
-    /// Internal rather than private since `CloudIntelligence+Prediction` became
-    /// the second caller. Everything a request needs to be correct — the Full
-    /// Access check, the transport, the field ordering — lives in here, so a
-    /// caller reaching around it would be reimplementing all three.
-    func run(
+    /// Everything a request needs to be correct — the Full Access check, the
+    /// transport, the field ordering — lives in here, so a caller reaching
+    /// around it would be reimplementing all three.
+    private func run(
         instructions: String,
         prompt: String,
         fields: [CloudField]

@@ -259,7 +259,9 @@ extension KeyboardController {
             // write into. The keys go back to one letter each while it is open,
             // which is the same trade that box already makes: it exists to put an
             // alphabet back on screen.
-            !overlay.isEmoji
+            !overlay.isEmoji,
+            // CopyClip hides the letter keys, so there is nothing to group.
+            !overlay.isCopyClip
         else { return .off }
         return SharedStore.shared.storedGroupedLevel.capped(for: language)
     }

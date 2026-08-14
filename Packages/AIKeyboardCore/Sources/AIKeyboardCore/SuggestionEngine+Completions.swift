@@ -248,7 +248,8 @@ extension SuggestionEngine {
                 }
         }
 
-        out += checkerCandidates(for: core, in: context, typedLanguage: typedLanguage)
+        out += checkerCandidates(
+            for: core, in: context, typedLanguage: typedLanguage, personal: personal)
 
         // The field gets its say last, over everything already collected, so a
         // word any earlier pair is known to be followed by climbs whichever
@@ -266,7 +267,41 @@ extension SuggestionEngine {
             }
         }
 
+        stampPersonalCounts(&out, personal: personal)
         return rank(out, limit: 3)
+    }
+
+    /// How often this person has committed each candidate. Asked once, here,
+    /// so `score` can stay a pure function of the candidate.
+    @MainActor
+    static func stampPersonalCounts(
+        _ candidates: inout [Candidate], personal: PersonalLanguageModel
+    ) {
+        for index in candidates.indices {
+            candidates[index].personalCount = personal.count(
+                of: candidates[index].text, in: candidates[index].language)
+        }
+    }
+
+    /// Seed neighbours first, then words this person has actually used.
+    /// Personal hits fill any remaining slots so a name you type can be
+    /// offered from a one-key slip the seed list has never heard of.
+    @MainActor
+    static func neighbourWords(
+        of word: String, in language: KeyboardLanguage, personal: PersonalLanguageModel,
+        limit: Int
+    ) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        let seed = SeedLanguageModel.neighbours(of: word, in: language, limit: limit)
+        let learned = personal.neighbours(of: word, in: language, limit: limit)
+        for hit in seed + learned {
+            let key = SeedLanguageModel.fold(hit)
+            guard seen.insert(key).inserted else { continue }
+            out.append(hit)
+            if out.count == limit { break }
+        }
+        return out
     }
 
     /// Completions drawn from words already in this field.
@@ -423,7 +458,8 @@ extension SuggestionEngine {
     /// than it returns once a frequency prior exists.
     @MainActor
     private static func checkerCandidates(
-        for word: String, in context: String, typedLanguage: KeyboardLanguage
+        for word: String, in context: String, typedLanguage: KeyboardLanguage,
+        personal: PersonalLanguageModel
     )
         -> [Candidate]
     {
@@ -471,7 +507,7 @@ extension SuggestionEngine {
         // most of the ground the rule was written to cover.
         if !SeedLanguageModel.knows(word, in: typedLanguage) {
             out +=
-                SeedLanguageModel.neighbours(of: word, in: typedLanguage, limit: 2)
+                neighbourWords(of: word, in: typedLanguage, personal: personal, limit: 2)
                 .enumerated()
                 .map {
                     Candidate(
@@ -645,7 +681,7 @@ extension SuggestionEngine {
         // followed it.
         let neighbourMatch =
             !known
-            && SeedLanguageModel.neighbours(of: word, in: typedLanguage, limit: 3)
+            && neighbourWords(of: word, in: typedLanguage, personal: personal, limit: 3)
                 .contains(where: { SeedLanguageModel.fold($0) == winner })
         // **Same-length substitutions are a word still being typed.** `מכונ` on
         // the way to `מכונית` is one substitution from `נכון`, four letters

@@ -130,28 +130,28 @@ public struct AIEdit: Equatable, Sendable {
 // MARK: - Tone
 
 public enum ToneStyle: String, CaseIterable, Identifiable, Codable, Sendable {
+    case normal
     case clearer
     case shorter
     case professional
     case casual
     case confident
-    case friendly
 
     public var id: String { rawValue }
 
     public var title: String {
         switch self {
+        case .normal: return "Normal"
         case .clearer: return "Clearer"
         case .shorter: return "Shorter"
         case .professional: return "Professional"
         case .casual: return "Casual"
         case .confident: return "Confident"
-        case .friendly: return "Friendly"
         }
     }
 
     /// **No tone may wear a sparkle, and Clearer did.** SF `sparkle` and SF
-    /// `sparkles` are the same drawing at different counts. These six are drawn in
+    /// `sparkles` are the same drawing at different counts. These are drawn in
     /// the tone picker and on a result variant, both inside a panel whose header
     /// carries `SparkleMark`, so a sparkle here still puts two of them on one
     /// screen meaning two different things.
@@ -165,58 +165,58 @@ public enum ToneStyle: String, CaseIterable, Identifiable, Codable, Sendable {
     /// halves of the rule.
     public var icon: String {
         switch self {
+        case .normal: return "text.alignleft"
         case .clearer: return "eyeglasses"
         case .shorter: return "arrow.down.right.and.arrow.up.left"
         case .professional: return "briefcase"
         case .casual: return "figure.wave"
         case .confident: return "bolt"
-        case .friendly: return "hand.wave"
         }
     }
 
     /// One row per register. Lives on the type so Settings cannot invent a
-    /// seventh sample that the prompts do not describe.
+    /// sample that the prompts do not describe.
     public var previewCaption: String { preview.caption }
     public var previewEnglish: String { preview.english }
     public var previewHebrew: String { preview.hebrew }
 
     private var preview: (caption: String, english: String, hebrew: String) {
         switch self {
+        case .normal:
+            return (
+                "Keeps your voice. Tidies only what a reader would trip on.",
+                "Can you do lunch tomorrow at 12?",
+                "אפשר צהריים מחר ב-12?"
+            )
         case .clearer:
             return (
-                "Cuts filler. Keeps the ask.",
+                "Drops filler and hedges so the ask is easy to see.",
                 "Are you free for lunch tomorrow at 12?",
                 "אתה פנוי לצהריים מחר ב-12?"
             )
         case .shorter:
             return (
-                "Fewer words. Same facts.",
+                "Keeps the same facts in fewer words.",
                 "Lunch tomorrow at 12?",
                 "צהריים מחר ב-12?"
             )
         case .professional:
             return (
-                "Full sentences. A request as a question.",
+                "Uses full sentences and puts the request as a question.",
                 "Would you be available for lunch tomorrow at 12?",
                 "האם תהיה פנוי לארוחת צהריים מחר בשעה 12?"
             )
         case .casual:
             return (
-                "Plain words, no formality.",
+                "Sounds like speech, with no formal wording.",
                 "Wanna grab lunch tomorrow at 12?",
                 "יש לך צהריים מחר ב-12?"
             )
         case .confident:
             return (
-                "Direct. No hedging.",
+                "Goes straight to the point and skips the hedging.",
                 "Free for lunch tomorrow at 12?",
                 "פנוי לצהריים מחר ב-12?"
-            )
-        case .friendly:
-            return (
-                "Warmer. No emoji.",
-                "Want to have lunch tomorrow at 12?",
-                "בא לך צהריים מחר ב-12?"
             )
         }
     }
@@ -257,6 +257,18 @@ public enum FixStyle: String, CaseIterable, Identifiable, Sendable {
         case .spelling: return "Spelling"
         case .punctuate: return "Punctuate"
         case .polish: return "Polish"
+        }
+    }
+
+    /// Drawn beside the title in the Fix key's hold menu. Looked up by title,
+    /// the same way a lift picks a pass, so a renamed case cannot leave a
+    /// blank mark next to the old word.
+    public var icon: String {
+        switch self {
+        case .proofread: return "checkmark.circle"
+        case .spelling: return "textformat.abc"
+        case .punctuate: return "text.quote"
+        case .polish: return "paintbrush"
         }
     }
 

@@ -156,19 +156,19 @@ final class DefaultToneTests: XCTestCase {
     func testAWrittenCustomToneIsWhatTheDefaultResolvesTo() {
         let saved = ToneSettings.snapshot()
         defer { saved.restore() }
-        store.defaultTone = .friendly
+        store.defaultTone = .casual
         store.customTone = "short, blunt, no pleasantries"
         store.prefersCustomTone = true
 
         XCTAssertEqual(
-            store.toneSetting, .custom(instruction: "short, blunt, no pleasantries", nearest: .friendly),
+            store.toneSetting, .custom(instruction: "short, blunt, no pleasantries", nearest: .casual),
             "the default tone is still one of the six built-in registers")
         XCTAssertEqual(store.toneSetting.instruction, "short, blunt, no pleasantries")
         XCTAssertEqual(store.toneSetting.title, ToneSetting.customTitle)
         // What the answer is labelled with, and what an engine that cannot take
         // free text falls back to. The user's own last built-in choice rather than
         // a guess at what their sentence means.
-        XCTAssertEqual(store.toneSetting.style, .friendly)
+        XCTAssertEqual(store.toneSetting.style, .casual)
     }
 
     /// The user's own words reach the engine, rather than the built-in they fall
@@ -177,7 +177,7 @@ final class DefaultToneTests: XCTestCase {
     func testACustomToneReachesTheEngineAsAnInstruction() async {
         let saved = ToneSettings.snapshot()
         defer { saved.restore() }
-        store.defaultTone = .friendly
+        store.defaultTone = .casual
         store.customTone = "short, blunt, no pleasantries"
         store.prefersCustomTone = true
 
@@ -193,7 +193,7 @@ final class DefaultToneTests: XCTestCase {
         await settleToneController(controller)
 
         XCTAssertEqual(engine.instructions, ["short, blunt, no pleasantries"])
-        XCTAssertEqual(engine.tones, [.friendly], "the register the answer is labelled with was lost")
+        XCTAssertEqual(engine.tones, [.casual], "the register the answer is labelled with was lost")
     }
 
     /// **A custom tone must not still be lit after the user has left it.**
@@ -208,7 +208,7 @@ final class DefaultToneTests: XCTestCase {
     func testLeavingACustomToneForRewriteStopsCallingItMyTone() async {
         let saved = ToneSettings.snapshot()
         defer { saved.restore() }
-        store.defaultTone = .friendly
+        store.defaultTone = .casual
         store.customTone = "short, blunt, no pleasantries"
         store.prefersCustomTone = true
 

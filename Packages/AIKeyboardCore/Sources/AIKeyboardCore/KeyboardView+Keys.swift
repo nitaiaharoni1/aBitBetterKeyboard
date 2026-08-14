@@ -37,7 +37,7 @@ extension KeyboardView {
             // The action row is `cursorRow`. The compiler appends it last;
             // this view draws it first, above the letter block. Emoji replaces
             // only what sits below it — the letters (and optional number row,
-            // and the 123/space row) — so the five actions stay reachable while
+            // and the 123/space row) — so the action keys stay reachable while
             // the grid is open.
             let letterRows = rows.filter { $0.id != KeyboardLayout.RowID.cursor }
             let actionRows = rows.filter { $0.id == KeyboardLayout.RowID.cursor }
@@ -60,18 +60,19 @@ extension KeyboardView {
                     referenceRows: referenceSlidingRows,
                     keyHeight: layout.geometry.keyHeight,
                     rowSpacing: layout.geometry.rowSpacing)
-            // **Emoji search puts the letters back and takes the action row
-            // instead**, which is the exact opposite trade to the grid below it.
-            // Typing a search term needs an alphabet, and at 364 pt there is no
-            // band left to put one in — so the two halves swap: the grid goes, the
-            // keys return, and the matches take the row the actions were in. The
+            // **Search puts the letters back and takes the action row instead**,
+            // which is the exact opposite trade to the panel below it. Typing a
+            // search term needs an alphabet, and at 364 pt there is no band left
+            // to put one in — so the two halves swap: the panel goes, the keys
+            // return, and the matches take the row the actions were in. The
             // actions are not reachable in that state and do not need to be; the
-            // Emoji key that closes it all is in the suggestion bar's edge, and
-            // the search box's own ✕ is a tap away. The results sit between the
+            // key that closes it all is in the suggestion bar's edge, and the
+            // search box's own ✕ is a tap away. The results sit between the
             // search box and the letters, which is the only place they fit.
-            let searching = controller.overlay == .emojiSearch
-            let showLetterKeys = controller.overlay == .none || searching
-            let showActionRow = controller.overlay == .none || controller.overlay == .emoji
+            let searchingEmoji = controller.overlay == .emojiSearch
+            let searchingCopyclip = controller.overlay == .copyclipSearch
+            let showLetterKeys = controller.overlay.showsLetterKeys
+            let showActionRow = controller.overlay.showsActionRow
 
             VStack(spacing: layout.geometry.rowSpacing) {
                 if !actionRows.isEmpty {
@@ -85,7 +86,7 @@ extension KeyboardView {
                         .allowsHitTesting(showActionRow)
                         .keyboardGridChrome(width: gridWidth, reach: layout.geometry.reach)
 
-                        if searching {
+                        if searchingEmoji {
                             EmojiResultsStrip(
                                 controller: controller, height: layout.geometry.keyHeight
                             )
@@ -96,10 +97,22 @@ extension KeyboardView {
                             )
                             .transition(panelTransition)
                         }
+                        if searchingCopyclip {
+                            CopyClipResultsStrip(
+                                controller: controller, height: layout.geometry.keyHeight
+                            )
+                            .frame(width: gridWidth)
+                            .frame(
+                                maxWidth: .infinity,
+                                alignment: reachAlignment(layout.geometry.reach)
+                            )
+                            .transition(panelTransition)
+                        }
                     }
-                    // Above the letter block so a stack that grows up from
-                    // Fix or Rewrite is not painted under the QWERTY row.
-                    .zIndex(1)
+                    // Below the letters at rest so a QWERTY callout is not
+                    // painted under Reply. Climbs above them only while a
+                    // stacked key is held — that raise is what hid the balloon.
+                    .zIndex(KeyPopupLayer.actionRow(raised: actionPopupRaised))
                 }
 
                 ZStack(alignment: .top) {
@@ -156,7 +169,19 @@ extension KeyboardView {
                             .environment(\.layoutDirection, .leftToRight)
                             .transition(panelTransition)
                     }
+
+                    if controller.overlay == .copyclip {
+                        CopyClipPanel(controller: controller)
+                            .frame(width: gridWidth)
+                            .frame(
+                                maxWidth: .infinity,
+                                alignment: reachAlignment(layout.geometry.reach)
+                            )
+                            .environment(\.layoutDirection, .leftToRight)
+                            .transition(panelTransition)
+                    }
                 }
+                .zIndex(KeyPopupLayer.letters)
             }
             .padding(.top, Theme.Metrics.topInset)
             .padding(.bottom, Theme.Metrics.bottomInset)
@@ -222,6 +247,10 @@ extension KeyboardView {
                 }
             }
             .frame(maxWidth: .infinity)
+            // Above a trailing pin. `m` sits next to delete; without this
+            // the balloon is delete's background. A pin has no callout, so
+            // it does not need the same raise.
+            .zIndex(1)
             if trailing == 1 {
                 key(at: row.keys.count - 1, in: row, widths: widths, unit: unit, height: height)
             }
@@ -235,6 +264,8 @@ extension KeyboardView {
     ) -> some View {
         if row.keys.indices.contains(index) {
             let key = row.keys[index]
+            let hostsReplyPicker =
+                key.cap == .aiReply && controller.replyKeyBroadcastPrompt != nil
             KeyView(
                 spec: key,
                 width: widths.indices.contains(index) ? widths[index] : unit,
@@ -255,19 +286,24 @@ extension KeyboardView {
                 // Only Fix, and only because the list lives on the controller
                 // the way the registers do. Same shape as `toneAlternates`.
                 fixAlternates: key.cap == .aiFix ? controller.fixAlternates : [],
+                // Only CopyClip, and only because the list lives on the
+                // controller the way the registers do. Same shape as the two
+                // above.
+                copyclipAlternates: key.cap == .copyclip ? controller.copyclipAlternates : [],
                 // Only the Emoji key changes what it says when the grid opens,
                 // and only it is told. Same shape as `toneAlternates` above.
                 isEmojiOpen: key.cap == .emoji && controller.overlay.isEmoji,
-                // The shipped action row keeps these two familiar controls as
-                // glyphs. A custom placement in another row may use the caption.
+                isCopyClipOpen: key.cap == .copyclip && controller.overlay.isCopyClip,
+                // The shipped action row keeps emoji and dictation as glyphs.
+                // CopyClip keeps its caption: the clipboard mark is not a name
+                // people already know.
                 showsActionCaption: row.id != KeyboardLayout.RowID.cursor
                     || (key.cap != .emoji && key.cap != .dictation),
                 // Match the action row's labels to every other key. Custom
                 // placements keep their action-specific tint.
                 usesNeutralActionTint: row.id == KeyboardLayout.RowID.cursor,
-                // Which of Reply / Fix / Rewrite / Dictate / Emoji is the thing
-                // currently on screen — soft fill on that key. See
-                // `KeyboardController.isActionKeyActive`.
+                // Which action is currently on screen — filled brand on that
+                // key. See `KeyboardController.isActionKeyActive`.
                 isActionActive: controller.isActionKeyActive(key.cap),
                 // Fix and Rewrite over an empty field. See
                 // `KeyboardController.isActionKeyDisabled` for why these two are
@@ -302,16 +338,25 @@ extension KeyboardView {
                         ? { controller.press(.deleteForward) }
                         : nil,
                 onAlternate: alternateHandler(for: key),
-                onSpaceTouch: key.cap == .space ? { controller.spaceBarTouch($0) } : nil
+                onSpaceTouch: key.cap == .space ? { controller.spaceBarTouch($0) } : nil,
+                onPopupLayerChange: popupLayerHandler(for: key)
             )
-            .modifier(
-                LayoutJiggle(
-                    enabled: isEditingLayout
-                        && (row.id == KeyboardLayout.RowID.bottom
-                            || row.id == KeyboardLayout.RowID.cursor),
-                    phase: index
-                )
-            )
+            // The overlay sits outside KeyView so VoiceOver can see ReplayKit's
+            // real button (`.accessibilityElement()` hides descendants). Hits
+            // must not also reach the SwiftUI gesture, or one tap both opens
+            // the picker and runs `press(.aiReply)`.
+            .allowsHitTesting(!hostsReplyPicker)
+            .accessibilityHidden(hostsReplyPicker)
+            .overlay {
+                if hostsReplyPicker {
+                    BroadcastPickerButton.overlay(
+                        label: KeyCap.aiReply.accessibilityLabel,
+                        hint: "Opens the iOS screen broadcast picker.",
+                        identifier: "key-\(key.addressableID)",
+                        onActivation: { controller.acknowledgeReplyBroadcastTap() }
+                    )
+                }
+            }
             .background {
                 GeometryReader { proxy in
                     Color.clear.preference(
@@ -322,13 +367,25 @@ extension KeyboardView {
         }
     }
 
+    /// Fix, Rewrite and CopyClip tell the action row to climb over the letters
+    /// for the hold. Every other key stays silent so a letter press cannot
+    /// raise the row that is supposed to sit under its balloon.
+    func popupLayerHandler(for key: KeySpec) -> ((Bool) -> Void)? {
+        switch key.cap {
+        case .quickTone, .aiFix, .copyclip:
+            return { actionPopupRaised = $0 }
+        default:
+            return nil
+        }
+    }
+
     /// What lifting a finger on the second or later item of a key's popup does.
     ///
     /// A letter has already inserted its character on finger-down, so picking an
     /// accent is a replacement: delete, then type the alternate. A grouped key
     /// has already appended a stroke, so picking a letter pins that stroke. The
-    /// rewrite key and Fix have deliberately run nothing yet (see
-    /// `KeyView.runsOnLift`), so picking a style is the whole action.
+    /// rewrite key, Fix and CopyClip have deliberately run nothing yet (see
+    /// `KeyView.runsOnLift`), so picking a row is the whole action.
     func alternateHandler(for key: KeySpec) -> ((String) -> Void)? {
         if key.cap == .quickTone {
             return controller.toneAlternates.count > 1
@@ -337,6 +394,10 @@ extension KeyboardView {
         if key.cap == .aiFix {
             return controller.fixAlternates.count > 1
                 ? { controller.selectFix(named: $0) } : nil
+        }
+        if key.cap == .copyclip {
+            return controller.copyclipAlternates.count > 1
+                ? { controller.selectCopyclip(named: $0) } : nil
         }
         guard !key.alternates.isEmpty else { return nil }
         // Finger-down already appended a grouped stroke. Delete-then-retype
@@ -348,23 +409,5 @@ extension KeyboardView {
             controller.deleteBackward()
             controller.press(.character(alternate))
         }
-    }
-}
-
-/// Small repeating tilt on editable keys. Letters stay still. Preference
-/// frames are measured outside this rotation so `KeyFramesKey` stays stable.
-private struct LayoutJiggle: ViewModifier {
-    let enabled: Bool
-    let phase: Int
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var outward = false
-
-    func body(content: Content) -> some View {
-        let active = enabled && !reduceMotion
-        let sign: Double = phase.isMultiple(of: 2) ? 1 : -1
-        content
-            .rotationEffect(.degrees(active ? (outward ? 1.2 : -1.2) * sign : 0))
-            .animation(active ? Theme.Motion.jiggle : nil, value: outward)
-            .onAppear { outward = true }
     }
 }

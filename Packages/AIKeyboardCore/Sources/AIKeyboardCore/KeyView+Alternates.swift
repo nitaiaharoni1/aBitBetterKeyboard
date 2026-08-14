@@ -11,9 +11,10 @@ extension KeyView {
     /// must not silently swap the letter they already typed.
     ///
     /// A letter offers its own character and then its accents. The rewrite key
-    /// offers the registers, and Fix offers its passes, both already ordered
-    /// with the default first — see `KeyboardController.toneAlternates` and
-    /// `fixAlternates` for why that order is not cosmetic.
+    /// offers the registers, Fix offers its passes, and CopyClip offers recent
+    /// clips, all already ordered with the rest item first — see
+    /// `KeyboardController.toneAlternates`, `fixAlternates` and
+    /// `copyclipAlternates` for why that order is not cosmetic.
     ///
     /// The bottom-row full stop is the exception: its list is SwiftKey's order,
     /// with the period in the middle rather than first. Resting still keeps the
@@ -22,6 +23,7 @@ extension KeyView {
         switch spec.cap {
         case .quickTone: return toneAlternates
         case .aiFix: return fixAlternates
+        case .copyclip: return copyclipAlternates
         default: break
         }
         guard case .character(let value) = spec.cap else { return [] }
@@ -70,7 +72,20 @@ extension KeyView {
     /// else in any of the sixty-four layouts is invisible, so this is a
     /// substitution rather than a labelling system.
     func displayLabel(_ item: String) -> String {
-        item.replacingOccurrences(of: "\u{200C}", with: "\u{2423}")
+        var shown = item
+        if spec.cap == .copyclip, item != KeyCap.copyclip.accessibilityLabel {
+            shown = Self.collapsedClipLabel(item)
+        }
+        return shown.replacingOccurrences(of: "\u{200C}", with: "\u{2423}")
+    }
+
+    /// 156pt row at 15pt. A 4000-character clip would scale into a smear.
+    private static let clipLabelLimit = 22
+
+    private static func collapsedClipLabel(_ text: String) -> String {
+        let collapsed = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        if collapsed.count <= clipLabelLimit { return collapsed }
+        return String(collapsed.prefix(clipLabelLimit - 1)) + "…"
     }
 
     /// What VoiceOver calls the action that picks one item out of the popup.
@@ -92,11 +107,12 @@ extension KeyView {
     /// wrote last. Replaying the press costs one insert nobody sees and keeps a
     /// single implementation of what an alternate means.
     ///
-    /// The rewrite key and Fix are the exception in the other direction: they
-    /// deliberately run nothing on press (see `runsOnLift`), so their handler
-    /// has nothing to undo and must not be given anything to undo.
+    /// The rewrite key, Fix and CopyClip are the exception in the other
+    /// direction: they deliberately run nothing on press (see `runsOnLift`),
+    /// so their handler has nothing to undo and must not be given anything
+    /// to undo. Replaying CopyClip would toggle the panel, then insert.
     func commitAlternate(_ item: String) {
-        if spec.cap != .quickTone, spec.cap != .aiFix {
+        if spec.cap != .quickTone, spec.cap != .aiFix, spec.cap != .copyclip {
             onPress(spec.cap, CGPoint(x: 0.5, y: 0.5))
         }
         onAlternate?(item)
@@ -138,13 +154,11 @@ extension KeyView {
     /// is about 1,000 points of width on a 393-point screen, so the strip that
     /// works for five accented `e`s cannot hold them.
     ///
-    /// The stack grows *up* from the key: index 0 (the rest item) sits nearest
-    /// the finger and the other names climb away from it. Drawing the list in
-    /// array order hung it the other way — default at the top, later passes
-    /// dropping toward the key — which is a dropdown, and these keys sit in the
-    /// action row *above* the letters, not at the bottom.
+    /// The stack grows *down* from the key: index 0 (the rest item) sits nearest
+    /// the finger and the other names drop away from it. These keys sit in the
+    /// action row above the letters, so the menu covers QWERTY on purpose.
     var alternatesAreStacked: Bool {
-        spec.cap == .quickTone || spec.cap == .aiFix
+        spec.cap == .quickTone || spec.cap == .aiFix || spec.cap == .copyclip
     }
 
     private var alternateItemWidth: CGFloat { alternatesAreStacked ? 156 : max(width, 34) }
@@ -158,17 +172,14 @@ extension KeyView {
             : alternateItemWidth * CGFloat(max(1, alternateItems.count))
     }
 
-    /// Negative: every popup sits above its key. Stacked menus measure from
-    /// the key's top (see `alternatesPopupAlignment`) so a 136-point Fix list
-    /// cannot hang down through the letters. A letter strip still measures
-    /// from the key's bottom, the way the balloon does.
+    /// A letter strip sits above its key. A stacked menu sits below: same
+    /// 6-point gap, measured from the key's bottom so the list covers the
+    /// letters rather than the suggestion bar.
     var alternatesPopupOffsetY: CGFloat {
-        alternatesAreStacked ? -(alternatesHeight + 6) : -height - 6
+        alternatesAreStacked ? alternatesHeight + 6 : -height - 6
     }
 
-    var alternatesPopupAlignment: Alignment {
-        alternatesAreStacked ? .top : .bottom
-    }
+    var alternatesPopupAlignment: Alignment { .bottom }
 
     private var alternatesHeight: CGFloat {
         alternatesAreStacked
@@ -181,15 +192,15 @@ extension KeyView {
     /// A row is centred on the key, then shifted by `alternatesStripOffset` so a
     /// strip that would draw past the keyboard stays inside it. The period popup
     /// is also aligned so the period sits over the key. A stack sits directly
-    /// above the key: its bottom edge is 6 points above the key's top, so it
-    /// spans `-(6 + height)` to `-6`. Index 0 is the near edge (just above the
-    /// key); later items are further up.
+    /// below the key: its top edge is 6 points below the key's bottom, so it
+    /// spans `height + 6` to `height + 6 + stackHeight`. Index 0 is the near
+    /// edge (just below the key); later items are further down.
     func alternateIndex(
         at point: CGPoint, keyMinX: CGFloat = 0, canvasWidth: CGFloat = 0
     ) -> Int {
         let index: Int
         if alternatesAreStacked {
-            index = Int(((-point.y - 6) / alternateItemHeight).rounded(.down))
+            index = Int(((point.y - height - 6) / alternateItemHeight).rounded(.down))
         } else {
             let overhang = (alternatesWidth - width) / 2
             let dx = alternatesStripOffset(keyMinX: keyMinX, canvasWidth: canvasWidth)
@@ -236,9 +247,7 @@ extension KeyView {
             Group {
                 if alternatesAreStacked {
                     VStack(spacing: 0) {
-                        ForEach(
-                            Array(alternateItems.enumerated().reversed()), id: \.offset
-                        ) { index, item in
+                        ForEach(Array(alternateItems.enumerated()), id: \.offset) { index, item in
                             alternateItem(item, index: index)
                         }
                     }
@@ -265,24 +274,62 @@ extension KeyView {
                 y: alternatesPopupOffsetY
             )
             .allowsHitTesting(false)
-            .transition(Theme.Motion.pop(reduceMotion: reduceMotion))
+            .transition(
+                Theme.Motion.pop(
+                    reduceMotion: reduceMotion,
+                    anchor: alternatesAreStacked ? .top : .bottom)
+            )
+        }
+    }
+
+    /// SF Symbol beside a stacked row, looked up from the title the popup
+    /// already uses as its identity. Letters have none.
+    func stackedItemIcon(_ item: String) -> String? {
+        switch spec.cap {
+        case .quickTone:
+            if item == ToneSetting.customTitle { return ToneSetting.customIcon }
+            return ToneStyle.allCases.first { $0.title == item }?.icon
+        case .aiFix:
+            return FixStyle.allCases.first { $0.title == item }?.icon
+        case .copyclip:
+            if item == KeyCap.copyclip.accessibilityLabel { return "clipboard" }
+            return "doc.plaintext"
+        default:
+            return nil
         }
     }
 
     private func alternateItem(_ item: String, index: Int) -> some View {
         let isSelected = index == selectedAlternate
-        return Text(displayLabel(item))
-            .font(
-                alternatesAreStacked
-                    ? .system(size: 15, weight: .regular) : .system(size: 24, weight: .light)
-            )
-            .foregroundStyle(isSelected ? Theme.Text.onBrand : Theme.Keys.label)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .frame(width: alternateItemWidth, height: alternateItemHeight)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
-                    .fill(isSelected ? Theme.Brand.solid : Color.clear)
-            )
+        let color = isSelected ? Theme.Text.onBrand : Theme.Keys.label
+        return Group {
+            if alternatesAreStacked {
+                HStack(spacing: Theme.Space.xs) {
+                    if let glyph = stackedItemIcon(item) {
+                        Image(systemName: glyph)
+                            .font(Theme.Glyph.font(14))
+                            .frame(width: 18)
+                    }
+                    Text(displayLabel(item))
+                        .font(.system(size: 15, weight: .regular))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .foregroundStyle(color)
+                .padding(.horizontal, Theme.Space.sm)
+            } else {
+                Text(displayLabel(item))
+                    .font(.system(size: 24, weight: .light))
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .frame(width: alternateItemWidth, height: alternateItemHeight)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
+                .fill(isSelected ? Theme.Brand.solid : Color.clear)
+        )
     }
 }

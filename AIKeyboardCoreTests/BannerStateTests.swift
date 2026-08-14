@@ -107,6 +107,18 @@ final class BannerStateTests: XCTestCase {
         XCTAssertEqual(action, .reply)
     }
 
+    /// **An engine that cannot run draws no strip, and leftover answers stay
+    /// off screen.** Falling through to `.options` would put a Use button over
+    /// three replies from a minute ago. Returning `.failed` would reprint
+    /// "Model not ready". Idle is the only answer that rejects both.
+    func testAnAvailabilityMissKeepsLeftoverOptionsOffTheScreen() {
+        let state = resolve(
+            runningAction: .fix, error: .modelNotReady, options: [reply])
+        XCTAssertFalse(state.isPresented)
+        if case .options = state { return XCTFail("leftover options came back") }
+        if case .failed = state { return XCTFail("Model not ready earned a row") }
+    }
+
     // MARK: A refusal
 
     private let noSession = BannerState.Block(
@@ -217,6 +229,12 @@ final class BannerStateTests: XCTestCase {
 
         XCTAssertTrue(resolve(runningAction: .rewrite, options: [reply]).isPresented)
         XCTAssertTrue(resolve(runningAction: .fix, error: .refused).isPresented)
+        XCTAssertFalse(
+            resolve(runningAction: .fix, error: .modelNotReady).isPresented,
+            "Model not ready earned a row")
+        XCTAssertFalse(
+            resolve(runningAction: .fix, error: .cloudNotConfigured).isPresented,
+            "a 401 earned a row")
         XCTAssertTrue(resolve(block: noSession).isPresented)
         XCTAssertFalse(resolve(dictationIsLive: true).isPresented)
         let context = ScreenContext(

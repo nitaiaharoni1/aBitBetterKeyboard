@@ -10,7 +10,7 @@ extension Prompts {
     /// on the way out of the store — this function does not sanitise, it composes.
     ///
     /// It **replaces** the built-in direction rather than being appended to it.
-    /// The six directions are mutually exclusive registers: "Shorter. The result
+    /// The built-in directions are mutually exclusive registers: "Shorter. The result
     /// must be strictly fewer words than the original" standing beside "warm and
     /// chatty, like a friend" is two instructions arguing, and the model picks one.
     /// `tone` is still passed because it is what `RewriteVariant` and the result
@@ -92,6 +92,9 @@ extension Prompts {
 
     private static func englishDirection(_ tone: ToneStyle) -> String {
         switch tone {
+        case .normal:
+            return
+                "Normal. Keep the writer's voice and the same level of formality. Tidy grammar, spelling and punctuation only. Do not make it shorter, clearer, warmer, more formal or more confident. Do not cut hedges the writer meant."
         case .clearer:
             return
                 "Clearer. Cut hedges and filler ('just', 'probably', 'maybe', 'I think we should probably'). Separate what happened from what is suspected. Keep any uncertainty the writer actually meant."
@@ -107,14 +110,14 @@ extension Prompts {
         case .confident:
             return
                 "Confident. Remove hedging and apology. State the position directly. Do not add a justification, a slogan or a second sentence that was not there."
-        case .friendly:
-            return
-                "Friendly. Warmer and more personal, an emoji only if the original had one or clearly invites it. Do not turn an apology into thanks or change what the message is doing."
         }
     }
 
     private static func hebrewDirection(_ tone: ToneStyle) -> String {
         switch tone {
+        case .normal:
+            return
+                "רגיל. שמור על הקול של הכותב ועל אותה רמת רשמיות. תקן רק דקדוק, איות ופיסוק. אל תקצר, אל תהפוך לבהיר יותר, אל תוסיף חום או ביטחון. אל תוריד גידור שהכותב התכוון אליו."
         case .clearer:
             return
                 "בהיר יותר. הורד מילות גידור ומילוי. הפרד בין מה שקרה לבין מה שמשוער. שמור על אי-הוודאות שהכותב באמת התכוון אליה."
@@ -129,9 +132,6 @@ extension Prompts {
         case .confident:
             return
                 "נחרץ. הורד גידור והתנצלות ואמור את העמדה ישירות. אל תוסיף נימוק, סיסמה או משפט שני שלא היה שם."
-        case .friendly:
-            return
-                "ידידותי. חם ואישי יותר, אימוג'י רק אם המקור הזמין את זה. אל תהפוך התנצלות לתודה ואל תשנה את מה שההודעה עושה."
         }
     }
 }

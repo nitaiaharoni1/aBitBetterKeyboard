@@ -55,19 +55,24 @@ struct LayoutView: View {
             Theme.Surface.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                canvasSection
-                if let slot = model.selection, model.session == nil {
-                    LayoutKeyInspectorSection(model: model, slot: slot)
-                        .padding(.horizontal, Theme.Space.md)
-                        .padding(.vertical, Theme.Space.sm)
+                VStack(spacing: 0) {
+                    canvasSection
+                    if let slot = model.selection, model.session == nil {
+                        LayoutKeyInspectorSection(model: model, slot: slot)
+                            .padding(.horizontal, Theme.Space.md)
+                            .padding(.vertical, Theme.Space.sm)
+                    }
+                    LayoutTray(
+                        model: model,
+                        keyboardGlobal: keyboardGlobal,
+                        geometry: canvasGeometry,
+                        dragLocation: $dragLocation,
+                        trayHeight: $trayHeight
+                    )
                 }
-                LayoutTray(
-                    model: model,
-                    keyboardGlobal: keyboardGlobal,
-                    geometry: canvasGeometry,
-                    dragLocation: $dragLocation,
-                    trayHeight: $trayHeight
-                )
+                .padding(.horizontal, Theme.Space.xs)
+                .padding(.top, Theme.Space.xs)
+
                 if !model.issues.isEmpty {
                     LayoutProblemsSection(model: model)
                         .padding(.horizontal, Theme.Space.md)
@@ -410,8 +415,8 @@ private struct LayoutTray: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             Divider.themed
-            SectionHeader(title: "Unused keys")
-                .padding(.horizontal, Theme.Space.md)
+            SectionHeader(title: "Add keys")
+                .padding(.horizontal, Theme.Space.sm)
             VStack(alignment: .leading, spacing: model.displayed.geometry.rowSpacing) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     HStack(spacing: Theme.Metrics.keySpacing) {
@@ -422,7 +427,7 @@ private struct LayoutTray: View {
                     }
                 }
             }
-            .padding(.horizontal, Theme.Metrics.sideInset)
+            .padding(.horizontal, Theme.Space.sm)
             .padding(.bottom, Theme.Space.sm)
         }
         .background(Theme.Keys.background)
@@ -456,7 +461,7 @@ private struct LayoutTray: View {
     }
 
     private var rows: [[TrayItem]] {
-        let inner = max(trayWidth - Theme.Metrics.sideInset * 2, keyWidth)
+        let inner = max(trayWidth - Theme.Space.sm * 2, keyWidth)
         let columns = max(1, Int((inner + Theme.Metrics.keySpacing) / (keyWidth + Theme.Metrics.keySpacing)))
         return stride(from: 0, to: model.tray.count, by: columns).map { start in
             Array(model.tray[start..<min(start + columns, model.tray.count)])

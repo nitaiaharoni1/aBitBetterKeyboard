@@ -367,6 +367,26 @@ final class AIDirectEditTests: XCTestCase {
         XCTAssertFalse(controller.showsActionBanner)
     }
 
+    /// The screenshot: Fix on the simulator, on-device refused up front, cloud
+    /// 401'd, and the strip said "Model not ready / Still downloading".
+    /// `isAvailabilityMiss` is what rejects that build — a version that still
+    /// presents `.failed` for either error passes every other assertion here.
+    func testAModelThatCannotRunDoesNotOpenAStrip() async {
+        let onDevice = DirectEditEngine(failure: .modelNotReady)
+        let cloud = DirectEditEngine(failure: .cloudNotConfigured)
+        let controller = KeyboardController(
+            target: MockTextTarget(text: "Yyy"),
+            engine: RoutedIntelligence(onDevice: onDevice, cloud: cloud))
+
+        controller.run(.fix)
+        await settleToneController(controller)
+
+        XCTAssertEqual(controller.aiError, .cloudNotConfigured)
+        XCTAssertFalse(
+            controller.showsActionBanner,
+            "Model not ready is still on the strip")
+    }
+
     // MARK: The two keys that need text
 
     /// Fix and Rewrite are drawn off on an empty field and come back the moment
@@ -582,12 +602,14 @@ private final class DirectEditEngine: TextIntelligence, @unchecked Sendable {
 
     private let fixed: String
     private let rewritten: String
+    private let failure: AIEngineError?
     private let lock = NSLock()
     private var released = true
 
-    init(fixed: String = "", rewritten: String = "") {
+    init(fixed: String = "", rewritten: String = "", failure: AIEngineError? = nil) {
         self.fixed = fixed
         self.rewritten = rewritten
+        self.failure = failure
     }
 
     /// Holds the next call open until `release()`, so a test can type into the
@@ -623,6 +645,7 @@ private final class DirectEditEngine: TextIntelligence, @unchecked Sendable {
 
     func fix(_ text: String, style: FixStyle) async throws -> String {
         await waitForRelease()
+        if let failure { throw failure }
         return fixed.isEmpty ? text : fixed
     }
 

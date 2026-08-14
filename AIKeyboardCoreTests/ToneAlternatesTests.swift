@@ -115,11 +115,11 @@ final class ToneAlternatesTests: XCTestCase {
     /// the drift `SuggestionBar` and `AIMenuPanel` already shipped once rather than
     /// guarding against it.
     func testAWrittenCustomToneIsNotOfferedUnlessItIsSelected() {
-        store.defaultTone = .friendly
+        store.defaultTone = .casual
         store.customTone = "short, blunt, no pleasantries"
         store.prefersCustomTone = false
         let controller = makeController(engine: ToneCallRecorder())
-        XCTAssertEqual(controller.toneAlternates.first, ToneStyle.friendly.title)
+        XCTAssertEqual(controller.toneAlternates.first, ToneStyle.casual.title)
         XCTAssertNil(controller.customTone, "the setting itself does not resolve to a custom tone")
         XCTAssertFalse(controller.toneAlternates.contains(ToneSetting.customTitle))
     }
@@ -127,7 +127,7 @@ final class ToneAlternatesTests: XCTestCase {
     /// And is not offered twice when it *is* the default: the first slot already
     /// carries it.
     func testTheCustomToneIsNotOfferedTwiceWhenItIsTheDefault() {
-        store.defaultTone = .friendly
+        store.defaultTone = .casual
         store.customTone = "short, blunt, no pleasantries"
         store.prefersCustomTone = true
         let list = makeController(engine: ToneCallRecorder()).toneAlternates
@@ -187,7 +187,7 @@ final class ToneAlternatesTests: XCTestCase {
     /// stand behind. `ToneSetting.custom` carries both and the instruction is the
     /// half a `ToneStyle`-only path drops.
     func testPickingTheCustomToneSendsTheUsersOwnWords() async {
-        store.defaultTone = .friendly
+        store.defaultTone = .casual
         store.customTone = "short, blunt, no pleasantries"
         store.prefersCustomTone = true
         let engine = ToneCallRecorder()
@@ -198,7 +198,7 @@ final class ToneAlternatesTests: XCTestCase {
         await settleToneController(controller)
 
         XCTAssertEqual(engine.calls.first?.instruction, "short, blunt, no pleasantries")
-        XCTAssertEqual(engine.calls.first?.tone, .friendly, "the register it falls back to")
+        XCTAssertEqual(engine.calls.first?.tone, .casual, "the register it falls back to")
         // `selectedToneIsCustom` was the third assertion here and is gone for the
         // reason given on the test above: it is banner state, and there is no
         // banner left to hold it once the answer is in the field.

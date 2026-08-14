@@ -8,7 +8,7 @@ extension KeyView {
     /// keyed off this defers rather than committing on finger-down.
     var slidesForLanguage: Bool { spec.cap == .space && onSpaceTouch != nil }
 
-    /// The one-tap rewrite key and Fix, when they have styles to offer.
+    /// The one-tap rewrite key, Fix and CopyClip, when they have items to offer.
     ///
     /// **They commit on lift rather than on finger-down, and they are the only
     /// keys besides the space bar that do.** Every other key acts immediately
@@ -18,12 +18,14 @@ extension KeyView {
     /// spend one on the default pass every time the user held the key to
     /// choose a different one, and `beginWork` cancels its predecessor, so
     /// the answer being paid for would be thrown away by the style that was
-    /// actually wanted. A tap still runs the default — it just runs it 100ms
+    /// actually wanted. CopyClip is the same lift rule so a hold does not
+    /// toggle the panel. A tap still runs the default — it just runs it 100ms
     /// later, on the lift, which no thumb can feel.
     var runsOnLift: Bool {
         switch spec.cap {
         case .quickTone: return toneAlternates.count > 1
         case .aiFix: return fixAlternates.count > 1
+        case .copyclip: return copyclipAlternates.count > 1
         default: return false
         }
     }
@@ -89,10 +91,10 @@ extension KeyView {
                         canvasWidth: keyboardCanvasWidth) : alternateRestIndex
             }
             .onEnded { value in
-        // Not just a mirror of the `onChanged` guard: `runsOnLift` means
-        // this is the *only* place the rewrite and Fix keys ever fire, so a
-        // disabled key with a guard on one half and not the other
-        // would still run on every tap.
+                // Not just a mirror of the `onChanged` guard: `runsOnLift` means
+                // this is the *only* place the rewrite and Fix keys ever fire, so a
+                // disabled key with a guard on one half and not the other
+                // would still run on every tap.
                 guard acceptsTouches else {
                     endPress()
                     return
@@ -123,7 +125,9 @@ extension KeyView {
                     if runsOnLift { onPress(spec.cap, unitPoint(value.startLocation)) }
                     return
                 }
-                guard picked >= 0, picked < alternateItems.count else { return }
+                guard picked >= 0, picked < alternateItems.count else {
+                    return
+                }
                 onAlternate?(alternateItems[picked])
             }
     }

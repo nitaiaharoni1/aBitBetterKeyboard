@@ -22,8 +22,8 @@ final class CustomLayoutTests: XCTestCase {
     func testEveryActionRoundTrips() throws {
         let actions: [SlotAction] = [
             .shift, .backspace, .numbersPlane, .symbolsPlane, .globe, .settings, .space, .ret,
-            .dictation, .emoji, .quickTone, .cursorLeft, .cursorRight, .deleteForward,
-            .hideKeyboard, .text(".com")
+            .dictation, .emoji, .copyclip, .reply, .fix, .punctuation, .quickTone,
+            .cursorLeft, .cursorRight, .deleteForward, .hideKeyboard, .text(".com")
         ]
         let data = try JSONEncoder().encode(actions)
         XCTAssertEqual(try JSONDecoder().decode([SlotAction].self, from: data), actions)
@@ -45,6 +45,20 @@ final class CustomLayoutTests: XCTestCase {
         XCTAssertFalse(
             KeyboardCustomization.default.bottomRow.contains { $0.action == .dictation },
             "dictation is on the action row; two of it is one too many")
+    }
+
+    /// Photographs the shipped action row so a sixth key cannot land by
+    /// accident, and so this intentional sixth key cannot vanish later.
+    func testTheDefaultCompilesToTodaysRows() {
+        XCTAssertEqual(
+            KeyboardCustomization.actionRow.map(\.action),
+            [.emoji, .copyclip, .reply, .fix, .quickTone, .dictation])
+        let rows = KeyboardLayout.rows(
+            for: .english, plane: .letters, showsGlobe: false, customization: .default)
+        let action = rows.first { $0.id == KeyboardLayout.RowID.cursor }
+        XCTAssertEqual(
+            action?.keys.map(\.cap),
+            [.emoji, .copyclip, .aiReply, .aiFix, .quickTone, .dictation])
     }
 
     /// Nothing the default ships appears in two rows at once.
@@ -147,7 +161,8 @@ final class CustomLayoutTests: XCTestCase {
     /// thing a VoiceOver user has to tell two icon keys apart.
     func testNewCapsHaveDistinctAccessibilityLabels() {
         let caps: [KeyCap] = [
-            .settings, .emoji, .quickTone, .cursorLeft, .cursorRight, .deleteForward, .hideKeyboard
+            .settings, .emoji, .copyclip, .quickTone, .cursorLeft, .cursorRight, .deleteForward,
+            .hideKeyboard
         ]
         let labels = caps.map(\.accessibilityLabel)
         XCTAssertEqual(Set(labels).count, caps.count, "two caps share a label: \(labels)")
@@ -158,15 +173,16 @@ final class CustomLayoutTests: XCTestCase {
     /// the cap, and a collision is a `ForEach` with duplicate identity.
     func testNewCapsHaveDistinctSpecIDs() {
         let caps: [KeyCap] = [
-            .settings, .emoji, .quickTone, .cursorLeft, .cursorRight, .deleteForward, .hideKeyboard
+            .settings, .emoji, .copyclip, .quickTone, .cursorLeft, .cursorRight, .deleteForward,
+            .hideKeyboard
         ]
         XCTAssertEqual(Set(caps.map { KeySpec($0).id }).count, caps.count)
     }
 
     func testTheNewCapsAreFunctionKeys() {
         for cap in [
-            KeyCap.settings, .emoji, .quickTone, .cursorLeft, .cursorRight, .deleteForward,
-            .hideKeyboard
+            KeyCap.settings, .emoji, .copyclip, .quickTone, .cursorLeft, .cursorRight,
+            .deleteForward, .hideKeyboard
         ] {
             XCTAssertTrue(cap.isFunctionKey, "\(cap) should not be treated as a character key")
         }
@@ -260,7 +276,7 @@ final class CustomLayoutTests: XCTestCase {
         XCTAssertFalse(SuggestionBar.barCatalogue.contains(.shift))
         XCTAssertFalse(SuggestionBar.barCatalogue.contains(.backspace))
         XCTAssertFalse(SuggestionBar.barCatalogue.contains(.deleteForward))
-        for action in [SlotAction.emoji, .quickTone] {
+        for action in [SlotAction.emoji, .copyclip, .quickTone] {
             XCTAssertTrue(SuggestionBar.barCatalogue.contains(action), "\(action) is missing")
         }
     }

@@ -106,6 +106,7 @@ extension SuggestionEngine {
         // Capitalised at the start of a message, because that is where the word is
         // going and the shift key has already decided the same thing.
         let atStart = context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        stampPersonalCounts(&out, personal: personal)
         return rank(out, limit: 3).map { suggestion in
             guard atStart else { return suggestion }
             return Suggestion(

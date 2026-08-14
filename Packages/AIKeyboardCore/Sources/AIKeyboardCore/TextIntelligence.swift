@@ -23,6 +23,18 @@ extension AIEngineError {
         default: return true
         }
     }
+
+    /// The engine cannot run at all. Not a decision about the text, and not
+    /// what to keep if another engine also fails: "still downloading" is a lie
+    /// when the cloud just answered 401.
+    var isAvailabilityMiss: Bool {
+        switch self {
+        case .modelNotReady, .appleIntelligenceOff, .deviceNotSupported, .cloudNotConfigured:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 // MARK: - Engine
@@ -146,7 +158,9 @@ public struct RoutedIntelligence: Sendable {
                 return AIOutput(try await bounded { try await call(cloud) }, provenance: .cloud)
             } catch let error as AIEngineError {
                 guard error.isWorthFallingBackFrom else { throw error }
-                if firstFailure == nil { firstFailure = error }
+                if firstFailure == nil || firstFailure!.isAvailabilityMiss {
+                    firstFailure = error
+                }
             }
         }
 

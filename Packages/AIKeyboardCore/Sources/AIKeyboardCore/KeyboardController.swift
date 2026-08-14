@@ -11,6 +11,7 @@ public struct KeyboardInteraction: Identifiable, Equatable, Sendable {
     public enum Kind: Equatable, Sendable {
         case suggestion
         case emoji
+        case copyclip
         case dictation
         case languageSwitch
     }
@@ -221,6 +222,15 @@ public final class KeyboardController: ObservableObject {
     /// tearing the extension down.
     @Published public var recentEmoji: [String] = SharedStore.shippedRecentEmoji
 
+    /// Copied texts this keyboard has snapshotted, newest first. Seeded from
+    /// `SharedStore` in `init` and written back on every mutation: the extension
+    /// dies without teardown.
+    @Published public var clips: [Clip] = []
+
+    /// Last `UIPasteboard.changeCount` this process reconciled. Seeded from
+    /// the store so Clear survives a killed extension.
+    @Published public var lastChangeCount = -1
+
     /// What has been typed into the emoji search box. Empty unless `overlay` is
     /// `.emojiSearch`; `show(_:)` is what clears it.
     /// `internal(set)`, not `private(set)`: `setEmojiQuery` lives in
@@ -236,6 +246,13 @@ public final class KeyboardController: ObservableObject {
     /// emoji on every redraw would be a keyboard that stutters while it is being
     /// typed into.
     @Published public internal(set) var emojiResults: [String] = []
+
+    /// What has been typed into the CopyClip search box. Empty unless
+    /// `overlay` is `.copyclipSearch`; `show(_:)` is what clears it.
+    @Published public internal(set) var copyclipQuery = ""
+
+    /// Clips that match `copyclipQuery`, newest first.
+    @Published public internal(set) var copyclipResults: [Clip] = []
 
     /// Set by the host controller. False in the app preview, where there is no
     /// keyboard to switch to.
@@ -425,11 +442,11 @@ public final class KeyboardController: ObservableObject {
                 cloud: BackendTransport.configured().map { CloudIntelligence(transport: $0) }
             )
 
-        // Built after `engine`, and out of the same transport, so the keyboard has
-        // exactly one opinion about where the cloud is.
+        // On-device only. Cloud next-words in the bar mixed model guesses with
+        // the local dictionary, and Hebrew paid a network call for every pause.
+        // Fix, Rewrite and Reply still use `engine` above.
         if isSystemKeyboard {
-            let cloud = BackendTransport.configured().map { CloudIntelligence(transport: $0) }
-            refiner = PredictiveRefiner.standard(cloud: cloud) { [weak self] words, askedAbout in
+            refiner = PredictiveRefiner.standard { [weak self] words, askedAbout in
                 self?.applyRefinement(words, for: askedAbout)
             }
         }
@@ -490,6 +507,14 @@ public final class KeyboardController: ObservableObject {
         // reason `storedKeyboardLayout` is on the line above: this is a second
         // process, and `load()` filled that copy whenever *this* process launched.
         recentEmoji = store.storedRecentEmoji
+        let record = store.storedCopyclipRecord
+        clips = record.clips
+        lastChangeCount = record.lastChangeCount
+
+        NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshCopyClip() }
+            .store(in: &cancellables)
 
         apply(store.storedKeyboardLayout)
         refreshSuggestions()

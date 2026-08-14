@@ -105,6 +105,13 @@ final class DictationChannelProbe: @unchecked Sendable {
             return
         }
 
+        if request.cancelUtterance >= openUtterance, openUtterance > 0 {
+            openUtterance = 0
+            writer.setPhase(.idle)
+            Self.log.notice("dictation-probe dropped an utterance: the keyboard cancelled")
+            return
+        }
+
         if request.utterance > openUtterance, request.wantsRecording(now: now) {
             openUtterance = request.utterance
             openedAt = now

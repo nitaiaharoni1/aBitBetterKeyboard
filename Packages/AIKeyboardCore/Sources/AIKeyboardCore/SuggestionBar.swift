@@ -20,7 +20,14 @@ public struct SuggestionBar: View {
     }
 
     public var body: some View {
-        if controller.overlay.isEmoji {
+        if controller.overlay.isCopyClip {
+            // The bar becomes the CopyClip search box for as long as the list
+            // is open. Same height trade as emoji: see `CopyClipBar`.
+            CopyClipBar(controller: controller)
+                .frame(height: Theme.Metrics.suggestionBarHeight)
+                .padding(.horizontal, Theme.Space.xxs)
+                .environment(\.layoutDirection, .leftToRight)
+        } else if controller.overlay.isEmoji {
             // The bar becomes the emoji search box for as long as the grid is
             // open. Not an extra row: see `EmojiSearchField` for the height that
             // is not available to spend.
@@ -102,11 +109,11 @@ public struct SuggestionBar: View {
     ///
     /// **The default sits in the middle, even when the engine left it at index
     /// 0.** Mid-word the array is still `[typed, best, next]` so the refiner can
-    /// find the keystrokes; drawing that order put the word you want on the left
-    /// third of the bar. The system keyboard puts it in the center. Only the
-    /// drawing order changes here.
+    /// find the keystrokes. The typed echo is not drawn: it is already in the
+    /// field. Only the drawing order changes here.
     private var suggestions: some View {
-        let slots = Self.centeredSlots(controller.suggestions)
+        let slots = Self.centeredSlots(
+            controller.suggestions, typed: controller.currentWordPrefix)
         return HStack(spacing: 0) {
             ForEach(0..<3, id: \.self) { slot in
                 if slot > 0 { candidateSeparator }
@@ -123,12 +130,31 @@ public struct SuggestionBar: View {
 
     /// Visual order for the three candidate slots: default in the middle, the
     /// others on either side, a lone word centered rather than hugging the left.
-    static func centeredSlots(_ items: [Suggestion]) -> [Suggestion?] {
+    ///
+    /// **The word already in the field is not an offer.** Mid-word the engine
+    /// still pins those keystrokes at index 0. Drawing them spent a slot on a
+    /// tap that types nothing new. Completions and corrections stay. An empty
+    /// prefix is next-word, so nothing is filtered.
+    static func centeredSlots(_ items: [Suggestion], typed: String = "") -> [Suggestion?] {
         var slots: [Suggestion?] = [nil, nil, nil]
-        guard !items.isEmpty else { return slots }
-        let defaultIndex = items.firstIndex(where: \.isDefault) ?? 0
-        slots[1] = items[defaultIndex]
-        let others = items.indices.filter { $0 != defaultIndex }.map { items[$0] }
+        let offers: [Suggestion]
+        if typed.isEmpty {
+            offers = items
+        } else {
+            let key = SuggestionEngine.comparable(typed)
+            // "" is a prefix of every word. Equality against it would drop
+            // nothing useful and is the same trap `comparable`'s other
+            // callers already guard. A punctuation-only echo still matches
+            // by the raw keystrokes.
+            offers =
+                key.isEmpty
+                ? items.filter { $0.text != typed }
+                : items.filter { SuggestionEngine.comparable($0.text) != key }
+        }
+        guard !offers.isEmpty else { return slots }
+        let defaultIndex = offers.firstIndex(where: \.isDefault) ?? 0
+        slots[1] = offers[defaultIndex]
+        let others = offers.indices.filter { $0 != defaultIndex }.map { offers[$0] }
         if others.count > 0 { slots[0] = others[0] }
         if others.count > 1 { slots[2] = others[1] }
         return slots
@@ -178,10 +204,9 @@ public struct SuggestionBar: View {
 #if DEBUG
 
 /// Candidates are set directly rather than through `refreshSuggestions()` so
-/// the canvas shows the same three words every time. Slot zero is the echo of
-/// what was typed — `SuggestionEngine` always offers it, so that the user
-/// cannot be trapped in a word they did not type — and the middle slot is the
-/// one a space press commits.
+/// the canvas shows the same three words every time. The engine still pins
+/// the typed echo at index 0; the bar does not draw it. The middle slot is
+/// the one a space press commits, when that offer is the default.
 private struct SuggestionBarPreviewHost: View {
     @StateObject private var controller: KeyboardController
 
@@ -209,8 +234,9 @@ private struct SuggestionBarPreviewHost: View {
 }
 
 /// The candidate slots do **not** mirror in Hebrew: they are targets a thumb
-/// learns, and language changes on a space-bar swipe. `שלו` should sit on the
-/// left. See `.claude/rules/keyboard-layout.md`.
+/// learns, and language changes on a space-bar swipe. The typed echo `שלו`
+/// is not drawn. `שלום` sits in the middle. See
+/// `.claude/rules/keyboard-layout.md`.
 #Preview("Hebrew") {
     SuggestionBarPreviewHost(
         language: .hebrew,

@@ -205,6 +205,17 @@ enum SeedLanguageModel {
 
     // MARK: Edit distance
 
+    /// Same length-and-distance gate `neighbours` uses, for a word list this
+    /// type does not own. Personal neighbours ask it so a name you type can
+    /// be offered from a one-key slip without a second copy of the walk.
+    static func isOneEditAway(_ candidate: String, of typed: String) -> Bool {
+        let folded = Array(shapeFolded(fold(typed)))
+        let other = Array(shapeFolded(fold(candidate)))
+        guard other.count >= folded.count, other.count - folded.count <= 1, other != folded
+        else { return false }
+        return isOneEditApart(folded, other)
+    }
+
     /// Whether two words are within one insertion, deletion, substitution or
     /// transposition of adjacent characters.
     ///

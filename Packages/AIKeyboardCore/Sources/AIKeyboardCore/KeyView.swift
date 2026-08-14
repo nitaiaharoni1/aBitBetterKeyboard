@@ -25,17 +25,23 @@ public struct KeyView: View {
     /// other key. Same shape as `toneAlternates`: the list lives on the
     /// controller, and a `KeySpec` is a value that cannot read one.
     let fixAlternates: [String]
+    /// Recent clips a long press on CopyClip offers, rest title first. Empty
+    /// on every other key. Same shape as `toneAlternates` and `fixAlternates`.
+    let copyclipAlternates: [String]
     /// Whether the emoji grid is open, which is the only thing that changes what
     /// the Emoji key says. Passed in for the same reason `toneAlternates` is: it
     /// is controller state, and a `KeySpec` is a value that cannot read any.
     /// False on every other key, where it is not read at all.
     let isEmojiOpen: Bool
+    /// Whether the CopyClip panel is open. Passed separately from `isEmojiOpen`
+    /// so the two keys cannot steal each other's letters-plane label.
+    let isCopyClipOpen: Bool
     /// Whether a wide action key should include its text caption.
     let showsActionCaption: Bool
     /// Whether action glyphs and captions should match the standard key label color.
     let usesNeutralActionTint: Bool
     /// Whether this key is the action currently running (or the open emoji grid).
-    /// The key wears a filled brand cap so the row says which of the five is live
+    /// The key wears a filled brand cap so the row says which action is live
     /// without the user having to read the strip.
     let isActionActive: Bool
     /// Whether this key has nothing it could do — Fix and Rewrite over an empty
@@ -63,6 +69,10 @@ public struct KeyView: View {
     /// a touch here may still turn into a language slide, so it reports the touch
     /// and lets the controller decide whether it was a space.
     let onSpaceTouch: ((SpaceTouchPhase) -> Void)?
+    /// Set on Fix, Rewrite and CopyClip so the action row can climb over the
+    /// letters for the length of the hold. A preference from every key was a
+    /// frame late and a letter press could raise the wrong block.
+    let onPopupLayerChange: ((Bool) -> Void)?
 
     @State var isPressed = false
     @State var repeater = KeyRepeater()
@@ -94,7 +104,9 @@ public struct KeyView: View {
         enabledLanguages: [KeyboardLanguage] = [],
         toneAlternates: [String] = [],
         fixAlternates: [String] = [],
+        copyclipAlternates: [String] = [],
         isEmojiOpen: Bool = false,
+        isCopyClipOpen: Bool = false,
         showsActionCaption: Bool = true,
         usesNeutralActionTint: Bool = false,
         isActionActive: Bool = false,
@@ -105,7 +117,8 @@ public struct KeyView: View {
         onPress: @escaping (KeyCap, CGPoint) -> Void,
         onRepeat: (() -> Void)? = nil,
         onAlternate: ((String) -> Void)? = nil,
-        onSpaceTouch: ((SpaceTouchPhase) -> Void)? = nil
+        onSpaceTouch: ((SpaceTouchPhase) -> Void)? = nil,
+        onPopupLayerChange: ((Bool) -> Void)? = nil
     ) {
         self.spec = spec
         self.width = width
@@ -116,7 +129,9 @@ public struct KeyView: View {
         self.enabledLanguages = enabledLanguages
         self.toneAlternates = toneAlternates
         self.fixAlternates = fixAlternates
+        self.copyclipAlternates = copyclipAlternates
         self.isEmojiOpen = isEmojiOpen
+        self.isCopyClipOpen = isCopyClipOpen
         self.showsActionCaption = showsActionCaption
         self.usesNeutralActionTint = usesNeutralActionTint
         self.isActionActive = isActionActive
@@ -128,6 +143,7 @@ public struct KeyView: View {
         self.onRepeat = onRepeat
         self.onAlternate = onAlternate
         self.onSpaceTouch = onSpaceTouch
+        self.onPopupLayerChange = onPopupLayerChange
     }
 
     public var body: some View {
@@ -168,8 +184,10 @@ public struct KeyView: View {
         // the strip is in the same transaction.
         .animation(isPressed ? nil : Theme.Motion.press, value: isPressed)
         // High enough that a balloon wider than the key sits above every
-        // neighbour, not only the ones SwiftUI happened to draw first.
-        .zIndex((isTouching || isPressed) ? 10 : 0)
+        // neighbour, not only the ones SwiftUI happened to draw first. An
+        // active action key uses the same raise so Reply's orange cap is
+        // not sliced by Fix.
+        .zIndex((raisesPopupLayer || isActionActive) ? 10 : 0)
         .contentShape(Rectangle())
         .gesture(pressGesture)
         // **The whole key, not the gesture alone.** `.disabled` takes the touch out
@@ -184,12 +202,16 @@ public struct KeyView: View {
         // first of those calls `onEnded`.
         .onChange(of: isTouching) { _, touching in
             if !touching { endPress() }
+            reportPopupLayer(touching)
         }
         // And if the key is taken off screen mid-press — a plane switch, a
         // language switch, the keyboard being dismissed — the touch never ends at
         // all. `@State` releasing the repeater covers this too; this makes it
         // prompt rather than dependent on when the storage is torn down.
-        .onDisappear { endPress() }
+        .onDisappear {
+            endPress()
+            reportPopupLayer(false)
+        }
         .background {
             GeometryReader { proxy in
                 let minX = proxy.frame(in: .global).minX - keyboardCanvasOriginX
@@ -288,6 +310,18 @@ public struct KeyView: View {
         ControlActivityChrome(activity: activity, cornerRadius: Theme.Radius.key)
     }
 
+    /// Finger down, or the hold strip already open. Same signal the key uses
+    /// to sit above its neighbours.
+    var raisesPopupLayer: Bool { isTouching || isPressed || showsAlternates }
+
+    /// The action row climbs over the letters only for a stacked hold menu.
+    /// A letter press must not raise that row, or the balloon is under Reply
+    /// again. Finger-down, not popup-open, so the menu is already in front
+    /// when the 200ms wait ends.
+    func reportPopupLayer(_ touching: Bool) {
+        onPopupLayerChange?(touching && alternatesAreStacked)
+    }
+
     var hint: String {
         if isDisabled { return disabledHint }
         guard spec.cap == .space else { return "" }
@@ -304,7 +338,7 @@ public struct KeyView: View {
     /// Below this the caption comes off and the glyph stands alone.
     ///
     /// **A key wide enough to name itself should, and one that is not must not
-    /// try.** The action row splits the width five ways, which is about 74pt on a
+    /// try.** The action row splits the width six ways, which is about 62pt on a
     /// 375pt screen — room for a word. The same action dragged into the bottom row
     /// beside the space bar is one unit, about 32pt, where a caption either
     /// truncates to two letters or scales into a hairline. The key decides from

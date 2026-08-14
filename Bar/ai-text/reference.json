@@ -626,13 +626,13 @@
       "id": "tn-mix-01",
       "action": "tone",
       "language": "he-en",
-      "tone": "friendly",
+      "tone": "casual",
       "confidence": "high",
       "reference": "ממש סליחה שלא הספקתי לעשות review ל-PR שלך 🙏",
       "alternates": ["סליחה שלא הספקתי לעשות review ל-PR שלך, אני אגיע לזה בהקדם 🙏"],
       "must": ["stays an apology", "review and PR stay in Latin script"],
       "must_not": ["open with תודה or any form of thanks"],
-      "note": "The mock's friendly rule prefixes 'תודה מראש!' to everything, so an apology comes back as 'Thanks in advance! Sorry I did not review your PR.' This is the single clearest proof that the rules are context-blind."
+      "note": "Casual must keep an apology an apology."
     },
     {
       "id": "tn-mix-02",

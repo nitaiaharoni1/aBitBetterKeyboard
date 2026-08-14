@@ -156,6 +156,50 @@ final class AlternatesPopupTests: XCTestCase {
         XCTAssertEqual(KeyView.groupedLetterSpacing, 0)
     }
 
+    /// **A QWERTY balloon grows into the action row, and a permanent raise on
+    /// that row painted Reply over it.** Letters stay above the resting action
+    /// row. The action row climbs back over them only while Fix, Rewrite or
+    /// CopyClip is holding a stack open — the reason the raise existed.
+    func testALetterCalloutSitsAboveTheActionRow() {
+        XCTAssertGreaterThan(
+            KeyPopupLayer.letters, KeyPopupLayer.actionRow(raised: false),
+            "the broken build kept the action row at 1 and the letters at 0")
+        XCTAssertGreaterThan(
+            KeyPopupLayer.actionRow(raised: true), KeyPopupLayer.letters,
+            "a Fix stack that cannot cover QWERTY is the other half of this")
+    }
+
+    /// The climb is only for a stacked hold. A letter that reported the same
+    /// signal would put the action row back over the balloon.
+    func testOnlyAStackedActionKeyRaisesTheActionRow() throws {
+        var letterRaised: Bool?
+        let letter = KeyView(
+            spec: KeySpec(.character("y")),
+            width: 34,
+            height: 44,
+            language: .english,
+            shift: .off,
+            onPress: { _, _ in },
+            onPopupLayerChange: { letterRaised = $0 })
+        letter.reportPopupLayer(true)
+        XCTAssertEqual(letterRaised, false, "a letter press raised the action row")
+        XCTAssertFalse(letter.raisesPopupLayer)
+
+        var fixRaised: Bool?
+        let fix = KeyView(
+            spec: KeySpec(.aiFix),
+            width: 34,
+            height: 44,
+            language: .english,
+            shift: .off,
+            onPress: { _, _ in },
+            onPopupLayerChange: { fixRaised = $0 })
+        fix.reportPopupLayer(true)
+        XCTAssertEqual(fixRaised, true, "a Fix hold left the menu under QWERTY")
+        fix.reportPopupLayer(false)
+        XCTAssertEqual(fixRaised, false)
+    }
+
     /// The balloon has to be larger than the key it grew out of, or it is not a
     /// preview — it is the same glyph under the thumb.
     func testTheCalloutIsLargerAndHeavierThanTheKeyCap() throws {
@@ -286,7 +330,7 @@ final class AlternatesPopupTests: XCTestCase {
     }
 
     /// Same standing-finger rule as a letter, on a stack. The key sits
-    /// *below* the stack, so the raw point on the cap clamps to index 0.
+    /// *above* the stack, so the raw point on the cap clamps to index 0.
     /// A letter's centred strip is the opposite: the cap maps to the middle
     /// item, which is why `hasSlid` exists. Lifting without a slide still
     /// keeps Fix either way.
@@ -302,38 +346,58 @@ final class AlternatesPopupTests: XCTestCase {
             view.alternateIndexOnLift(
                 popupIsVisible: true, translation: .zero, location: centre),
             0)
-        let spelling = CGPoint(x: 17, y: -57)
+        let spelling = CGPoint(x: 17, y: 101)
         XCTAssertEqual(view.alternateIndex(at: spelling), 1)
         XCTAssertEqual(
             view.alternateIndexOnLift(
                 popupIsVisible: true,
-                translation: CGSize(width: 0, height: -79),
+                translation: CGSize(width: 0, height: 79),
                 location: spelling),
             1)
     }
 
-    /// **The measurement that rejects a dropdown.** Drawing the passes in list
-    /// order put Fix at the top of the stack and Polish next to the key, so the
-    /// menu hung down toward the finger. Index 0 is the near edge: just above
-    /// the key. The last pass is further up. A positive offset is the other
-    /// half of the same defect — the list sitting on the letters.
-    func testTheFixPopupGrowsUpFromTheKey() {
+    /// **The measurement that rejects an upward stack.** Drawing the passes
+    /// reversed put Fix at the bottom of a downward list, away from the
+    /// finger. Index 0 is the near edge: just below the key. The last pass
+    /// is further down. A negative offset is the other half of the same
+    /// defect: the list climbing into the suggestion bar.
+    func testTheFixPopupGrowsDownFromTheKey() {
         let view = recordingKey(
             KeySpec(.aiFix), fixes: ["Fix", "Spelling", "Punctuate", "Polish"]
         ).0
         XCTAssertTrue(view.alternatesAreStacked)
-        XCTAssertEqual(view.alternatesPopupAlignment, .top)
-        XCTAssertEqual(view.alternatesPopupOffsetY, -(34 * 4 + 6))
-        XCTAssertEqual(view.alternateIndex(at: CGPoint(x: 17, y: -7)), 0)
-        XCTAssertEqual(view.alternateIndex(at: CGPoint(x: 17, y: -125)), 3)
+        XCTAssertEqual(view.alternatesPopupAlignment, .bottom)
+        XCTAssertEqual(view.alternatesPopupOffsetY, 34 * 4 + 6)
+        XCTAssertEqual(view.alternateIndex(at: CGPoint(x: 17, y: 44 + 7)), 0)
+        XCTAssertEqual(view.alternateIndex(at: CGPoint(x: 17, y: 169)), 3)
 
         let rewrite = recordingKey(
             KeySpec(.quickTone), tones: ["Clearer", "Friendly", "Casual"]
         ).0
         XCTAssertTrue(rewrite.alternatesAreStacked)
-        XCTAssertEqual(rewrite.alternatesPopupAlignment, .top)
-        XCTAssertEqual(rewrite.alternatesPopupOffsetY, -(34 * 3 + 6))
-        XCTAssertEqual(rewrite.alternateIndex(at: CGPoint(x: 17, y: -7)), 0)
+        XCTAssertEqual(rewrite.alternatesPopupAlignment, .bottom)
+        XCTAssertEqual(rewrite.alternatesPopupOffsetY, 34 * 3 + 6)
+        XCTAssertEqual(rewrite.alternateIndex(at: CGPoint(x: 17, y: 44 + 7)), 0)
+    }
+
+    /// The hold menu names a pass or register in words *and* a mark. A title
+    /// with no matching case is how a renamed style left a blank slot.
+    func testStackedFixAndRewriteRowsCarryTheirIcons() {
+        let fix = recordingKey(
+            KeySpec(.aiFix), fixes: ["Fix", "Spelling", "Punctuate", "Polish"]
+        ).0
+        XCTAssertEqual(fix.stackedItemIcon("Fix"), FixStyle.proofread.icon)
+        XCTAssertEqual(fix.stackedItemIcon("Spelling"), FixStyle.spelling.icon)
+        XCTAssertEqual(fix.stackedItemIcon("Punctuate"), FixStyle.punctuate.icon)
+        XCTAssertEqual(fix.stackedItemIcon("Polish"), FixStyle.polish.icon)
+        XCTAssertNil(fix.stackedItemIcon("unknown"))
+
+        let rewrite = recordingKey(
+            KeySpec(.quickTone), tones: ["Clearer", ToneSetting.customTitle, "Casual"]
+        ).0
+        XCTAssertEqual(rewrite.stackedItemIcon("Clearer"), ToneStyle.clearer.icon)
+        XCTAssertEqual(rewrite.stackedItemIcon(ToneSetting.customTitle), ToneSetting.customIcon)
+        XCTAssertEqual(rewrite.stackedItemIcon("Casual"), ToneStyle.casual.icon)
     }
 
     /// A letter strip is the other shape: still a row, still above the key,
@@ -414,7 +478,7 @@ final class AlternatesPopupTests: XCTestCase {
         XCTAssertFalse(key.hasSlid(.zero), "a finger that never moved is resting")
         XCTAssertFalse(key.hasSlid(CGSize(width: 2, height: -3)), "that is a wobble")
         XCTAssertTrue(key.hasSlid(CGSize(width: 20, height: 0)), "that is a slide to the geresh")
-        XCTAssertTrue(key.hasSlid(CGSize(width: 0, height: -20)), "the registers stack upward")
+        XCTAssertTrue(key.hasSlid(CGSize(width: 0, height: 20)), "the registers stack downward")
         XCTAssertLessThan(
             KeyView.slideThreshold, 34,
             "the threshold has grown past an item; the second one is now unreachable")

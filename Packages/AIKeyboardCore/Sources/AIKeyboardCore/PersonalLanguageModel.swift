@@ -1,5 +1,17 @@
 import Foundation
 
+/// One word the keyboard has seen this person type, with how often.
+///
+/// Personal dictionary lists these. Ranking still ignores a count below
+/// `PersonalLanguageModel.boostThreshold`.
+public struct LearnedWord: Identifiable, Equatable, Sendable {
+    public let word: String
+    public let count: Int
+    public let language: KeyboardLanguage
+
+    public var id: String { "\(language.languageTag)\u{1F}\(word)" }
+}
+
 /// What this keyboard has learned about the person typing on it.
 ///
 /// **This is the half that makes the bar fit somebody.** `SeedLanguageModel` is
@@ -38,9 +50,9 @@ public final class PersonalLanguageModel {
     public static let shared = PersonalLanguageModel()
 
     /// Seen this many times before it influences ranking.
-    static let boostThreshold = 2
+    nonisolated static let boostThreshold = 2
     /// Seen this many times before autocorrect must leave it alone.
-    static let protectThreshold = 3
+    nonisolated static let protectThreshold = 3
 
     /// Beyond this the counts are halved and the singletons dropped. Chosen so the
     /// file stays well under a megabyte: a keyboard extension is memory-capped
@@ -83,6 +95,43 @@ public final class PersonalLanguageModel {
     /// How often this user has committed this word. Zero for one they never have.
     public func count(of word: String, in language: KeyboardLanguage) -> Int {
         store.unigrams[language.languageTag]?[SeedLanguageModel.fold(word)] ?? 0
+    }
+
+    /// Every stored word, including those seen once. Personal dictionary shows
+    /// these so the user can see what the store holds before Forget. Ranking
+    /// still ignores count below `boostThreshold`; `allWords` stays gated.
+    public func learnedWords() -> [LearnedWord] {
+        var out: [LearnedWord] = []
+        for (tag, counts) in store.unigrams {
+            guard let language = KeyboardLanguage(languageTag: tag) else { continue }
+            for (word, count) in counts {
+                out.append(LearnedWord(word: word, count: count, language: language))
+            }
+        }
+        return out.sorted {
+            if $0.count != $1.count { return $0.count > $1.count }
+            if $0.language.displayName != $1.language.displayName {
+                return $0.language.displayName < $1.language.displayName
+            }
+            return $0.word < $1.word
+        }
+    }
+
+    /// Re-read the App Group file. The keyboard writes it; the app's in-memory
+    /// copy is from launch and goes stale the moment you type elsewhere.
+    /// A missing file is empty, not "keep what we had": Forget deletes the
+    /// file, and a keyboard that is still alive must drop the old counts.
+    public func reload() {
+        loadedGeneration = Self.generation
+        guard let url else { return }
+        guard let data = try? Data(contentsOf: url),
+            let decoded = try? JSONDecoder().decode(Store.self, from: data)
+        else {
+            store = Store()
+            pendingWrites = 0
+            return
+        }
+        store = decoded
     }
 
     /// Whether the word is this user's own, firmly enough that autocorrect must
@@ -132,6 +181,25 @@ public final class PersonalLanguageModel {
             .sorted { $0.1 == $1.1 ? $0.0 < $1.0 : $0.1 > $1.1 }
             .prefix(limit)
             .map(\.0)
+    }
+
+    /// Learned words one edit from this typo, most typed first.
+    ///
+    /// The seed neighbour list cannot see a name this person writes. Same
+    /// distance and "never shorter" rules as `SeedLanguageModel.neighbours`,
+    /// and the same two-sighting floor as completions, so one slip does not
+    /// become a dictionary.
+    func neighbours(of word: String, in language: KeyboardLanguage, limit: Int) -> [String] {
+        let folded = SeedLanguageModel.fold(word)
+        guard folded.count >= 3, let counts = store.unigrams[language.languageTag] else {
+            return []
+        }
+        let matches: [(String, Int)] = counts.compactMap { key, count in
+            guard count >= Self.boostThreshold else { return nil }
+            guard SeedLanguageModel.isOneEditAway(key, of: folded) else { return nil }
+            return (key, count)
+        }
+        return Self.mostFrequent(matches, limit: limit)
     }
 
     /// Words this user tends to write after this one, most often first.
@@ -257,7 +325,25 @@ public final class PersonalLanguageModel {
         try? data.write(to: url, options: .atomic)
     }
 
-    /// Forget everything. The Settings screen's "Clear what it learned".
+    /// Drop one word and the pairs it sat in. Saved now so a keyboard that
+    /// reloads on appear does not put it back.
+    public func forget(_ word: String, in language: KeyboardLanguage) {
+        let folded = SeedLanguageModel.fold(word)
+        guard !folded.isEmpty else { return }
+        store.unigrams[language.languageTag]?[folded] = nil
+        if store.unigrams[language.languageTag]?.isEmpty == true {
+            store.unigrams[language.languageTag] = nil
+        }
+        if var pairs = store.bigrams[language.languageTag] {
+            let head = folded + Self.pairSeparator
+            let tail = Self.pairSeparator + folded
+            pairs = pairs.filter { !$0.key.hasPrefix(head) && !$0.key.hasSuffix(tail) }
+            store.bigrams[language.languageTag] = pairs.isEmpty ? nil : pairs
+        }
+        save()
+    }
+
+    /// Forget everything. Personal dictionary's Forget.
     public func clear() {
         store = Store()
         pendingWrites = 0

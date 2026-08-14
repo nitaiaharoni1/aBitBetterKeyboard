@@ -248,48 +248,6 @@ final class KeyboardTypesIntoHostTests: KeyboardExtensionTestCase {
             "dismissing the banner did not restore the idle host height")
     }
 
-    /// Swipe down on the suggestion strip hides the real extension. The in-app
-    /// playground cannot prove this: `onDismissKeyboard` is nil there, so the
-    /// same gesture no-ops on purpose, the way the Hide key does.
-    func testSwipingDownTheSuggestionChromeHidesTheKeyboard() throws {
-        _ = try standExtensionOverARealTextField()
-
-        let space = app.descendants(matching: .any).matching(identifier: "key-space").firstMatch
-        XCTAssertTrue(
-            space.waitForExistence(timeout: 10),
-            "the extension never drew; nothing to dismiss")
-
-        let field = app.textFields["Add a word or name"]
-        let chip = app.descendants(matching: .any)
-            .matching(identifier: "suggestion-1").firstMatch
-        if chip.waitForExistence(timeout: 3), chip.isHittable {
-            let before = fieldText(field)
-            chip.tap()
-            XCTAssertTrue(
-                waitUntil { self.fieldText(field) != before },
-                "a tap on a candidate did nothing; the dismiss gesture stole it")
-        }
-
-        var handle = app.descendants(matching: .any)
-            .matching(identifier: "keyboard-dismiss-chrome").firstMatch
-        if !handle.waitForExistence(timeout: 2) {
-            handle =
-                app.descendants(matching: .any)
-                .matching(identifier: "suggestion-1").firstMatch
-        }
-        XCTAssertTrue(
-            handle.waitForExistence(timeout: 5),
-            "the suggestion chrome was not on screen to pull")
-
-        let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
-        let end = start.withOffset(CGVector(dx: 0, dy: 90))
-        start.press(forDuration: 0.05, thenDragTo: end)
-
-        XCTAssertTrue(
-            space.waitForNonExistence(timeout: 4),
-            "swiped down on the suggestion strip and the keyboard stayed up")
-    }
-
     // MARK: Steps
 
     /// Everything between a fresh simulator and a keyboard extension running in

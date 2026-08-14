@@ -27,34 +27,8 @@ final class KeyboardViewController: UIInputViewController {
     /// still gets to leave one. See `recordPresence()`.
     private var hasRecordedPresence = false
 
-    override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
-        super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
-        publishDictationKey()
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        publishDictationKey()
-    }
-
-    /// Face ID phones draw Apple's dictation microphone in a strip under a
-    /// third-party keyboard unless we say we already have one. We do — the
-    /// orange microphone in the action row — and leaving this false is the
-    /// large empty band with Apple's glyph sitting under the space row.
-    ///
-    /// Public API (`UIInputViewController.hasDictationKey`); do not go looking
-    /// for the system view. Set from `init` as well as `viewDidLoad` /
-    /// `viewWillAppear`: iOS can read the trait before the view loads when it
-    /// decides whether to allocate the dock, and it keeps this instance alive
-    /// across fields and keyboard switches, so a one-shot in `viewDidLoad` is
-    /// not enough.
-    private func publishDictationKey() {
-        hasDictationKey = true
-    }
-
     override func viewDidLoad() {
         super.viewDidLoad()
-        publishDictationKey()
 
         // `store.load()` is what puts the palette into `Theme` at launch, through
         // `brandPalette`'s `didSet` — so there is deliberately no
@@ -145,7 +119,10 @@ final class KeyboardViewController: UIInputViewController {
         // the height changes without anything in here having asked for it.
         controller.$customization
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.updateKeyboardHeight() }
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.updateKeyboardHeight()
+            }
             .store(in: &cancellables)
 
         // The value in the sink is the new host language. `@Published` emits from
@@ -201,11 +178,10 @@ final class KeyboardViewController: UIInputViewController {
         host.view.insetsLayoutMarginsFromSafeArea = false
         host.view.backgroundColor = .clear
         host.view.translatesAutoresizingMaskIntoConstraints = false
-        // Fix and Rewrite stacks grow up from the action row, through the
-        // suggestion bar and into the host, the way a system key preview does.
-        // The default clip cuts them off at the keyboard's top edge, and the
-        // only room left is over the letters — which is how those two menus
-        // read as opening downward.
+        // Letter callouts still grow up through the suggestion bar, the way
+        // a system key preview does. The default clip cuts them off at the
+        // keyboard's top edge. Fix and Rewrite stacks grow down over the
+        // letters and do not need this, but sharing the flag keeps one rule.
         view.clipsToBounds = false
         host.view.clipsToBounds = false
 
@@ -223,7 +199,6 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        publishDictationKey()
         // **Re-read the suite before measuring, and both before the keyboard is
         // on screen.** Settings live in the companion app; iOS keeps this process
         // alive in the background. The space bar and Return already read
@@ -233,6 +208,9 @@ final class KeyboardViewController: UIInputViewController {
         // `reloadCustomization` below then draws. Reading only the layout left
         // those two on the launch-time copy.
         SharedStore.shared.load()
+        // Forget lives in the app. This process stays alive, so without a
+        // re-read the bar would keep ranking words the user just wiped.
+        PersonalLanguageModel.shared.reload()
         // **Re-read before measuring, and both before the keyboard is on screen.**
         // The layout is edited in the companion app, and iOS keeps this process
         // alive in the background, so the first appearance after an edit is the
@@ -243,6 +221,7 @@ final class KeyboardViewController: UIInputViewController {
         // `$customization` sink landed — that sink is `.receive(on: RunLoop.main)`
         // and so is never synchronous with this.
         controller?.reloadCustomization()
+        controller?.refreshCopyClip()
         // Re-read for exactly the reason above: the picker is in the companion
         // app, iOS keeps this process alive in the background, and the first
         // appearance after the user changed palette is the one that has to be

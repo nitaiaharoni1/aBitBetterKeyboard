@@ -53,11 +53,11 @@ struct ScreenContextPrompt: Equatable {
             return
         }
         title = "Screen context is off"
-        // ReplayKit's picker does not present over a keyboard (dead on the
-        // simulator, unmeasured on a device). The start lives in the app, same
-        // as dictation. Nothing auto-starts there: the user still has to tap
-        // Apple's button.
-        detail = "Start it in aBitBetterKeyboard — swipe back to continue."
+        // The Reply key *is* ReplayKit's button in this state. The sentence
+        // hosts the same control so a tap on the strip still reaches replayd
+        // if the system sheet was dismissed. Simulator has no replayd, so
+        // neither surface can start a session there.
+        detail = "Tap to pick aBitBetterKeyboard, then Start Broadcast."
         offersPicker = true
     }
 }

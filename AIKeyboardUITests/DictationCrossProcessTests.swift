@@ -65,11 +65,10 @@ final class DictationCrossProcessTests: KeyboardExtensionTestCase {
             // no longer exists.** Finishing a recording was `dictation-insert` in a
             // panel over the keys; the panel is deleted and the identifier went with
             // it, so this spent five seconds waiting for an element nothing draws
-            // and then never stopped the utterance at all. The recorder therefore
-            // never published a transcript, and check 4's transcript assertion —
-            // the one the whole script is for — could not pass on any build. The
-            // microphone key both starts and finishes now; see
-            // `KeyboardController.toggleDictation`.
+            // and then never stopped the utterance at all. A partial has already
+            // landed by this point, so the tap cancels rather than asking for a
+            // cloud rewrite; check 4 greps for that partial. The microphone key
+            // both starts and finishes now; see `KeyboardController.toggleDictation`.
             microphone.tap()
         }
 

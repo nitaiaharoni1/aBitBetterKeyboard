@@ -21,6 +21,7 @@ public extension SlotAction {
         case .ret: return .ret
         case .dictation: return .dictation
         case .emoji: return .emoji
+        case .copyclip: return .copyclip
         case .quickTone: return .quickTone
         case .cursorLeft: return .cursorLeft
         case .cursorRight: return .cursorRight
@@ -54,6 +55,7 @@ public extension SlotAction {
         case .ret: return "return"
         case .dictation: return "waveform"
         case .emoji: return "face.smiling"
+        case .copyclip: return "clipboard"
         case .quickTone: return AIAction.rewrite.icon
         // Each action's own icon, so the key and the banner's label draw one thing.
         case .reply: return AIAction.reply.icon

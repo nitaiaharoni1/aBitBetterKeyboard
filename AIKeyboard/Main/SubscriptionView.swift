@@ -39,7 +39,7 @@ struct SubscriptionView: View {
     /// keyboard as built, and `legal` says plainly that none of it is limited.
     private let features = [
         ("infinity", "Unlimited Fix and Rewrite", "As many as you like, in every language you type in"),
-        ("slider.horizontal.3", "Every tone", "Six registers, plus one line you write yourself"),
+        ("slider.horizontal.3", "Every tone", "Seven registers, plus one line you write yourself"),
         ("character.book.closed", "Personal dictionary", "Names and terms that survive autocorrect"),
         ("lock.shield", "Nothing kept", "Text is processed and dropped, never stored")
     ]

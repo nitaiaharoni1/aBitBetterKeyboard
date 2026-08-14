@@ -291,6 +291,44 @@ final class DictationKeyboardTests: XCTestCase {
         XCTAssertNil(controller.revertibleEdit)
     }
 
+    /// **The microphone tap must not rewrite what is already in the field.**
+    /// The old tap called `stopDictation(insert: true)`, waited for the cloud
+    /// sentence, and replaced the live words with it. That is the "fix" this
+    /// test is named against: after a partial, a second tap just stops, and a
+    /// transcript that arrives anyway is ignored.
+    func testAStopAfterStreamingKeepsTheDraftAndIgnoresTheTranscript() throws {
+        let id = beginLiveSession()
+        session.poll()
+        controller.toggleDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+
+        try recorder.publishPartial(
+            DictationPartialRecord(
+                sessionID: id, utterance: utterance, sequence: 1, text: "hi mami",
+                seconds: 2))
+        session.poll()
+        XCTAssertEqual(target.text, "hi mami")
+
+        controller.toggleDictation()
+        XCTAssertEqual(
+            controller.dictationKeyState, .idle,
+            "a stop after streaming still waited for a cloud rewrite")
+        XCTAssertEqual(
+            recorder.request()?.cancelUtterance, utterance,
+            "the second tap asked the recorder to transcribe instead of just stop")
+        XCTAssertEqual(target.text, "hi mami")
+
+        try recorder.publish(
+            DictationTranscriptRecord(
+                sessionID: id, utterance: utterance, text: "Hi Mami, what's up?",
+                recordedAt: 1, completedAt: 2, seconds: 4))
+        session.poll()
+
+        XCTAssertEqual(
+            target.text, "hi mami",
+            "the cloud sentence still replaced the live words after stop")
+    }
+
     /// The first partial is what WhatsApp lays out. Languages have to be on
     /// `transcriptLanguages` before that text is published: counting letters in
     /// this sentence says Latin, and a host that is still English parks it on
@@ -587,9 +625,9 @@ final class DictationKeyboardTests: XCTestCase {
     // MARK: Pause and resume
 
     /// **The microphone key both starts and finishes a recording now.** A tap
-    /// with nothing live opens an utterance; a second tap finishes it and
-    /// asks for an insert, exactly as `stopDictation(insert: true)` always
-    /// has — `toggleDictation` is what the key calls for both halves.
+    /// with nothing live opens an utterance; a second tap with nothing streamed
+    /// still asks for an insert, because that is the only copy of the words.
+    /// `toggleDictation` is what the key calls for both halves.
     func testToggleDictationStartsThenFinishesWithInsert() throws {
         let id = beginLiveSession()
         session.poll()

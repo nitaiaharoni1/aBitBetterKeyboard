@@ -11,7 +11,7 @@
   "actions": {
     "fix": "Grammar and spelling only. Meaning, tone and language preserved. Output is one string.",
     "rewrite": "Three variants of the same message. The product promise is that they differ in the decision they take, not in wording. Output is a list.",
-    "tone": "One of six registers: clearer, shorter, professional, casual, confident, friendly. Output is one variant, always shown even if nothing changed.",
+    "tone": "One of six registers: normal, clearer, shorter, professional, casual, confident. Output is one variant, always shown even if nothing changed.",
     "reply": "Three answers to a message read off the screen, differing in what they decide (accept / push back / ask), not in phrasing. Input is a ScreenContext, not the text field."
   },
   "languages": {
@@ -649,16 +649,16 @@
       "id": "tn-mix-01",
       "action": "tone",
       "language": "he-en",
-      "tone": "friendly",
+      "tone": "casual",
       "input": "לא הספקתי לעשות review ל-PR שלך, סליחה",
       "tags": [
         "code-switch"
       ],
-      "why": "An apology. The mock's friendly rule prefixes תודה מראש, which on an apology is nonsense, and that is the clearest single demonstration that these rules are context-blind.",
+      "why": "An apology. Casual must keep it an apology, not turn it into thanks.",
       "mock_output": [
         {
           "text": "תודה מראש! לא הספקתי לעשות review ל-PR שלך, סליחה.",
-          "tone": "friendly"
+          "tone": "casual"
         }
       ]
     },
