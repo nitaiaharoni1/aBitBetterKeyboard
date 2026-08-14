@@ -725,27 +725,6 @@ extension SuggestionEngine {
             }
         }
 
-        // **An unfinished word with two different endings is not a typo.**
-        // `respon` is the start of `respond`, `response` and `responsible`.
-        // The four-letter gate used to commit whichever the seed ranked first
-        // (`respond`), which is a guess about a word still being typed — corpus
-        // `en-comp-03`, `Thanks for the quick respon`. Inflections of one
-        // lexeme (`schedule` / `scheduled`) still commit: they are one word
-        // with a tail, not two readings. Context can still pick: if the
-        // previous words are known to be followed by the winner, that is the
-        // same sentence signal the Hebrew path already uses, applied only to
-        // this unfinished-stem case rather than to valid English words.
-        let continuations = SeedLanguageModel.words(
-            startingWith: word, in: typedLanguage, limit: 3)
-        if hasDistinctLexemes(continuations) {
-            let contextual = Set(
-                contextFollowers(
-                    last: previousWords, field: documentWords(in: context), context: context,
-                    language: typedLanguage, personal: personal
-                ).map(SeedLanguageModel.fold))
-            if !contextual.contains(winner) { return false }
-        }
-
         // **Four letters, not three, and the three-letter typos are covered
         // above.** Lowering this to three did fix `teh` → `the`, and it also let a
         // three-letter prefix be replaced by any six-letter word starting with it:
@@ -759,21 +738,6 @@ extension SuggestionEngine {
         // clause stopped doing it.
         return word.count >= 4 && !known
             && !(sameLengthSubstitution && typedLanguage.script == .hebrew)
-    }
-
-    /// Whether these completions are more than one word with a suffix stuck on.
-    ///
-    /// `schedule` / `scheduled` is one lexeme. `respond` / `response` is two:
-    /// neither string begins with the other. Asked of the seed list's own
-    /// answers, most-common first, so the head is the one the four-letter gate
-    /// would have committed.
-    static func hasDistinctLexemes(_ words: [String]) -> Bool {
-        guard words.count >= 2 else { return false }
-        let folded = words.map(SeedLanguageModel.fold)
-        let head = folded[0]
-        return folded.dropFirst().contains { other in
-            !other.hasPrefix(head) && !head.hasPrefix(other)
-        }
     }
 
     /// Whether these completions are more than one word with a suffix stuck on.
