@@ -82,6 +82,39 @@ enum SeedLanguageModel {
         return []
     }
 
+    /// Every collocation this token list can see, later windows first.
+    ///
+    /// `followers(after:)` only reads the last two words, so
+    /// `Thanks for the quick turnaround. I'll send a` forgot `the quick` the
+    /// moment two more words landed. Sliding a two-word window over the whole
+    /// list is how the field, not just its tail, reaches the seed table.
+    ///
+    /// **One-word keys fire only at the end.** `the` is followed by half the
+    /// language, and it appears in every English sentence; asking it of every
+    /// token would mark `way` and `address` as "the sentence wanted this" for
+    /// the rest of the message. A pair is specific enough to keep (`the quick`
+    /// → `response`). The last token still gets its one-word row, which is
+    /// what `followers(after:)` already returned.
+    static func followers(mentionedIn words: [String], in language: KeyboardLanguage) -> [String] {
+        guard let bigrams = catalogue[language.languageTag]?.bigrams else { return [] }
+        let tokens = words.filter { !$0.isEmpty }.map(fold)
+        guard !tokens.isEmpty else { return [] }
+        var seen = Set<String>()
+        var out: [String] = []
+        for end in stride(from: tokens.count, through: 1, by: -1) {
+            let maxLength = min(maximumKeyWords, end)
+            let minLength = end == tokens.count ? 1 : 2
+            for length in stride(from: maxLength, through: minLength, by: -1) {
+                let key = tokens[(end - length)..<end].joined(separator: " ")
+                guard let hits = bigrams[key] else { continue }
+                for hit in hits where seen.insert(fold(hit)).inserted {
+                    out.append(hit)
+                }
+            }
+        }
+        return out
+    }
+
     /// The longest phrase the table is keyed on. Two: three-word keys were tried
     /// and every one of them was already answered by its own last two words, so
     /// they only cost rows.

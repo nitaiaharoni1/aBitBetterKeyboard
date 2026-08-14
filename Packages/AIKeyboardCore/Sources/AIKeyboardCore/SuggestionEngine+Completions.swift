@@ -250,17 +250,16 @@ extension SuggestionEngine {
 
         out += checkerCandidates(for: core, in: context, typedLanguage: typedLanguage)
 
-        // The sentence gets its say last, over everything already collected, so a
-        // word the previous word is known to be followed by climbs whichever
-        // source it happened to arrive from. The field is asked too: a name that
-        // followed this word earlier in the message is context the seed table
-        // has never seen.
+        // The field gets its say last, over everything already collected, so a
+        // word any earlier pair is known to be followed by climbs whichever
+        // source it happened to arrive from. The last two tokens still lead;
+        // earlier sentences are how `the quick` still reaches `response` after
+        // two more words have landed.
         let followers = Set(
-            (SeedLanguageModel.followers(after: previousWords, in: typedLanguage)
-                + personal.followers(after: previousWords.last ?? "", in: typedLanguage, limit: 4)
-                + documentFollowers(
-                    after: previousWords.last ?? "", in: context, limit: 4))
-                .map(SeedLanguageModel.fold))
+            contextFollowers(
+                last: previousWords, field: documentWords(in: context), context: context,
+                language: typedLanguage, personal: personal
+            ).map(SeedLanguageModel.fold))
         if !followers.isEmpty {
             for index in out.indices where followers.contains(SeedLanguageModel.fold(out[index].text)) {
                 out[index].followsContext = true
@@ -549,7 +548,8 @@ extension SuggestionEngine {
     /// characters are known to be wrong; everything else keeps what they keyed.
     @MainActor
     static func shouldAutocorrect(
-        _ prefix: String, previousWords: [String], typedLanguage: KeyboardLanguage,
+        _ prefix: String, previousWords: [String], context: String = "",
+        typedLanguage: KeyboardLanguage,
         results: [Suggestion], supplementary: [String], personal: PersonalLanguageModel
     ) -> Bool {
         guard results.count > 1 else { return false }
@@ -674,8 +674,10 @@ extension SuggestionEngine {
             startingWith: word, in: typedLanguage, limit: 3)
         if hasDistinctLexemes(continuations) {
             let contextual = Set(
-                SeedLanguageModel.followers(after: previousWords, in: typedLanguage)
-                    .map(SeedLanguageModel.fold))
+                contextFollowers(
+                    last: previousWords, field: documentWords(in: context), context: context,
+                    language: typedLanguage, personal: personal
+                ).map(SeedLanguageModel.fold))
             if !contextual.contains(winner) { return false }
         }
 

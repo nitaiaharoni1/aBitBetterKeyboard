@@ -51,13 +51,21 @@ extension SuggestionEngine {
         // predicting `much` after `Thank you so much.` would read across a
         // boundary the writer just drew. The openers answer instead, which is
         // right — the next word really is the start of something.
-        let preceding = previousWords(in: context)
-        let last = preceding.last ?? ""
+        //
+        // The whole current sentence, not the last two tokens. Seed lookup
+        // still prefers the longest key at the end (`see you` beats `you`);
+        // earlier pairs in this sentence are how `the quick` still predicts
+        // `response` after two more words have landed. Earlier *sentences*
+        // stay out — that is `documentFollowers`'s job, and only for the
+        // last token, so a name two sentences back can return and a closed
+        // thought cannot.
+        let sentence = previousWords(in: context, limit: Int.max)
+        let last = sentence.last ?? ""
 
         var out: [Candidate] = []
         if !last.isEmpty {
             out +=
-                personal.followers(after: last, in: contextLanguage, limit: 3)
+                personal.followers(mentionedIn: sentence, in: contextLanguage, limit: 3)
                 .enumerated()
                 .map {
                     Candidate(
@@ -73,7 +81,7 @@ extension SuggestionEngine {
                         ordinal: $0.offset)
                 }
             out +=
-                SeedLanguageModel.followers(after: preceding, in: contextLanguage)
+                SeedLanguageModel.followers(mentionedIn: sentence, in: contextLanguage)
                 .prefix(3)
                 .enumerated()
                 .map {

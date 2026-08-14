@@ -238,7 +238,7 @@ public enum SuggestionEngine {
         return markDefault(
             results,
             at: shouldAutocorrect(
-                trimmedPrefix, previousWords: preceding,
+                trimmedPrefix, previousWords: preceding, context: context,
                 typedLanguage: typedLanguage, results: results,
                 supplementary: supplementary, personal: personal) ? 1 : 0)
     }
@@ -251,7 +251,10 @@ public enum SuggestionEngine {
     /// one are not context for the word after it: predicting `much` from
     /// `Thank you so much. ` would be reading across a boundary the writer just
     /// drew. Empty means there is nothing to predict *from*, which is a different
-    /// answer from "no prediction" and the callers treat it as one.
+    /// answer from "no prediction" and the callers treat it as one. Ranking
+    /// walks the whole field through `contextFollowers`; this function stays
+    /// the short tail, because learning a pair from a closed thought is how
+    /// `See you\n` taught `tomorrow` a second time.
     ///
     /// **The newline half of that was written down and not implemented.** This
     /// began by trimming the whole context, which takes the line break off the
@@ -318,6 +321,35 @@ public enum SuggestionEngine {
             seen.insert(key)
             out.append(next)
             if out.count == limit { break }
+        }
+        return out
+    }
+
+    /// Words the rest of this field has taught us to expect next.
+    ///
+    /// `previousWords` is the last two tokens of the current sentence — right
+    /// for the seed table's longest key, and right for *learning*. It is too
+    /// short as a prior over a message: `Thanks for the quick turnaround. I'll
+    /// send a respon` has already dropped `the quick` by the time `respon` is
+    /// being typed. The field is walked for every two-word seed key, for what
+    /// this person writes after any of its words, and for what followed the
+    /// last token earlier in the same field.
+    static func contextFollowers(
+        last: [String], field: [String], context: String,
+        language: KeyboardLanguage, personal: PersonalLanguageModel
+    ) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        let sources: [[String]] = [
+            SeedLanguageModel.followers(after: last, in: language),
+            SeedLanguageModel.followers(mentionedIn: field, in: language),
+            personal.followers(mentionedIn: field, in: language, limit: 4),
+            documentFollowers(after: last.last ?? "", in: context, limit: 4)
+        ]
+        for word in sources.joined() {
+            let key = SeedLanguageModel.fold(word)
+            guard !key.isEmpty, seen.insert(key).inserted else { continue }
+            out.append(word)
         }
         return out
     }

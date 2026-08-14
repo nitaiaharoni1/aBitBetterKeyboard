@@ -219,6 +219,62 @@ final class ContextAwareSuggestionTests: XCTestCase {
             "got \(results.map(\.text)) — the old bar committed respond here")
     }
 
+    /// **The last two words are not the field.** `followers(after:)` only reads
+    /// the tail, so two more words after `the quick` made the collocation
+    /// invisible and `respon` fell back to `respond`. Sliding the seed table
+    /// over the whole token list is what keeps the noun in front. One-word
+    /// keys stay at the end: `the` in the middle of a sentence must not mark
+    /// `way` as context.
+    func testSeedFollowersReadTheWholeFieldNotOnlyTheLastWords() {
+        XCTAssertTrue(
+            SeedLanguageModel.followers(
+                mentionedIn: ["Thanks", "for", "the", "quick", "turnaround", "I'll", "send", "a"],
+                in: .english
+            ).contains("response"),
+            "the quick was two words back and the seed never saw it")
+        XCTAssertFalse(
+            SeedLanguageModel.followers(
+                mentionedIn: ["the", "quick", "turnaround"], in: .english
+            ).contains("way"),
+            "the interior `the` leaked its one-word row")
+        XCTAssertEqual(
+            SeedLanguageModel.followers(mentionedIn: ["See", "you"], in: .english).first,
+            "tomorrow",
+            "the last pair still has to win: see you beats you")
+    }
+
+    /// A collocation two sentences back is still this message. Space committing
+    /// `respond` here is the same unfinished-stem miss as `en-comp-03`, just
+    /// with two more words in the way.
+    func testACollocationEarlierInTheFieldStillRanksTheCompletion() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "respon",
+            context: "Thanks for the quick turnaround. I'll send a ",
+            languages: [.english], personal: emptyPersonal())
+        XCTAssertEqual(
+            results.first(where: \.isDefault)?.text.lowercased(), "response",
+            "got \(results.map(\.text)) — the last two words hid the quick")
+    }
+
+    /// Next-word stays inside the current sentence. A newline still closes
+    /// the thought — that is `testANewlineClosesTheThoughtAsAFullStopDoes` —
+    /// but pairs earlier *in this sentence* still count.
+    func testNextWordReadsEarlierPairsInThisSentence() {
+        let later = SuggestionEngine.suggestions(
+            prefix: "", context: "Thanks for the quick turnaround and ",
+            languages: [.english], personal: emptyPersonal())
+        XCTAssertTrue(
+            later.contains { $0.text.lowercased() == "response" },
+            "got \(later.map(\.text)) — next-word only asked the last two tokens")
+
+        let afterBreak = SuggestionEngine.suggestions(
+            prefix: "", context: "See you\n",
+            languages: [.english], personal: emptyPersonal())
+        XCTAssertFalse(
+            afterBreak.contains { $0.text.lowercased() == "tomorrow" },
+            "got \(afterBreak.map(\.text)) — a newline must not leak the previous line")
+    }
+
     // MARK: Hebrew morphology
 
     /// One seed entry for `עבודה` has to serve `לעבודה`, `בעבודה` and `מהעבודה`,
