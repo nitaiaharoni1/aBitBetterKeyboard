@@ -4,11 +4,8 @@ Do this work in order. Do not start task 2 until task 1 is green. Read
 `.claude/rules/suggestion-bar.md` and `Bar/typing/README.md` before any edit.
 Keyboard UI lives in `Packages/AIKeyboardCore/`, not the extension.
 
-**Branch / PR already open:** `cursor/suggestions-review-6ecf` —
-https://github.com/nitaiaharoni1/aBitBetterKeyboard/pull/15
-
-That PR is the review plus two local-tier changes that have **not** been run on
-a simulator:
+These two local-tier changes are on `main` and have **not** been run on a
+simulator:
 
 1. Space no longer finishes an unfinished English stem (`respon` is
    `respond` / `response` / `responsible`). `schedule` / `scheduled` still
@@ -19,9 +16,9 @@ a simulator:
    Learning pairs still use `previousWords` (limit 2).
 
 A Linux replica of the seed lookup passed 17/17 on those cases. That is not a
-simulator score. Task 1 is proving the PR, not rewriting it.
+simulator score. Task 1 is proving what is on `main`, not rewriting it.
 
-## Task 1 — Prove the open PR
+## Task 1 — Prove what is on main
 
 Needs a Mac and a booted iPhone simulator. Do not drive the simulator to look;
 build and run the commands, then stop.
@@ -60,7 +57,7 @@ Bar/typing/harness/score.py before.json after.json
 If the headline drops, stop. Do not “fix” it by loosening `shouldAutocorrect`.
 Read the per-entry diff.
 
-If task 1 is green, the PR is done. The rest is new work on a new branch.
+If task 1 is green, this slice is done. The rest is new work on a new branch.
 
 ## Task 2 — First backspace undoes autocorrect
 
