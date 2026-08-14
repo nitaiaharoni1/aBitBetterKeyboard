@@ -27,8 +27,34 @@ final class KeyboardViewController: UIInputViewController {
     /// still gets to leave one. See `recordPresence()`.
     private var hasRecordedPresence = false
 
+    override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
+        super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
+        publishDictationKey()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        publishDictationKey()
+    }
+
+    /// Face ID phones draw Apple's dictation microphone in a strip under a
+    /// third-party keyboard unless we say we already have one. We do — the
+    /// orange microphone in the action row — and leaving this false is the
+    /// large empty band with Apple's glyph sitting under the space row.
+    ///
+    /// Public API (`UIInputViewController.hasDictationKey`); do not go looking
+    /// for the system view. Set from `init` as well as `viewDidLoad` /
+    /// `viewWillAppear`: iOS can read the trait before the view loads when it
+    /// decides whether to allocate the dock, and it keeps this instance alive
+    /// across fields and keyboard switches, so a one-shot in `viewDidLoad` is
+    /// not enough.
+    private func publishDictationKey() {
+        hasDictationKey = true
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
+        publishDictationKey()
 
         // `store.load()` is what puts the palette into `Theme` at launch, through
         // `brandPalette`'s `didSet` — so there is deliberately no
@@ -189,6 +215,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        publishDictationKey()
         // **Re-read the suite before measuring, and both before the keyboard is
         // on screen.** Settings live in the companion app; iOS keeps this process
         // alive in the background. The space bar and Return already read
