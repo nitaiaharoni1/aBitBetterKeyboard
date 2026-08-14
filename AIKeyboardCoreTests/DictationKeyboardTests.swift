@@ -357,6 +357,8 @@ final class DictationKeyboardTests: XCTestCase {
         XCTAssertFalse(controller.isWorking, "the one-tap rewrite route is not guarded")
         controller.selectTone(.shorter)
         XCTAssertFalse(controller.isWorking, "the register popup is not guarded")
+        controller.selectFix(named: FixStyle.spelling.title)
+        XCTAssertFalse(controller.isWorking, "the Fix popup is not guarded")
 
         XCTAssertNil(controller.revertibleEdit)
         XCTAssertEqual(target.text, "hello wrold")

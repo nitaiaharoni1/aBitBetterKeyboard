@@ -18,7 +18,7 @@ private final class ToneCallRecorder: TextIntelligence, @unchecked Sendable {
 
     func canHandle(_ text: String, action: AIAction) -> Bool { true }
 
-    func fix(_ text: String) async throws -> String { text }
+    func fix(_ text: String, style: FixStyle) async throws -> String { text }
 
     func variants(
         for text: String, tone: ToneStyle?, instruction: String?

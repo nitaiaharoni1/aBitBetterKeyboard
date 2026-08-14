@@ -50,24 +50,9 @@ extension KeyboardController {
         case .reply:
             break
         case .fix:
-            let source = aiSourceText
-            // **No overlay, and there is no longer one to ask for.** Fix,
-            // Rewrite and Reply report in the banner, so the keys stay visible and
-            // usable while the call runs — the user can see the sentence being
-            // corrected, which is the one thing the panel that used to cover them
-            // hid. The screen-context setup screen was the last case argued to need
-            // a panel, because it holds `BroadcastPickerButton`, a real `UIView`.
-            beginWork(.fix, showing: .none) { [engine] in
-                try await engine.fix(source)
-            } apply: { controller, text in
-                // **Straight into the field, with no Use button in front of it.**
-                // See `applyDirectly`. `aiResultText` is still set on the way past,
-                // because it is what `BannerState.resolve` reads to tell "the model
-                // answered" from "the model answered with nothing" — and an empty
-                // answer is the one case that still has to reach the strip.
-                controller.aiResultText = text
-                controller.applyDirectly(text, for: .fix)
-            }
+            // The tap is proofread. Spelling, Punctuate and Polish live on the
+            // long-press popup and reach `runFix` through `selectFix(named:)`.
+            runFix(.proofread)
         // **Both of these clear `selectedToneIsCustom`, and forgetting it left the
         // flag lit across a Back.** It is set by `runTone`, and it used to be
         // cleared only by `dismissOverlay` — which the result panel's Back button

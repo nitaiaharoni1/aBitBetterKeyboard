@@ -582,7 +582,7 @@ private final class DirectEditEngine: TextIntelligence, @unchecked Sendable {
 
     func canHandle(_ text: String, action: AIAction) -> Bool { true }
 
-    func fix(_ text: String) async throws -> String {
+    func fix(_ text: String, style: FixStyle) async throws -> String {
         await waitForRelease()
         return fixed.isEmpty ? text : fixed
     }
