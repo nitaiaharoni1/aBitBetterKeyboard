@@ -146,6 +146,27 @@ public final class PersonalLanguageModel {
         return Self.mostFrequent(matches, limit: limit)
     }
 
+    /// What this person writes after any of these words, later tokens first.
+    ///
+    /// The single-word lookup is what the last token uses. Walking the rest of
+    /// the field is how `אני מגיע` still teaches `מגיע` when two more words
+    /// have landed since `אני`.
+    func followers(
+        mentionedIn words: [String], in language: KeyboardLanguage, limit: Int
+    ) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for word in words.reversed() {
+            for next in followers(after: word, in: language, limit: limit) {
+                let key = SeedLanguageModel.fold(next)
+                guard seen.insert(key).inserted else { continue }
+                out.append(next)
+                if out.count == limit { return out }
+            }
+        }
+        return out
+    }
+
     /// Joins the two halves of a pair key. A unit separator rather than a space,
     /// because `record` accepts a hyphen inside a word and a space would make
     /// `בלי־פרופ` ambiguous with a pair the moment the maqaf folded.

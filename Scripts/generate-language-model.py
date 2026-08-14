@@ -236,6 +236,10 @@ ENGLISH_BIGRAMS = {
     "twenty": "minutes",
     "great": "thanks day weekend",
     "very": "much good soon",
+    # `respon` is `respond` / `response` / `responsible` — rank alone picks the
+    # verb, and "Thanks for the quick respon" is the noun. Same shape as
+    # `see you` beating `you`.
+    "quick": "response question",
     # Two-word keys. The lookup tries the longest suffix first, so these only ever
     # override the one-word row when both words match — `you` is followed by half
     # the language, and `see you` by four things.
@@ -254,6 +258,7 @@ ENGLISH_BIGRAMS = {
     "signed the": "contract agreement document",
     "have a": "great good nice",
     "a great": "day weekend week",
+    "the quick": "response",
     "talk to": "you her him",
     "to you": "later soon tomorrow",
     "running a": "bit little",

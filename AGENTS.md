@@ -70,3 +70,4 @@ Read the doc that matches the change, not all of them.
 | Tests | `.claude/docs/testing.md` |
 | Module structure or data flow | `.claude/docs/architecture.md` |
 | ReplayKit capture contract | `.claude/docs/replaykit-contract.md` |
+| Suggestion-bar follow-up | `.claude/docs/suggestion-bar-next.md` |
