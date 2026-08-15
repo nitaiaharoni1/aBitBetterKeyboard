@@ -10,7 +10,7 @@ number here is a reading, not a property of the code.
 | | |
 |---|---|
 | Date | 2026-08-16 |
-| Commit | `98946cf4` plus the working tree described below |
+| Commit | `aaca58d2`. The same reading was taken at `45fe74c8` and again after `aaca58d2`, unchanged. |
 | Destination | iPhone 17 Pro, iOS 26.2 simulator, uncontended |
 | Command | `xcodebuild test -project AIKeyboard.xcodeproj -scheme AIKeyboard -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:AIKeyboardCoreTests` |
 
