@@ -281,7 +281,11 @@ final class KeyboardViewController: UIInputViewController {
     /// moves between the frame a reading was taken from and the frame it is
     /// confirmed against retires that reading exactly as a real conversation
     /// switch would. Rotate the phone while a read is in flight and the answer the
-    /// user is waiting for is silently thrown away.
+    /// user is waiting for is silently thrown away. The host height constraint
+    /// republishes here too, unconditionally: unlike the fingerprint crop it has
+    /// no reading in flight to protect, and a landscape keyboard left standing in
+    /// a portrait-tall reservation is a visible gap under the keys, not a subtle
+    /// one.
     ///
     /// `viewWillTransition` rather than `traitCollectionDidChange`, because the
     /// size is what matters and the traits do not always move with it — an iPad
@@ -294,23 +298,42 @@ final class KeyboardViewController: UIInputViewController {
         super.viewWillTransition(to: size, with: coordinator)
         coordinator.animate(alongsideTransition: nil) { [weak self] _ in
             guard let self else { return }
+            // The host height follows rotation immediately: the device has
+            // physically turned, and `KeyboardView`'s own `verticalSizeClass`
+            // read already redrew the grid at the new orientation's height, so
+            // the constraint has to catch up or a landscape keyboard sits inside
+            // a portrait-sized reservation.
+            self.updateKeyboardHeight()
             // A band that moves while Reply is waiting for a frame retires that
             // reading as a conversation switch. Hold the crop until the read
             // lands; the next appearance or the next rotation after that
             // republishes the real height.
             guard !ScreenContextSession.shared.isAwaitingRead else { return }
-            ScreenContextSession.shared.updateOwnUIHeightFraction(ownUIHeightFraction())
+            ScreenContextSession.shared.updateOwnUIHeightFraction(self.ownUIHeightFraction())
         }
+    }
+
+    /// Portrait or landscape, read from the window rather than
+    /// `UIScreen.bounds`: `UIScreen.bounds` is documented to stay fixed across
+    /// rotation on iOS, while the window's own bounds are exactly what UIKit lays
+    /// autolayout out against, so they are the one source that is guaranteed to
+    /// track the device's actual current orientation. No window (not yet in a
+    /// hierarchy) falls back to portrait, matching `ownUIHeightFraction()`'s own
+    /// fallback.
+    private var currentOrientation: KeyboardGeometry.Orientation {
+        guard let size = view.window?.bounds.size else { return .portrait }
+        return KeyboardGeometry.Orientation(width: size.width, height: size.height)
     }
 
     /// How much of the screen we are covering, for the capture process to leave
     /// out of the frame fingerprint. See `KeyboardGeometry`.
     ///
     /// The height itself comes from `Theme.Metrics`, because that is what this
-    /// class asks the host for and it is a constant. The one thing only the
-    /// runtime knows is the gap underneath us — the strip where the system draws
-    /// the home indicator over the keyboard — so that is measured and everything
-    /// else is not.
+    /// class asks the host for and it is a constant per orientation. The two
+    /// things only the runtime knows are the gap underneath us — the strip where
+    /// the system draws the home indicator over the keyboard — and which
+    /// orientation we are actually in, so both are measured here and nothing
+    /// else is.
     private func ownUIHeightFraction() -> Double {
         // The layout, because a Roomy keyboard with both optional rows on covers
         // half again what the default does, and the band has to leave all of it
@@ -320,10 +343,18 @@ final class KeyboardViewController: UIInputViewController {
             return KeyboardGeometry.ownUIHeightFraction(
                 screenHeight: KeyboardGeometry.referenceScreenHeight, layout: layout)
         }
-        let screenHeight = window.screen.bounds.height
+        // `window.bounds`, not `window.screen.bounds` — see `currentOrientation`.
+        // Mixing the two here would compare a rotation-aware `ourBottom` against
+        // a `screenHeight` that never rotates, which is wrong in both directions:
+        // right in portrait by coincidence, silently wrong the moment the device
+        // turns.
+        let screenSize = window.bounds.size
+        let orientation = KeyboardGeometry.Orientation(width: screenSize.width, height: screenSize.height)
+        let screenHeight = screenSize.height
         let ourBottom = window.frame.minY + view.convert(view.bounds, to: window).maxY
         return KeyboardGeometry.ownUIHeightFraction(
-            screenHeight: screenHeight, gapBelow: screenHeight - ourBottom, layout: layout)
+            screenHeight: screenHeight, gapBelow: screenHeight - ourBottom, layout: layout,
+            orientation: orientation)
     }
 
     /// **Both channels stop here, and the dictation one is not optional.**
@@ -390,7 +421,7 @@ final class KeyboardViewController: UIInputViewController {
         let showsBanner = controller.showsActionBanner
         lastShowsActionBanner = showsBanner
         let height = Theme.Metrics.totalHeight(
-            for: controller.customization, showsBanner: showsBanner)
+            for: controller.customization, showsBanner: showsBanner, orientation: currentOrientation)
 
         guard let heightConstraint else {
             let constraint = view.heightAnchor.constraint(equalToConstant: height)

@@ -104,6 +104,17 @@ words this layout could type and the lexicon knows — same definitions
 is max−min commit across the 5 seeds; AGENTS.md's rule that one run is not
 evidence applies here as much as anywhere else in this repo.
 
+**The sweep is reproducible, and it was not at first.** Every path is drawn
+from a seeded `random.Random`, so re-running at the same seeds must give the
+same file. It did not: `fuzzy_candidates` iterated a `set` of code variants,
+and Python randomises string hashing per process, so the insertion order of
+its candidate map changed between runs and decided how equal-frequency words
+broke ties. Two runs at identical seeds disagreed on `commitFuzzyRate` in 7 of
+60 conditions. Every other field matched to the digit, which is what located
+it. It now iterates `sorted(variants)` and breaks ties on the word itself, and
+two runs under deliberately different `PYTHONHASHSEED` values produce
+identical scores in all 60. If you change that function, re-check that.
+
 **EN** — 190 entries, 1,805 words, 200,000-word lexicon.
 
 | corner_cut | σ | mean commit | spread | mean offered | +fuzzy commit |
@@ -148,10 +159,17 @@ built to find.**
 - **Fuzzy rescue helps a lot at low corner-cutting and barely at all when
   corners are cut.** At `corner_cut=0.0, σ=0.25` it recovers 8–11 points
   (single-error cases: one dropped or substituted letter). At `corner_cut=
-  0.5` it recovers 1–4: a fast swipe typically drops or garbles *several*
+  0.5` it recovers 1.6–4.6: a fast swipe typically drops or garbles *several*
   letters in one pass, which is more than one edit away from the truth, so
   a cheap edit-distance-1 rescue cannot reach it. This is measured evidence
   for the recommendation below, not a guess.
+
+  **Quote the σ with the number.** The rescue's value depends on noise as
+  much as on corner-cutting, so "it recovers 8–11 points at `corner_cut=0`"
+  is not true as a general statement: across the swept σ it ranges from
+  +0.4 to +14.2 there. At σ=0.15 the exact decoder already gets almost
+  everything and there is nothing left to rescue; at σ=0.35 it is carrying
+  14 points. The condition is part of the reading.
 
 ## Does Hebrew behave differently? (question 3, not skipped)
 

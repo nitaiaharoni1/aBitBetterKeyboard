@@ -40,12 +40,24 @@ public struct KeyboardView: View {
     // would compile only while the keys lived in this same file.
     @ObservedObject var controller: KeyboardController
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.verticalSizeClass) var verticalSizeClass
     var isEditingLayout: Bool
     @State var actionPopupRaised = false
 
     public init(controller: KeyboardController, isEditingLayout: Bool = false) {
         self.controller = controller
         self.isEditingLayout = isEditingLayout
+    }
+
+    /// iPhone only: `.compact` is exactly how UIKit reports "this device is in
+    /// landscape" for a phone, and it is the same test
+    /// `KeyboardGeometry.Orientation.init(width:height:)` runs over the numbers
+    /// `KeyboardViewController` measures from the window — one definition of
+    /// landscape rather than two that can disagree. iPad and Slide Over/Split
+    /// View can also report `.compact` for reasons that have nothing to do with
+    /// rotation, which is exactly why iPad needs its own answer; see NIT-18.
+    var orientation: KeyboardGeometry.Orientation {
+        verticalSizeClass == .compact ? .landscape : .portrait
     }
 
     public var body: some View {
@@ -58,7 +70,12 @@ public struct KeyboardView: View {
             // on the key that started it, and a live recording is a waveform on
             // the microphone, so what is left here is a live reading, a refusal
             // and a failure. See `BannerState.isPresented`.
-            if controller.showsActionBanner {
+            // **Landscape never shows it.** The banner's 58pt is more than a
+            // third of landscape's whole ≈169pt budget under the fingerprint
+            // cap — see `Theme.Metrics.totalHeight(for:showsBanner:orientation:)`.
+            // Height and drawing have to agree on this or the published crop
+            // stops matching what is actually on screen.
+            if controller.showsActionBanner, orientation == .portrait {
                 ActionBanner(controller: controller)
                     .transition(.opacity)
             }
@@ -74,7 +91,9 @@ public struct KeyboardView: View {
             // action row above them, and search hands the letters back and
             // takes only that row.
             keyGrid
-                .frame(height: Theme.Metrics.keyAreaHeight(for: controller.customization))
+                .frame(
+                    height: Theme.Metrics.keyAreaHeight(
+                        for: controller.customization, orientation: orientation))
         }
         .background(Theme.Keys.background)
         .environment(\.layoutDirection, controller.language.layoutDirection)

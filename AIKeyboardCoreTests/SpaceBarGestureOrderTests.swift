@@ -109,9 +109,29 @@ final class SpaceBarGestureOrderTests: XCTestCase {
         controller.press(.backspace)
         controller.spaceBarTouch(.ended(0))
 
+        // **The answer is the original word, and that is the ordering working
+        // rather than failing.** The space commits the swap and arms
+        // `pendingAutocorrectUndo`; the delete that lands after it is therefore
+        // the delete that takes the swap back, which is the documented rule at
+        // `insertSpace` ("only this swap, if there was one, can be taken back by
+        // the next delete") and the same thing a user gets by tapping space then
+        // backspace deliberately.
+        //
+        // This asserted `correction` instead, which is what a delete that only
+        // removed the trailing space would leave, and it predates the undo. It
+        // had been failing on committed `main` against correct behaviour.
+        //
+        // The value still rejects both orderings this test exists to catch. A
+        // delete that ran *before* the space would cut the word to `sche` and
+        // commit whatever that suggests, and a delete that was dropped entirely
+        // would leave `schedule ` with its trailing space. Only space-then-delete
+        // lands back on the word the user actually typed.
         XCTAssertEqual(
+            target.text, "sched",
+            "the delete did not land after the space, so it did not take back the swap the space made")
+        XCTAssertNotEqual(
             target.text, correction,
-            "The delete ran before the space, so it took a letter out of the word instead of the space")
+            "the delete removed only the space, so the swap it should have undone is still standing")
     }
 
     func testASecondTouchBeginningBeforeTheFirstEndsTypesOneSpace() {

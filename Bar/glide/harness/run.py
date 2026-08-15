@@ -100,10 +100,20 @@ def fuzzy_candidates(decoder, code, alphabet):
     for i in range(len(code) + 1):
         for letter in alphabet:
             variants.add(code[:i] + (letter,) + code[i:])
-    for variant in variants:
+    # **`sorted`, and a word as the second sort key, because neither was
+    # deterministic and the sweep quietly was not reproducible.** `variants` is
+    # a set of tuples, and Python randomises string hashing per process, so its
+    # iteration order changed between runs; that decided the insertion order of
+    # `seen`, which decided how `sorted` broke ties between two words of equal
+    # frequency. Two runs of this file at the same seeds disagreed on
+    # `commitFuzzyRate` in 7 of 60 conditions, by around 0.02 points each.
+    # Small, and not small enough for a harness whose whole purpose is a number
+    # somebody quotes. Every other field already matched to the digit, which is
+    # what narrowed it to this function.
+    for variant in sorted(variants):
         for word in decoder.candidates(variant):
             seen.setdefault(word, decoder.lexicon.freq[word])
-    return sorted(seen, key=lambda w: -seen[w])
+    return sorted(seen, key=lambda w: (-seen[w], w))
 
 
 def evaluate(
@@ -252,6 +262,12 @@ def main() -> None:
                         language, rows, lexicon, entries, bigrams,
                         sigma=sigma, corner_cut=corner_cut, seed=seed,
                     )
+                    # Stamped per row, not only in the file's header. A number
+                    # from this sweep is quoted by lifting one row out of
+                    # `results.json`, and a row that travels without the header
+                    # is a synthetic accuracy figure with nothing left on it to
+                    # say so. The README promises every record carries this.
+                    row["synthetic"] = True
                     results.append(row)
                 print(
                     f"  corner_cut={corner_cut} sigma={sigma}  commit "

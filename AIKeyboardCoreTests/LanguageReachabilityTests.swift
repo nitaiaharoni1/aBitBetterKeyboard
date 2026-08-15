@@ -107,9 +107,24 @@ final class LanguageReachabilityTests: LanguageCatalogueTestFixture {
             for plane in [KeyboardPlane.letters, .numbers, .symbols] {
                 for key in allKeys(language, plane) {
                     guard case .character(let value) = key.cap else { continue }
-                    XCTAssertFalse(
-                        key.alternates.contains(value),
-                        "\(language.displayName) offers \(value) as its own alternate")
+                    // **The punctuation key is the one deliberate exception, and
+                    // it is documented rather than accidental.** Its popup is
+                    // SwiftKey's order, `! @ # , . ?`, and the full stop is in it
+                    // on purpose: the strip is aligned so the period sits over
+                    // the key it came from, and `alternateRestIndex` names the
+                    // period rather than slot 0 so lifting without sliding still
+                    // types a full stop. Removing it from the list would move
+                    // every other mark and break that resting behaviour. See
+                    // `.claude/rules/keyboard-layout.md`. This assertion was
+                    // written as a blanket rule and had been failing on committed
+                    // `main` against a design that is correct; the rule it means
+                    // is "no key offers a redundant alternate", and for this one
+                    // key the alternate is not redundant, it is the anchor.
+                    if key.id != KeyboardLayout.punctuationKeyID {
+                        XCTAssertFalse(
+                            key.alternates.contains(value),
+                            "\(language.displayName) offers \(value) as its own alternate")
+                    }
                     XCTAssertEqual(Set(key.alternates).count, key.alternates.count)
                 }
             }

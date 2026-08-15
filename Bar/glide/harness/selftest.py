@@ -167,6 +167,31 @@ def main() -> None:
     check("both later and latter share one code", set(later_candidates), {"later", "latter"})
     check("frequency still ranks the commoner one first", later_candidates[0], "later")
 
+    # --- Fuzzy rescue is order-independent ------------------------------------
+    # `fuzzy_candidates` builds a `set` of code variants, and Python randomises
+    # string hashing per process, so iterating it directly made the sweep
+    # disagree with itself at identical seeds: 7 of 60 conditions moved on
+    # `commitFuzzyRate` alone. The fix is `sorted(variants)` plus a word
+    # tiebreak, and this is what keeps it. Two lexicon words of *exactly* equal
+    # frequency are the case that used to flip, so the toy lexicon below is
+    # built that way on purpose.
+    # **Calling it repeatedly in one process would not catch this.** A set's
+    # iteration order is fixed for the life of a process, so the bug only ever
+    # showed up between runs. What rejects it is the *order itself*: four words
+    # of identical frequency must come back alphabetically, because the tiebreak
+    # is now the word. Insertion order would put them in one of 24 arrangements
+    # and only one of those is this one.
+    from run import fuzzy_candidates  # noqa: E402
+
+    tied_words = ["bat", "cat", "rat", "sat"]
+    tied = Lexicon("en", [(w, 0.01) for w in tied_words], "tied")
+    tied_decoder = Decoder(tied, layout)
+    check(
+        "equal-frequency fuzzy candidates are broken alphabetically, not by set order",
+        fuzzy_candidates(tied_decoder, layout.code("at"), set(layout.centers)),
+        tied_words,
+    )
+
     if FAILURES:
         print(f"FAILED {len(FAILURES)}:\n", file=sys.stderr)
         for failure in FAILURES:

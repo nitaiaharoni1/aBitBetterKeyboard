@@ -20,6 +20,33 @@ public enum KeyboardGeometry {
     /// window to measure.
     public static let referenceScreenHeight: CGFloat = 874
 
+    /// The same device, rotated: 874×402, so the *height* becomes 402. The
+    /// fallback for a landscape read with no window to measure. Nothing under
+    /// `Bar/screen-context/` has measured a landscape frame — the fingerprint
+    /// sweep that set `FrameReduction.Band.maximumOwnUI` ran on portrait scenes
+    /// only — so landscape leans on the fraction that sweep found rather than a
+    /// landscape measurement of its own. See `Theme.Metrics.Landscape`.
+    public static let referenceLandscapeScreenHeight: CGFloat = 402
+
+    /// Portrait or landscape, iPhone only.
+    ///
+    /// **iPad is a different question, not a wider answer to this one.** A split
+    /// or floating keyboard changes shape rather than just aspect ratio, so this
+    /// type does not attempt it — see NIT-18. `width > height` is exactly how
+    /// UIKit's own `verticalSizeClass` decides "this is an iPhone in landscape"
+    /// (`.compact`), which is what `KeyboardView` reads; this initialiser is the
+    /// same test over the numbers `KeyboardViewController` measures from the
+    /// window, so the SwiftUI rendering and the UIKit height constraint use one
+    /// definition of landscape rather than two that can disagree.
+    public enum Orientation: Sendable, Equatable {
+        case portrait
+        case landscape
+
+        public init(width: CGFloat, height: CGFloat) {
+            self = width > height ? .landscape : .portrait
+        }
+    }
+
     /// The bottom fraction of a `screenHeight`-tall screen our keyboard covers.
     ///
     /// **Always the tallest form, never the current one.** The context strip
@@ -52,13 +79,24 @@ public enum KeyboardGeometry {
     /// edits it in the app, never mid-read, so it does not move the band under a
     /// reading in flight the way the old appearing-and-disappearing context strip
     /// did.
+    ///
+    /// **`orientation` picks which of `Theme.Metrics`' two geometries this reads,
+    /// and it does not change the cap.** `FrameReduction.Band.maximumOwnUI` is a
+    /// fraction of whatever `screenHeight` is — it was swept in points against a
+    /// fixed 874pt portrait frame, but the ratio, not the point count, is what
+    /// this reuses for landscape's 402pt frame, because a fixed point cap would
+    /// mean nothing against a screen less than half as tall. Raising the fraction
+    /// itself past what the sweep found was already measured and rejected, so a
+    /// landscape keyboard whose natural height would cross it has to get shorter,
+    /// not push the cap: see `Theme.Metrics.Landscape`.
     public static func ownUIHeightFraction(
         screenHeight: CGFloat, gapBelow: CGFloat = 0,
-        layout: KeyboardCustomization = .default
+        layout: KeyboardCustomization = .default,
+        orientation: Orientation = .portrait
     ) -> Double {
         guard screenHeight > 0 else { return 0 }
         let gap = min(max(0, gapBelow), Theme.Metrics.minTouchTarget)
-        let covered = Theme.Metrics.totalHeight(for: layout) + gap
+        let covered = Theme.Metrics.totalHeight(for: layout, orientation: orientation) + gap
         return Double(min(covered, screenHeight) / screenHeight)
     }
 }

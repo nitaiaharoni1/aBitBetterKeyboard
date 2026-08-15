@@ -208,7 +208,14 @@ final class SparkleReachabilityTests: XCTestCase {
         XCTAssertFalse(controller.screenContextPrompt.offersPicker)
         XCTAssertNil(controller.replyKeyBroadcastPrompt)
         controller.run(.reply)
-        XCTAssertEqual(controller.block?.remedy, .none)
+        // `BannerState.Block.Remedy.none` spelled out. `block` is optional, so a
+        // bare `.none` here is `Optional.none` and this asserted there was no
+        // block at all, against a refusal that correctly carries one with no
+        // remedy button. `refuseForScreenContext` builds it as
+        // `remedy: prompt.offersPicker ? .broadcastPicker : .none`, and
+        // `offersPicker` is false one line above, so `Remedy.none` is precisely
+        // what this means to check.
+        XCTAssertEqual(controller.block?.remedy, BannerState.Block.Remedy.none)
         XCTAssertTrue(openedURLs.isEmpty, "an unrestartable ending still opened the app")
 
         openedURLs.removeAll()
@@ -219,7 +226,7 @@ final class SparkleReachabilityTests: XCTestCase {
         XCTAssertNil(controller.replyKeyBroadcastPrompt)
         controller.run(.reply)
         XCTAssertEqual(
-            controller.block?.remedy, .none,
+            controller.block?.remedy, BannerState.Block.Remedy.none,
             "no-cloud still offers a start")
         XCTAssertTrue(openedURLs.isEmpty, "no-cloud still opened the app")
     }

@@ -86,7 +86,11 @@ extension Theme {
         /// for a height the grid does not fill: a short action row leaves a strip
         /// of host app showing under the keys, and a tall one clips the space
         /// bar. `testTheHostHeightMatchesWhatTheGridDraws` is what fails.
-        public static func keyAreaHeight(for layout: KeyboardCustomization) -> CGFloat {
+        public static func keyAreaHeight(
+            for layout: KeyboardCustomization,
+            orientation: KeyboardGeometry.Orientation = .portrait
+        ) -> CGFloat {
+            let layout = orientation == .landscape ? landscapeLayout(basedOn: layout) : layout
             let geometry = layout.geometry
             let letterRows = 3 + (layout.showsNumberRow ? 1 : 0)
             let stacked =
@@ -96,6 +100,60 @@ extension Theme {
             return stacked
                 + geometry.rowSpacing * CGFloat(layout.rowCount - 1)
                 + topInset + bottomInset
+        }
+
+        /// **Landscape is a separate branch of the geometry, not a scaled-down
+        /// portrait.** iPhone 17 Pro portrait is 874pt tall; rotated, it is 402 —
+        /// and `FrameReduction.Band.maximumOwnUI` (368/874, ≈0.421) is a fraction
+        /// of screen height, not a point budget, so the same fraction of 402pt
+        /// leaves only ≈169pt for the *whole* keyboard, against 368pt in
+        /// portrait. Scaling every portrait row down by that same ~46% would put
+        /// keys under 20pt tall. Shedding rows instead: no number row, no action
+        /// row (`cursorRow`), and no banner — see `KeyboardView`.
+        ///
+        /// That still leaves three letter rows and the bottom row at
+        /// `Landscape.keyHeight` (26pt) and a `Landscape.suggestionBarHeight`
+        /// (30pt) candidate strip:
+        ///
+        /// | | height |
+        /// |---|---|
+        /// | 3 letter rows + bottom row | `26 × 4 = 104` |
+        /// | 3 row gaps at `Landscape.rowSpacing` (8) | `24` |
+        /// | top + bottom inset (unchanged from portrait) | `8` |
+        /// | **key area** | **136** |
+        /// | suggestion bar | `30` |
+        /// | **total** | **166** |
+        ///
+        /// 166 / 402 ≈ 0.4129, under the 0.4210 cap with about 3pt to spare —
+        /// deliberately not spent on taller keys, the same rule portrait's own
+        /// 3pt of headroom is under. Landscape has never been swept the way
+        /// `Bar/screen-context/harness/run-fingerprint.sh` swept portrait, so
+        /// that margin is untested slack rather than a measured one.
+        ///
+        /// 26pt keys are shorter than `Theme.Metrics.minTouchTarget` (44) and
+        /// `LayoutGeometry.keyHeightRange`'s own 36pt floor — both portrait
+        /// numbers for a portrait thumb. Landscape's constraint is the
+        /// fingerprint cap over an iPhone's short axis, not a preference, and the
+        /// cap does not leave room for Apple's comfortable target here.
+        public enum Landscape {
+            public static let suggestionBarHeight: CGFloat = 30
+            public static let keyHeight: CGFloat = 26
+            public static let rowSpacing: CGFloat = 8
+        }
+
+        /// The layout landscape actually draws: the caller's rows and reach, with
+        /// the two that do not fit removed and the compact key height and row
+        /// spacing substituted. Shared by `keyAreaHeight(for:orientation:)` and
+        /// `KeyboardView+Keys`'s `keyGrid`, so the height this publishes and the
+        /// grid that is actually drawn cannot drift apart.
+        static func landscapeLayout(basedOn layout: KeyboardCustomization) -> KeyboardCustomization {
+            var compact = layout
+            compact.showsNumberRow = false
+            compact.cursorRow = []
+            compact.geometry = LayoutGeometry(
+                keyHeight: Landscape.keyHeight, rowSpacing: Landscape.rowSpacing,
+                reach: layout.geometry.reach)
+            return compact
         }
 
         /// Tallest height the keyboard can ask the host for, for a given layout.
@@ -113,6 +171,15 @@ extension Theme {
             totalHeight(for: layout, showsBanner: true)
         }
 
+        /// Landscape's own tallest form. There is only one: see
+        /// `totalHeight(for:showsBanner:orientation:)` — landscape never shows
+        /// the banner, so `showsBanner` cannot change this answer.
+        public static func totalHeight(
+            for layout: KeyboardCustomization, orientation: KeyboardGeometry.Orientation
+        ) -> CGFloat {
+            totalHeight(for: layout, showsBanner: true, orientation: orientation)
+        }
+
         /// Height the keyboard extension asks the host app for right now.
         ///
         /// The banner is omitted for everything the keys can say themselves
@@ -120,11 +187,21 @@ extension Theme {
         /// live recording all use that form: status lives on the control, so
         /// none of those states reserve a row. The fingerprint crop still reads
         /// the tallest form (banner on).
+        ///
+        /// **Landscape never shows the banner, at any `showsBanner`.** A live
+        /// reading, a refusal or a failure would cost the whole 58pt banner out
+        /// of landscape's ≈169pt total budget, which is more than a third of it
+        /// — see `Landscape`. Those three states are rare next to ordinary
+        /// typing, and dropping them in landscape is a real gap, not a free
+        /// choice; flagged for product to confirm rather than decided quietly.
         public static func totalHeight(
-            for layout: KeyboardCustomization, showsBanner: Bool
+            for layout: KeyboardCustomization, showsBanner: Bool,
+            orientation: KeyboardGeometry.Orientation = .portrait
         ) -> CGFloat {
-            return (showsBanner ? bannerHeight : 0) + suggestionBarHeight
-                + keyAreaHeight(for: layout)
+            let banner = orientation == .landscape ? 0 : (showsBanner ? bannerHeight : 0)
+            let suggestionBar =
+                orientation == .landscape ? Landscape.suggestionBarHeight : suggestionBarHeight
+            return banner + suggestionBar + keyAreaHeight(for: layout, orientation: orientation)
         }
 
         /// Apple's minimum comfortable target. Anything smaller gets mistapped.

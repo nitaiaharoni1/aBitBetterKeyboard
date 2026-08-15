@@ -6,7 +6,18 @@ extension KeyboardView {
 
     var keyGrid: some View {
         GeometryReader { geo in
-            let layout = controller.customization
+            // **Landscape sheds the number row and the action row, regardless of
+            // what the user turned on.** 402pt of landscape screen height under
+            // the same fingerprint-fraction cap portrait uses leaves ≈169pt for
+            // the whole keyboard, against 368pt in portrait — not room for two
+            // more rows at a usable size. `Theme.Metrics.landscapeLayout(basedOn:)`
+            // is also what `keyAreaHeight(for:orientation:)` reads, so the height
+            // published to the host and the rows actually drawn here cannot
+            // drift apart. See NIT-18.
+            let layout: KeyboardCustomization =
+                orientation == .landscape
+                ? Theme.Metrics.landscapeLayout(basedOn: controller.customization)
+                : controller.customization
             // The one place that knows what the user chose. `KeyboardLayout` is a
             // pure function of its arguments and must stay one — reading the dial
             // inside it made every layout test depend on whatever the App Group
