@@ -124,9 +124,16 @@ struct HomeView: View {
                 }
 
                 if setup.fullAccess != .confirmed {
+                    // **Named after what it buys, not where it lives.** Onboarding no
+                    // longer spends a whole step asking for this, so this card is the
+                    // one place left that raises it — and the row that used to repeat
+                    // the Settings path now says what is actually gated behind it:
+                    // Hebrew Fix, Rewrite and Reply need the network, and the language
+                    // list and custom layout need the shared container, neither of
+                    // which the keyboard can reach without this.
                     StatusRow(
                         title: "Allow Full Access",
-                        detail: "Settings › General › Keyboard › Keyboards › aBitBetterKeyboard",
+                        detail: "Needed for Hebrew AI, Reply, and your saved languages and layout",
                         check: setup.fullAccess,
                         singleLineDetail: true
                     )

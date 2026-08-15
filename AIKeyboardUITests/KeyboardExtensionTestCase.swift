@@ -150,7 +150,8 @@ class KeyboardExtensionTestCase: XCTestCase {
     func skipOnboardingIfPresent() {
         let start = app.buttons["Start typing"]
         let cont = app.buttons["Continue"]
-        // Ten onboarding steps, so the bound clears ten taps rather than equalling them.
+        // Nine onboarding steps (ten before NIT-15 removed the Full Access step), so
+        // the bound clears them rather than equalling them.
         for _ in 0..<14 {
             Thread.sleep(forTimeInterval: 0.5)
             if start.exists {

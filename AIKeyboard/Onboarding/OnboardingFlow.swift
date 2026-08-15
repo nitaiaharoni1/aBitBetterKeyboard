@@ -6,13 +6,13 @@ struct OnboardingFlow: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var step = 0
 
-    /// The same measurement Home makes, for the same reason: three of these
-    /// steps ask the user to change something outside the app, and two of the
-    /// three now leave evidence the app can read. Re-read on every return to the
+    /// The same measurement Home makes, for the same reason: two of these
+    /// steps ask the user to change something outside the app, and one of the
+    /// two now leaves evidence the app can read. Re-read on every return to the
     /// foreground, because that is when the user comes back from Settings.
     @State private var setup = SetupState()
 
-    private let setupStepCount = 7
+    private let setupStepCount = 6
 
     /// Computed off `setupStepCount` rather than restating it, because these
     /// were two spellings of one number and inserting a step in the middle is
@@ -21,7 +21,7 @@ struct OnboardingFlow: View {
 
     /// The step whose footer's primary action is the globe-key confirmation.
     /// Named once here so the footer and the step itself cannot drift apart.
-    private let switchStep = 5
+    private let switchStep = 4
 
     /// The palette step, named for the same reason: it is the one setup step the
     /// footer must not offer to skip. See the footer.
@@ -39,9 +39,8 @@ struct OnboardingFlow: View {
                     PaletteStep().tag(1)
                     LanguagesStep(setup: setup).tag(2)
                     AddKeyboardStep(setup: setup).tag(3)
-                    FullAccessStep(setup: setup).tag(4)
-                    SwitchStep(setup: setup).tag(5)
-                    MicrophoneStep(setup: setup).tag(6)
+                    SwitchStep(setup: setup).tag(4)
+                    MicrophoneStep(setup: setup).tag(5)
                     ForEach(OnboardingPracticeStage.allCases, id: \.rawValue) { practice in
                         TryItStep(setup: setup, stage: practice)
                             .tag(setupStepCount + practice.rawValue)

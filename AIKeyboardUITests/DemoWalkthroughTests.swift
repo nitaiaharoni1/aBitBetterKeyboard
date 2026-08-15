@@ -80,8 +80,17 @@ final class DemoWalkthroughTests: XCTestCase {
     func testOnboarding() throws {
         app.launch()
 
+        // **`full-access` is deliberately absent.** NIT-15 removed the dedicated
+        // Full Access step: it was the one blocking, alarming ask standing before
+        // the user had seen the keyboard do anything, and the permission is now
+        // raised where it buys something instead. The mention did not vanish with
+        // it, so this list shrinking is the whole change and not a coverage loss:
+        // `add-keyboard` still carries the Allow Full Access row and its one-tap
+        // route to Settings, and `languages` still says the list is unreadable
+        // until the permission is on. Nine steps now, six setup plus three
+        // practice.
         let names = [
-            "welcome", "palette", "languages", "add-keyboard", "full-access", "switch",
+            "welcome", "palette", "languages", "add-keyboard", "switch",
             "microphone",
             "practice-writing", "practice-everyday", "practice-smart-tools"
         ]
@@ -295,7 +304,10 @@ final class DemoWalkthroughTests: XCTestCase {
     // MARK: Helpers
 
     /// Onboarding fits inside this guard; skip it when the screens under test come later.
-    /// Ten steps today, so the bound has to clear ten taps, not equal them.
+    /// Nine steps today, so the bound has to clear nine taps, not equal them.
+    /// It was ten until NIT-15 removed the dedicated Full Access step. The bound
+    /// is deliberately loose rather than exact, which is why that change did not
+    /// break this the way it broke `testOnboarding`'s hardcoded list.
     private func skipOnboardingIfPresent() {
         let start = app.buttons["Start typing"]
         let cont = app.buttons["Continue"]
