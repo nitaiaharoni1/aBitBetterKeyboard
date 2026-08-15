@@ -615,11 +615,13 @@ test("an expired session token logs 'expired'", async () => {
 
 // ── SESSION_SECRET rotation, end to end ─────────────────────────────────────
 //
-// `server.js` is the file that would read `SESSION_SECRET_PREVIOUS` and pass
-// it through as `previousSecrets` — see the report for why that wiring is not
-// in this change. This proves the half that is: a server that *is* handed a
-// previous secret honours tokens signed under it, through the real HTTP path
-// rather than `sessionToken.js` alone.
+// `server.js` reads `SESSION_SECRET_PREVIOUS` and passes it through as
+// `previousSecrets`, and `deploy.sh` forwards it. An earlier version of this
+// comment said that wiring was left for a follow-up; it shipped in the same
+// change, and the stale note would send the next person debugging a 401 burst
+// looking for something that is already there. What this test adds on top of
+// `sessionToken.js`'s own coverage is the real HTTP path: a server handed a
+// previous secret honours tokens signed under it, end to end.
 
 test("a token signed under a rotated-away secret still opens /v1/text when the server keeps it as a previous secret", async () => {
   const oldSecret = "o".repeat(64);

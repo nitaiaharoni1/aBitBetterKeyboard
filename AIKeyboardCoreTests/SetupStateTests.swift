@@ -302,56 +302,6 @@ final class SetupStateTests: XCTestCase {
             state(nil, cloudConfigured: true).fullAccessDetail)
         XCTAssertEqual(state(nil).fullAccessDetail, "Typing and on-device AI work without it")
     }
-
-    /// Onboarding's Full Access step listed "Cloud rewrites for languages the
-    /// on-device model cannot handle" under "What it turns on", unconditionally, on
-    /// screen 4 of 6 — before the user has any way of knowing a cloud model is a
-    /// thing they need. Same fix, same test shape: the promise is allowed only
-    /// where it is true.
-    func testWhatFullAccessTurnsOnOnlyPromisesCloudRewritesWhenThereAreSome() {
-        let withoutCloud = state(nil, cloudConfigured: false).fullAccessTurnsOn
-        XCTAssertFalse(
-            withoutCloud.localizedCaseInsensitiveContains("cloud rewrites"),
-            "onboarding promises cloud rewrites to a phone with no cloud model: \(withoutCloud)")
-        // Same move as `fullAccessDetail`: the remedy is the connection this app
-        // makes for itself, not a settings screen that no longer holds a field.
-        XCTAssertTrue(withoutCloud.localizedCaseInsensitiveContains("connection"))
-
-        XCTAssertTrue(
-            state(nil, cloudConfigured: true).fullAccessTurnsOn
-                .localizedCaseInsensitiveContains("cloud rewrites"))
-    }
-
-    /// **Onboarding's third Full Access row cost the user the choice they had made
-    /// two screens earlier.** It read "Typing, autocorrect, predictions and emoji
-    /// all run locally. Full Access is only for the cloud fallback", and without
-    /// Full Access `SharedContainer.url` is nil, `SharedStore` falls back to
-    /// `.standard`, and every setting the app wrote is invisible to the keyboard —
-    /// the language list included, which leaves a French-only user typing on an
-    /// English/Hebrew keyboard with no way to change it from inside one. It also
-    /// contradicted the row directly above it, which credits Full Access with the
-    /// key click sound.
-    ///
-    /// Both halves are asserted. A build that simply deleted the sentence would
-    /// pass the first and fail the second, and that is a different defect: the row
-    /// is titled "Works without it" and typing genuinely does.
-    func testWorksWithoutFullAccessDoesNotClaimTheCloudIsAllThatStops() {
-        let detail = SetupState.worksWithoutFullAccess
-
-        XCTAssertFalse(
-            detail.localizedCaseInsensitiveContains("only for the cloud"),
-            "onboarding still says the cloud is the only thing Full Access buys: \(detail)")
-        XCTAssertTrue(
-            detail.localizedCaseInsensitiveContains("languages"),
-            "and it does not warn that the language list never reaches the keyboard: \(detail)")
-        XCTAssertTrue(
-            detail.localizedCaseInsensitiveContains("key click"),
-            "the row above credits Full Access with the key click; this one has to agree: \(detail)")
-        XCTAssertTrue(
-            detail.localizedCaseInsensitiveContains("typing"),
-            "typing really does work without it, and the row is titled 'Works without it': \(detail)")
-    }
-
     /// The same consequence, said beside the language picker. It names the two
     /// languages a keyboard with no shared container actually draws, so it is tied
     /// to the shipped default rather than to a remembered pair — if that default

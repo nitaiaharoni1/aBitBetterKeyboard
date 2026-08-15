@@ -181,52 +181,6 @@ public struct SetupState: Equatable, Sendable {
                 + "once this app has a network connection."
     }
 
-    /// What onboarding's Full Access step lists under "What it turns on".
-    ///
-    /// Here rather than in the view for the reason the rest of this type is: it is
-    /// a sentence chosen by a state, the app target has no test host, and the
-    /// version it replaces promised cloud rewrites to a user who had no cloud
-    /// model and no idea one was needed.
-    public var fullAccessTurnsOn: String {
-        cloudConfigured
-            ? "Cloud rewrites for languages the on-device model cannot handle, and the system key click sound."
-            // "have nowhere to run" was true when no backend existed anywhere and
-            // is not any more: there is a server and the calls reach it. What it
-            // used to turn them down for was a missing access token, which is why
-            // this named a settings screen; attestation fills that in by itself
-            // now, so the honest instruction is the network, not a destination.
-            // See `fullAccessDetail`.
-            // The phrase "cloud rewrites" is deliberately absent from this branch
-            // and `SetupStateTests` fails the build if it comes back: this is the
-            // state where there are none, and the whole point of the split is not
-            // to promise them here.
-            : "The system key click sound, and the network aBitBetterKeyboard needs — including the connection "
-                + "this app makes once, on its own. Until it does, Hebrew Fix, Rewrite and Reply are "
-                + "refused."
-    }
-
-    /// What onboarding's Full Access step lists under "Works without it".
-    ///
-    /// **The sentence it replaces cost the user the choice they had just made.**
-    /// It read "Typing, autocorrect, predictions and emoji all run locally. Full
-    /// Access is only for the cloud fallback", which is false twice over: iOS hands
-    /// a keyboard extension the shared container only once Full Access is granted,
-    /// so `SharedContainer.url` is nil, `SharedStore` falls back to `.standard`,
-    /// and **every** setting the app wrote is invisible to the keyboard — including
-    /// the language list picked two screens earlier, which leaves a French-only
-    /// user with an English/Hebrew keyboard and no way to change it from inside
-    /// one. And the row directly above it in the same card says Full Access turns
-    /// on the key click sound, which "only for the cloud fallback" contradicts.
-    ///
-    /// A constant rather than a state-dependent sentence: the row is a
-    /// hypothetical, and the hypothetical is the same whether or not the switch is
-    /// on yet.
-    public static let worksWithoutFullAccess =
-        "Typing, autocorrect, predictions and emoji run on the device either way. Nothing that crosses "
-        + "between the two does: iOS only lets the keyboard read this app's storage once Full Access is "
-        + "on, so without it the languages you picked, your tone and your personal dictionary never "
-        + "reach it. It falls back to English and Hebrew, with no key click and no cloud rewrites."
-
     /// The same consequence, said where the choice is made rather than two screens
     /// later. Shown beside the language list only while Full Access is unconfirmed,
     /// which is the only state in which it is news.

@@ -63,6 +63,27 @@ extension KeyView {
     /// different SwiftUI environments — this test target renders nothing, and
     /// a bare `@Environment` read on a directly-constructed view only ever
     /// answers the default.
+    /// The space bar's language name, when one enabled language makes it the
+    /// key's only content and it gets up to 40% of the key's own height.
+    ///
+    /// **`max(15, …)` for the same reason `scaledGlyphSize` has its floor**, and
+    /// it was missing. `height` is the bottom row's key height, which the layout
+    /// editor drags down to `LayoutGeometry.keyHeightRange`'s 36, where 40% is
+    /// 14.4. So at the system default, where the scale is 1 and this has to
+    /// resolve to exactly the shipped 15, it resolved to 14.4 instead. Dynamic
+    /// Type must never draw anything smaller than the build without it, and a
+    /// short row is a reason not to grow rather than a reason to shrink.
+    ///
+    /// Here rather than on `SpaceBarLabel` because that type is `private`, so a
+    /// size only reachable through it could not be asserted against a short key.
+    static func spaceBarNameFontSize(
+        height: CGFloat, dynamicTypeSize: DynamicTypeSize
+    )
+        -> CGFloat
+    {
+        min(15 * Theme.DynamicType.scale(for: dynamicTypeSize), max(15, height * 0.4))
+    }
+
     static func scaledGlyphSize(
         base: CGFloat, dynamicTypeSize: DynamicTypeSize,
         width: CGFloat, height: CGFloat,
@@ -162,7 +183,25 @@ private struct SpaceBarLabel: View {
     /// The language name when it is the key's *only* content (one language
     /// enabled, no code strip above it) is this key's primary label, so it
     /// gets real room: up to 40% of the key's own height.
-    private var nameFontSize: CGFloat { min(15 * typeScale, height * 0.4) }
+    ///
+    /// **`max(15, …)` for the same reason `scaledGlyphSize` has it**, and it
+    /// was missing here. `height` is the bottom row's own key height, which the
+    /// layout editor lets a user drag down to `LayoutGeometry.keyHeightRange`'s
+    /// floor of 36. At 36 the ceiling is 14.4, so at the *system default* type
+    /// size, where `typeScale` is 1 and this should resolve to exactly the
+    /// shipped 15, it resolved to 14.4 instead. Dynamic Type must never make a
+    /// label smaller than the build without it, and a short row is a reason not
+    /// to grow rather than a reason to shrink.
+    ///
+    /// Only bites the one-language case, since `nameSecondaryFontSize` is
+    /// capped by `Theme.Glyph.lightFloor` rather than by the key's height.
+    ///
+    /// The arithmetic lives on `KeyView` beside `scaledGlyphSize` rather than
+    /// here, for the reason that one is static: `SpaceBarLabel` is `private`, so
+    /// a size only reachable through it cannot be asserted at all.
+    private var nameFontSize: CGFloat {
+        KeyView.spaceBarNameFontSize(height: height, dynamicTypeSize: dynamicTypeSize)
+    }
     /// The same name, smaller, when it is the confirmation line under the
     /// code strip rather than the key's only content — badge tier again.
     private var nameSecondaryFontSize: CGFloat { min(11 * typeScale, Theme.Glyph.lightFloor) }

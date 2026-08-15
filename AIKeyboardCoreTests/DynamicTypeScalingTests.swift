@@ -221,4 +221,41 @@ final class DynamicTypeScalingTests: XCTestCase {
         XCTAssertLessThanOrEqual(atAX2.pointSize, Theme.Glyph.lightFloor)
         XCTAssertEqual(SuggestionBar.toneLabelFont.pointSize, 9)
     }
+
+    // MARK: The space bar's own label
+
+    /// **The one-language space bar drew its name *smaller* than the shipped
+    /// build, at the system default type size, on any short bottom row.**
+    /// `nameFontSize` was `min(15 * typeScale, height * 0.4)` with no floor, and
+    /// `height` is the bottom row's key height, which the layout editor drags
+    /// down to `LayoutGeometry.keyHeightRange`'s 36. At 36 the ceiling is 14.4,
+    /// so at `.large`, where `typeScale` is 1 and this must resolve to exactly
+    /// 15, it resolved to 14.4. Dynamic Type is not allowed to make anything
+    /// smaller than the build without it.
+    ///
+    /// The whole editable range is swept rather than just the floor, because
+    /// the break is at 37.5 and a test pinned to one end would pass against a
+    /// fix that only moved the boundary.
+    func testTheSpaceBarNameNeverShrinksBelowItsShippedSizeAtTheDefault() {
+        for height in stride(
+            from: LayoutGeometry.keyHeightRange.lowerBound,
+            through: LayoutGeometry.keyHeightRange.upperBound, by: 1)
+        {
+            let size = KeyView.spaceBarNameFontSize(height: height, dynamicTypeSize: .large)
+            XCTAssertGreaterThanOrEqual(
+                size, 15,
+                "a \(height)pt bottom row drew the language name at \(size), under the shipped 15")
+        }
+    }
+
+    /// It still grows, and it is still bounded by the key it sits in, so the
+    /// floor above did not turn into "ignore the height entirely".
+    func testTheSpaceBarNameStillGrowsWithDynamicTypeAndStaysBounded() {
+        let tall = LayoutGeometry.keyHeightRange.upperBound
+        let atDefault = KeyView.spaceBarNameFontSize(height: tall, dynamicTypeSize: .large)
+        let atAX3 = KeyView.spaceBarNameFontSize(height: tall, dynamicTypeSize: .accessibility3)
+        XCTAssertGreaterThan(atAX3, atDefault, "the name did not grow with Dynamic Type")
+        XCTAssertLessThanOrEqual(
+            atAX3, max(15, tall * 0.4), "the name grew past the room its own key has")
+    }
 }
