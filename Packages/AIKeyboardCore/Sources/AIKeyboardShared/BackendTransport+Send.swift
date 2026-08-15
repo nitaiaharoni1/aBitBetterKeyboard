@@ -5,6 +5,18 @@ import Foundation
 extension BackendTransport {
 
     public func send(_ request: CloudRequest) async throws -> [String: String] {
+        try await send(request, token: token, allowReattest: true)
+    }
+
+    /// `token` is threaded through explicitly, rather than always read from
+    /// `self.token`, so the one retry NIT-87 asks for can run with a freshly
+    /// minted bearer without constructing a second `BackendTransport`.
+    /// `allowReattest` is what keeps the retry to exactly one: it is false on
+    /// the recursive call, so a second 401 falls straight through to
+    /// `mapped` instead of asking `SessionReattestation` again.
+    private func send(
+        _ request: CloudRequest, token: String?, allowReattest: Bool
+    ) async throws -> [String: String] {
         var body: [String: Any] = [
             "instructions": request.instructions,
             "prompt": request.prompt,
@@ -65,8 +77,30 @@ extension BackendTransport {
         }
 
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard status == 200 else { throw Self.mapped(status: status, body: data) }
-        return try Self.decode(data)
+        guard status != 200 else { return try Self.decode(data) }
+
+        // **NIT-87: a 401 on a model route can mean the session token this
+        // process is holding is stale rather than "there is no cloud".**
+        // `SessionReattestation` is the one thing that can tell the
+        // difference without bothering the user — see its doc comment for why
+        // this cannot stampede. Tried at most once per call, via
+        // `allowReattest`: a second 401 after a fresh token is a real
+        // refusal, not another round of the same guess.
+        if status == 401, allowReattest {
+            if let fresh = await SessionReattestation.shared.reattest() {
+                return try await send(request, token: fresh, allowReattest: false)
+            }
+            // Re-attestation was not possible at all — nothing registered,
+            // which today means this process is one of the two extensions —
+            // or it ran and failed. A process with no path to the shared
+            // session token says so by name, rather than repeating the vague
+            // "reconnecting" line that used to cover Full Access too.
+            if SharedContainer.url == nil {
+                throw AIEngineError.needsFullAccess
+            }
+        }
+
+        throw Self.mapped(status: status, body: data)
     }
 
     /// Field order is preserved all the way to the provider. Both engines rely

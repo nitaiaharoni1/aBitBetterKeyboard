@@ -61,13 +61,39 @@ fi
 # not a permanent break. It is also the only revocation there is: a session token
 # carries its own expiry and this service stores nothing, so there is no list to
 # remove one from.
+#
+# **Generate it once and keep it. Do not generate it per deploy.** The secret
+# signs every session token already sitting on every device, so a redeploy under
+# a fresh one invalidates all of them at that instant, and a device cannot tell
+# that from a forged token: it gets a flat 401 on the AI action the user just
+# pressed, then retries into the same wall. That is what the 2026-08-14 bursts in
+# NIT-87 look like, both of which follow revision 00004 by minutes. An earlier
+# version of this message printed `openssl rand -hex 32` as the example for every
+# run, which is how the habit started.
+#
+# Rotating on purpose is fine, but hand the old value over for one deploy:
+#
+#   SESSION_SECRET=<new> SESSION_SECRET_PREVIOUS=<old> ./deploy.sh
+#
+# Tokens signed under the old secret keep verifying until they expire on their
+# own, and nothing new is ever signed with it. Drop the variable on the deploy
+# after that.
 if [ -z "${SESSION_SECRET:-}" ]; then
   echo "SESSION_SECRET is not set." >&2
   echo >&2
   echo "Without it /v1/challenge and /v1/attest are switched off, no device can" >&2
   echo "attest, and every install falls back to a token nobody has typed in." >&2
   echo >&2
-  echo "  SESSION_SECRET=\$(openssl rand -hex 32) BACKEND_TOKEN=\$(openssl rand -hex 32) ./deploy.sh" >&2
+  echo "Generate it ONCE, keep it somewhere you can read back, and reuse it on" >&2
+  echo "every deploy. A fresh secret 401s every device that has already attested." >&2
+  echo >&2
+  echo "  SESSION_SECRET=\"\$(cat ~/.aikeyboard-session-secret)\" BACKEND_TOKEN=... ./deploy.sh" >&2
+  echo >&2
+  echo "First time only:" >&2
+  echo "  openssl rand -hex 32 > ~/.aikeyboard-session-secret" >&2
+  echo >&2
+  echo "Rotating on purpose? Pass the outgoing value as SESSION_SECRET_PREVIOUS" >&2
+  echo "for one deploy so live tokens keep working until they expire." >&2
   exit 1
 fi
 
@@ -79,6 +105,7 @@ gcloud run deploy "$SERVICE" \
   --set-env-vars="PROJECT=${PROJECT},MODEL=${MODEL}" \
   --set-env-vars="BACKEND_TOKEN=${BACKEND_TOKEN}" \
   --set-env-vars="SESSION_SECRET=${SESSION_SECRET}" \
+  --set-env-vars="SESSION_SECRET_PREVIOUS=${SESSION_SECRET_PREVIOUS:-}" \
   --set-env-vars="APP_ID=${APP_ID:-9R8P28G4BJ.com.nitai.aikeyboard}" \
   --set-env-vars="ATTEST_ENV=${ATTEST_ENV:-production}" \
   --memory=256Mi \

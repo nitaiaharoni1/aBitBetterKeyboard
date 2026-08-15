@@ -6,10 +6,10 @@ struct LanguagesView: View {
     @EnvironmentObject private var search: AppSearch
     @Environment(\.scenePhase) private var scenePhase
 
-    /// Measured for one sentence: without Full Access the keyboard cannot read
-    /// this screen's list at all, and this is where a user picks it. Re-read on
-    /// every return to the foreground, like Home's copy, because the switch is
-    /// thrown in Settings and nothing notifies the app.
+    /// Measured for `FullAccessNeededBanner`: without Full Access the keyboard
+    /// cannot read this screen's list at all, and this is where a user picks
+    /// it. Re-read on every return to the foreground, like Home's copy,
+    /// because the switch is thrown in Settings and nothing notifies the app.
     @State private var setup = SetupState()
     @State private var learnedWordCount = 0
 
@@ -103,20 +103,15 @@ struct LanguagesView: View {
                 }
             }
 
-            // Without Full Access, none of these choices reaches the keyboard.
-            // Keep the warning quiet, outside the primary content card, and only
-            // show it while it is actionable.
+            // Without Full Access, none of these choices reaches the keyboard —
+            // and the keyboard cannot say so itself, since it is drawing the
+            // shipped default with no idea a different list was ever chosen.
+            // This used to be a quiet tertiary caption below the card; the
+            // choice a user makes on this screen going nowhere is not a
+            // footnote, so it is `FullAccessNeededBanner` now, with a route out.
             if setup.fullAccess != .confirmed {
-                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.xxs) {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 11, weight: .regular))
-
-                    Text("Full Access is off. Changes here won’t reach the keyboard.")
-                        .font(Theme.Fonts.micro.weight(.regular))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .foregroundStyle(Theme.Text.tertiary)
-                .padding(.horizontal, Theme.Space.xxs)
+                FullAccessNeededBanner(
+                    message: SetupState.languagesNeedFullAccess, context: "languages")
             }
         }
     }

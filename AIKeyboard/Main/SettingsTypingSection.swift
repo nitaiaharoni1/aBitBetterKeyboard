@@ -3,8 +3,16 @@ import SwiftUI
 
 /// The "Typing" settings card: autocorrect, pause actions, auto-capitalise,
 /// and predictions. Learned words and Forget live on Personal dictionary.
+///
+/// **Every switch here is affected by Full Access, not some of them.** Each
+/// one is a `SharedStore.stored*` accessor the keyboard reads across the App
+/// Group at the keystroke — `storedAutocorrect`, `storedAutocapitalise`,
+/// `storedPredictions`, `storedCompleteOnIdle`, `storedSpaceOnIdle`,
+/// `storedIdleDelayMs` — so there is no row here to carve out as a survivor,
+/// unlike `accountSection` on the same screen. See `FullAccessNeededBanner`.
 struct SettingsTypingSection: View {
     @EnvironmentObject private var store: SharedStore
+    let setup: SetupState
 
     /// How long to wait after the last key. Only drawn when a pause action is
     /// on, so the card does not ask about a wait nobody will feel.
@@ -30,8 +38,18 @@ struct SettingsTypingSection: View {
         }
     }
 
+    /// Mirrors `LayoutView.fullAccessMessage`'s hedge: `setup.fullAccess` can
+    /// only ever *confirm* a yes, so this says "once Full Access is on"
+    /// rather than asserting it is off right now.
+    private static let fullAccessMessage =
+        "The keyboard can only read these once Full Access is on. Until then it keeps typing, "
+        + "autocorrecting and predicting the way it shipped, whatever is set here."
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            if setup.fullAccess != .confirmed {
+                FullAccessNeededBanner(message: Self.fullAccessMessage, context: "typing")
+            }
             SectionHeader(title: "Typing")
             Card {
                 VStack(spacing: Theme.Space.sm) {

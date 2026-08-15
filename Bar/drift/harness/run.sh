@@ -11,9 +11,10 @@
 #   Bar/drift/harness/run.sh --trend-only      # reads the records, runs nothing
 #   Bar/drift/harness/run.sh --no-trend        # writes the records, checks nothing
 #
-# Exit 0 when the trend check found nothing, 2 when it fired, 3 when a corpus was
-# asked for and produced no record. A scheduled job wants to hear about all of 2
+# Exit 0 when the trend check found nothing, 4 when it fired, 3 when a corpus was
+# asked for and produced no record. A scheduled job wants to hear about all of 4
 # and 3: measuring nothing quietly is the failure this directory exists to catch.
+# (2 is argparse's own usage-error code and is left alone; see the README.)
 #
 # Two things this script will not do, and both are the point:
 #

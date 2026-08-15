@@ -118,7 +118,11 @@ extension ActionBanner {
     func openAppChip(_ url: URL) -> some View {
         Link(destination: url) {
             Text("Open app")
-                .font(.system(size: 13, weight: .medium))
+                .font(
+                    .system(
+                        size: Self.sentenceFontSize(base: 13, dynamicTypeSize: dynamicTypeSize),
+                        weight: .medium)
+                )
                 .foregroundStyle(Theme.Text.onBrand)
                 .lineLimit(1)
                 .padding(.horizontal, Theme.Space.sm)
@@ -147,7 +151,11 @@ extension ActionBanner {
     ) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 13, weight: .medium))
+                .font(
+                    .system(
+                        size: Self.sentenceFontSize(base: 13, dynamicTypeSize: dynamicTypeSize),
+                        weight: .medium)
+                )
                 .foregroundStyle(filled ? Theme.Text.onBrand : Theme.Keys.label)
                 .lineLimit(1)
                 .padding(.horizontal, Theme.Space.sm)

@@ -76,6 +76,21 @@ extension SuggestionBar {
     /// a hairline holds up at 15pt and disappears at 9.
     static let toneLabelFont = UIFont.systemFont(ofSize: 9, weight: .semibold)
 
+    /// `toneLabelFont`, scaled for a Dynamic Type setting and capped at
+    /// `Theme.Glyph.lightFloor` — this file's own line between a caption and
+    /// body text, the same ceiling every other small label in this keyboard
+    /// now shares.
+    ///
+    /// **`toneLabelFont` itself stays an unscaled constant.** `ControlActivity`
+    /// draws with it too and is outside this scaling pass, and
+    /// `AIButtonTests` measures every tone name against it directly; changing
+    /// what the constant *means* would move both without anyone touching
+    /// them. This is a second function precisely so neither has to change.
+    static func toneLabelFont(for dynamicTypeSize: DynamicTypeSize) -> UIFont {
+        let scaled = 9 * Theme.DynamicType.scale(for: dynamicTypeSize)
+        return UIFont.systemFont(ofSize: min(scaled, Theme.Glyph.lightFloor), weight: .semibold)
+    }
+
     /// Rewrite in the default tone, without opening anything.
     ///
     /// **The icon is fixed and the tone is written out under it, because the icon
@@ -150,7 +165,7 @@ extension SuggestionBar {
                         .font(Theme.Glyph.medium(15))
                         .frame(height: 18)
                     Text(tone.title)
-                        .font(Font(Self.toneLabelFont))
+                        .font(Font(Self.toneLabelFont(for: dynamicTypeSize)))
                         .lineLimit(1)
                 }
                 .foregroundStyle(tint)

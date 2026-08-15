@@ -134,7 +134,15 @@ final class CustomKeyActionTests: XCTestCase {
         controller.press(.quickTone)
         XCTAssertEqual(controller.overlay, .none, "the keys must stay visible")
         XCTAssertEqual(controller.block?.action, .rewrite)
-        XCTAssertEqual(controller.block?.remedy, .none, "there is no button that would help")
+        // `BannerState.Block.Remedy.none` spelled out, because `.none` in an
+        // optional comparison is `Optional.none`. This asserted the block had no
+        // remedy *at all* against a block that correctly carries `Remedy.none`,
+        // so it failed on committed `main` while its own message said the thing
+        // the code was already doing. Third instance of this trap in the repo,
+        // after `FrameIdentity` and `autocapitalizationType`.
+        XCTAssertEqual(
+            controller.block?.remedy, BannerState.Block.Remedy.none,
+            "there is no button that would help")
     }
 
     /// Nothing in the package can dismiss a keyboard, so the cap has to reach the

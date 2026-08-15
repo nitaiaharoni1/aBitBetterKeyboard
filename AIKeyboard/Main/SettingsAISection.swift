@@ -2,11 +2,28 @@ import AIKeyboardCore
 import SwiftUI
 
 /// The "AI" settings card: default tone picker and optional custom tone field.
+///
+/// **Both controls are affected by Full Access.** `SharedStore.toneSetting`
+/// reads `defaultTone`, `prefersCustomTone` and `customTone` across the App
+/// Group — `ToneSetting.swift`'s `storedDefaultTone` and this section's own
+/// two accessors — so a tone picked here is inert in the keyboard until Full
+/// Access is confirmed. See `FullAccessNeededBanner`.
 struct SettingsAISection: View {
     @EnvironmentObject private var store: SharedStore
+    let setup: SetupState
+
+    /// Mirrors `LayoutView.fullAccessMessage`'s hedge: `setup.fullAccess` can
+    /// only ever *confirm* a yes, so this says "once Full Access is on"
+    /// rather than asserting it is off right now.
+    private static let fullAccessMessage =
+        "The keyboard can only read your tone once Full Access is on. Until then the one-tap "
+        + "rewrite button uses Normal, whatever is chosen here."
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            if setup.fullAccess != .confirmed {
+                FullAccessNeededBanner(message: Self.fullAccessMessage, context: "ai")
+            }
             SectionHeader(title: "AI")
             Card {
                 VStack(alignment: .leading, spacing: Theme.Space.sm) {

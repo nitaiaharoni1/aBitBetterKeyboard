@@ -25,10 +25,18 @@ Bar/drift/harness/trend.py ai-text          # the same check on its own
 Bar/drift/harness/trend.py --window 4       # 3 is the minimum the rule will accept
 ```
 
-**Exit 0 clean, 2 the trend check fired, 3 a corpus was asked for and produced no
-record.** A scheduled job wants to hear about both 2 and 3; see
+**Exit 0 clean, 4 the trend check fired, 3 a corpus was asked for and produced no
+record.** A scheduled job wants to hear about both 4 and 3; see
 [Installing it](#installing-it-which-is-yours-to-do), and read the money
 paragraph there before you schedule the paid set.
+
+The alert is 4, not 2, on purpose: `trend.py` and `run.py` both parse their
+arguments with `argparse`, and `argparse` itself exits 2 on a usage error —
+a missing `--window` value, an unknown corpus name. If the trend alert also
+used 2, `trend.py --window` (forgot the value) and `trend.py grouped` (found a
+real regression) would be indistinguishable by exit code alone, and a script
+that branches on "2 means quality regressed" would open an issue for a typo.
+2 stays argparse's; the alert moved to 4 instead.
 
 ## What runs, what it costs, and how often it is worth running
 
@@ -240,7 +248,7 @@ The free set, weekly on Monday morning. Run this from the repo root:
 **The `|| mail` half is not decoration.** Redirecting both streams to a log is
 what makes cron mail *nothing*, so an earlier version of this line had no
 configuration in which a failure or an alert reached a human at all: the runner
-exits 2 on an alert and 3 when it measured nothing, and both went into a file
+exits 4 on an alert and 3 when it measured nothing, and both went into a file
 nobody opens. Drop the redirection instead if you would rather cron mailed you
 every run's full output. On stock macOS `mail` delivers to the local mailbox, so
 either read it with `mail` or swap that command for whatever you actually check.

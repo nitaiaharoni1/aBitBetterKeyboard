@@ -2,12 +2,16 @@
   "schema": 1,
   "name": "AIKeyboard async typing corpus",
   "device": "iPhone 17 Pro",
-  "generated": "2026-08-14",
+  "generated": "2026-08-15",
   "notes": [
     "Async-tier exam. Same shape as Bar/typing/corpus.json, plus optional pauseMs and screen.",
     "pauseMs is the idle the PredictiveRefiner is asked after. The local 72/76 headline does not include these entries.",
     "Foundation Models cannot predict Hebrew. A Hebrew next-word skip is measured, not a corpus failure.",
-    "were is not in the contraction table. apos-09 is this tier's named job."
+    "were is not in the contraction table. apos-09 is this tier's named job.",
+    "NIT-21: mustNotCorrect entries added below, exercised through a pause for the first time. An entry where the right answer is to leave the bold slot alone is scored exactly as it is in Bar/typing/corpus.json (commit = bold slot still equals what was typed); a corpus made only of improvable cases flatters the refiner.",
+    "apos-09-control and apos-10-control pair a risky word with a context where the async-only correction must NOT fire, the same word as its improvable twin either way.",
+    "The Hebrew entries below (he-no-correct-*, he-comp-01, he-next-02/03, he-async-screen-01) are still expected-skip: PredictiveRefiner.standard never carries a Hebrew-capable engine (see .claude/rules/suggestion-bar.md). They are here to prove the skip is graceful at a larger, more varied sample than one entry, not to claim Hebrew prediction works.",
+    "First run needs a machine where Foundation Models actually answers (see Bar/typing/async/run.sh); nothing in this file has been scored against the model yet."
   ],
   "entries": [
     {
@@ -199,6 +203,281 @@
         "can",
         "am",
         "will"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "apos-10",
+      "category": "missing-apostrophe",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I told them ",
+      "prefix": "wed",
+      "intended": "we'd",
+      "pauseMs": 300,
+      "probes": "wed is an ordinary word (to marry) and not in the contraction table; only the sentence says it means we'd."
+    },
+    {
+      "id": "apos-11",
+      "category": "missing-apostrophe",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I promised her ",
+      "prefix": "shed",
+      "intended": "she'd",
+      "pauseMs": 300,
+      "probes": "shed is a real word (garden shed) and not in the contraction table; the sentence forces the contraction reading, the same shape as apos-09 and apos-10."
+    },
+    {
+      "id": "apos-09-control",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "They said we ",
+      "prefix": "were",
+      "mustNotCorrect": true,
+      "pauseMs": 300,
+      "probes": "Same risky word as apos-09, opposite context: were is the correct past-tense verb here and must not become we're. Checks the refiner is reading the sentence rather than pattern-matching the word."
+    },
+    {
+      "id": "apos-10-control",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "We need a new garden ",
+      "prefix": "shed",
+      "mustNotCorrect": true,
+      "pauseMs": 300,
+      "probes": "shed here is the noun, not she'd; pairs with apos-11 the way apos-09-control pairs with apos-09."
+    },
+    {
+      "id": "no-correct-name-01",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Ask ",
+      "prefix": "Dana",
+      "mustNotCorrect": true,
+      "pauseMs": 300,
+      "probes": "Common given name, not in any dictionary. A paused version of the local corpus's nc-05/nc-06 class: the async tier must not have its own opinion about names."
+    },
+    {
+      "id": "no-correct-digit-01",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Meet me at ",
+      "prefix": "8",
+      "mustNotCorrect": true,
+      "pauseMs": 300,
+      "probes": "A digit paused mid-thought; nothing should happen, sentence-level or not. Paused twin of the local corpus's nc-07."
+    },
+    {
+      "id": "no-correct-ok-01",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "",
+      "prefix": "ok",
+      "mustNotCorrect": true,
+      "pauseMs": 300,
+      "probes": "Two-letter real word autocorrect likes to capitalise or expand into OK/Okay; must survive a pause too. Paused twin of the local corpus's nc-03."
+    },
+    {
+      "id": "en-next-06",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Let me know if you have any ",
+      "prefix": "",
+      "pauseMs": 300,
+      "probes": "Common closing request; several good nouns, tests spread rather than a single hit.",
+      "acceptable": [
+        "questions",
+        "concerns",
+        "issues"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-next-07",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Looking forward to ",
+      "prefix": "",
+      "pauseMs": 300,
+      "probes": "Idiom completion; several natural closes.",
+      "acceptable": [
+        "it",
+        "hearing from you",
+        "seeing you"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-next-08",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I hope you're doing ",
+      "prefix": "",
+      "pauseMs": 300,
+      "probes": "Near-fixed idiom; essentially one continuation.",
+      "acceptable": [
+        "well"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-comp-postp",
+      "category": "english-completion",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "The meeting might get ",
+      "prefix": "postp",
+      "pauseMs": 300,
+      "probes": "Stem shared by postpone/postponed; context after 'get' favours the participle.",
+      "acceptable": [
+        "postponed",
+        "postpone"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "en-comp-conf",
+      "category": "english-completion",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "I need to ",
+      "prefix": "conf",
+      "pauseMs": 300,
+      "probes": "Stem shared by confirm/configure/confess; 'I need to' strongly favours confirm.",
+      "acceptable": [
+        "confirm"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "async-screen-03",
+      "category": "english-next-word",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "",
+      "prefix": "",
+      "pauseMs": 300,
+      "screen": {
+        "appName": "Slack",
+        "appIcon": "message",
+        "sender": "Maya",
+        "message": "Can you send the deck before the call?",
+        "language": "en"
+      },
+      "probes": "Empty field, a request on screen. A third screen-context entry so this class is not a sample of one shape.",
+      "acceptable": [
+        "Yes",
+        "Sure",
+        "Sending",
+        "Will do",
+        "On it"
+      ],
+      "acceptableIsClosed": false,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-next-02",
+      "category": "hebrew-next-word",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "לילה ",
+      "prefix": "",
+      "pauseMs": 300,
+      "probes": "Good night idiom (laila tov). Expected-skip class, same as he-next-01: Foundation Models cannot predict Hebrew.",
+      "acceptable": [
+        "טוב"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-next-03",
+      "category": "hebrew-next-word",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "תודה ",
+      "prefix": "",
+      "pauseMs": 300,
+      "probes": "Thank you very much (toda raba). Expected-skip class, same as he-next-01.",
+      "acceptable": [
+        "רבה"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-comp-01",
+      "category": "hebrew-completion",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "אני ",
+      "prefix": "מגי",
+      "pauseMs": 300,
+      "probes": "Arriving, mid-word with a pause. The local tier already handles this well (see .claude/rules/suggestion-bar.md); this checks the async path over the same ground does not make it worse, in the same spirit as en-comp-tomor.",
+      "acceptable": [
+        "מגיע",
+        "מגיעה"
+      ],
+      "acceptableIsClosed": true,
+      "acceptableSource": "human-authored"
+    },
+    {
+      "id": "he-no-correct-01",
+      "category": "no-correct",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "",
+      "prefix": "לא",
+      "mustNotCorrect": true,
+      "pauseMs": 300,
+      "probes": "Complete two-letter Hebrew word, paused. Paused twin of the local corpus's nc-08: the async tier does not serve Hebrew at all, so this must stay a local-only pass even with a pause armed."
+    },
+    {
+      "id": "he-no-correct-02",
+      "category": "no-correct",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "קוראים לי ",
+      "prefix": "סאפא",
+      "mustNotCorrect": true,
+      "pauseMs": 300,
+      "probes": "Product name in the shipped personal dictionary; must survive a pause too, and Hebrew's async skip must not somehow let a different word through."
+    },
+    {
+      "id": "he-async-screen-01",
+      "category": "hebrew-next-word",
+      "language": "he",
+      "keyboard": "he_IL",
+      "context": "",
+      "prefix": "",
+      "pauseMs": 300,
+      "screen": {
+        "appName": "WhatsApp",
+        "appIcon": "message",
+        "sender": "רותם",
+        "message": "מתי אתה מגיע?",
+        "language": "he"
+      },
+      "probes": "Hebrew screen context; extends the expected-skip class to the screen-aware path rather than only plain next-word.",
+      "acceptable": [
+        "בעוד",
+        "כמעט",
+        "עוד"
       ],
       "acceptableIsClosed": false,
       "acceptableSource": "human-authored"

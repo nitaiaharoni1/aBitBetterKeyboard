@@ -40,6 +40,71 @@ extension MicrophonePermission {
     }
 }
 
+// MARK: - FullAccessNeededBanner
+
+/// Sits on a surface that accepts a choice the keyboard cannot read yet —
+/// the layout editor and the language picker, today — and says so at the
+/// moment the choice is made, rather than leaving the user to discover it on
+/// their phone.
+///
+/// **Deliberately not the `StatusRow` question mark.** `StatusRow` is a
+/// checklist item: quiet, tertiary, one of several rows working through a
+/// setup card. This is not a checklist — it sits beside a control the user
+/// is about to use and will otherwise have no way to learn is inert, which
+/// is why it carries real colour and a border rather than a caption's grey.
+///
+/// **Says "once Full Access is on", never "Full Access is off".**
+/// `SetupState.fullAccess` can only ever *confirm* a yes — `KeyboardPresence`
+/// is a file only a keyboard that already has the entitlement could have
+/// written — so `!= .confirmed` also covers a phone where Full Access was
+/// just switched on and the keyboard has not been opened once since. Naming
+/// that as "off" would be wrong exactly there. Every string handed to this
+/// view has to hold up under both readings, which is what `SetupState
+/// .languagesNeedFullAccess` is already written to do.
+struct FullAccessNeededBanner: View {
+    let message: String
+
+    /// Distinguishes this banner's accessibility identifier from any other
+    /// on screen. Required rather than defaulted: `SettingsTypingSection` and
+    /// `SettingsAISection` both draw one on the same scrollable Settings
+    /// screen, and two elements answering to one identifier is a
+    /// `firstMatch` that picks whichever it finds first — the exact trap
+    /// `LayoutView`'s `remove-bar-…` / `add-bar-…` identifiers exist to avoid.
+    let context: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.Space.sm) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.Semantic.warning)
+                .frame(width: 20)
+
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                Text(message)
+                    .font(Theme.Fonts.caption)
+                    .foregroundStyle(Theme.Text.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button("Open Settings", action: openSettings)
+                    .font(Theme.Fonts.caption.weight(.semibold))
+                    .foregroundStyle(Theme.Semantic.warning)
+            }
+        }
+        .padding(Theme.Space.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                .fill(Theme.Semantic.warning.opacity(0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                .strokeBorder(Theme.Semantic.warning.opacity(0.35), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("full-access-needed-\(context)")
+    }
+}
+
 // MARK: - StatusRow
 
 struct StatusRow: View {

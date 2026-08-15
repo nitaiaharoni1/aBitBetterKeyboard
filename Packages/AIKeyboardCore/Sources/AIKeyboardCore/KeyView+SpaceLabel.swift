@@ -26,11 +26,77 @@ extension KeyView {
         SpaceBarLabel(
             language: language,
             indication: indication,
-            enabledLanguages: enabledLanguages)
+            enabledLanguages: enabledLanguages,
+            height: height,
+            dynamicTypeSize: dynamicTypeSize)
+    }
+
+    /// How much of the key's own height a scaled glyph may fill at the
+    /// largest accessibility sizes.
+    ///
+    /// **The key does not grow with Dynamic Type — only the user's own choice
+    /// in the layout editor does that (`LayoutGeometry.RowBand`) — so growth
+    /// has to saturate short of the cap, or the glyph collides with the row
+    /// above and below it.** The shipped default (43pt key, a 22-25pt glyph)
+    /// sits at roughly half its height; 0.75 leaves real room to grow before
+    /// it saturates and still clears the rounded corner at every height
+    /// `LayoutGeometry.keyHeightRange` allows (36...56).
+    static let characterHeightCeiling: CGFloat = 0.75
+
+    /// Scales a key-cap glyph's base size for a Dynamic Type setting, capped
+    /// so it never grows past the key that carries it, in either dimension.
+    ///
+    /// **A ceiling, not `minimumScaleFactor`.** `minimumScaleFactor` shrinks
+    /// text back down to fit a box, which is the right tool when the length
+    /// of the content is unknown — the punctuation key's two-line label and
+    /// every action-key caption already carry one, for exactly that reason.
+    /// A key cap is (almost always) one glyph of known size: capping the size
+    /// it is *drawn* at, rather than drawing it large and shrinking it back,
+    /// means the largest accessibility sizes see the most growth this key can
+    /// hold, rather than a size that grew past the ceiling and was clamped
+    /// back down — which is the opposite of what an AX5 user asked for.
+    ///
+    /// **`static`, and `dynamicTypeSize` is a parameter rather than another
+    /// read of `self.dynamicTypeSize`**, so `KeyView.scaledGlyphSize(base:
+    /// dynamicTypeSize:width:height:)` can be asked for two sizes against the
+    /// identical key box without constructing two `KeyView`s inside two
+    /// different SwiftUI environments — this test target renders nothing, and
+    /// a bare `@Environment` read on a directly-constructed view only ever
+    /// answers the default.
+    static func scaledGlyphSize(
+        base: CGFloat, dynamicTypeSize: DynamicTypeSize,
+        width: CGFloat, height: CGFloat,
+        widthFraction: CGFloat = 0.78, heightFraction: CGFloat = characterHeightCeiling
+    ) -> CGFloat {
+        let scaled = base * Theme.DynamicType.scale(for: dynamicTypeSize)
+        // **The height ceiling must never fall below `base`.** The numbers and
+        // symbols planes squeeze a fourth row into the letters plane's
+        // three-row block (`Theme.Metrics.fittedKeyHeight`), which ships at
+        // roughly 29pt against a 43pt letter key — well under `base *
+        // heightFraction`. Without the floor, a digit key would render
+        // *smaller* than it does today the moment this runs at the system
+        // default (`.large`, where `scaled == base`). A row that is already
+        // compressed for another reason simply does not grow with Dynamic
+        // Type; it must not shrink because of it.
+        let heightCeiling = max(base, height * heightFraction)
+        return min(scaled, width * widthFraction, heightCeiling)
+    }
+
+    /// Instance convenience: this key's own box and the environment's current
+    /// Dynamic Type setting.
+    func scaledGlyphSize(
+        base: CGFloat, widthFraction: CGFloat = 0.78,
+        heightFraction: CGFloat = Self.characterHeightCeiling
+    ) -> CGFloat {
+        Self.scaledGlyphSize(
+            base: base, dynamicTypeSize: dynamicTypeSize, width: width, height: height,
+            widthFraction: widthFraction, heightFraction: heightFraction)
     }
 
     /// Scripts carry different amounts of ink, and a twelve-column layout has
-    /// narrower keys than a ten-column one, so the size follows both.
+    /// narrower keys than a ten-column one, so the size follows both — and
+    /// now the user's own text-size setting, capped so the glyph never
+    /// outgrows the key. See `scaledGlyphSize`.
     var characterFontSize: CGFloat {
         let base: CGFloat
         switch language.script {
@@ -40,7 +106,7 @@ extension KeyView {
         case .devanagari, .tamil, .georgian: base = 22
         case .latin, .cyrillic, .greek, .other: base = 25
         }
-        return min(base, width * 0.78)
+        return scaledGlyphSize(base: base)
     }
 
     /// The same for a grouped cap, which carries several letters on one or two
@@ -78,9 +144,28 @@ private struct SpaceBarLabel: View {
     let language: KeyboardLanguage
     let indication: LanguageSwitchIndication?
     let enabledLanguages: [KeyboardLanguage]
+    /// This key's own height, passed down rather than read again, so the two
+    /// lines below can be capped the same way every other key-cap glyph is:
+    /// growing with Dynamic Type without outgrowing the key.
+    let height: CGFloat
+    let dynamicTypeSize: DynamicTypeSize
 
     @Namespace private var strip
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var typeScale: CGFloat { Theme.DynamicType.scale(for: dynamicTypeSize) }
+    /// The code strip (`EN`, `HE`) is a badge, the same tier as every other
+    /// small label in this keyboard — capped at `Theme.Glyph.lightFloor`,
+    /// the size this file already treats as the line between a caption and
+    /// body text.
+    private var codeFontSize: CGFloat { min(12 * typeScale, Theme.Glyph.lightFloor) }
+    /// The language name when it is the key's *only* content (one language
+    /// enabled, no code strip above it) is this key's primary label, so it
+    /// gets real room: up to 40% of the key's own height.
+    private var nameFontSize: CGFloat { min(15 * typeScale, height * 0.4) }
+    /// The same name, smaller, when it is the confirmation line under the
+    /// code strip rather than the key's only content — badge tier again.
+    private var nameSecondaryFontSize: CGFloat { min(11 * typeScale, Theme.Glyph.lightFloor) }
 
     var body: some View {
         // The lit code follows the finger, so a slide walks the highlight along the
@@ -102,7 +187,7 @@ private struct SpaceBarLabel: View {
                     HStack(spacing: 6) {
                         ForEach(codes, id: \.self) { code in
                             Text(code.shortName)
-                                .font(.system(size: 12, weight: code == lit ? .semibold : .regular))
+                                .font(.system(size: codeFontSize, weight: code == lit ? .semibold : .regular))
                                 .foregroundStyle(
                                     code == lit
                                         ? Theme.Keys.label
@@ -125,7 +210,7 @@ private struct SpaceBarLabel: View {
                 Text(indication?.language.nativeName ?? language.spaceLabel)
                     .font(
                         .system(
-                            size: codes.isEmpty ? 15 : 11,
+                            size: codes.isEmpty ? nameFontSize : nameSecondaryFontSize,
                             weight: indication == nil ? .light : .medium)
                     )
                     .foregroundStyle(

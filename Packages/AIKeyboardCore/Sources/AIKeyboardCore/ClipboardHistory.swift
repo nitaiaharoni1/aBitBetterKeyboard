@@ -123,4 +123,38 @@ public enum ClipboardHistory {
         guard !needle.isEmpty else { return clips }
         return clips.filter { $0.text.value.localizedStandardContains(needle) }
     }
+
+    /// Which of three things CopyClip can do about the pasteboard right now,
+    /// decided without looking at its contents.
+    ///
+    /// Pure so the decision is testable on its own: `changeCount` and
+    /// `holdsText` are the two accessors `refreshCopyClip(_:)` will ever call
+    /// — neither one reads the board's contents — so this function never
+    /// needs a live `UIPasteboard` to be exercised. See `CopyClipCaptureState`.
+    public static func captureState(
+        changeCount: Int, lastChangeCount: Int, holdsText: Bool
+    ) -> CopyClipCaptureState {
+        guard changeCount != lastChangeCount else { return .automatic }
+        return holdsText ? .control : .neither
+    }
+}
+
+/// What the CopyClip panel draws about the current pasteboard generation.
+///
+/// `.control` is the one case that did not exist before `UIPasteControl`:
+/// reading a new item's *text* is what raises "Allow Paste?", so rather than
+/// pay that automatically on every panel-open, the panel offers the system
+/// paste button instead — one tap, no alert, ever — and only *that* one
+/// case costs the user anything. See `ClipboardHistory.captureState` and
+/// `KeyboardController.copyclipCaptureState`.
+public enum CopyClipCaptureState: Equatable, Sendable {
+    /// Nothing has changed since the ledger last caught up. The list already
+    /// reflects the pasteboard; draw it alone.
+    case automatic
+    /// A new generation is waiting and may hold text. Offer `UIPasteControl`
+    /// rather than read it here.
+    case control
+    /// A new generation is waiting but holds no text — an image, a file. It
+    /// can never become a clip: nothing to read, nothing to offer.
+    case neither
 }

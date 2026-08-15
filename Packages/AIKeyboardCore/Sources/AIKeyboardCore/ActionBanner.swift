@@ -29,6 +29,7 @@ import SwiftUI
 public struct ActionBanner: View {
 
     @ObservedObject var controller: KeyboardController
+    @Environment(\.dynamicTypeSize) var dynamicTypeSize
 
     public init(controller: KeyboardController) {
         self.controller = controller
@@ -80,5 +81,35 @@ public struct ActionBanner: View {
         case .hint: return Theme.Keys.panel.opacity(0.5)
         default: return Theme.Keys.panel
         }
+    }
+
+    // MARK: Dynamic Type
+
+    /// The strip's small uppercase and secondary labels — the leading tag, a
+    /// context sender, an options label — scale with Dynamic Type up to
+    /// `Theme.Glyph.lightFloor`, the same badge ceiling every small label in
+    /// this keyboard now shares. **Not the strip's own sentence**: that gets
+    /// more room in `sentenceFontSize`, because it is what the banner exists
+    /// to say and a badge-sized cap on it would waste most of the growth an
+    /// AX5 user asked for.
+    static func badgeFontSize(base: CGFloat, dynamicTypeSize: DynamicTypeSize) -> CGFloat {
+        min(base * Theme.DynamicType.scale(for: dynamicTypeSize), Theme.Glyph.lightFloor)
+    }
+
+    /// The strip's own sentence — an answer, a refusal, a failure — capped at
+    /// 3pt over its shipped size rather than a fraction of the box.
+    ///
+    /// **`Theme.Metrics.bannerHeight` is fixed at 58 for the screen-context
+    /// fingerprint** (`.claude/rules/screen-context.md`: growing it costs a
+    /// conversation switch), and the worst case here already stacks a title
+    /// over two lines of detail — three lines in 58pt at the shipped size.
+    /// Scaling that trio by the full Dynamic Type ratio would push the third
+    /// line past the strip well before AX5. `minimumScaleFactor`, already on
+    /// every caller, is the same lever this file used before Dynamic Type
+    /// existed to keep a long generated reply inside one line; a modest,
+    /// fixed ceiling here is what keeps that lever from having to do all the
+    /// work by itself.
+    static func sentenceFontSize(base: CGFloat, dynamicTypeSize: DynamicTypeSize) -> CGFloat {
+        min(base * Theme.DynamicType.scale(for: dynamicTypeSize), base + 3)
     }
 }

@@ -5,8 +5,10 @@
     Bar/drift/harness/trend.py ai-text
     Bar/drift/harness/trend.py --window 4       # 3 is the minimum; see below
 
-Exit 0 when nothing fired, 2 when something did, so a scheduled job that only
-mails on failure mails exactly when there is something to read.
+Exit 0 when nothing fired, 4 when something did, so a scheduled job that only
+mails on failure mails exactly when there is something to read. 4, not 2:
+`argparse` itself exits 2 on a usage error, and a trend alert must not read as
+a typo in the command line, or the reverse.
 
 THE RULE, AND WHY IT IS NOT A SINGLE DELTA
 
@@ -455,13 +457,14 @@ def report(only: list[str] | None = None, window: int | None = None,
     print("TREND: something needs reading.")
     for line in alerts:
         print(f"  !! {line}")
-    return 2
+    return 4
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="The trend rule over Bar/drift/runs/*.jsonl.",
-        epilog="Exit 0 when nothing fired, 2 when something did.",
+        epilog="Exit 0 when nothing fired, 4 when something did. (argparse itself exits 2 on "
+               "a usage error, so the trend alert does not share that code.)",
     )
     parser.add_argument("corpus", nargs="*", help="which corpora to check (default: all with records)")
     parser.add_argument("--window", type=int, default=None,

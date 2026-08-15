@@ -56,7 +56,11 @@ extension ActionBanner {
             Image(systemName: icon)
                 .font(Theme.Glyph.medium(13))
             Text(title.uppercased())
-                .font(.system(size: 8, weight: .semibold))
+                .font(
+                    .system(
+                        size: Self.badgeFontSize(base: 8, dynamicTypeSize: dynamicTypeSize),
+                        weight: .semibold)
+                )
                 .tracking(0.4)
                 .lineLimit(1)
         }
@@ -76,7 +80,11 @@ extension ActionBanner {
         case .context(let sender, let message, let language):
             VStack(alignment: .leading, spacing: 0) {
                 Text(sender)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(
+                        .system(
+                            size: Self.badgeFontSize(base: 10, dynamicTypeSize: dynamicTypeSize),
+                            weight: .semibold)
+                    )
                     .foregroundStyle(Theme.Keys.secondaryLabel)
                 answer(message, language: language, size: 13)
             }
@@ -88,7 +96,11 @@ extension ActionBanner {
             VStack(alignment: .leading, spacing: 1) {
                 if !option.label.isEmpty {
                     Text(option.label.uppercased())
-                        .font(.system(size: 8, weight: .semibold))
+                        .font(
+                            .system(
+                                size: Self.badgeFontSize(base: 8, dynamicTypeSize: dynamicTypeSize),
+                                weight: .semibold)
+                        )
                         .tracking(0.4)
                         .foregroundStyle(Theme.Brand.solid)
                         .lineLimit(1)
@@ -110,7 +122,11 @@ extension ActionBanner {
         case .failed(_, let title, let detail):
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(
+                        .system(
+                            size: Self.sentenceFontSize(base: 13, dynamicTypeSize: dynamicTypeSize),
+                            weight: .medium)
+                    )
                     .foregroundStyle(Theme.Keys.label)
                     .lineLimit(1)
                 caption(detail)
@@ -124,7 +140,11 @@ extension ActionBanner {
             // happen — so it earns no new vocabulary.
             VStack(alignment: .leading, spacing: 2) {
                 Text(block.title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(
+                        .system(
+                            size: Self.sentenceFontSize(base: 13, dynamicTypeSize: dynamicTypeSize),
+                            weight: .medium)
+                    )
                     .foregroundStyle(Theme.Keys.label)
                     .lineLimit(1)
                 caption(block.detail)
@@ -148,13 +168,15 @@ extension ActionBanner {
 
     func caption(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11))
+            .font(.system(size: Self.sentenceFontSize(base: 11, dynamicTypeSize: dynamicTypeSize)))
             .foregroundStyle(Theme.Keys.secondaryLabel)
             // **Two lines, and `Theme.Metrics.bannerHeight` is why they fit.** The
             // strip paid 11pt to grow the letter keys (69 → 58). Three 11pt lines
             // plus the title overflow that frame and paint the suggestion bar.
             // Scale a hair before truncating; past two lines the honest mitigation
-            // is still the accessibility label.
+            // is still the accessibility label. `sentenceFontSize` caps Dynamic
+            // Type's own growth at 3pt over that 11 for the same reason: three
+            // lines is already the ceiling this frame allows.
             .lineLimit(2)
             .minimumScaleFactor(0.85)
             .multilineTextAlignment(.leading)
@@ -168,7 +190,7 @@ extension ActionBanner {
     /// the user is typing English into the field underneath.
     func answer(_ text: String, language: KeyboardLanguage, size: CGFloat) -> some View {
         Text(text)
-            .font(.system(size: size))
+            .font(.system(size: Self.sentenceFontSize(base: size, dynamicTypeSize: dynamicTypeSize)))
             .foregroundStyle(Theme.Keys.label)
             .lineLimit(1)
             // **Shrink before truncating, because the user is being asked to accept

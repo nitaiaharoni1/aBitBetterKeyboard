@@ -20,10 +20,16 @@ extension KeyView {
             if spec.addressableID == KeyboardLayout.punctuationKeyID, !spec.alternates.isEmpty {
                 VStack(spacing: 0) {
                     Text(spec.alternates.prefix(3).joined())
-                        .font(.system(size: 11, weight: .regular))
+                        .font(
+                            .system(
+                                size: min(
+                                    11 * Theme.DynamicType.scale(for: dynamicTypeSize),
+                                    Theme.Glyph.lightFloor),
+                                weight: .regular)
+                        )
                         .foregroundStyle(Theme.Keys.label.opacity(0.5))
                     Text(value)
-                        .font(.system(size: 22, weight: .light))
+                        .font(.system(size: scaledGlyphSize(base: 22), weight: .light))
                         .foregroundStyle(Theme.Keys.label)
                 }
                 .lineLimit(1)
@@ -56,7 +62,7 @@ extension KeyView {
 
         case .plane(_, let text):
             Text(text)
-                .font(.system(size: 16, weight: .light))
+                .font(.system(size: scaledGlyphSize(base: 16), weight: .light))
                 .foregroundStyle(labelColor)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
@@ -119,7 +125,7 @@ extension KeyView {
             // is that nothing about emoji is brand-tinted when it is not open.
             if isEmojiOpen {
                 Text(language.lettersPlaneLabel)
-                    .font(.system(size: 16, weight: .light))
+                    .font(.system(size: scaledGlyphSize(base: 16), weight: .light))
                     .foregroundStyle(labelColor)
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
@@ -285,7 +291,7 @@ extension KeyView {
                     icon: icon, size: 15, tint: resolvedTint, waveform: waveform,
                     showsCaption: true)
                 Text(title)
-                    .font(Font(SuggestionBar.toneLabelFont))
+                    .font(Font(SuggestionBar.toneLabelFont(for: dynamicTypeSize)))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }

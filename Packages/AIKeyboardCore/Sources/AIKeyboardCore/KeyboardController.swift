@@ -436,10 +436,34 @@ public final class KeyboardController: ObservableObject {
         // keyboard is already on screen is not picked up until the extension is
         // rebuilt by iOS, which is the ordinary case anyway — the host app changing
         // a field tears the keyboard down first.
+        // `networkAllowed` is what turns a 401 into a sentence the user can act
+        // on. **It defaults to `{ true }` and for the whole of this type's life
+        // nothing passed it**, so the `needsFullAccess` guard inside
+        // `CloudIntelligence` was unreachable in the one process that needs it:
+        // a keyboard without Full Access has no networking at all, and instead
+        // of saying so it built a request, sent it, and got a 401 back. That is
+        // the extension half of the 401s in `NIT-87` — 31 of the 36 that landed
+        // after a valid token existed — and the guard was not missing, it was
+        // written and tested
+        // (`CloudIntelligenceTests.testNoFullAccessIsReportedBeforeAnyRequest`,
+        // which asserts nothing is even sent) and simply never armed.
+        //
+        // **This is the only call site in the project where it bites**, which is
+        // why the default went unnoticed: the other two takers of a
+        // `networkAllowed` are `CloudScreenReader`, built only in
+        // `AIKeyboardBroadcast`, and `CloudDictation`, built only in the
+        // containing app. A broadcast extension carries the App Group through
+        // its own entitlement and an app always has it, so neither is ever the
+        // process the permission is withheld from. The keyboard is.
+        //
+        // Read at the call rather than captured, because Full Access can be
+        // granted while this controller is alive.
         self.engine =
             engine
             ?? RoutedIntelligence.standard(
-                cloud: BackendTransport.configured().map { CloudIntelligence(transport: $0) }
+                cloud: BackendTransport.configured().map {
+                    CloudIntelligence(transport: $0, networkAllowed: { SharedContainer.url != nil })
+                }
             )
 
         // On-device only. Cloud next-words in the bar mixed model guesses with
@@ -572,6 +596,20 @@ public final class KeyboardController: ObservableObject {
     /// `viewWillAppear` did not fire — from the same field being typed into.
     var adoptedKeyboardType: UIKeyboardType?
 
+    /// The `autocapitalizationType` the keys were last shaped for.
+    ///
+    /// Same shape and same reason as `adoptedKeyboardType`: nil until a field
+    /// answers, and read once per field so a keystroke cannot re-decide it.
+    var adoptedAutocapitalizationType: UITextAutocapitalizationType?
+
+    /// What this field's own trait says about capitalising what is typed into
+    /// it, decided once at focus by `adoptFieldAutocapitalization` and read
+    /// from every boundary event afterwards — see `armShiftAtBoundary` in
+    /// `KeyboardController+Typing`. Starts at `.sentences`, which is what a
+    /// controller that has never adopted a field's trait already behaves like:
+    /// the same value the nil fallback resolves to.
+    var autocapitalizationMode: UITextAutocapitalizationType = .sentences
+
     /// The language this keyboard moved to on its own, and the one it moved away
     /// from.
     ///
@@ -698,15 +736,6 @@ public final class KeyboardController: ObservableObject {
         // quantity box left the keyboard on the digits, and this is the one
         // moment that knows the next field wants letters.
         plane = .letters
-        // **An address and a URL are never capitalised, and this keyboard reads
-        // no `autocapitalizationType` at all** — `shift` starts `.on`, Return and
-        // the double-space full stop re-arm it, and nothing resets it per field.
-        // Before `IsASCIICapable` was corrected iOS withheld these fields and drew
-        // its own keyboard, so the flip is what exposed it: a user who had just
-        // ended a sentence met an email box that typed `Nitai@example.com`. Held
-        // to the two types where the answer is not a judgement call; the general
-        // fix is to read the trait, which is its own piece of work.
-        if reported == .emailAddress || reported == .URL { shift = .off }
 
         guard language.script != .latin,
             let latin = enabledLanguages.first(where: { $0.script == .latin })
@@ -716,6 +745,57 @@ public final class KeyboardController: ObservableObject {
         // rather than what the fourth one left behind.
         if imposedLatin == nil { imposedLatin = (was: language, became: latin) }
         language = latin
+        return true
+    }
+
+    /// Reads `autocapitalizationType` the way `adoptFieldKeyboardType` reads
+    /// `keyboardType`, and decides how `shift` starts and re-arms in this field.
+    ///
+    /// **`.none` never arms shift, `.allCharacters` locks it, and `.words` /
+    /// `.sentences` arm it exactly where Return and the double-space full stop
+    /// already did** — see `armShiftAtBoundary` in `KeyboardController+Typing`.
+    /// This function only decides the mode a boundary event goes on to consult;
+    /// it does not touch shift on an ordinary keystroke, which is what stops
+    /// typing itself from fighting a shift the user just set by hand.
+    ///
+    /// **A host that answers nil reads as `.sentences`**, which is what this
+    /// keyboard already did before it read the trait at all, so a host that
+    /// never implemented `autocapitalizationType` sees no change — the same
+    /// fallback `adoptFieldKeyboardType` gives `.default` and nil.
+    ///
+    /// **Never touches a `.locked` shift.** Caps lock only ever comes from the
+    /// user's own `toggleShift()`; nothing here may cancel it, even walking
+    /// into a field this decides fresh for — the concrete case is a
+    /// `.sentences` field the user has locked caps in, then a boundary or a
+    /// silent field swap that would otherwise re-arm `.on` over it.
+    ///
+    /// **Called from `prepareForNewDocument()` only, always at `force: true`.**
+    /// `adoptFieldKeyboardType` also re-decides from `refreshSuggestions()` on
+    /// every keystroke, which is what catches a field swapped without the
+    /// keyboard being dismissed — see `.claude/rules/keyboard-wiring.md`. Doing
+    /// the same here would mean every keystroke re-reading whichever value the
+    /// mock or the real proxy has landed on, which is far more exposed than a
+    /// rarely-changing `keyboardType`: several `TextTarget` conformers in
+    /// `AIKeyboardCoreTests` answer a fixed, non-nil `autocapitalizationType`
+    /// from the moment they are built rather than only after a field genuinely
+    /// changes, so a per-keystroke recheck would treat their very first
+    /// keystroke as a field swap and re-arm shift out from under whatever a
+    /// test — or a real caller — had just set it to by hand. Catching a silent
+    /// mid-session swap of this trait as well is real future work, and it
+    /// needs a call from `KeyboardController+Suggestions.swift`.
+    @discardableResult
+    func adoptFieldAutocapitalization(force: Bool) -> Bool {
+        let reported = target?.autocapitalizationType ?? nil
+        guard force || reported != adoptedAutocapitalizationType else { return false }
+        adoptedAutocapitalizationType = reported
+        autocapitalizationMode = reported ?? .sentences
+        guard shift != .locked else { return true }
+        switch autocapitalizationMode {
+        case .none: shift = .off
+        case .allCharacters: shift = .locked
+        case .words, .sentences: shift = store.storedAutocapitalise ? .on : .off
+        @unknown default: shift = store.storedAutocapitalise ? .on : .off
+        }
         return true
     }
 
@@ -742,6 +822,7 @@ public final class KeyboardController: ObservableObject {
         // candidates over an English keyboard, which is the two-surfaces-disagree
         // defect this codebase keeps finding.
         if adoptFieldKeyboardType(force: true) { refreshSuggestions() }
+        adoptFieldAutocapitalization(force: true)
         if documentHasText,
             let rtl = SuggestionEngine.languages(in: contextBefore + contextAfter)
                 .first(where: { $0.isRightToLeft })

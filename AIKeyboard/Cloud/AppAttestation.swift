@@ -59,14 +59,26 @@ public enum AppAttestation {
 
     private static let log = Logger(subsystem: "com.nitai.aikeyboard", category: "AppAttest")
 
-    /// One run at a time. `.task` at launch and `.onChange(of: scenePhase)` both
-    /// call in, and two overlapping runs would race on `attestKeyId` and burn two
-    /// attestations to answer one question.
-    private static var running = false
+    /// One run at a time, shared rather than merely exclusive: `.task` at
+    /// launch, `.onChange(of: scenePhase)`, the daily background refresh, and
+    /// now a 401 recovering through `SessionReattestation` (`BackendTransport
+    /// .send`) can all land inside the same window. A caller that arrives
+    /// while a run is already in flight awaits *that* run's own result rather
+    /// than skipping — the old `Bool` guard let a second caller return before
+    /// the first had written a token, which is exactly the "401 while an
+    /// attestation is already running" case NIT-87 asks this to be safe
+    /// against.
+    private static var inFlight: Task<Void, Never>?
 
     /// Called at launch and on every return to the foreground. Does nothing at
     /// all in the common case.
     public static func refreshIfNeeded(store: SharedStore) async {
+        // Idempotent: this is the earliest, most-called entry point, so by the
+        // time any cloud action can be attempted, `BackendTransport.send` has
+        // somewhere to send a 401 recovery. Extensions never call this, so
+        // `SessionReattestation.shared` in their own process stays unset.
+        await SessionReattestation.shared.register(AppAttestationReattestor())
+
         guard needsRefresh(store: store) else { return }
         // **A typed token means there is nothing to attest for.** It wins in
         // `BackendTransport.storedToken`, and the only place it exists is a
@@ -88,6 +100,7 @@ public enum AppAttestation {
     /// is compiled out of Release, because a connection the user cannot see is not
     /// a connection they should have to repair.
     public static func attestNow(store: SharedStore) async {
+        await SessionReattestation.shared.register(AppAttestationReattestor())
         await attest(store: store)
     }
 
@@ -137,11 +150,20 @@ public enum AppAttestation {
         return expiry.timeIntervalSinceNow < (90 * 24 * 60 * 60) - refreshAfter
     }
 
+    /// The coordinating wrapper: starts a run, or joins the one already
+    /// happening. See `inFlight`'s own comment for why a caller that arrives
+    /// mid-run must wait for that run's answer rather than return early.
     static func attest(store: SharedStore) async {
-        guard !running else { return }
-        running = true
-        defer { running = false }
+        if let inFlight {
+            return await inFlight.value
+        }
+        let task = Task { await runAttest(store: store) }
+        inFlight = task
+        defer { inFlight = nil }
+        await task.value
+    }
 
+    private static func runAttest(store: SharedStore) async {
         guard DCAppAttestService.shared.isSupported else {
             finish(false, "This device can't use App Attest.", store: store)
             return
@@ -333,6 +355,23 @@ public enum AppAttestation {
         } else {
             log.error("not attested: \(note, privacy: .public)")
         }
+    }
+}
+
+/// `AppAttestation`'s conformance to `SessionReattestor`, registered with
+/// `SessionReattestation.shared` at the top of `refreshIfNeeded` and
+/// `attestNow` — see those for why that is early enough.
+///
+/// **Holds nothing**, rather than capturing a `SharedStore`: `attest(store:)`
+/// only ever runs against `.shared`, the same singleton `AIKeyboardApp`
+/// passes it, and `cloudSessionToken` reads `UserDefaults` fresh on every
+/// call — so there is nothing here that could go stale, and nothing that
+/// would make this struct not trivially `Sendable`.
+private struct AppAttestationReattestor: SessionReattestor {
+    func reattest() async -> String? {
+        await AppAttestation.attest(store: .shared)
+        let token = SharedStore.shared.cloudSessionToken
+        return token.isEmpty ? nil : token
     }
 }
 

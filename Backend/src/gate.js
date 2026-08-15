@@ -72,10 +72,16 @@ export function bearerToken(headers) {
 /// case cannot reach Cloud Run by accident.
 export async function authorize({ expectedToken, headers, verifySession }) {
   const presented = bearerToken(headers);
+  let sessionRejectReason;
 
   if (presented && verifySession) {
     const session = await verifySession(presented);
     if (session.ok) return { ok: true, deviceId: session.deviceId };
+    // Kept rather than discarded: `session.reason` is one of the closed set
+    // `SessionRejectReason` names in sessionToken.js (expired, bad signature,
+    // malformed), and it is the only place that distinction still exists once
+    // this function has decided to refuse the call.
+    sessionRejectReason = session.reason;
   }
 
   if (!expectedToken) return { ok: true, deviceId: null };
@@ -83,7 +89,16 @@ export async function authorize({ expectedToken, headers, verifySession }) {
   // 401 rather than 403: the client maps both to `cloudNotConfigured`, which is
   // the honest reading — from the app's side a backend it cannot authenticate
   // to is a backend it does not have.
-  return { ok: false, status: 401, error: "missing or invalid bearer token" };
+  return {
+    ok: false,
+    status: 401,
+    error: "missing or invalid bearer token",
+    // A session-shaped bearer that `verifySession` itself rejected names why.
+    // Otherwise, the only other reason this project's own devices ever hit
+    // this branch is that no bearer was presented at all — NIT-87's "no token
+    // yet" state, distinct from a real refusal.
+    reason: sessionRejectReason ?? (presented ? undefined : "absent")
+  };
 }
 
 /// A fixed-window counter keyed by caller.

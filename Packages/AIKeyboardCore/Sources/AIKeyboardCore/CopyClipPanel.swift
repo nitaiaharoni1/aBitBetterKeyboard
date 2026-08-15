@@ -9,9 +9,13 @@ import SwiftUI
 public struct CopyClipPanel: View {
     @ObservedObject var controller: KeyboardController
 
+    /// A new pasteboard generation is waiting and offering `UIPasteControl`
+    /// is the whole reason this file imports the state at all.
+    private var awaitsPasteControl: Bool { controller.copyclipCaptureState == .control }
+
     public var body: some View {
         Group {
-            if controller.clips.isEmpty {
+            if controller.clips.isEmpty && !awaitsPasteControl {
                 empty
             } else {
                 list
@@ -28,6 +32,18 @@ public struct CopyClipPanel: View {
         // hidden separators, and zero content margins keep the cards looking
         // like letter keys rather than a settings table.
         List {
+            if awaitsPasteControl {
+                CopyClipPendingCaptureRow(controller: controller)
+                    .listRowInsets(
+                        EdgeInsets(
+                            top: Theme.Metrics.keySpacing / 2,
+                            leading: Theme.Metrics.sideInset,
+                            bottom: Theme.Metrics.keySpacing / 2,
+                            trailing: Theme.Metrics.sideInset)
+                    )
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            }
             ForEach(controller.clips) { clip in
                 CopyClipCard(clip: clip) {
                     controller.insertClip(clip)
@@ -290,5 +306,45 @@ private struct CopyClipCardStyle: ButtonStyle {
             )
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(Theme.Motion.press, value: configuration.isPressed)
+    }
+}
+
+/// The row CopyClip draws instead of reading a fresh pasteboard generation.
+///
+/// Same card shell as `CopyClipCard` — `Theme.Keys.card`, `Theme.Radius.key`
+/// — because the row sits in the same list, but it is not a `Button`: the
+/// tap target inside it is `CopyClipPasteControl` itself, a system `UIControl`
+/// wrapped for SwiftUI, and it is the one piece of this row `Theme` cannot
+/// reach. Apple supplies the label ("Paste") and the icon; only the fill,
+/// the text colour and the corner radius are tunable, and they are pulled
+/// from the same palette the card beside it uses, not from iOS's default
+/// blue.
+private struct CopyClipPendingCaptureRow: View {
+    @ObservedObject var controller: KeyboardController
+
+    var body: some View {
+        HStack(spacing: Theme.Space.sm) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("New copy waiting")
+                    .font(Theme.Fonts.body)
+                    .foregroundStyle(Theme.Keys.label)
+                Text("Paste adds it here. No prompt.")
+                    .font(Theme.Fonts.caption)
+                    .foregroundStyle(Theme.Keys.secondaryLabel)
+            }
+            Spacer(minLength: Theme.Space.sm)
+            CopyClipPasteControl { text in
+                controller.captureFromPasteControl(text)
+            }
+            .fixedSize()
+        }
+        .padding(.vertical, Theme.Space.xs)
+        .padding(.horizontal, Theme.Space.sm)
+        .frame(minHeight: Theme.Metrics.minTouchTarget, alignment: .center)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
+                .fill(Theme.Keys.card)
+        )
+        .accessibilityElement(children: .contain)
     }
 }

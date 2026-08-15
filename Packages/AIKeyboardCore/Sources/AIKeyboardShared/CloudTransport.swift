@@ -100,6 +100,67 @@ public protocol CloudTransport: Sendable {
     func send(_ request: CloudRequest) async throws -> [String: String]
 }
 
+// MARK: - Recovering from a rejected session token
+
+/// A hook `BackendTransport.send` calls when a model route answers 401
+/// despite a session token being sent: mint, or re-read, a fresher one for
+/// exactly one retry of the request that failed.
+///
+/// **Only the containing app can conform to this for real.** App Attest binds
+/// an attestation to one bundle ID, the keyboard and the broadcast extension
+/// carry different ones from the app, and neither runs `DCAppAttestService`
+/// at all — `AppAttestation` (in the app target) is the one conformer, and it
+/// registers itself with `SessionReattestation.shared` the first time it
+/// runs, which happens at launch before any AI action can be attempted. A
+/// transport built in either extension finds nothing registered and answers
+/// the 401 honestly rather than retrying into nothing — see
+/// `BackendTransport.send`.
+public protocol SessionReattestor: Sendable {
+    /// The fresh bearer to retry with, or nil when re-attestation itself
+    /// failed (offline, Apple refused, the service refused it again) or
+    /// produced nothing to send.
+    func reattest() async -> String?
+}
+
+/// Coordinates recovery from a 401 that arrives despite a session token
+/// existing, one process at a time.
+///
+/// **An actor, because the failure NIT-87 measured is concurrency.** Device
+/// traffic showed bursts of 14 and 17 calls landing 401 within seconds of
+/// each other from one process — a burst of retries against a failing auth,
+/// not independent losses. Without serialising through here, each call would
+/// ask `reattest()` on its own, which spends Apple's per-device attestation
+/// allowance on a burst rather than on the one retry this exists to make.
+/// `reattest()` runs the registered conformer at most once no matter how many
+/// callers arrive while it is in flight, and every caller sees the same
+/// result.
+public actor SessionReattestation {
+    public static let shared = SessionReattestation()
+
+    private var conformer: (any SessionReattestor)?
+    private var inFlight: Task<String?, Never>?
+
+    private init() {}
+
+    /// Called by whichever process can actually attest. Left unset in both
+    /// extensions.
+    public func register(_ reattestor: any SessionReattestor) {
+        conformer = reattestor
+    }
+
+    /// Nil immediately, with no attempt at all, when nothing is registered —
+    /// the honest answer in both extensions, which cannot mint a token for
+    /// this app no matter how many times they ask.
+    public func reattest() async -> String? {
+        guard let conformer else { return nil }
+        if let inFlight { return await inFlight.value }
+        let task = Task { await conformer.reattest() }
+        inFlight = task
+        defer { inFlight = nil }
+        return await task.value
+    }
+}
+
 // MARK: - Backend transport
 
 /// The shipping cloud path: the app talks to the product's own backend, and the

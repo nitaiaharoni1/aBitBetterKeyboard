@@ -14,6 +14,7 @@ public struct SuggestionBar: View {
     /// nothing notifies it, which is why `KeyboardController.defaultTone` reads the
     /// store at the moment of the tap rather than trusting what is drawn here.
     @ObservedObject private var store: SharedStore = .shared
+    @Environment(\.dynamicTypeSize) var dynamicTypeSize
 
     public init(controller: KeyboardController) {
         self.controller = controller
@@ -160,6 +161,17 @@ public struct SuggestionBar: View {
         return slots
     }
 
+    /// The three candidates are the bar's primary content, so they get real
+    /// room to grow — capped at 70% of `suggestionBarHeight`, which is fixed
+    /// at 36pt (see `.claude/rules/suggestion-bar.md`) and stays that way
+    /// regardless of Dynamic Type, so the growth has to go somewhere within
+    /// it rather than push the row taller. `.minimumScaleFactor(0.75)` below
+    /// already absorbs a long word at the larger size; it existed before this
+    /// for the same reason, on a long completion at the shipped size.
+    static func candidateFontSize(for dynamicTypeSize: DynamicTypeSize) -> CGFloat {
+        min(17 * Theme.DynamicType.scale(for: dynamicTypeSize), Theme.Metrics.suggestionBarHeight * 0.7)
+    }
+
     private func candidate(_ suggestion: Suggestion) -> some View {
         Button {
             controller.apply(suggestion)
@@ -170,7 +182,11 @@ public struct SuggestionBar: View {
             // word is already written in its own script, so the tag repeats what
             // the letters say and costs the room they are read in.
             Text(suggestion.text)
-                .font(.system(size: 17, weight: suggestion.isDefault ? .bold : .light))
+                .font(
+                    .system(
+                        size: Self.candidateFontSize(for: dynamicTypeSize),
+                        weight: suggestion.isDefault ? .bold : .light)
+                )
                 .foregroundStyle(Theme.Keys.label)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)

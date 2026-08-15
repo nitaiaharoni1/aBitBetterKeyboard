@@ -50,11 +50,28 @@ if (!expectedToken) {
 // `createTokenProvider` above it, which fetches Google access tokens for Vertex.
 // Two different tokens, two different jobs, named apart here because they were
 // briefly not.
+// `SESSION_SECRET_PREVIOUS` is the grace window across a rotation, and it exists
+// because rotating without one is silent. `deploy.sh` reads the secret from the
+// caller's shell on every run and its own printed example generates one inline
+// with `openssl rand -hex 32`, so a redeploy that does not reuse the old value
+// invalidates every session token already on every device at that instant. The
+// devices cannot tell that from a forged token: they get a flat 401 on the AI
+// action they just pressed. That is the shape of the 2026-08-14 bursts in
+// NIT-87, both of which follow revision 00004 by minutes.
+//
+// Set it to the outgoing secret for one deploy and outstanding tokens keep
+// verifying until they expire on their own schedule. Signing always uses the
+// current secret, so nothing is issued under the old one and the window closes
+// by itself. Unset is the ordinary state and means no grace at all.
 const sessionSecret = process.env.SESSION_SECRET || null;
+const previousSessionSecret = process.env.SESSION_SECRET_PREVIOUS || null;
 let sessionTokens = null;
 let attestationVerifier = null;
 if (sessionSecret) {
-  sessionTokens = createTokens({ secret: sessionSecret });
+  sessionTokens = createTokens({
+    secret: sessionSecret,
+    previousSecrets: previousSessionSecret ? [previousSessionSecret] : []
+  });
   attestationVerifier = createAttestationVerifier({
     rootCertificatePem: APPLE_APP_ATTEST_ROOT_PEM,
     appId: process.env.APP_ID || "9R8P28G4BJ.com.nitai.aikeyboard",

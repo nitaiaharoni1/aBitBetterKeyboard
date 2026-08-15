@@ -20,6 +20,14 @@ struct LayoutView: View {
     @EnvironmentObject private var store: SharedStore
     @Environment(AppChrome.self) private var chrome
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// Measured for `FullAccessNeededBanner`: without Full Access every edit
+    /// made below is stored and never reaches the keyboard, which goes on
+    /// drawing the shipped default. Re-read on every return to the
+    /// foreground, the same as `LanguagesView`, because the switch is thrown
+    /// in Settings and nothing notifies the app.
+    @State private var setup = SetupState()
 
     /// **Both of these are default-initialised and filled in `.task`, and that is
     /// not a style choice.**
@@ -47,6 +55,23 @@ struct LayoutView: View {
     @State private var trayGlobal: CGRect = .zero
     @State private var resizeStartPixels: CGFloat = 0
 
+    /// The screen's own box, below the nav bar — everything `workbench` and
+    /// `shelf` have to fit inside once the canvas claims its `safeAreaInset`.
+    /// Measured, not assumed, by `LayoutViewportHeightKey` on the root
+    /// `ZStack`, the same `.background { GeometryReader { … } }` idiom
+    /// `keyboardGlobal` already uses below. Starts at 0 so the very first
+    /// layout pass — before any measurement has arrived — reads as "no room"
+    /// and `hasRoomForWorkbenchFloor` defaults to the safe answer rather than
+    /// briefly forcing a floor it has not checked for.
+    @State private var availableHeight: CGFloat = 0
+
+    /// `shelf`'s own real height, measured the same way, because its pieces
+    /// are fixed (`contextBandHeight` and the tray) but `LayoutProblemsSection`
+    /// is not — an unbounded number of wrapped warning lines is exactly the
+    /// part `keyAreaHeight`'s arithmetic cannot predict, so this is read off
+    /// the rendered view rather than recomputed.
+    @State private var shelfHeight: CGFloat = 0
+
     /// The shelf's middle band. Fixed, because the hint, a live drag and the
     /// selected-key inspector take turns in it and a band that resized would
     /// shunt the spare keys under the thumb that was reaching for them.
@@ -54,6 +79,65 @@ struct LayoutView: View {
     /// 60 is the floor rather than a taste: the inspector's controls are 44 pt
     /// targets inside `Theme.Space.xs` of padding, and anything less clips them.
     private static let contextBandHeight: CGFloat = 60
+
+    /// The workbench's floor when there is room for one, so a tall preset
+    /// cannot squeeze it away.
+    ///
+    /// **The canvas is a `safeAreaInset`, so it claims its height first and
+    /// `workbench` — the flexible half, being a `ScrollView` — absorbs whatever
+    /// the shelf below it leaves over.** The shelf's own pieces are mostly
+    /// fixed (`contextBandHeight` above, and the tray drawn at the row height
+    /// the key is about to become), so on Roomy with the number row on, on an
+    /// iPhone SE, the canvas alone claims 426 of the 603 pt below the nav bar
+    /// and the shelf claims another ~167, leaving the workbench about 10 pt —
+    /// the preset cards and the sliders that would get the user back out of
+    /// Roomy are still there, just not reachable.
+    ///
+    /// **138 is not a round number: it is what the workbench gets on the
+    /// untouched *default* layout on the same phone**, so no combination of
+    /// presets and sliders ever leaves the workbench worse off than the keyboard
+    /// as it ships. It is also enough to see the Presets header and at least the
+    /// top of the first preset card, which is the one control that gets a user
+    /// out of any preset they regret.
+    ///
+    /// **Applied only when `hasRoomForWorkbenchFloor` says there is room for
+    /// it.** `contextBand` and the tray are exact `.frame(height:)`, not a
+    /// range, so the shelf cannot actually shrink to make way — a floor forced
+    /// on regardless would push the outer stack past what the screen holds,
+    /// which on the single most extreme device-and-preset combination could
+    /// carry the tray under the canvas. That is the same defect this floor
+    /// exists to fix, wearing the tray's clothes instead of the workbench's.
+    /// So this is a ceiling on how generous the floor gets to be, never a
+    /// guarantee: when there is not enough room, `workbench` takes what is
+    /// left, exactly as it did before this existed.
+    private static let workbenchMinHeight: CGFloat = 138
+
+    /// What the canvas actually asks the host for right now, computed rather
+    /// than measured: `Theme.Metrics.totalHeight(for:showsBanner:)` is the
+    /// same formula `KeyboardViewController` uses, so this can never disagree
+    /// with what `canvasSection` renders, and it is available before the
+    /// canvas has laid out even once — unlike `shelfHeight`, nothing here
+    /// varies with content the formula cannot see. `model.displayed` rather
+    /// than `model.draft`: mid-drag or mid-resize the *displayed* geometry is
+    /// what `canvasSection` is actually drawing.
+    private var canvasHeight: CGFloat {
+        Theme.Metrics.totalHeight(for: model.displayed, showsBanner: false)
+    }
+
+    /// Whether `workbenchMinHeight` fits without pushing the outer stack past
+    /// the screen. See that constant's note for why this exists at all.
+    private var hasRoomForWorkbenchFloor: Bool {
+        availableHeight - canvasHeight - shelfHeight >= Self.workbenchMinHeight
+    }
+
+    /// What `FullAccessNeededBanner` says here. Mirrors
+    /// `SetupState.languagesNeedFullAccess`'s hedge deliberately: `setup
+    /// .fullAccess` can only ever *confirm* a yes, so this says "once Full
+    /// Access is on" rather than asserting it is off right now.
+    private static let fullAccessMessage =
+        "The keyboard can only read this layout once Full Access is on. Until then it draws the "
+        + "shipped default, whatever you build here. Done still saves it, ready for when Full "
+        + "Access catches up."
 
     /// **Takes nothing, and that is the fix for a hang.**
     ///
@@ -75,6 +159,15 @@ struct LayoutView: View {
                 shelf
             }
         }
+        // Measures the box below the nav bar, before the canvas's own
+        // `safeAreaInset` is chained on below — see `availableHeight`.
+        .background {
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: LayoutViewportHeightKey.self, value: geo.size.height)
+            }
+        }
+        .onPreferenceChange(LayoutViewportHeightKey.self) { availableHeight = $0 }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             canvasSection
         }
@@ -106,8 +199,14 @@ struct LayoutView: View {
         .onChange(of: model.resize) { _, _ in applyCanvas() }
         // The app's tab bar is a `safeAreaInset`, not a `TabView`'s, so
         // `.toolbar(.hidden, for: .tabBar)` cannot reach it. See `AppChrome`.
-        .onAppear { chrome.hidesTabBar = true }
+        .onAppear {
+            chrome.hidesTabBar = true
+            setup = .current(store: store)
+        }
         .onDisappear { chrome.hidesTabBar = false }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { setup = .current(store: store) }
+        }
         .task {
             guard !hasLoaded else { return }
             hasLoaded = true
@@ -125,6 +224,12 @@ struct LayoutView: View {
     private var workbench: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.lg) {
+                // First in the stack, ahead of the controls it is warning
+                // about, so it is what a squeezed `workbenchMinHeight`
+                // viewport shows before anything else on a short phone.
+                if setup.fullAccess != .confirmed {
+                    FullAccessNeededBanner(message: Self.fullAccessMessage, context: "layout")
+                }
                 LayoutPresetSection(model: model)
                 LayoutGeometrySection(model: model)
                 LayoutBarEndsSection(model: model)
@@ -139,6 +244,7 @@ struct LayoutView: View {
             .contentShape(Rectangle())
             .onTapGesture(perform: deselect)
         }
+        .frame(minHeight: hasRoomForWorkbenchFloor ? Self.workbenchMinHeight : 0)
     }
 
     // MARK: Shelf
@@ -166,6 +272,17 @@ struct LayoutView: View {
                     Theme.Surface.separator.frame(height: 1)
                 }
         }
+        // A second `.background`, behind the one above: attaching it here
+        // rather than wrapping `shelf`'s content in a `GeometryReader` is
+        // what keeps this an observer rather than a layout participant — see
+        // `shelfHeight`. `LayoutProblemsSection` is the one part of the total
+        // that `hasRoomForWorkbenchFloor`'s formula cannot predict.
+        .background {
+            GeometryReader { geo in
+                Color.clear.preference(key: ShelfHeightKey.self, value: geo.size.height)
+            }
+        }
+        .onPreferenceChange(ShelfHeightKey.self) { shelfHeight = $0 }
     }
 
     /// One band, three states. The drag state is the only place the editor can
@@ -554,6 +671,22 @@ private struct LayoutChromeFrameKey: PreferenceKey {
 private struct LayoutTrayFrameKey: PreferenceKey {
     static var defaultValue: CGRect = .zero
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
+    }
+}
+
+/// Backs `availableHeight`. See `hasRoomForWorkbenchFloor`.
+private struct LayoutViewportHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+/// Backs `shelfHeight`. See `hasRoomForWorkbenchFloor`.
+private struct ShelfHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }
 }

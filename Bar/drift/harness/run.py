@@ -9,8 +9,9 @@
     Bar/drift/harness/run.sh --trend-only      # reads the records, runs nothing
     Bar/drift/harness/run.sh --no-trend        # writes the records, checks nothing
 
-Exit 0 when the trend check found nothing, 2 when it fired, 3 when a corpus was
-asked for and produced no record.
+Exit 0 when the trend check found nothing, 4 when it fired, 3 when a corpus was
+asked for and produced no record. 4, not 2: `argparse` exits 2 on a usage
+error, and a trend alert must never collide with a typo in the command line.
 
 Why this exists: every absolute number in `README.md` is a reading with a date
 on it. The model is served behind a moving alias with no dated version to pin to
@@ -600,8 +601,8 @@ def selection(args) -> list[str]:
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Re-runs the Bar corpora and appends one dated record per run.",
-        epilog="Exit 0 clean, 2 the trend check fired, 3 a corpus was asked for and "
-               "produced no record.",
+        epilog="Exit 0 clean, 4 the trend check fired, 3 a corpus was asked for and "
+               "produced no record. (2 is argparse's own usage-error code, left alone.)",
     )
     parser.add_argument("--paid", action="store_true",
                         help="also run the corpora that spend real model calls")

@@ -93,6 +93,11 @@ public struct KeyView: View {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.keyboardCanvasWidth) var keyboardCanvasWidth
     @Environment(\.keyboardCanvasOriginX) var keyboardCanvasOriginX
+    /// Read here and forwarded into the `static` sizing functions in
+    /// `KeyView+SpaceLabel`, rather than read again inside them: those take
+    /// the size as an explicit parameter so a test can compare two sizes
+    /// against one key box without standing up a second SwiftUI environment.
+    @Environment(\.dynamicTypeSize) var dynamicTypeSize
 
     public init(
         spec: KeySpec,

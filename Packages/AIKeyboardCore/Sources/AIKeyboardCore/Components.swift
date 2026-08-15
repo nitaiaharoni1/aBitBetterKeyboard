@@ -77,6 +77,7 @@ public struct WaveformView: View {
 /// The small marker that identifies a suggestion coming from the other language.
 public struct LanguageTag: View {
     private let language: KeyboardLanguage
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     public init(_ language: KeyboardLanguage) {
         self.language = language
@@ -84,7 +85,11 @@ public struct LanguageTag: View {
 
     public var body: some View {
         Text(language.shortName)
-            .font(.system(size: 9, weight: .semibold))
+            .font(
+                .system(
+                    size: min(9 * Theme.DynamicType.scale(for: dynamicTypeSize), Theme.Glyph.lightFloor),
+                    weight: .semibold)
+            )
             .foregroundStyle(Theme.Brand.solid)
             .padding(.horizontal, 4)
             .padding(.vertical, 1)

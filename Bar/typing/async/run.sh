@@ -26,6 +26,10 @@ esac
 
 device="${SIMULATOR_DEVICE:-0966F3D6-2589-4E88-BE84-4A69CD64FEE8}"
 
+# Cheap first: catches a malformed entry before xcodebuild spends minutes
+# building and booting to reach it.
+python3 "$here/validate.py"
+
 export ASYNC_TYPING_CORPUS="$corpus"
 export ASYNC_TYPING_OUT="$out"
 export TEST_RUNNER_ASYNC_TYPING_CORPUS="$corpus"

@@ -24,7 +24,32 @@ export const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const CHALLENGE_AUDIENCE = "aikeyboard/challenge";
 const SESSION_AUDIENCE = "aikeyboard/session";
 
-export function createTokens({ secret, now = Date.now }) {
+// **The closed set of reasons a session token is refused, for the log line
+// `authorize` (gate.js) writes and `httpServer.js` prints.** A constant set
+// rather than free text on purpose: the reason reaches the log unfiltered, so
+// it must never be able to carry a token fragment or anything else worth not
+// printing — it can only ever be one of these four words.
+export const SessionRejectReason = Object.freeze({
+  EXPIRED: "expired",
+  BAD_SIGNATURE: "bad_signature",
+  MALFORMED: "malformed"
+});
+
+/// jose's own error `code` distinguishes the shapes that matter here. Anything
+/// that is not "expired" or "not even a JWT" is treated as a bad signature —
+/// which is also where a wrong audience lands (a challenge presented as a
+/// session token, or a token from a secret this deployment no longer holds):
+/// the payload parsed, so it is not malformed, and it has not aged out, so it
+/// is not expired; it simply does not check out as ours.
+function reasonForError(error) {
+  if (error?.code === "ERR_JWT_EXPIRED") return SessionRejectReason.EXPIRED;
+  if (error?.code === "ERR_JWS_INVALID" || error?.code === "ERR_JWT_INVALID") {
+    return SessionRejectReason.MALFORMED;
+  }
+  return SessionRejectReason.BAD_SIGNATURE;
+}
+
+export function createTokens({ secret, previousSecrets = [], now = Date.now }) {
   // Thrown rather than defaulted: a service that comes up signing tokens with
   // `undefined` accepts tokens anybody can mint, and it would come up looking
   // perfectly healthy. server.js calls this at startup so the failure is a
@@ -32,7 +57,20 @@ export function createTokens({ secret, now = Date.now }) {
   if (typeof secret !== "string" || secret.length < 32) {
     throw new Error("SESSION_SECRET must be at least 32 characters");
   }
+  for (const candidate of previousSecrets) {
+    if (typeof candidate !== "string" || candidate.length < 32) {
+      throw new Error("SESSION_SECRET must be at least 32 characters");
+    }
+  }
   const key = new TextEncoder().encode(secret);
+  // **Signing only ever uses `key`.** These exist so a token signed under a
+  // secret this deployment has since rotated away from still verifies during
+  // the grace window — the fix for the redeploy on 2026-08-14 that is one
+  // candidate explanation for NIT-87's 36 refusals: nothing here persists
+  // `SESSION_SECRET` across a `deploy.sh` run, so a second invocation that
+  // does not reuse the same value invalidates every outstanding token the
+  // instant the new revision serves.
+  const previousKeys = previousSecrets.map((value) => new TextEncoder().encode(value));
 
   // Seconds, because that is what `exp` and `iat` are. Injected rather than read
   // from the clock so the tests can move time instead of sleeping for ninety
@@ -49,30 +87,43 @@ export function createTokens({ secret, now = Date.now }) {
       .sign(key);
   }
 
+  async function verifyWith(candidateKey, token, audience) {
+    const { payload } = await jwtVerify(token, candidateKey, {
+      audience,
+      // **Not decoration.** Without it, a token whose header says `alg: none`
+      // is a token this service verifies, and every caller can mint one.
+      algorithms: ["HS256"],
+      currentDate: new Date(now())
+    });
+    return payload;
+  }
+
+  /// Tries the current secret, then each previous one in order, but only
+  /// keeps trying while the failure is specifically a signature mismatch —
+  /// expired or malformed is true of the token regardless of which key
+  /// verifies it, so a second key cannot change that verdict and is not
+  /// worth the extra check.
   async function verify(token, audience) {
-    if (typeof token !== "string" || token.length === 0) return null;
-    try {
-      const { payload } = await jwtVerify(token, key, {
-        audience,
-        // **Not decoration.** Without it, a token whose header says `alg: none`
-        // is a token this service verifies, and every caller can mint one.
-        algorithms: ["HS256"],
-        currentDate: new Date(now())
-      });
-      return payload;
-    } catch {
-      // Every failure is the same failure to a caller: wrong signature, wrong
-      // audience, expired, malformed. Telling them which would be telling them
-      // what to fix.
-      return null;
+    if (typeof token !== "string" || token.length === 0) {
+      return { payload: null, reason: SessionRejectReason.MALFORMED };
     }
+    let reason = SessionRejectReason.MALFORMED;
+    for (const candidateKey of [key, ...previousKeys]) {
+      try {
+        return { payload: await verifyWith(candidateKey, token, audience) };
+      } catch (error) {
+        reason = reasonForError(error);
+        if (reason !== SessionRejectReason.BAD_SIGNATURE) break;
+      }
+    }
+    return { payload: null, reason };
   }
 
   return {
     signChallenge: () => sign(CHALLENGE_AUDIENCE, CHALLENGE_TTL_MS),
 
     async verifyChallenge(token) {
-      return (await verify(token, CHALLENGE_AUDIENCE)) !== null;
+      return (await verify(token, CHALLENGE_AUDIENCE)).payload !== null;
     },
 
     async signSession(deviceId) {
@@ -81,8 +132,8 @@ export function createTokens({ secret, now = Date.now }) {
     },
 
     async verifySession(token) {
-      const payload = await verify(token, SESSION_AUDIENCE);
-      if (!payload?.sub) return { ok: false };
+      const { payload, reason } = await verify(token, SESSION_AUDIENCE);
+      if (!payload?.sub) return { ok: false, reason: reason ?? SessionRejectReason.MALFORMED };
       return { ok: true, deviceId: payload.sub };
     }
   };

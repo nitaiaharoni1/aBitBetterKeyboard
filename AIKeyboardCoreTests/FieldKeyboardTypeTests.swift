@@ -97,11 +97,22 @@ final class FieldKeyboardTypeTests: XCTestCase {
             "the host was still told Hebrew, so the field would lay out right to left")
     }
 
-    /// The remaining three Latin-wanting types, and `.URL` is the one the unfixed
+    /// The remaining Latin-wanting types, and `.URL` is the one the unfixed
     /// build hurts most: a Hebrew keyboard cannot type a single character of a
-    /// URL. All four leave `language == .hebrew` before this change.
+    /// URL. All three leave `language == .hebrew` before this change.
+    ///
+    /// **`.webSearch` was in this list and contradicted
+    /// `testASearchFieldLeavesAHebrewKeyboardAlone` two screens down**, so one of
+    /// the two had to be failing on committed `main` whatever the code did. The
+    /// search test is the one that matches the shipped decision: `latinFieldTypes`
+    /// deliberately excludes `.webSearch`, and `.claude/rules/keyboard-wiring.md`
+    /// records why (Apple documents it as taking any script, and Apple's own
+    /// Hebrew keyboard stays Hebrew on one, so treating a search box as ASCII
+    /// takes the keyboard away in the user's own language for no reason). This
+    /// list was asserting the behaviour that decision rejected. Found by NIT-92,
+    /// which exists because nobody knew what the suite reported.
     func testEveryLatinWantingFieldTypeMovesOffHebrew() {
-        for type in [UIKeyboardType.asciiCapable, .emailAddress, .URL, .webSearch] {
+        for type in [UIKeyboardType.asciiCapable, .emailAddress, .URL] {
             let (controller, target) = keyboard(language: .hebrew)
             target.keyboardType = type
 
@@ -223,15 +234,27 @@ final class FieldKeyboardTypeTests: XCTestCase {
             controller.language, .hebrew, "a search box took the Hebrew keyboard away")
     }
 
-    /// An address is never capitalised, and this keyboard reads no
-    /// `autocapitalizationType` at all: `shift` starts `.on` and Return re-arms
-    /// it. Before `IsASCIICapable` was corrected iOS withheld these fields, so the
-    /// flip is what exposed it — the unfixed build types `Nitai@example.com`.
+    /// An address is never capitalised. Before `IsASCIICapable` was corrected iOS
+    /// withheld these fields, so the flip is what exposed it — the build this was
+    /// written against typed `Nitai@example.com`.
+    ///
+    /// **It now declares the trait, and that is the point of the extra line.**
+    /// This used to pass on `keyboardType` alone, because `.emailAddress` and
+    /// `.URL` were special-cased into `shift = .off` while
+    /// `autocapitalizationType` was read nowhere in the project. `NIT-89`
+    /// replaced that patch with the real trait, and an undeclared trait now means
+    /// `.sentences` so that no existing field regresses — which is exactly what
+    /// `MockTextTarget` answers. So a host that says nothing arms shift, and it is
+    /// the host declaring `.none` that does not. The email field in front of a
+    /// real user declares it; this one has to say so too, or it is asserting the
+    /// old heuristic under a new name. `AutocapitalizationTests` owns the trait's
+    /// own behaviour.
     func testAnEmailFieldDoesNotArriveWithShiftArmed() {
         let (controller, target) = keyboard()
         XCTAssertEqual(controller.shift, .on, "shift no longer starts armed, so this proves nothing")
 
         target.keyboardType = .emailAddress
+        target.autocapitalizationType = UITextAutocapitalizationType.none
         controller.prepareForNewDocument()
 
         XCTAssertEqual(controller.shift, .off, "the email field capitalised the address")

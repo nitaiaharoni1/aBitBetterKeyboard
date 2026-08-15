@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer } from "../src/httpServer.js";
-import { createTokens } from "../src/sessionToken.js";
+import { createTokens, SESSION_TTL_MS } from "../src/sessionToken.js";
 import { createAttestationVerifier } from "../src/attestationVerifier.js";
 import { buildFakeAttestation, createTestCA } from "./helpers/fakeAttestation.js";
 
@@ -510,5 +510,132 @@ test("/v1/challenge closes the connection it answers", async () => {
       assert.equal(response.headers.get("connection"), "close");
     },
     { rootPem: ca.pem }
+  );
+});
+
+// ── Logging why a session token was rejected (NIT-87) ──────────────────────
+//
+// Before this, a rejected session token logged nothing at all, which is what
+// made the two candidate causes — Full Access off in the extension, and
+// SESSION_SECRET rotating under a redeploy — indistinguishable from the
+// traffic logs alone. Every line here is one of the four words
+// `SessionRejectReason` names, never the bearer itself.
+
+/// Captures every `console.warn` call during `run`, then restores it — even
+/// if `run` throws, so a failing assertion cannot leave `console.warn`
+/// patched for the rest of the suite.
+async function withCapturedWarnings(run) {
+  const logged = [];
+  const original = console.warn;
+  console.warn = (...args) => logged.push(args.join(" "));
+  try {
+    await run();
+  } finally {
+    console.warn = original;
+  }
+  return logged;
+}
+
+test("no bearer at all logs 'absent'", async () => {
+  const logged = await withCapturedWarnings(() =>
+    withServer(
+      fakeVertexClient(async () => ({ kind: "ok", fields: { text: "hi" } })),
+      async (base) => {
+        const response = await fetch(`${base}/v1/text`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ instructions: "i", prompt: "p", fields: [] })
+        });
+        assert.equal(response.status, 401);
+      },
+      { expectedToken: "letmein" }
+    )
+  );
+  assert.ok(
+    logged.some((line) => line.includes("session token rejected: absent")),
+    `expected an "absent" reason, got: ${JSON.stringify(logged)}`
+  );
+});
+
+test("a malformed bearer logs 'malformed', and never logs the bearer itself", async () => {
+  const ca = await createTestCA();
+  const logged = await withCapturedWarnings(() =>
+    withAttestServer(
+      async (base) => {
+        const response = await fetch(`${base}/v1/text`, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: "Bearer not-a-real-token" },
+          body: TEXT_BODY
+        });
+        assert.equal(response.status, 401);
+      },
+      { rootPem: ca.pem }
+    )
+  );
+  const combined = logged.join("\n");
+  assert.match(combined, /session token rejected: malformed/);
+  assert.ok(!combined.includes("not-a-real-token"), "the bearer itself must never reach the log");
+});
+
+test("an expired session token logs 'expired'", async () => {
+  const secret = "s".repeat(64);
+  const signedInThePast = createTokens({ secret, now: () => 1_000_000 });
+  const { token } = await signedInThePast.signSession("device-1");
+
+  const logged = await withCapturedWarnings(() =>
+    withServer(
+      fakeVertexClient(async () => ({ kind: "ok", fields: { text: "hi" } })),
+      async (base) => {
+        const response = await fetch(`${base}/v1/text`, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+          body: TEXT_BODY
+        });
+        assert.equal(response.status, 401);
+      },
+      {
+        // A separate `tokens` instance, same secret, whose clock has moved
+        // past the token's ninety-day expiry — the server-side half of the
+        // same secret, not a different one.
+        tokens: createTokens({ secret, now: () => 1_000_000 + SESSION_TTL_MS + 60_000 }),
+        // Without a shared token configured, `authorize` treats "no token
+        // configured" as an open door regardless of the session token
+        // result — see the first test in gate.test.js. A real deployment
+        // always sets both (`deploy.sh` refuses to deploy without either),
+        // so this is what makes the session check the one actually on trial.
+        expectedToken: "shared-secret"
+      }
+    )
+  );
+  assert.ok(
+    logged.some((line) => line.includes("session token rejected: expired")),
+    `expected an "expired" reason, got: ${JSON.stringify(logged)}`
+  );
+});
+
+// ── SESSION_SECRET rotation, end to end ─────────────────────────────────────
+//
+// `server.js` is the file that would read `SESSION_SECRET_PREVIOUS` and pass
+// it through as `previousSecrets` — see the report for why that wiring is not
+// in this change. This proves the half that is: a server that *is* handed a
+// previous secret honours tokens signed under it, through the real HTTP path
+// rather than `sessionToken.js` alone.
+
+test("a token signed under a rotated-away secret still opens /v1/text when the server keeps it as a previous secret", async () => {
+  const oldSecret = "o".repeat(64);
+  const newSecret = "n".repeat(64);
+  const { token } = await createTokens({ secret: oldSecret }).signSession("device-1");
+
+  await withServer(
+    fakeVertexClient(async () => ({ kind: "ok", fields: { text: "hi" } })),
+    async (base) => {
+      const response = await fetch(`${base}/v1/text`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: TEXT_BODY
+      });
+      assert.equal(response.status, 200);
+    },
+    { tokens: createTokens({ secret: newSecret, previousSecrets: [oldSecret] }) }
   );
 });

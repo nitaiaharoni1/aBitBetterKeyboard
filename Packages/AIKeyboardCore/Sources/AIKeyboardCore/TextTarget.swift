@@ -42,6 +42,23 @@ public protocol TextTarget: AnyObject {
     /// may answer `.default` to mean "I did not check".
     var keyboardType: UIKeyboardType? { get }
 
+    /// What this field wants automatically capitalised, as the host declared it.
+    ///
+    /// Same optional shape as `keyboardType` and for the same reason:
+    /// `autocapitalizationType` sits in the same `@objc optional` block of
+    /// `UITextInputTraits`, so nil is a host that never implemented the property
+    /// rather than one that asked for `.sentences`.
+    /// `KeyboardController.adoptFieldAutocapitalization` reads that nil exactly
+    /// as `.sentences`, which is what this keyboard already did before it read
+    /// the trait at all.
+    ///
+    /// Defaulted to nil by the extension below rather than required outright:
+    /// several `TextTarget` conformers inside `AIKeyboardCoreTests` were
+    /// written before this trait existed, and answering nil for them — the same
+    /// "never checked" reading a silent host gets — is what keeps every one of
+    /// them compiling and typing exactly as they did.
+    var autocapitalizationType: UITextAutocapitalizationType? { get }
+
     func insertText(_ text: String)
     func deleteBackward()
 
@@ -52,6 +69,12 @@ public protocol TextTarget: AnyObject {
     /// sits in the middle of means stepping past its tail first and then deleting
     /// the whole span backwards. `replaceTargetText` is the only caller.
     func adjustTextPosition(byCharacterOffset offset: Int)
+}
+
+extension TextTarget {
+    /// The default for every conformer that predates this trait: the same nil
+    /// a silent host answers for `keyboardType`.
+    public var autocapitalizationType: UITextAutocapitalizationType? { nil }
 }
 
 /// Bridges the system proxy to `TextTarget`. `UITextDocumentProxy` is itself a
@@ -113,6 +136,10 @@ public final class ProxyTextTarget: TextTarget {
         guard let proxy else { return nil }
         return proxy.keyboardType
     }
+    public var autocapitalizationType: UITextAutocapitalizationType? {
+        guard let proxy else { return nil }
+        return proxy.autocapitalizationType
+    }
 
     public func insertText(_ text: String) { proxy?.insertText(text) }
     public func deleteBackward() { proxy?.deleteBackward() }
@@ -152,6 +179,13 @@ public final class MockTextTarget: TextTarget, ObservableObject {
     /// and that is the path `adoptFieldKeyboardType` has to get right; a test has
     /// no other way to reach it.
     public var keyboardType: UIKeyboardType? = .default
+
+    /// A positive `.sentences`, on the same principle as `keyboardType`: the
+    /// playground is an ordinary free-text document and answers the question
+    /// rather than declining to. Stored rather than computed for the same
+    /// reason `keyboardType` is: a test drives a field swap by changing it on
+    /// the same target.
+    public var autocapitalizationType: UITextAutocapitalizationType? = .sentences
 
     public func insertText(_ newText: String) { text.append(newText) }
     public func deleteBackward() { if !text.isEmpty { text.removeLast() } }

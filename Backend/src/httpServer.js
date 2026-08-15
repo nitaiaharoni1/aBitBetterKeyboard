@@ -189,6 +189,11 @@ export function createServer({
       verifySession: tokens?.verifySession
     });
     if (!auth.ok) {
+      // Mirrors the attestation log above: the reason stays server-side and
+      // the caller gets one message regardless of which of the four it was.
+      // `auth.reason` is only ever set on the paths gate.js documents — never
+      // free text, never the token, never anything a caller sent.
+      if (auth.reason) console.warn(`session token rejected: ${auth.reason}`);
       sendJSONAndClose(req, res, auth.status, { error: auth.error });
       return;
     }

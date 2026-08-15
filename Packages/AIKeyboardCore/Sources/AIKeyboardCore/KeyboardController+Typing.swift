@@ -82,7 +82,7 @@ extension KeyboardController {
             // same close-out `insertSpace` does. See `isCorrectingWordByHand`.
             deletedWordPrefix = nil
             pendingAutocorrectUndo = nil
-            shift = store.storedAutocapitalise ? .on : .off
+            armShiftAtBoundary()
             refreshSuggestions()
         case .dictation:
             // **The only haptic on this path.** `startDictation` used to fire a
@@ -265,7 +265,7 @@ extension KeyboardController {
             target?.deleteBackward()
             target?.insertText(". ")
             lastSpaceTapAt = nil
-            shift = store.storedAutocapitalise ? .on : .off
+            armShiftAtBoundary()
             _ = consumeGroupedSkipLearn()
             pendingAutocorrectUndo = nil
             refreshSuggestions()
@@ -312,6 +312,9 @@ extension KeyboardController {
         // A new space closes any earlier undo. Only this swap, if there was one,
         // can be taken back by the next delete.
         pendingAutocorrectUndo = swapped
+        // The one case an ordinary space arms shift: a `.words` field
+        // capitalises every word, not only the first letter of a sentence.
+        if autocapitalizationMode == .words { armShiftAtBoundary() }
         refreshSuggestions()
     }
 
@@ -463,6 +466,29 @@ extension KeyboardController {
         case .off: shift = .on
         case .on: shift = .locked
         case .locked: shift = .off
+        }
+    }
+
+    /// Arms or disarms shift for a word or sentence boundary, following the
+    /// mode `KeyboardController.adoptFieldAutocapitalization` decided at focus.
+    ///
+    /// Called from Return, the double-space full stop, and — only in a
+    /// `.words` field — an ordinary space; nowhere else touches shift
+    /// automatically. `.sentences` and its nil fallback keep the exact
+    /// expression Return and the double-space full stop already used, so a
+    /// host that stays silent about the trait sees no change.
+    ///
+    /// **Never touches a `.locked` shift.** Caps lock only ever comes from the
+    /// user's own `toggleShift()`, and a boundary this keyboard crosses is not
+    /// a decision to cancel it — the same "decide at focus, do not fight them
+    /// mid-field" rule `adoptFieldAutocapitalization` is written under.
+    func armShiftAtBoundary() {
+        guard shift != .locked else { return }
+        switch autocapitalizationMode {
+        case .none: shift = .off
+        case .allCharacters: break
+        case .words, .sentences: shift = store.storedAutocapitalise ? .on : .off
+        @unknown default: shift = store.storedAutocapitalise ? .on : .off
         }
     }
 

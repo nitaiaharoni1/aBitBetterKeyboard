@@ -4,6 +4,25 @@ import AIKeyboardCore
 struct KeysView: View {
     @EnvironmentObject private var store: SharedStore
     @EnvironmentObject private var search: AppSearch
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// **Nothing on this screen survives without Full Access.** Layout,
+    /// Grouped keys and the number-row toggle all go through
+    /// `SharedStore.keyboardLayout` / `storedGroupedLevel`; the palette in
+    /// `lookSection` is `storedBrandPalette`; both feedback switches in
+    /// `feelSection` are `storedHaptics` / `storedKeySounds`. Every one of
+    /// them is read across the App Group, so there is no row here to carve
+    /// out as a survivor the way `accountSection` is on Settings. Re-read on
+    /// every return to the foreground, the same as `LayoutView`.
+    @State private var setup = SetupState()
+
+    /// Mirrors `LayoutView.fullAccessMessage`'s hedge: `setup.fullAccess` can
+    /// only ever *confirm* a yes, so this says "once Full Access is on"
+    /// rather than asserting it is off right now.
+    private static let fullAccessMessage =
+        "The keyboard can only read the layout, palette and sound choices on this screen once "
+        + "Full Access is on. Until then it draws and sounds the way it shipped, whatever is set "
+        + "here."
 
     var body: some View {
         NavigationStack {
@@ -16,6 +35,10 @@ struct KeysView: View {
                             if search.isSearching {
                                 AppSearchResults()
                             } else {
+                                if setup.fullAccess != .confirmed {
+                                    FullAccessNeededBanner(
+                                        message: Self.fullAccessMessage, context: "keys")
+                                }
                                 layoutSection
                                 lookSection
                                 feelSection
@@ -43,6 +66,10 @@ struct KeysView: View {
             }
         }
         .id(search.stackEpoch)
+        .onAppear { setup = .current(store: store) }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { setup = .current(store: store) }
+        }
     }
 
     // MARK: Layout
@@ -170,8 +197,18 @@ struct KeysView: View {
 
     private var feelSection: some View {
         section("Feel") {
-            ToggleRow(title: "Haptics", icon: "hand.tap", isOn: $store.haptics)
-                .searchTarget(.haptics)
+            // **Was undocumented, and it is exactly as affected as Key
+            // sounds below.** `Feedback.hapticsEnabled` reads
+            // `storedHaptics` at the press, the same cross-process read as
+            // `storedKeySounds` — so this row gets the same static subtitle
+            // Key sounds already carries, not a new dialect.
+            ToggleRow(
+                title: "Haptics",
+                subtitle: "Needs Full Access",
+                icon: "hand.tap",
+                isOn: $store.haptics
+            )
+            .searchTarget(.haptics)
             Divider.themed
             ToggleRow(
                 title: "Key sounds",

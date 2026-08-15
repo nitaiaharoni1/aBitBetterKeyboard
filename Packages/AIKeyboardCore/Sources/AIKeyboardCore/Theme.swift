@@ -233,6 +233,40 @@ public enum Theme {
         public static let micro = Font.system(size: 12, weight: .medium)
     }
 
+    // MARK: Dynamic Type
+    //
+    // Every point size in this file — a key cap, a suggestion, a banner
+    // sentence — is bespoke: tuned against one key or one fixed-height strip,
+    // never drawn from a system text style. So there is no `UIFontMetrics`
+    // role to hand any of them to, and `DynamicType.scale` is what stands in
+    // for one: a flat ratio, not a font. A 25pt key cap grows the way
+    // Apple's own 17pt Body grows, without pretending it *is* Body.
+
+    public enum DynamicType {
+        /// Apple's published Body scale (`UIFontMetrics(forTextStyle: .body)`
+        /// at each Dynamic Type category), read relative to `.large` — the
+        /// system default, and the size every hardcoded point size in this
+        /// file was tuned against, so `scale(for: .large) == 1` has to hold
+        /// or every shipped size moves the moment this ships.
+        public static func scale(for size: DynamicTypeSize) -> CGFloat {
+            switch size {
+            case .xSmall: return 14 / 17
+            case .small: return 15 / 17
+            case .medium: return 16 / 17
+            case .large: return 1
+            case .xLarge: return 19 / 17
+            case .xxLarge: return 21 / 17
+            case .xxxLarge: return 23 / 17
+            case .accessibility1: return 28 / 17
+            case .accessibility2: return 33 / 17
+            case .accessibility3: return 40 / 17
+            case .accessibility4: return 47 / 17
+            case .accessibility5: return 53 / 17
+            @unknown default: return 1
+            }
+        }
+    }
+
     // MARK: Glyphs
     //
     // Every icon on the keyboard is drawn through here, so the monoline weight is

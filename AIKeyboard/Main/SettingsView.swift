@@ -4,6 +4,14 @@ import AIKeyboardCore
 struct SettingsView: View {
     @EnvironmentObject private var store: SharedStore
     @EnvironmentObject private var search: AppSearch
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// Measured once here rather than inside each section: every row on
+    /// Typing and AI is a setting the keyboard reads across the App Group,
+    /// so both sections need it, and measuring it twice would be the same
+    /// state read twice a beat apart. Re-read on every return to the
+    /// foreground, the same as `LayoutView` and `LanguagesView`.
+    @State private var setup = SetupState()
 
     var body: some View {
         NavigationStack {
@@ -16,8 +24,8 @@ struct SettingsView: View {
                             if search.isSearching {
                                 AppSearchResults()
                             } else {
-                                SettingsTypingSection()
-                                SettingsAISection()
+                                SettingsTypingSection(setup: setup)
+                                SettingsAISection(setup: setup)
                                 accountSection
                                 footer
                             }
@@ -44,6 +52,10 @@ struct SettingsView: View {
             }
         }
         .id(search.stackEpoch)
+        .onAppear { setup = .current(store: store) }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { setup = .current(store: store) }
+        }
     }
 
     // MARK: Account
