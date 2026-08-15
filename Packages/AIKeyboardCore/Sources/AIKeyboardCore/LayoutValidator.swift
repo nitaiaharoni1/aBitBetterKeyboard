@@ -13,7 +13,6 @@ public struct LayoutIssue: Equatable, Identifiable, Sendable {
         case duplicateSpace
         case rowTooWide
         case geometryOutOfRange
-        case costsScreenContext
         case snippetTooLong
         case duplicateAction
     }
@@ -77,6 +76,18 @@ public enum LayoutValidator {
     /// over the corpus, and past it the band eats the host's own message lines.
     /// Reading it from the constant means the two cannot drift when the next
     /// measurement moves it.
+    ///
+    /// **A rail on the shipped default, not a warning to the user, and it was
+    /// both.** A `costsScreenContext` warning used to fire in the editor's
+    /// Problems list the moment a layout crossed this line. It was deleted: a
+    /// user who has just turned the number row on and dragged the key-height
+    /// slider up cannot act on "screen context may miss a conversation switch",
+    /// so the sentence is a permanent amber row above the keyboard reporting a
+    /// choice they made on purpose. The line still binds where it can be obeyed
+    /// — `CustomLayoutTests.testTheShippedLayoutStillFitsUnderTheFingerprintCliff`
+    /// and `NumbersSymbolsLayoutTests` fail the build if the *default* crosses
+    /// it. A layout the user builds may exceed it and costs only their own
+    /// screen context.
     static var screenContextHeightLimit: CGFloat {
         CGFloat(FrameReduction.Band.maximumOwnUI) * KeyboardGeometry.referenceScreenHeight
     }
@@ -122,8 +133,8 @@ public enum LayoutValidator {
         // whenever `needsInputModeSwitchKey` says the device needs one, *before* it
         // validates — so the rule could never fire on the path it was written for,
         // and the only place it ever did fire was the editor, where it blocked Done
-        // on the layout this app ships. Every preset now carries `.settings` in the
-        // slot the globe used to occupy (see `KeyboardCustomization.default`), so
+        // on the layout this app ships. No preset places a globe
+        // (see `KeyboardCustomization.default`), so
         // that refusal was shown to every user with two keyboards installed the
         // first time they opened the editor. A rail that stops the user doing
         // something the code then does for them is not a rail.
@@ -136,7 +147,13 @@ public enum LayoutValidator {
 
         // MARK: Geometry
 
-        if !LayoutGeometry.keyHeightRange.contains(layout.geometry.keyHeight)
+        // Every band, not only the letters. A hand-edited JSON that put the
+        // action row at 4 pt would otherwise pass a rail whose whole job is to
+        // reject a keyboard that cannot be typed on.
+        let heightsOutOfRange = LayoutGeometry.RowBand.allCases.contains { band in
+            !LayoutGeometry.keyHeightRange.contains(layout.geometry.height(band))
+        }
+        if heightsOutOfRange
             || !LayoutGeometry.rowSpacingRange.contains(layout.geometry.rowSpacing)
         {
             found.append(
@@ -161,29 +178,6 @@ public enum LayoutValidator {
                             "The \(name) row is too wide to fit. Make a key narrower or remove one."
                     ))
             }
-        }
-
-        // MARK: A cost the user cannot otherwise see
-        //
-        // **A tall keyboard quietly degrades screen context, and until this
-        // warning existed nothing said so where the choice was made.** The frame
-        // fingerprint crops our own UI out before deciding whether the
-        // conversation on screen is still the one that was read, and
-        // `FrameReduction.Band.maximumOwnUI` caps that crop at a measured cliff:
-        // past roughly 368pt the band starts eating the host's own message lines
-        // and two different conversations collide. A user who turns on the number
-        // row and picks 52pt keys is past it. That is a fair trade to offer — it
-        // costs screen context and nothing else — but it has to be offered rather
-        // than taken, which is the same principle as the globe key naming its
-        // refusal. `FrameFingerprint.swift` carries the swept table.
-
-        if Theme.Metrics.totalHeight(for: layout) > screenContextHeightLimit {
-            found.append(
-                LayoutIssue(
-                    kind: .costsScreenContext, severity: .warning,
-                    message:
-                        "This keyboard is tall enough that screen context may miss a conversation switch. Typing and the AI actions are unaffected."
-                ))
         }
 
         // MARK: Taste, not safety

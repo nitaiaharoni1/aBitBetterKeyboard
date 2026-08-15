@@ -28,6 +28,12 @@ Bar/typing/engine_outputs.json
 # Brainstorm/design session artifacts
 .superpowers/
 .impeccable/
+.audit/
+
+# Byte-compiled Python from the Bar harnesses. Bar/drift sets
+# PYTHONDONTWRITEBYTECODE=1 so its own runs leave none behind, but the
+# harnesses invoked by hand still do, inside the frozen corpus directories.
+__pycache__/
 
 # wordfreq venv for Bar/grouped/make-lexicon.py (54 MB of data files)
 Bar/grouped/.venv/

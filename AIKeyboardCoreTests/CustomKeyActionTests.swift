@@ -22,6 +22,7 @@ final class RecordingTextTarget: TextTarget {
     var selectedText: String? { nil }
     var isSecureTextEntry: Bool? { false }
     var textContentType: UITextContentType?? { .some(.none) }
+    var keyboardType: UIKeyboardType? { .default }
 
     func insertText(_ text: String) { inserted.append(text) }
     func deleteBackward() { deletions += 1 }
@@ -168,7 +169,7 @@ final class CustomKeyActionTests: XCTestCase {
     func testAControllerDoesNotInventAnIOSGlobeBeforeItsHostAnswers() {
         let controller = KeyboardController(target: RecordingTextTarget(), language: .english)
         XCTAssertFalse(controller.customization.bottomRow.contains { $0.action == .globe })
-        XCTAssertTrue(controller.customization.bottomRow.contains { $0.action == .settings })
+        XCTAssertTrue(controller.customization.cursorRow.contains { $0.action == .settings })
     }
 
     /// The device decides whether the globe is drawn, and the stored layout does

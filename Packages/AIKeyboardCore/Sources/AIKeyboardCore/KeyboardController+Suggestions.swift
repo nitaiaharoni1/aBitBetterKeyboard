@@ -11,6 +11,18 @@ extension KeyboardController {
         // goes through, including the host's own `textDidChange`.
         let hadText = documentHasText
         refreshDocumentState()
+        // **The host can move focus without the keyboard going away**, and
+        // `viewWillAppear` does not fire for that — these callbacks
+        // (`textDidChange` and `selectionDidChange`) are the only news of it a
+        // keyboard extension gets. Whether they *always* arrive on a swap is not
+        // something this repo can prove without a device, so this is additive: the
+        // appearance path is still the guaranteed one, and a swap this misses
+        // simply leaves the previous field's shape, which is what shipped. It is
+        // safe on the keystroke path because it acts only on a trait that
+        // *changed*, and a field being typed into reports the same one every time.
+        // Ahead of the scoring below, so a language it switches is the language the
+        // candidates come from rather than one refresh behind.
+        adoptFieldKeyboardType(force: false)
         expirePendingAutocorrectUndoIfCaretMoved()
         stopDictationIfHostSent(hadText: hadText)
         // The field already holds the decoder's guess. Scoring that as typed

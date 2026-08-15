@@ -511,11 +511,14 @@ public final class KeyboardController: ObservableObject {
         clips = record.clips
         lastChangeCount = record.lastChangeCount
 
-        NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.refreshCopyClip() }
-            .store(in: &cancellables)
-
+        // **There is deliberately no `UIPasteboard.changedNotification`
+        // subscription here any more.** It used to snapshot the board's
+        // *contents*, which since iOS 16 is the call that raises "Allow Paste?",
+        // and this keyboard was firing it on a notification nobody had asked
+        // for. Under `CopyClipRefresh` the only thing it could still do is a
+        // passive refresh, which has no user-visible effect that opening
+        // CopyClip does not already do a moment later, so the subscription is
+        // gone rather than reduced. See `refreshCopyClip(_:)`.
         apply(store.storedKeyboardLayout)
         refreshSuggestions()
     }
@@ -529,9 +532,9 @@ public final class KeyboardController: ObservableObject {
     /// `needsInputModeSwitchKey`, a property of the *device* and unknown to the
     /// store: a layout saved on a phone with one keyboard installed is missing
     /// nothing, and becomes a trap the day a second one is added. No preset places
-    /// the key — they all carry `.settings` in that slot — so this repair is the
-    /// ordinary path rather than a rescue, and it runs *before* the check below,
-    /// which is why `LayoutValidator` was never the thing standing between a user
+    /// the key, so this repair is the ordinary path rather than a rescue, and it
+    /// runs *before* the check below, which is why `LayoutValidator` was never
+    /// the thing standing between a user
     /// and a keyboard they could not switch away from. It carried a `missingGlobe`
     /// error anyway, and the only surface that ever saw it was the layout editor,
     /// where it blocked Done on the shipped default for anybody with two keyboards
@@ -547,7 +550,7 @@ public final class KeyboardController: ObservableObject {
         let hasGlobe = (repaired.bottomRow + repaired.cursorRow).contains { $0.action == .globe }
         if showsGlobeKey, !hasGlobe, !allowingIncomplete {
             // Second from the start: beside the plane key and away from the space
-            // bar, which is where it stood before `.settings` took that slot.
+            // bar.
             let index = min(1, repaired.bottomRow.count)
             repaired.bottomRow.insert(SlotSpec(action: .globe, width: .units(1.0)), at: index)
         }
@@ -558,6 +561,164 @@ public final class KeyboardController: ObservableObject {
         customization = repaired
     }
 
+    /// The `keyboardType` the keys were last shaped for.
+    ///
+    /// Nil until a field answers. It exists so the decision below can be taken
+    /// **once per field**: `refreshSuggestions` runs on every keystroke and every
+    /// caret move, and re-deciding there would mean an OTP box the user had
+    /// deliberately switched to letters snapping back to the digits on the next
+    /// key. Comparing the reported value is also the only thing that tells a field
+    /// *swap* — the host moved focus and the keyboard never went away, so
+    /// `viewWillAppear` did not fire — from the same field being typed into.
+    var adoptedKeyboardType: UIKeyboardType?
+
+    /// The language this keyboard moved to on its own, and the one it moved away
+    /// from.
+    ///
+    /// **Reshaping a keyboard for a field is only half a decision; the other half
+    /// is putting it back, and the first version of this did not have one.** A
+    /// Hebrew user who touched one email box kept an English keyboard afterwards,
+    /// in the chat they went back to and in every app after that, because one
+    /// extension instance is reused across fields *and* across host apps (see
+    /// `.claude/rules/keyboard-wiring.md`). They had to slide the space bar back
+    /// by hand every time, which is worse than the Hebrew-in-an-email-field
+    /// problem the switch was written to solve.
+    ///
+    /// Restored **only while the keyboard is still standing on the language it
+    /// imposed**. A user who slid to something else inside that field has made a
+    /// decision of their own and putting it back would be the keyboard arguing
+    /// with them, which is the same claim-checked-rather-than-trusted shape
+    /// `pendingAutocorrectUndo` and `GroupedInput.lastWritten` already use.
+    private var imposedLatin: (was: KeyboardLanguage, became: KeyboardLanguage)?
+
+    /// Field types whose answer is digits.
+    ///
+    /// `.numbersAndPunctuation` is here with the three genuinely numeric pads
+    /// because the digits are what it is asking for; the marks it also wants are
+    /// on the same plane's third and fourth rows. `.phonePad` and `.namePhonePad`
+    /// are absent because iOS draws those itself and they never reach us.
+    static let digitFieldTypes: Set<UIKeyboardType> = [
+        .numberPad, .decimalPad, .asciiCapableNumberPad, .numbersAndPunctuation
+    ]
+
+    /// Field types that cannot hold a non-Latin script.
+    ///
+    /// **`.webSearch` is deliberately not here.** Apple documents it as optimised
+    /// for search terms and URL entry, it accepts any script, and Apple's own
+    /// Hebrew keyboard stays Hebrew on one — searching in Hebrew is an ordinary
+    /// thing to do, so treating a search box as ASCII would take the keyboard
+    /// away from the user for no reason. `.twitter` is absent for the same
+    /// reason: a tweet can be Hebrew. An address and a URL genuinely cannot.
+    static let latinFieldTypes: Set<UIKeyboardType> = [.asciiCapable, .emailAddress, .URL]
+
+    /// Shapes the keyboard for the field it is standing over.
+    ///
+    /// **Nothing in this project read `keyboardType` at all**, and iOS substitutes
+    /// its own keyboard only for `.phonePad` and `.namePhonePad` — so every OTP
+    /// box, quantity field, price field and PIN input asking for `.numberPad`,
+    /// `.decimalPad` or `.asciiCapableNumberPad` got the full letter QWERTY, which
+    /// reads as a keyboard that is broken rather than one that is missing a
+    /// feature. The Latin-wanting types are the other half of the same gap, and
+    /// they became a defect the day `IsASCIICapable` was set to `true`: iOS now
+    /// hands us the ASCII-capable, email and URL fields it used to withhold, so a
+    /// user whose last keystroke was Hebrew met Hebrew letters in a field that
+    /// cannot hold them, where before the flip they got Apple's ASCII keyboard.
+    /// See `.claude/rules/keyboard-wiring.md`.
+    ///
+    /// **Decided at focus and never again for that field, in both halves.** The
+    /// plane key and the space-bar slide still do exactly what they always did the
+    /// moment the user reaches for them, and nothing here puts them back — a
+    /// keyboard that re-imposes its guess on the next keystroke is a keyboard the
+    /// user cannot argue with, and a numeric plane is one a user with a custom
+    /// layout could be stranded on if they could not leave it. That escape is not
+    /// an assumption: `LayoutValidator.missingPlaneSwitch` makes a layout with no
+    /// `123` key an *error*, `apply(_:)` drops an unusable layout back to the
+    /// default, and `CustomLayoutCompiler.resolvedCap` points that key at
+    /// `.letters` from every plane that is not `.letters`. So every keyboard that
+    /// reaches a user has a way back.
+    ///
+    /// `force` is the appearance: a fresh focus re-decides even when the trait has
+    /// not moved, because the user's manual switch belonged to the session that
+    /// just ended and an OTP field has to come back up on digits. Everywhere else
+    /// only a *changed* trait re-decides, which cannot fire while one field is
+    /// being typed into.
+    ///
+    /// Returns whether the language moved, so the caller can rescore the bar.
+    @discardableResult
+    func adoptFieldKeyboardType(force: Bool) -> Bool {
+        guard let reported = target?.keyboardType ?? nil else {
+            // Two different silences, and only one of them is news. On appear a
+            // nil is a host that does not implement the trait, so forgetting what
+            // the last field asked for is right. Mid-session it is a
+            // `ProxyTextTarget` whose input view controller has gone — see
+            // `TextTarget` — and treating that as a field change would re-adopt
+            // the *same* type on the next callback, which is the user pressing ABC
+            // and being put back on the digits a keystroke later.
+            if force { adoptedKeyboardType = nil }
+            return false
+        }
+        guard force || reported != adoptedKeyboardType else { return false }
+        // Both read before the write, because every branch below is about the
+        // difference between the field being left and the field being entered.
+        let previous = adoptedKeyboardType
+        // Before the branches, so a re-entrant refresh below sees the decision as
+        // already taken.
+        adoptedKeyboardType = reported
+
+        if Self.digitFieldTypes.contains(reported) {
+            plane = .numbers
+            return false
+        }
+
+        // **Undo the last field's shape before imposing this one's, because a
+        // keyboard that only ever reshapes accumulates.** The digits are the
+        // sharp case: nothing else in this class puts the plane back except the
+        // `123` key, so before this line a six-digit code box followed by a chat
+        // box gave the chat box a numeric keyboard, in a different app, with no
+        // key pressed in between.
+        if let previous, Self.digitFieldTypes.contains(previous) { plane = .letters }
+
+        let wantsLatin = Self.latinFieldTypes.contains(reported)
+        var restored = false
+        if !wantsLatin, let imposed = imposedLatin {
+            // Only while the keyboard is still standing where this code put it.
+            if language == imposed.became {
+                language = imposed.was
+                restored = true
+            }
+            imposedLatin = nil
+        }
+
+        // `.default` and nil keep today's behaviour exactly, and so now does
+        // `.webSearch`. `.phonePad` and `.namePhonePad` never reach us: iOS draws
+        // those itself.
+        guard wantsLatin else { return restored }
+
+        // The plane as well as the language: a form whose previous field was a
+        // quantity box left the keyboard on the digits, and this is the one
+        // moment that knows the next field wants letters.
+        plane = .letters
+        // **An address and a URL are never capitalised, and this keyboard reads
+        // no `autocapitalizationType` at all** — `shift` starts `.on`, Return and
+        // the double-space full stop re-arm it, and nothing resets it per field.
+        // Before `IsASCIICapable` was corrected iOS withheld these fields and drew
+        // its own keyboard, so the flip is what exposed it: a user who had just
+        // ended a sentence met an email box that typed `Nitai@example.com`. Held
+        // to the two types where the answer is not a judgement call; the general
+        // fix is to read the trait, which is its own piece of work.
+        if reported == .emailAddress || reported == .URL { shift = .off }
+
+        guard language.script != .latin,
+            let latin = enabledLanguages.first(where: { $0.script == .latin })
+        else { return restored }
+        // Latin to Latin keeps the *original* language, so a form of five ASCII
+        // fields restores what the user had when they reached the first one
+        // rather than what the fourth one left behind.
+        if imposedLatin == nil { imposedLatin = (was: language, became: latin) }
+        language = latin
+        return true
+    }
+
     /// Called when the keyboard comes up over a field.
     ///
     /// An empty field follows the keys. A field that already contains Hebrew
@@ -565,6 +726,22 @@ public final class KeyboardController: ObservableObject {
     /// resetting unconditionally is how dismissing and reopening flipped a
     /// WhatsApp draft onto the left.
     public func prepareForNewDocument() {
+        // First, because the two answers are independent and this one feeds the
+        // other: which keys are drawn is the field's declared trait, which way the
+        // host lays the text out is what is already sitting in it. Switching to a
+        // Latin language publishes `hostLanguage` through `language`'s `didSet`,
+        // and the lines below then overrule that for a field holding Hebrew, which
+        // is the correct pair of answers for an ASCII field somebody has already
+        // typed Hebrew into.
+        //
+        // The rescore is not free — `refreshSuggestions` starts
+        // `PredictiveRefiner`'s clock, which is exactly what
+        // `KeyboardViewController.viewWillAppear` calls `refreshDocumentState`
+        // rather than this to avoid — so it is spent only when the keys have
+        // actually changed script. Leaving it out is a bar offering Hebrew
+        // candidates over an English keyboard, which is the two-surfaces-disagree
+        // defect this codebase keeps finding.
+        if adoptFieldKeyboardType(force: true) { refreshSuggestions() }
         if documentHasText,
             let rtl = SuggestionEngine.languages(in: contextBefore + contextAfter)
                 .first(where: { $0.isRightToLeft })

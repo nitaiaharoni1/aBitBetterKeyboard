@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import UIKit
 import os
 
 /// Inserts the spaces a jammed token is missing, from the bundled word list.
@@ -83,6 +84,7 @@ enum MissingSpaces {
         if pieceRank(letters, language: language, ranks: ranks, ofWhole: letters) != nil {
             return nil
         }
+        if isSpelledCorrectly(letters, language: language) { return nil }
 
         let characters = Array(letters)
         var cost = [Double](repeating: .infinity, count: count + 1)
@@ -116,6 +118,41 @@ enum MissingSpaces {
         }
         parts.reverse()
         return parts.count >= 2 ? parts : nil
+    }
+
+    /// **The frequency list answers "is this common", not "is this a word", and
+    /// for English those are different questions.**
+    ///
+    /// The list is a top-N, so every ordinary compound that fell off the end of
+    /// it decomposes into two words that did not: `standup` is not in it,
+    /// `stand` and `up` both are, and Fix wrote `stand up` over a model answer
+    /// that had said `standup`. That is precisely the failure `EditScope` exists
+    /// to prevent — changing a word the corrections list never called wrong —
+    /// arriving through the one door built to bypass `EditScope`.
+    /// `checkout`, `workout`, `backend` and `frontend` are the same shape.
+    ///
+    /// **Hebrew is deliberately left on the list alone.** `מהקורה` → `מה קורה`
+    /// is the measured motivating case and `מהקורה` is *also* a legal Hebrew
+    /// word-form, so a speller would accept it and retire the feature on the
+    /// example it was built for. Hebrew's missing boundaries are prefix
+    /// morphology, which the list plus `pieceRank`'s `ה` rule already models;
+    /// English's are compounding, which a dictionary models and a top-N cannot.
+    ///
+    /// The checker is local rather than `SuggestionEngine.sharedChecker`, which
+    /// is `@MainActor`: this runs at most a few times per Fix apply, behind a
+    /// model round trip, so the allocation costs nothing, while pinning
+    /// `restored` to an actor would cost every caller and every test.
+    private static func isSpelledCorrectly(
+        _ letters: String, language: KeyboardLanguage
+    ) -> Bool {
+        guard language == .english, let locale = language.spellCheckerLocale else {
+            return false
+        }
+        let length = (letters as NSString).length
+        let misspelled = UITextChecker().rangeOfMisspelledWord(
+            in: letters, range: NSRange(location: 0, length: length),
+            startingAt: 0, wrap: false, language: locale)
+        return misspelled.location == NSNotFound
     }
 
     private static func lexiconLanguage(of letters: String) -> KeyboardLanguage? {

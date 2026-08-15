@@ -80,10 +80,19 @@ final class CloudModelSettingNameTests: XCTestCase {
 
     /// The screen-context ending says what is true of the app rather than
     /// blaming screen reading for something four other features share.
+    ///
+    /// **The name is `aBitBetterKeyboard`, and this test asserted the old one.**
+    /// It read `"ai keyboard"`, which is the Xcode target, the folder and the
+    /// bundle id, and has not been the name a user sees since the rename. The
+    /// string it checks has said `aBitBetterKeyboard` since then, so this has
+    /// been failing on committed main while reporting the opposite of what was
+    /// wrong. The product name is spelled out in nineteen places with no shared
+    /// constant, which is how one of them was missed; the sibling assertion
+    /// above already uses the new name.
     func testTheScreenContextRefusalNamesTheApp() {
         let explanation = ScreenContextEndReason.notConfigured.explanation
         XCTAssertTrue(
-            explanation.localizedCaseInsensitiveContains("ai keyboard"),
+            explanation.localizedCaseInsensitiveContains("aBitBetterKeyboard"),
             "the ending blames screen reading for a state the whole app is in: \(explanation)")
         XCTAssertFalse(
             explanation.localizedCaseInsensitiveContains("in this build"),

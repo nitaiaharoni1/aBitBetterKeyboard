@@ -41,24 +41,24 @@ final class CustomLayoutTests: XCTestCase {
     func testTheDefaultBottomRow() {
         XCTAssertEqual(
             KeyboardCustomization.default.bottomRow.map(\.action),
-            [.numbersPlane, .settings, .space, .punctuation, .ret])
+            [.numbersPlane, .emoji, .space, .punctuation, .ret])
         XCTAssertFalse(
             KeyboardCustomization.default.bottomRow.contains { $0.action == .dictation },
             "dictation is on the action row; two of it is one too many")
     }
 
-    /// Photographs the shipped action row so a sixth key cannot land by
-    /// accident, and so this intentional sixth key cannot vanish later.
+    /// Photographs the shipped action row so a fifth key cannot land by
+    /// accident, and so the narrow centre settings key cannot vanish later.
     func testTheDefaultCompilesToTodaysRows() {
         XCTAssertEqual(
             KeyboardCustomization.actionRow.map(\.action),
-            [.emoji, .copyclip, .reply, .fix, .quickTone, .dictation])
+            [.copyclip, .fix, .settings, .quickTone, .dictation])
         let rows = KeyboardLayout.rows(
             for: .english, plane: .letters, showsGlobe: false, customization: .default)
         let action = rows.first { $0.id == KeyboardLayout.RowID.cursor }
         XCTAssertEqual(
             action?.keys.map(\.cap),
-            [.emoji, .copyclip, .aiReply, .aiFix, .quickTone, .dictation])
+            [.copyclip, .aiFix, .settings, .quickTone, .dictation])
     }
 
     /// Nothing the default ships appears in two rows at once.
@@ -259,13 +259,15 @@ final class CustomLayoutTests: XCTestCase {
 
     // MARK: The bar
 
-    /// **The bar ships empty, and that is a decision rather than an oversight.**
-    /// Emoji, one-tap rewrite and the AI menu moved into the action row, so the
-    /// bar is three candidates edge to edge. Both ends stay editable.
+    /// **`barLeading` ships empty. Reply sits on the trailing end.** The three
+    /// candidates stay the bar's job. Both ends stay editable.
     func testTheDefaultBarIsEmptyAndBothEndsStayEditable() {
         XCTAssertTrue(KeyboardCustomization.default.barLeading.isEmpty)
-        XCTAssertTrue(KeyboardCustomization.default.barTrailing.isEmpty)
+        XCTAssertEqual(
+            KeyboardCustomization.default.barTrailing.map(\.action),
+            [.reply])
         XCTAssertFalse(SuggestionBar.barCatalogue.isEmpty)
+        XCTAssertTrue(SuggestionBar.barCatalogue.contains(.reply))
     }
 
     /// A space bar or a shift key 46 points tall above the letters is not a layout
@@ -384,10 +386,21 @@ final class CustomLayoutTests: XCTestCase {
     /// that. Biases must cancel so the drawn letters grid still fills that frame;
     /// 123 / `#+=` must fit in it too.
     func testTheHostHeightMatchesWhatTheGridDraws() throws {
+        // **The fourth layout is the one that rejects the broken build.** The
+        // first three have all three bands at one height, so a `keyAreaHeight`
+        // that still multiplied a single `keyHeight` by `rowCount` would agree
+        // with the grid on every one of them and be wrong on any keyboard whose
+        // rows differ — which is now every keyboard a user can build. This one
+        // gives each band its own height, in both directions off the letters.
+        var mixed = KeyboardCustomization.default
+        mixed.geometry.actionRowHeight = LayoutGeometry.keyHeightRange.upperBound
+        mixed.geometry.bottomRowHeight = LayoutGeometry.keyHeightRange.lowerBound
+
         let layouts = [
             KeyboardCustomization.default,
             try XCTUnwrap(LayoutPreset.named("power")).customization,
-            try XCTUnwrap(LayoutPreset.named("compact")).customization
+            try XCTUnwrap(LayoutPreset.named("compact")).customization,
+            mixed
         ]
         for layout in layouts {
             XCTAssertEqual(
@@ -395,14 +408,20 @@ final class CustomLayoutTests: XCTestCase {
                 drawnKeyArea(layout, plane: .letters), accuracy: 0.001,
                 "row height biases no longer cancel; the host would clip or grow")
         }
-        XCTAssertEqual(
-            Theme.Metrics.keyAreaHeight(for: .default),
-            drawnKeyArea(.default, plane: .numbers), accuracy: 0.001,
-            "123 does not fit in the letters-plane host")
-        XCTAssertEqual(
-            Theme.Metrics.keyAreaHeight(for: .default),
-            drawnKeyArea(.default, plane: .symbols), accuracy: 0.001,
-            "#+= does not fit in the letters-plane host")
+        // `mixed` again on the other two planes: `fittedKeyHeight` squeezes their
+        // fourth row into the block the *letters* occupy, so feeding it an action
+        // or space height instead is a mistake that only a keyboard whose bands
+        // differ can see.
+        for layout in [KeyboardCustomization.default, mixed] {
+            XCTAssertEqual(
+                Theme.Metrics.keyAreaHeight(for: layout),
+                drawnKeyArea(layout, plane: .numbers), accuracy: 0.001,
+                "123 does not fit in the letters-plane host")
+            XCTAssertEqual(
+                Theme.Metrics.keyAreaHeight(for: layout),
+                drawnKeyArea(layout, plane: .symbols), accuracy: 0.001,
+                "#+= does not fit in the letters-plane host")
+        }
     }
 
     func testAFourRowGridReproducesTheShippedHeight() {
@@ -423,14 +442,20 @@ final class CustomLayoutTests: XCTestCase {
         layout.showsNumberRow = false
         layout.cursorRow = []
         let base = Theme.Metrics.keyAreaHeight(for: layout)
-        let oneRow = layout.geometry.keyHeight + layout.geometry.rowSpacing
+        // Each optional row is worth *its own* band's height, which the default's
+        // three equal bands cannot tell apart — so it is spelled out here rather
+        // than reusing one number twice.
+        let numberRow = layout.geometry.height(.letters) + layout.geometry.rowSpacing
+        let actionRow = layout.geometry.height(.action) + layout.geometry.rowSpacing
 
         layout.showsNumberRow = true
-        XCTAssertEqual(Theme.Metrics.keyAreaHeight(for: layout) - base, oneRow, accuracy: 0.001)
+        XCTAssertEqual(
+            Theme.Metrics.keyAreaHeight(for: layout) - base, numberRow, accuracy: 0.001)
 
         layout.cursorRow = [SlotSpec(action: .cursorLeft)]
         XCTAssertEqual(
-            Theme.Metrics.keyAreaHeight(for: layout) - base, oneRow * 2, accuracy: 0.001)
+            Theme.Metrics.keyAreaHeight(for: layout) - base, numberRow + actionRow,
+            accuracy: 0.001)
     }
 
     func testRoomyIsTallerThanCompact() {
@@ -471,10 +496,6 @@ final class CustomLayoutTests: XCTestCase {
             Theme.Metrics.totalHeight(for: .default),
             LayoutValidator.screenContextHeightLimit,
             "the shipped keyboard now costs screen context on every read")
-        XCTAssertFalse(
-            LayoutValidator.issues(in: .default)
-                .contains { $0.kind == .costsScreenContext },
-            "the default layout warns about itself")
     }
 
     /// Omitting the banner drops exactly the banner. A running call and a
@@ -524,11 +545,11 @@ final class CustomLayoutTests: XCTestCase {
         let sliding = rows.filter {
             $0.id != KeyboardLayout.RowID.cursor && $0.id != KeyboardLayout.RowID.bottom
         }
-        guard plane != .letters else { return layout.geometry.keyHeight }
+        guard plane != .letters else { return layout.geometry.height(.letters) }
         return Theme.Metrics.fittedKeyHeight(
             slidingRows: sliding.count,
             referenceRows: 3 + (layout.showsNumberRow ? 1 : 0),
-            keyHeight: layout.geometry.keyHeight,
+            keyHeight: layout.geometry.height(.letters),
             rowSpacing: layout.geometry.rowSpacing)
     }
 
@@ -540,10 +561,12 @@ final class CustomLayoutTests: XCTestCase {
         let spacing = layout.geometry.rowSpacing
         let slidingBase = slidingKeyHeight(for: rows, layout: layout, plane: plane)
         let keys = rows.reduce(CGFloat(0)) { total, row in
-            let base =
-                (row.id == KeyboardLayout.RowID.bottom
-                    || row.id == KeyboardLayout.RowID.cursor)
-                ? layout.geometry.keyHeight : slidingBase
+            let base: CGFloat
+            switch row.id {
+            case KeyboardLayout.RowID.bottom: base = layout.geometry.height(.bottom)
+            case KeyboardLayout.RowID.cursor: base = layout.geometry.height(.action)
+            default: base = slidingBase
+            }
             return total + row.drawnHeight(keyHeight: base, rowSpacing: spacing)
         }
         return keys + spacing * CGFloat(max(0, rows.count - 1))

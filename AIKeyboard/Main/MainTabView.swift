@@ -27,6 +27,27 @@ enum MainTab: Hashable, CaseIterable {
     }
 }
 
+/// Whether a pushed screen has claimed the whole window.
+///
+/// **The tab bar below is a plain `safeAreaInset`, not a `TabView`'s, so
+/// `.toolbar(.hidden, for: .tabBar)` on a pushed destination does exactly
+/// nothing.** The layout editor set it and believed it; the glass capsule went
+/// on sitting over the editor's spare-key tray, cutting the last row of keys in
+/// half and swallowing the taps that landed on them. A pushed full-window editor
+/// sets this instead, and `MainTabBar` removes itself, inset and all.
+///
+/// **`@Observable` rather than `ObservableObject`, and that is the point of
+/// using it.** A view that only *writes* this from `onAppear` never reads it in
+/// `body`, so it takes no dependency and is not re-rendered — which matters
+/// here, because `LayoutView` is a `NavigationLink` destination inside a
+/// `ScrollView` and is already rebuilt on every Keys tab body evaluation. Only
+/// `MainTabBar`, which reads it, redraws.
+@MainActor
+@Observable
+final class AppChrome {
+    var hidesTabBar = false
+}
+
 private struct SelectedMainTabKey: EnvironmentKey {
     static let defaultValue = MainTab.home
 }
@@ -82,8 +103,18 @@ struct MainTabView: View {
 
 private struct MainTabBar: View {
     @Binding var selection: MainTab
+    @Environment(AppChrome.self) private var chrome
 
+    /// Removed rather than hidden: an `EmptyView` measures zero, so the bottom
+    /// safe-area inset collapses with it and the screen underneath gets the
+    /// height back. Opacity would leave a 60 pt hole above the home indicator.
     var body: some View {
+        if !chrome.hidesTabBar {
+            bar
+        }
+    }
+
+    private var bar: some View {
         HStack(spacing: 0) {
             ForEach(MainTab.allCases, id: \.self) { tab in
                 Button {

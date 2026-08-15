@@ -31,9 +31,9 @@ extension SharedStore {
     /// opinion about it either.** Whether the key is required is a property of the
     /// *device*, which the store cannot know; a layout missing it is repaired where
     /// that answer is known, in `KeyboardController.apply(_:)`. `replacingInternalGlobe`
-    /// below is the other half of the same story: the shipped rows carry `.settings`
-    /// in the slot the globe used to occupy, so a layout stored by an older build is
-    /// migrated across rather than left holding a key the presets no longer place.
+    /// below is the other half of the same story: an older build stored `.globe`
+    /// where the presets no longer place it, so a layout with no `.settings` at
+    /// all is migrated rather than left holding that leftover key.
     public static func decodeLayout(from defaults: UserDefaults) -> KeyboardCustomization {
         guard let data = defaults.data(forKey: Key.keyboardLayout) else { return .default }
         guard let decoded = try? JSONDecoder().decode(KeyboardCustomization.self, from: data)

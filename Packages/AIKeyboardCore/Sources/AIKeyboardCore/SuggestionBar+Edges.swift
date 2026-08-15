@@ -13,7 +13,7 @@ extension SuggestionBar {
     /// wired in `KeyView`, which does not draw this bar — an edge button would
     /// delete once per tap and look broken beside the real one.
     public static let barCatalogue: [SlotAction] = [
-        .emoji, .copyclip, .quickTone, .dictation, .cursorLeft, .cursorRight,
+        .emoji, .copyclip, .reply, .quickTone, .dictation, .cursorLeft, .cursorRight,
         .hideKeyboard, .globe
     ]
 
@@ -26,11 +26,9 @@ extension SuggestionBar {
     /// whichever of the two the reader looked at first.
     ///
     /// **It now names a row rather than a button, because the buttons moved and
-    /// there is more than one of them.** Reply, Fix, Rewrite and dictation are keys
-    /// in the action row above the keys, and the bar's own ends ship empty. It
-    /// deliberately does not say "the sparkle": on a stock install there is no
-    /// sparkle, and a user who has put one back in the bar through the layout
-    /// editor is not who this copy is written for.
+    /// there is more than one of them.** Fix, Rewrite and dictation are keys
+    /// in the action row. Reply ships at the trailing end of the bar so that row
+    /// can stay two-and-two around settings.
     public static let aiButtonName = "the action row above the keys"
 
     /// Whether any AI action could run right now.

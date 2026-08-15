@@ -61,11 +61,10 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
     ///
     /// Three consequences, all deliberate:
     ///
-    /// - **`barLeading` and `barTrailing` are empty.** Not deleted —
-    ///   `SuggestionBar` still draws whatever is put there and its separators are
-    ///   already conditional on the arrays being non-empty — so a user who wants
-    ///   the sparkle back at the end of the bar can put it back. The default is
-    ///   three candidates edge to edge, which is what the bar is for.
+    /// - **`barLeading` is empty. `barTrailing` is Reply.** The three candidates
+    ///   stay the bar's job. Reply is the one AI action that does not sit in the
+    ///   action row, so it can keep that row two-and-two around a narrow settings
+    ///   key. A user who wants the trailing end empty can clear it in the editor.
     /// - **Dictation leaves the bottom row.** It would otherwise be on the
     ///   keyboard twice, and `LayoutValidator` would not say so: it warns about a
     ///   duplicate action *within* a row, and these would be in two. The unit it
@@ -84,11 +83,11 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
         basedOn: "default",
         geometry: .default,
         barLeading: [],
-        barTrailing: [],
+        barTrailing: [SlotSpec(action: .reply)],
         showsNumberRow: false,
         bottomRow: [
             SlotSpec(action: .numbersPlane, width: .units(1.3)),
-            SlotSpec(action: .settings, width: .units(1.0)),
+            SlotSpec(action: .emoji, width: .units(1.0)),
             SlotSpec(action: .space, width: .fill),
             SlotSpec(action: .punctuation, width: .units(1.0)),
             SlotSpec(action: .ret, width: .units(KeyboardLayout.functionKeyUnits))
@@ -96,23 +95,20 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
         cursorRow: Self.actionRow
     )
 
-    /// The action row as it ships: everything the keyboard can do to the text,
-    /// in one row above the keys.
+    /// The action row as it ships, in one row above the keys.
     ///
     /// **Ordered so the destructive-looking one is furthest from the space bar.**
     /// Dictation is the only control here that starts something the user then has
     /// to stop, and it sits at the far end rather than next to the keys a thumb
     /// is already travelling between.
     ///
-    /// Every slot is `.fill`, so the six split the width evenly and stay even in
-    /// all 64 languages — a row of fixed units would have to be checked against
-    /// `KeyboardLayout.columns(for:plane:)` for each of them, which is the
-    /// Bulgarian overrun `LayoutValidator` exists to catch.
+    /// CopyClip and Fix on the left, Rewrite and dictation on the right, settings
+    /// 1.0 units in the true middle. Four `.fill` keys share the leftover so the
+    /// gear stays narrow in all 64 languages.
     public static let actionRow: [SlotSpec] = [
-        SlotSpec(action: .emoji, width: .fill),
         SlotSpec(action: .copyclip, width: .fill),
-        SlotSpec(action: .reply, width: .fill),
         SlotSpec(action: .fix, width: .fill),
+        SlotSpec(action: .settings, width: .units(1.0)),
         SlotSpec(action: .quickTone, width: .fill),
         SlotSpec(action: .dictation, width: .fill)
     ]

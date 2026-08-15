@@ -135,15 +135,25 @@ final class CustomLayoutCompilerTests: XCTestCase {
     }
 
     /// The plane key is resolved at draw time, so it says where it goes *back* to.
-    func testTheBottomRowSwitchesBackFromTheNumbersPlane() {
+    ///
+    /// **`rows[RowID.bottom]` was not addressing by id, and the comment saying it
+    /// was is how it survived.** `RowID.bottom` is the literal `3`, `rows` is a
+    /// plain `[KeyRow]`, and nothing in the package gives it a by-id subscript —
+    /// so this read *position* 3, which was the bottom row only for as long as
+    /// the numbers plane drew three rows above it. `RowID.extraSymbols` added a
+    /// fourth (see `NumbersSymbolsLayoutTests`), position 3 became that row, and
+    /// this has been reading the `#+= . , ? ! '` strip and failing ever since.
+    /// Look it up.
+    func testTheBottomRowSwitchesBackFromTheNumbersPlane() throws {
         let rows = KeyboardLayout.rows(
             for: .hebrew, plane: .numbers, showsGlobe: true, customization: .default)
-        // Addressed by id, not by `last`: the compiler appends the action row
-        // after the bottom one, so `rows.last` is not the bottom row. The view
-        // then draws that last row first, above the letters.
+        let bottom = try XCTUnwrap(
+            rows.first { $0.id == KeyboardLayout.RowID.bottom },
+            "no row carries the bottom row's id")
         XCTAssertTrue(
-            rows[KeyboardLayout.RowID.bottom].keys.map(\.cap)
-                .contains(.plane(.letters, label: KeyboardLanguage.hebrew.lettersPlaneLabel)))
+            bottom.keys.map(\.cap)
+                .contains(.plane(.letters, label: KeyboardLanguage.hebrew.lettersPlaneLabel)),
+            "the 123 key on the numbers plane does not offer a way back to the letters")
     }
 
     /// **A plane key must go somewhere it is not, on every plane it is drawn on.**
@@ -197,16 +207,21 @@ final class CustomLayoutCompilerTests: XCTestCase {
         XCTAssertTrue(commas.allSatisfy { $0.addressableID == "char-," })
     }
 
-    func testTheDefaultBottomRowKeepsItsShippedIdentifiers() {
-        let row = KeyboardLayout.rows(
-            for: .english, plane: .letters, showsGlobe: true, customization: .default)[3]
+    func testTheDefaultBottomRowKeepsItsShippedIdentifiers() throws {
+        // By id, for the reason `testTheBottomRowSwitchesBackFromTheNumbersPlane`
+        // records: position 3 is the bottom row only while the letters plane
+        // draws exactly three rows above it, so switching the default's number
+        // row on would quietly point this at the digits instead.
+        let rows = KeyboardLayout.rows(
+            for: .english, plane: .letters, showsGlobe: true, customization: .default)
+        let row = try XCTUnwrap(rows.first { $0.id == KeyboardLayout.RowID.bottom })
         XCTAssertEqual(
             row.keys.map(\.addressableID),
-            // `.settings` stands where the globe used to. Nothing compiles a globe
+            // `.emoji` stands where the globe used to. Nothing compiles a globe
             // into a custom row — `KeyboardController.apply(_:)` inserts one into
             // the layout beforehand when the device needs it, which is why this row
             // has none even at `showsGlobe: true`.
-            ["plane-123", "settings", "space", KeyboardLayout.punctuationKeyID, "return"])
+            ["plane-123", "emoji", "space", KeyboardLayout.punctuationKeyID, "return"])
     }
 
     /// A key that was never compiled from a slot has no suffix to strip.

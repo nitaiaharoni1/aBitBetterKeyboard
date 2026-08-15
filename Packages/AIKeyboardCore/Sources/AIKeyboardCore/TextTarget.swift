@@ -28,6 +28,20 @@ public protocol TextTarget: AnyObject {
     /// inner nil is one that implemented it and set nothing.
     var textContentType: UITextContentType?? { get }
 
+    /// What kind of field this is, as the host declared it.
+    ///
+    /// Optional for the same reason the two above are: `keyboardType` sits in the
+    /// same `@optional` block of `UITextInputTraits`, so nil is a host that never
+    /// implemented it rather than one that asked for `.default`. Those two mean
+    /// the same *behaviour* — `KeyboardController.adoptFieldKeyboardType` leaves
+    /// the keyboard exactly as it was for both — and they are still not the same
+    /// *fact*, which is what matters when the host swaps fields without the
+    /// keyboard going away: a nil arriving mid-session is a `ProxyTextTarget`
+    /// whose input view controller has gone, and reading that as a field that
+    /// changed its mind would re-decide the plane under a typing finger. Nothing
+    /// may answer `.default` to mean "I did not check".
+    var keyboardType: UIKeyboardType? { get }
+
     func insertText(_ text: String)
     func deleteBackward()
 
@@ -85,7 +99,7 @@ public final class ProxyTextTarget: TextTarget {
     public var selectedText: String? { proxy?.selectedText }
 
     /// Forwarded exactly as the SDK declares them, optionals and all. Widening
-    /// either of these to a non-optional here would put the "unknown permits"
+    /// any of these to a non-optional here would put the "unknown permits"
     /// hole back in a place `SecureField`'s tests cannot see.
     public var isSecureTextEntry: Bool? {
         guard let proxy else { return nil }
@@ -94,6 +108,10 @@ public final class ProxyTextTarget: TextTarget {
     public var textContentType: UITextContentType?? {
         guard let proxy else { return UITextContentType??.none }
         return proxy.textContentType
+    }
+    public var keyboardType: UIKeyboardType? {
+        guard let proxy else { return nil }
+        return proxy.keyboardType
     }
 
     public func insertText(_ text: String) { proxy?.insertText(text) }
@@ -123,6 +141,17 @@ public final class MockTextTarget: TextTarget, ObservableObject {
     /// onboarding working under a guard that refuses on silence.
     public var isSecureTextEntry: Bool? { false }
     public var textContentType: UITextContentType?? { .some(.none) }
+
+    /// A positive `.default`, on the same principle as the line above: the
+    /// playground genuinely is an ordinary free-text document, so it answers the
+    /// question rather than declining to.
+    ///
+    /// **Stored rather than computed, because the one thing a real host does that
+    /// no fixed value can model is *change*.** Moving focus between two fields
+    /// without the keyboard going away is a new `keyboardType` on the same proxy,
+    /// and that is the path `adoptFieldKeyboardType` has to get right; a test has
+    /// no other way to reach it.
+    public var keyboardType: UIKeyboardType? = .default
 
     public func insertText(_ newText: String) { text.append(newText) }
     public func deleteBackward() { if !text.isEmpty { text.removeLast() } }

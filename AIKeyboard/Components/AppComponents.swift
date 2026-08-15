@@ -37,6 +37,14 @@ struct Card<Content: View>: View {
     }
 }
 
+/// **`Text.secondary`, and it was `Text.tertiary`.** At 12 pt this is small text,
+/// so the floor is 4.5:1, and the tertiary grey lands at **2.76:1** on
+/// `Surface.background` — it named every section on Home, Languages, Keys,
+/// Settings and the layout editor and was the least legible text in the app.
+/// `Text.secondary` is 5.18:1 in light and 6.90:1 in dark. The headers read a
+/// step darker than they did; that is the fix rather than a side effect.
+/// `NavigationRow`'s chevron below keeps the tertiary grey: it is a decorative
+/// disclosure mark on a row whose own label carries the meaning, not text.
 struct SectionHeader: View {
     let title: String
     var action: (title: String, handler: () -> Void)?
@@ -46,7 +54,7 @@ struct SectionHeader: View {
             Text(title.uppercased())
                 .font(.system(size: 12, weight: .semibold))
                 .tracking(0.8)
-                .foregroundStyle(Theme.Text.tertiary)
+                .foregroundStyle(Theme.Text.secondary)
 
             Spacer()
 

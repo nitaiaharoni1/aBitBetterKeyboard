@@ -78,10 +78,23 @@ extension Theme {
         /// longer a constant either. The numbers/space `rowHeightBias` pair does
         /// not appear here because it cancels;
         /// `testTheHostHeightMatchesWhatTheGridDraws` fails if it stops.
+        ///
+        /// **`rowCount` is still the gap count, and is no longer the height
+        /// multiplier.** Three bands can each carry their own key height now, so
+        /// this sums the bands the layout actually draws rather than multiplying
+        /// one number by a row count. Miss that and the extension asks the host
+        /// for a height the grid does not fill: a short action row leaves a strip
+        /// of host app showing under the keys, and a tall one clips the space
+        /// bar. `testTheHostHeightMatchesWhatTheGridDraws` is what fails.
         public static func keyAreaHeight(for layout: KeyboardCustomization) -> CGFloat {
-            let rows = CGFloat(layout.rowCount)
-            return layout.geometry.keyHeight * rows
-                + layout.geometry.rowSpacing * (rows - 1)
+            let geometry = layout.geometry
+            let letterRows = 3 + (layout.showsNumberRow ? 1 : 0)
+            let stacked =
+                geometry.height(.letters) * CGFloat(letterRows)
+                + geometry.height(.bottom)
+                + (layout.cursorRow.isEmpty ? 0 : geometry.height(.action))
+            return stacked
+                + geometry.rowSpacing * CGFloat(layout.rowCount - 1)
                 + topInset + bottomInset
         }
 

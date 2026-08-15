@@ -62,6 +62,7 @@ public struct LayoutPreset: Identifiable, Sendable {
                 layout.cursorRow = [
                     SlotSpec(action: .cursorLeft, width: .fill),
                     SlotSpec(action: .cursorRight, width: .fill),
+                    SlotSpec(action: .settings, width: .units(1.0)),
                     SlotSpec(action: .text(","), width: .fill),
                     SlotSpec(action: .text("?"), width: .fill),
                     SlotSpec(action: .hideKeyboard, width: .fill)
@@ -85,7 +86,7 @@ public struct LayoutPreset: Identifiable, Sendable {
                 layout.barTrailing = [SlotSpec(action: .quickTone)]
                 layout.bottomRow = [
                     SlotSpec(action: .numbersPlane, width: .units(1.3)),
-                    SlotSpec(action: .settings, width: .units(1.0)),
+                    SlotSpec(action: .emoji, width: .units(1.0)),
                     SlotSpec(action: .reply, width: .units(1.2)),
                     SlotSpec(action: .space, width: .fill),
                     SlotSpec(action: .dictation, width: .units(1.0)),

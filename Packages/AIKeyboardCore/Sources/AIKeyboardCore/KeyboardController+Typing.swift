@@ -593,7 +593,20 @@ extension KeyboardController {
             copyclipResults = []
         }
         if newOverlay == .copyclip || newOverlay == .copyclipSearch {
-            refreshCopyClip()
+            // **The one place the pasteboard's contents are read**, because it
+            // is the one place the user has said they want their clipboard.
+            // Everywhere else refreshes passively; see `refreshCopyClip(_:)`.
+            //
+            // **Above `withAnimation`, deliberately.** The read blocks the main
+            // thread while iOS's "Allow Paste?" alert is up, so the two orders
+            // are "alert, then a panel that is already right" and "a panel
+            // holding yesterday's list, an alert over it, then a row appearing
+            // underneath". The first is one transition and is what this is.
+            // `.copyclipSearch` is only ever entered from `.copyclip`
+            // (`CopyClipBar` is drawn only while `overlay.isCopyClip`), so the
+            // second case is a re-entry over a cursor that has already caught
+            // up and reads nothing at all.
+            refreshCopyClip(.userAsked)
         }
         if newOverlay == .copyclipSearch {
             setCopyclipQuery(copyclipQuery)

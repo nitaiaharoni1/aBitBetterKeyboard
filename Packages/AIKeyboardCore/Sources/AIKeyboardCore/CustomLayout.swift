@@ -166,7 +166,40 @@ public enum Reach: String, Codable, Hashable, Sendable {
 }
 
 public struct LayoutGeometry: Codable, Equatable, Sendable {
+
+    /// A run of rows that share one key height.
+    ///
+    /// **Three bands, not one height and not one per row, and the middle is the
+    /// interesting part.** The action row and the space row each do a job of
+    /// their own, so each gets its own height: a thumb resting on space wants
+    /// more than a thumb reaching for Rewrite, or less, and that is a real
+    /// preference. The *letters* are deliberately one value for all of them,
+    /// including the optional number row. They are a grid the eye reads as a
+    /// block, a stagger inside it reads as a rendering bug rather than a choice,
+    /// and `KeyboardLayout.rows` is extracted from Apple's own data for 64
+    /// languages where the three rows are peers. `fittedKeyHeight` also squeezes
+    /// the numbers plane's fourth row into the block the letters occupy, and
+    /// that arithmetic has one letter height to divide or it has none.
+    public enum RowBand: String, CaseIterable, Codable, Sendable {
+        case letters
+        case action
+        case bottom
+
+        public var title: String {
+            switch self {
+            case .letters: return "Letter keys"
+            case .action: return "Action row"
+            case .bottom: return "Bottom row"
+            }
+        }
+    }
+
+    /// The three letter rows and the optional number row.
     public var keyHeight: CGFloat
+    /// `cursorRow`: CopyClip, Fix, settings, Rewrite, dictation.
+    public var actionRowHeight: CGFloat
+    /// The space row.
+    public var bottomRowHeight: CGFloat
     public var rowSpacing: CGFloat
     public var reach: Reach
 
@@ -180,9 +213,54 @@ public struct LayoutGeometry: Codable, Equatable, Sendable {
     /// Today's `Theme.Metrics` values, so the shipped default is a no-op.
     public static let `default` = LayoutGeometry(keyHeight: 43, rowSpacing: 12, reach: .full)
 
-    public init(keyHeight: CGFloat, rowSpacing: CGFloat, reach: Reach) {
+    public func height(_ band: RowBand) -> CGFloat {
+        switch band {
+        case .letters: return keyHeight
+        case .action: return actionRowHeight
+        case .bottom: return bottomRowHeight
+        }
+    }
+
+    public mutating func setHeight(_ value: CGFloat, for band: RowBand) {
+        switch band {
+        case .letters: keyHeight = value
+        case .action: actionRowHeight = value
+        case .bottom: bottomRowHeight = value
+        }
+    }
+
+    /// **The two row heights default to the letter height rather than to a
+    /// constant**, so every existing call site — both presets, every test
+    /// fixture — keeps describing a keyboard whose rows are all one height,
+    /// which is what they meant when there was only one number to give.
+    public init(
+        keyHeight: CGFloat, rowSpacing: CGFloat, reach: Reach,
+        actionRowHeight: CGFloat? = nil, bottomRowHeight: CGFloat? = nil
+    ) {
         self.keyHeight = keyHeight
+        self.actionRowHeight = actionRowHeight ?? keyHeight
+        self.bottomRowHeight = bottomRowHeight ?? keyHeight
         self.rowSpacing = rowSpacing
         self.reach = reach
+    }
+
+    /// **Hand-written for the two new keys only, and the fallback is what makes
+    /// it a migration.** A layout stored by any earlier build has one
+    /// `keyHeight` and no row heights at all; decoding those as a constant would
+    /// silently reshape a keyboard somebody had already tuned, and decoding them
+    /// as required keys would throw and drop the layout back to the default. The
+    /// missing key means "this row was the same as the letters", because that is
+    /// the only keyboard the old model could describe. `encode(to:)` stays
+    /// synthesized.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let base = try container.decode(CGFloat.self, forKey: .keyHeight)
+        keyHeight = base
+        actionRowHeight =
+            try container.decodeIfPresent(CGFloat.self, forKey: .actionRowHeight) ?? base
+        bottomRowHeight =
+            try container.decodeIfPresent(CGFloat.self, forKey: .bottomRowHeight) ?? base
+        rowSpacing = try container.decode(CGFloat.self, forKey: .rowSpacing)
+        reach = try container.decode(Reach.self, forKey: .reach)
     }
 }

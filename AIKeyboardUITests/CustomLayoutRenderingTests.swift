@@ -120,14 +120,25 @@ final class CustomLayoutRenderingTests: XCTestCase {
     }
 
     /// Space is required. The X badge is absent, not disabled after the tap.
+    ///
+    /// **The badge follows the selection now**, so both halves have to select
+    /// first: a build that drew no badges at all would otherwise pass the second
+    /// assertion for the wrong reason, which is exactly the trap
+    /// `AGENTS.md` records this suite falling into three times.
     func testTheSpaceBarCannotBeRemoved() throws {
         try openLayoutEditor()
-        XCTAssertTrue(
-            element("canvas-Space").waitForExistence(timeout: 5),
-            "the space bar is not on the canvas")
+        let space = element("canvas-Space")
+        XCTAssertTrue(space.waitForExistence(timeout: 5), "the space bar is not on the canvas")
+
+        element("canvas-Settings").tap()
         XCTAssertTrue(
             element("remove-Settings").waitForExistence(timeout: 5),
-            "no remove badges drew, so a missing Space X proves nothing")
+            "no remove badge drew on a removable key, so a missing Space X proves nothing")
+
+        space.tap()
+        XCTAssertTrue(
+            element("inspector-width").waitForExistence(timeout: 5),
+            "tapping the space bar did not select it, so the missing X proves nothing")
         XCTAssertFalse(
             element("remove-Space").exists,
             "the space bar offered to remove itself")
@@ -147,35 +158,33 @@ final class CustomLayoutRenderingTests: XCTestCase {
         }
     }
 
-    private func openOptions() {
-        let options = element("layout-options")
-        guard options.waitForExistence(timeout: 5) else { return }
-        options.tap()
-    }
-
-    private func closeOptions() {
-        let done = element("layout-options-done")
-        if done.waitForExistence(timeout: 3) { done.tap() }
-    }
-
     private func selectPreset(_ id: String) throws {
         try openLayoutEditor()
-        openOptions()
         let card = element("preset-\(id)")
         XCTAssertTrue(card.waitForExistence(timeout: 5), "no \(id) preset card")
         card.tap()
-        closeOptions()
         commitLayout()
     }
 
     private func setReach(_ label: String) throws {
         try openLayoutEditor()
-        openOptions()
         let picker = element("layout-reach")
         XCTAssertTrue(picker.waitForExistence(timeout: 5), "no one-handed picker")
+        scrollIntoView(picker)
         picker.buttons[label].tap()
-        closeOptions()
         commitLayout()
+    }
+
+    /// **The settings live on the editor itself now, not behind an Options
+    /// sheet**, so the ones near the bottom of the workbench can start off
+    /// screen on a short phone. `exists` is true for those; `isHittable` is not,
+    /// and tapping one is a silent no-op that reads as "the slider did not reach
+    /// the keys".
+    private func scrollIntoView(_ item: XCUIElement) {
+        for _ in 0..<4 where !item.isHittable {
+            app.swipeUp()
+            Thread.sleep(forTimeInterval: 0.3)
+        }
     }
 
     private func commitLayout() {
@@ -196,7 +205,13 @@ final class CustomLayoutRenderingTests: XCTestCase {
     }
 
     private func openPlayground() {
-        app.tabBars.buttons["Home"].tap()
+        // **Wait for the bar, do not assume it.** The layout editor hides the
+        // tab bar while it is up (`AppChrome`) and restores it on disappear, so
+        // straight after Done there is a moment with no tab bar to tap and the
+        // tap lands on nothing.
+        let home = app.tabBars.buttons["Home"]
+        XCTAssertTrue(home.waitForExistence(timeout: 10), "the tab bar never came back")
+        home.tap()
         let card = element("home-playground")
         XCTAssertTrue(card.waitForExistence(timeout: 10), "playground card never appeared")
         card.tap()
@@ -283,22 +298,11 @@ final class CustomLayoutTypesIntoHostTests: KeyboardExtensionTestCase {
         }
         row.tap()
 
-        let options = app.descendants(matching: .any)
-            .matching(identifier: "layout-options").firstMatch
-        guard options.waitForExistence(timeout: 5) else {
-            throw XCTSkip("the Options button never appeared")
-        }
-        options.tap()
-
         let card = app.descendants(matching: .any).matching(identifier: "preset-power").firstMatch
         guard card.waitForExistence(timeout: 10) else {
             throw XCTSkip("the layout editor never opened")
         }
         card.tap()
-
-        let sheetDone = app.descendants(matching: .any)
-            .matching(identifier: "layout-options-done").firstMatch
-        if sheetDone.waitForExistence(timeout: 3) { sheetDone.tap() }
 
         let done = app.descendants(matching: .any).matching(identifier: "layout-done").firstMatch
         XCTAssertTrue(done.waitForExistence(timeout: 5))

@@ -27,6 +27,24 @@ final class MissingSpacesTests: XCTestCase {
         XCTAssertEqual(MissingSpaces.restored("anyway"), "anyway")
     }
 
+    /// **A word the list does not know is still a word, and this shipped
+    /// splitting them.**
+    ///
+    /// The list is a top-N frequency table, so it answers "is this common". Every
+    /// ordinary English compound below the cut decomposes into two words above
+    /// it: `standup` is out, `stand` and `up` are in. Fix answered
+    /// `I can't make the standup.` and this wrote `stand up` over it — changing a
+    /// word the model's corrections list never named, which is the one thing
+    /// `EditScope` exists to stop, arriving through the door built to bypass
+    /// `EditScope`. `AIDirectEditTests
+    /// .testFixWritesTheAnswerIntoTheFieldAndLeavesNoStrip` is the end-to-end
+    /// version of this and was red against the shipped build.
+    func testAnEnglishCompoundBelowTheListIsStillNotSplit() {
+        XCTAssertEqual(MissingSpaces.restored("standup"), "standup")
+        XCTAssertEqual(MissingSpaces.restored("checkout"), "checkout")
+        XCTAssertEqual(MissingSpaces.restored("workout"), "workout")
+    }
+
     /// Slang the list does not know, and cannot cover with real pieces.
     func testSlangTheListDoesNotKnowIsLeftAlone() {
         XCTAssertEqual(MissingSpaces.restored("יאללה"), "יאללה")

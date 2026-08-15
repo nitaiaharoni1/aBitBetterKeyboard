@@ -1,8 +1,20 @@
 import AIKeyboardCore
 import SwiftUI
 
-/// Slim dock under the canvas. Width is the handle on the key. This row
-/// names the value and keeps fill, action, and remove without covering keys.
+/// The selected key, in the shelf band directly above the keyboard. Width is
+/// the handle on the key itself; this row names the value and keeps fill,
+/// action and remove without covering a single key.
+///
+/// **Sized to `LayoutView.contextBandHeight` rather than to its contents.** The
+/// band is fixed so that selecting a key cannot shunt the spare-key tray under
+/// the thumb that was reaching for it. That fixes the height budget for
+/// everything in here: `xs` padding rather than `sm`, and a `minHeight: 44` on
+/// each control so the row still clears the touch-target floor inside it.
+///
+/// **`Toggle` is greedy in an `HStack`** — its style puts a spacer between the
+/// label and the switch and expands to whatever it is offered — so the Fill
+/// switch is `fixedSize`d. Without it, it eats the width the key's name needs
+/// and truncates a title the user just tapped to read.
 struct LayoutKeyInspectorSection: View {
     @ObservedObject var model: LayoutEditorModel
     let slot: SlotSpec
@@ -30,26 +42,46 @@ struct LayoutKeyInspectorSection: View {
                         set: { model.setWidth($0 ? .fill : .units(fallbackUnits), for: slot) })
                 )
                 .font(Theme.Fonts.callout)
+                .fixedSize()
+                .frame(minHeight: 44)
                 .disabled(resizing)
                 .accessibilityIdentifier("inspector-fill")
             }
             actionMenu
+                .frame(minWidth: 44, minHeight: 44)
                 .disabled(resizing)
             if verdict.isAllowed {
                 Button("Remove", role: .destructive) { model.remove(slot) }
                     .font(Theme.Fonts.callout)
+                    .frame(minHeight: 44)
                     .disabled(resizing)
                     .accessibilityIdentifier("inspector-remove")
             }
-            Button("Done") { dismiss() }
-                .font(Theme.Fonts.caption.weight(.semibold))
-                .accessibilityIdentifier("inspector-done")
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(Theme.Fonts.callout)
+                    .foregroundStyle(Theme.Text.secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Close")
+            .accessibilityIdentifier("inspector-done")
         }
-        .padding(.horizontal, Theme.Space.sm)
-        .padding(.vertical, Theme.Space.sm)
+        .padding(.leading, Theme.Space.sm)
+        // The close button carries its own 44 pt target, so the card's own
+        // trailing gutter is what is left after that target's built-in margin.
+        .padding(.trailing, Theme.Space.xxs)
+        .padding(.vertical, Theme.Space.xs)
+        .frame(maxHeight: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: Theme.Radius.key, style: .continuous)
-                .fill(Theme.Surface.elevated)
+            RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+                .fill(Theme.Keys.card)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+                .strokeBorder(Theme.Surface.separator, lineWidth: 1)
         )
     }
 

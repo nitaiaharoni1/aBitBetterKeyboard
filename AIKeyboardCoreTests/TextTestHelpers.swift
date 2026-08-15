@@ -45,6 +45,7 @@ final class CursorTextTarget: TextTarget {
     var selectedText: String? { selected }
     var isSecureTextEntry: Bool? { false }
     var textContentType: UITextContentType?? { .some(.none) }
+    var keyboardType: UIKeyboardType? { .default }
 
     func insertText(_ text: String) {
         selected = nil
@@ -146,6 +147,11 @@ final class LiveTextViewTarget: TextTarget {
 
     var isSecureTextEntry: Bool? { false }
     var textContentType: UITextContentType?? { .some(.none) }
+    /// The view's own trait, not a constant. This wraps a real `UITextView` that
+    /// has a real answer, and `TextTarget` forbids reporting a concrete value to
+    /// mean "I did not check" — a hardcoded `.default` is exactly that, and it
+    /// would leave this helper unable to exercise field shaping at all.
+    var keyboardType: UIKeyboardType? { view.keyboardType }
 
     func insertText(_ text: String) { view.insertText(text) }
     func deleteBackward() { view.deleteBackward() }

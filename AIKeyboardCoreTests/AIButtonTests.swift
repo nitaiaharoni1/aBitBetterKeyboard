@@ -349,6 +349,7 @@ private final class SecureTextTarget: TextTarget {
     var selectedText: String? { nil }
     var isSecureTextEntry: Bool? { true }
     var textContentType: UITextContentType?? { .some(.password) }
+    var keyboardType: UIKeyboardType? { .default }
 
     func insertText(_ text: String) {}
     func deleteBackward() {}

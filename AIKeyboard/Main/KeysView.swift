@@ -51,7 +51,7 @@ struct KeysView: View {
         section("Layout") {
             NavigationRow(
                 title: "Layout",
-                subtitle: "Drag keys around. Unused ones sit in a tray.",
+                subtitle: "Arrange the keys. Spare ones sit underneath.",
                 icon: "square.grid.3x2",
                 badge: layoutSummary
             ) {

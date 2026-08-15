@@ -42,7 +42,7 @@ final class LayoutEditorTests: XCTestCase {
 
     func testDroppingIntoAnotherRowMovesItBetweenThem() {
         let model = editor()
-        model.setExtraRow(enabled: true)
+        model.draft.cursorRow = KeyboardCustomization.actionRow
         let movable = model.draft.bottomRow.first { $0.action == .punctuation }!
         model.move(movable, to: .cursor, at: 0)
         XCTAssertFalse(model.draft.bottomRow.contains(movable))
@@ -194,35 +194,22 @@ final class LayoutEditorTests: XCTestCase {
 
     // MARK: Rows
 
-    /// Switching the extra row off and on gives back what the row ships holding,
-    /// not something else. It seeded arrows-and-hide while the row was the cursor
-    /// row; once it became the action row that seed was silently wrong.
-    func testTurningTheExtraRowOnSeedsItWithTheShippedActionRow() {
-        let model = editor()
-        model.setExtraRow(enabled: false)
-        XCTAssertTrue(model.draft.cursorRow.isEmpty)
-        model.setExtraRow(enabled: true)
-        XCTAssertEqual(
-            model.draft.cursorRow.map(\.action),
-            KeyboardCustomization.actionRow.map(\.action))
-    }
-
-    func testTheExtraRowIsListedOnlyWhenItExists() {
-        let model = editor()
-        // The default ships the row populated, so switch it off first: an empty
-        // `cursorRow` is what "the row is off" means.
-        model.setExtraRow(enabled: false)
-        XCTAssertFalse(model.visibleRows.contains(.cursor))
-        model.setExtraRow(enabled: true)
-        XCTAssertTrue(model.visibleRows.contains(.cursor))
-        XCTAssertEqual(
-            model.visibleRows.first, .cursor,
-            "the extra row is listed first because it is drawn above the letters")
-    }
+    // **`testTurningTheExtraRowOnSeedsItWithTheShippedActionRow` is deleted with
+    // the switch it covered.** `setExtraRow(enabled:)` is gone — see
+    // `LayoutGeometrySection` for why a control that emptied the action row in
+    // one tap was the wrong affordance — and rewriting the test against a direct
+    // `draft.cursorRow` write left it asserting the value it had just assigned.
+    //
+    // `testTheExtraRowIsListedOnlyWhenItExists` went the same way, and so did
+    // `LayoutEditorModel.visibleRows` underneath it. Nothing in the app listed
+    // rows any more once the editor's row sections were replaced by the canvas,
+    // so the property's only remaining caller was that test: a test keeping its
+    // own subject alive, which reads to the next person as an editor feature
+    // that still exists.
 
     func testRowKindFindsAKeyInEveryRow() {
         let model = editor()
-        model.setExtraRow(enabled: true)
+        model.draft.cursorRow = KeyboardCustomization.actionRow
         // **The bar ends are empty in the shipped default now** — the emoji key,
         // the one-tap rewrite and the AI menu (since deleted; its actions each
         // got their own key) all moved into the action row — so this has to put
@@ -267,16 +254,126 @@ final class LayoutEditorTests: XCTestCase {
         XCTAssertEqual(model.draft.geometry.reach, .right)
     }
 
+    /// **Each band clamps and writes only itself.** The default ships all three
+    /// equal, so a setter that ignored its `band:` argument and wrote the letters
+    /// every time would agree with a test that only read back the band it had
+    /// just set. This reads back the other two as well.
+    func testEachRowBandTakesItsOwnHeightAndLeavesTheOthers() {
+        for band in LayoutGeometry.RowBand.allCases {
+            let model = editor()
+            let before = LayoutGeometry.RowBand.allCases.map { model.draft.geometry.height($0) }
+            model.setKeyHeight(999, for: band)
+
+            XCTAssertEqual(
+                model.draft.geometry.height(band), LayoutGeometry.keyHeightRange.upperBound,
+                "\(band.rawValue) did not clamp")
+            for (index, other) in LayoutGeometry.RowBand.allCases.enumerated() where other != band {
+                XCTAssertEqual(
+                    model.draft.geometry.height(other), before[index],
+                    "setting \(band.rawValue) also moved \(other.rawValue)")
+            }
+        }
+    }
+
+    /// The undo stack covers a row height like any other edit, and the band it
+    /// restores is the band that moved.
+    func testUndoingARowHeightRestoresThatRow() {
+        let model = editor()
+        let before = model.draft.geometry.height(.action)
+        model.setKeyHeight(LayoutGeometry.keyHeightRange.upperBound, for: .action)
+        XCTAssertNotEqual(model.draft.geometry.height(.action), before)
+        model.undo()
+        XCTAssertEqual(model.draft.geometry.height(.action), before)
+    }
+
+    // MARK: Reading the drawn keyboard
+    //
+    // **These two had no test at all.** They were `static` on `LayoutView` with a
+    // comment saying they were static "so `LayoutFrameMappingTests` can drive
+    // it", and that file has never existed — the app target has no unit-test
+    // bundle for it to live in. They decide which drawn key belongs to which
+    // slot and which rows refuse a drop, so between them they are the whole
+    // drag system's view of the screen.
+
+    /// **The `#uuid` suffix is the identity, and the prefix is not.** Two commas
+    /// on one row compile to `char-,#aaaa…` and `char-,#bbbb…`; matching on the
+    /// prefix would map both to whichever slot was asked for first, and dragging
+    /// either would move the other.
+    func testTwoKeysWithTheSameActionMapToTheirOwnFrames() {
+        let first = SlotSpec(action: .text(","))
+        let second = SlotSpec(action: .text(","))
+        let frames = [
+            "char-,#\(first.id.uuidString.prefix(8))": CGRect(x: 0, y: 0, width: 30, height: 40),
+            "char-,#\(second.id.uuidString.prefix(8))": CGRect(x: 40, y: 0, width: 30, height: 40)
+        ]
+
+        let mapped = LayoutEditorModel.mapFrames(frames, to: [first, second])
+
+        XCTAssertEqual(mapped[first.id]?.minX, 0)
+        XCTAssertEqual(
+            mapped[second.id]?.minX, 40,
+            "both commas mapped to one frame: the id prefix is not the identity")
+    }
+
+    /// A slot the keyboard did not draw has no frame rather than a zero one: a
+    /// `CGRect.zero` would be a legal drop target at the top-left corner.
+    func testASlotTheKeyboardDidNotDrawIsAbsentRatherThanZero() {
+        let drawn = SlotSpec(action: .space)
+        let missing = SlotSpec(action: .ret)
+        let frames = [
+            "space#\(drawn.id.uuidString.prefix(8))": CGRect(x: 0, y: 0, width: 100, height: 40)
+        ]
+
+        let mapped = LayoutEditorModel.mapFrames(frames, to: [drawn, missing])
+
+        XCTAssertEqual(mapped.count, 1)
+        XCTAssertNil(mapped[missing.id])
+    }
+
+    /// Keys with no `#uuid` are the rows extracted from Apple's data, and they
+    /// merge per drawn row. The two `q`/`a` rects here overlap on purpose: a
+    /// grouped band is one double-height row, and reporting it as two would let a
+    /// drop land inside the letters.
+    func testFrozenBandsMergeOverlappingRowsAndIgnoreCustomKeys() {
+        let custom = SlotSpec(action: .space)
+        let frames: [String: CGRect] = [
+            "char-q": CGRect(x: 0, y: 0, width: 30, height: 40),
+            "char-a": CGRect(x: 0, y: 20, width: 30, height: 40),
+            "char-z": CGRect(x: 0, y: 100, width: 30, height: 40),
+            "space#\(custom.id.uuidString.prefix(8))": CGRect(
+                x: 0, y: 200, width: 100, height: 40)
+        ]
+
+        let bands = LayoutEditorModel.frozenBands(from: frames).sorted { $0.lowerBound < $1.lowerBound }
+
+        XCTAssertEqual(bands.count, 2, "the overlapping q/a rects are one drawn row")
+        XCTAssertEqual(bands.first?.lowerBound, 0)
+        XCTAssertEqual(bands.first?.upperBound, 60, "the merged band is the union, not the first rect")
+        XCTAssertEqual(bands.last?.lowerBound, 100)
+        XCTAssertFalse(
+            bands.contains { $0.contains(220) },
+            "a key the user placed was reported as frozen, so it could not be dragged")
+    }
+
     // MARK: Drag session
 
     /// Five midpoint updates must not touch `draft`. One undo after drop restores
     /// the start, and the stack is empty.
+    ///
+    /// **The sweep ends past the last key's midpoint, not on it.** `boardGeometry`
+    /// puts key *n* at `n * 44` with width 40, so the last midpoint is exactly
+    /// 196 — and `insertionIndex` counts `x > midX`, which 196 is not. The key
+    /// under test starts at index 3 of five, so a sweep that stops one short of
+    /// the end walks it 3 → 0 → 1 → 2 → 3 and hands back the order it began
+    /// with: `draft` was untouched and the stack was one step, both true, while
+    /// the assertion that the *preview* moved was false at the one moment it is
+    /// read. 210 is past the last cap rather than on its centre line.
     func testAFiveMidpointDragIsOneUndoStep() {
         let model = editor()
         let key = model.draft.bottomRow.first { $0.action == .punctuation }!
         let start = model.draft
         model.beginDrag(key)
-        for x in [20.0, 64.0, 108.0, 152.0, 196.0] {
+        for x in [20.0, 64.0, 108.0, 152.0, 210.0] {
             model.updateDrag(at: CGPoint(x: x, y: 120), in: boardGeometry(model))
         }
         XCTAssertEqual(model.draft, start)
@@ -321,7 +418,7 @@ final class LayoutEditorTests: XCTestCase {
 
     func testHoveringTheExtraRowWellProposesTheCursorRow() throws {
         let model = editor()
-        model.setExtraRow(enabled: false)
+        model.draft.cursorRow = []
         let key = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .punctuation })
         model.beginDrag(key)
         let geometry = CanvasGeometry(
@@ -482,7 +579,7 @@ final class LayoutEditorTests: XCTestCase {
     func testALateEndResizeFromAnotherKeyDoesNotCommit() throws {
         let model = editor()
         let key = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .punctuation })
-        let other = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .settings })
+        let other = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .emoji })
         let start = model.draft
         model.beginResize(key)
         model.updateResize(.units(2.5))
@@ -496,7 +593,7 @@ final class LayoutEditorTests: XCTestCase {
     func testALateEndDragFromAnotherKeyDoesNotCommit() {
         let model = editor()
         let key = model.draft.bottomRow.first { $0.action == .punctuation }!
-        let other = model.draft.bottomRow.first { $0.action == .settings }!
+        let other = model.draft.bottomRow.first { $0.action == .emoji }!
         let start = model.draft
         model.beginDrag(key)
         model.updateDrag(at: CGPoint(x: 20, y: 120), in: boardGeometry(model))

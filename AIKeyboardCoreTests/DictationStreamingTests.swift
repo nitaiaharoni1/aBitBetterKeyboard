@@ -280,6 +280,7 @@ private final class WindowedTextTarget: TextTarget {
     var selectedText: String? { nil }
     var isSecureTextEntry: Bool? { false }
     var textContentType: UITextContentType?? { .some(.none) }
+    var keyboardType: UIKeyboardType? { .default }
 
     func insertText(_ newText: String) { text.append(newText) }
     func deleteBackward() { if !text.isEmpty { text.removeLast() } }
@@ -295,6 +296,7 @@ private final class ReentrantEmptyTarget: TextTarget {
     var selectedText: String? { nil }
     var isSecureTextEntry: Bool? { false }
     var textContentType: UITextContentType?? { .some(.none) }
+    var keyboardType: UIKeyboardType? { .default }
 
     func insertText(_ newText: String) { text.append(newText) }
     func deleteBackward() {

@@ -47,9 +47,9 @@ extension KeyView {
         // end up with a white cap's shadow or a white cap's graphite glyph.
         if isActionActive { return .action }
         switch spec.cap {
-        // Warm white stays dominant: letters, space, and the AI actions, whose
+        // Warm white stays dominant: letters, space, settings, and the AI actions, whose
         // accent is the glyph's tint rather than the cap.
-        case .character, .space, .quickTone, .aiReply, .aiFix:
+        case .character, .space, .quickTone, .aiReply, .aiFix, .settings:
             return .letter
         // The strongest controls: shift and the plane switch.
         case .shift, .plane:

@@ -82,6 +82,19 @@ struct RootView: View {
     @EnvironmentObject private var store: SharedStore
     @Binding var selectedMainTab: MainTab
     @StateObject private var search = AppSearch()
+    /// Lives above the `.id(store.brandPalette)` below, which is what makes
+    /// `hidesTabBar` **survive** that rebuild rather than be reset by it.
+    ///
+    /// **Stated the other way round here for a while, and the truth is the
+    /// latent trap rather than the reassurance.** The `.id` change destroys
+    /// `MainTabView` and any pushed `LayoutView` under it, but a `true` written
+    /// here outlives them, so there would be no editor left to run the
+    /// `onDisappear` that puts the bar back. A `@State` *below* the `.id` would
+    /// re-initialise to `false` and could not strand it. Not reachable today,
+    /// because `PalettePicker` appears only on the Keys root and in onboarding,
+    /// so the palette cannot change while the editor is pushed. Anything that
+    /// lets it change from a pushed screen has to clear this on the way.
+    @State private var chrome = AppChrome()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -89,6 +102,7 @@ struct RootView: View {
             if store.hasCompletedOnboarding {
                 MainTabView(selection: $selectedMainTab)
                     .environmentObject(search)
+                    .environment(chrome)
                     // **`Theme.Brand` is a global, so somebody has to tell
                     // SwiftUI it moved.** Most of the views that draw an accent
                     // observe nothing and take no parameter that changes with

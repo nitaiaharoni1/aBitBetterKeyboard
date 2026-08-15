@@ -130,12 +130,19 @@ public final class LayoutEditorModel: ObservableObject {
     public enum RowKind: String, CaseIterable, Sendable {
         case cursor, bottom, barLeading, barTrailing
 
+        /// **Spoken, not internal.** These reach VoiceOver through
+        /// `KeyA11yAction.moveToRow`, `TrayA11yAction.addTo` and the canvas key's
+        /// own label, so they have to be the names the screen uses. `.cursor` was
+        /// "Extra row" — the name of a switch that no longer exists and never
+        /// described what is on the row — while every visible label on the editor
+        /// called it the action row, and the bar ends were "Bar, leading" against
+        /// a card reading "Left end".
         public var title: String {
             switch self {
             case .bottom: return "Bottom row"
-            case .cursor: return "Extra row"
-            case .barLeading: return "Bar, leading"
-            case .barTrailing: return "Bar, trailing"
+            case .cursor: return "Action row"
+            case .barLeading: return "Suggestion bar, left end"
+            case .barTrailing: return "Suggestion bar, right end"
             }
         }
     }
@@ -212,13 +219,6 @@ public final class LayoutEditorModel: ObservableObject {
     public var isUsable: Bool { LayoutValidator.isUsable(draft) }
 
     public var canUndo: Bool { !history.isEmpty }
-
-    /// The rows the editor lists, in the order they appear on the keyboard. The
-    /// extra row is first because `KeyboardView` draws it above the letters; it is
-    /// absent when it is switched off, which is what an empty `cursorRow` means.
-    public var visibleRows: [RowKind] {
-        RowKind.allCases.filter { $0 != .cursor || !draft.cursorRow.isEmpty }
-    }
 
     public func row(_ kind: RowKind) -> [SlotSpec] {
         switch kind {
@@ -375,6 +375,59 @@ public final class LayoutEditorModel: ObservableObject {
                 .compactMap { kind in self.row(kind).first { $0.id == selection.id } }
                 .first
         }
+    }
+
+    // MARK: Reading the drawn keyboard
+    //
+    // **These two live here rather than beside the canvas, and the comment that
+    // sent them here named a test file that did not exist.** They were `static`
+    // on `LayoutView` "so `LayoutFrameMappingTests` can drive it" — and nothing
+    // in the repo could, because the app target has no unit-test bundle at all
+    // and `AIKeyboardCoreTests` cannot see it. They are pure arithmetic over
+    // what the keyboard drew, which is the same reason everything else in this
+    // file is here: `LayoutEditorTests` drives the whole editor without standing
+    // a view up.
+
+    /// Matches the keyboard's compiled key ids back to the model's slots.
+    ///
+    /// A compiled key is `char-,#a1b2c3d4`: the suffix is the first eight
+    /// characters of the slot's `UUID`, which is what makes two commas on one
+    /// row two identities rather than one `ForEach` identity.
+    public static func mapFrames(
+        _ frames: [String: CGRect], to slots: [SlotSpec]
+    ) -> [UUID: CGRect] {
+        var mapped: [UUID: CGRect] = [:]
+        for slot in slots {
+            let suffix = "#\(slot.id.uuidString.prefix(8))"
+            if let match = frames.first(where: { $0.key.hasSuffix(suffix) }) {
+                mapped[slot.id] = match.value
+            }
+        }
+        return mapped
+    }
+
+    /// The bands the user may not drop into, merged into one range per drawn row.
+    ///
+    /// Compiled letter, digit, shift and delete keys have no `#uuid` suffix —
+    /// those rows come from `letterLayouts` and are not the user's to rearrange.
+    /// Overlapping rects merge, so a grouped double-height band is one range.
+    public static func frozenBands(from frames: [String: CGRect]) -> [ClosedRange<CGFloat>] {
+        var rows: [ClosedRange<CGFloat>] = []
+        for (id, rect) in frames where !id.contains("#") {
+            let band = rect.minY...rect.maxY
+            if let index = rows.firstIndex(where: {
+                $0.lowerBound <= band.upperBound && band.lowerBound <= $0.upperBound
+            }) {
+                let merged = rows[index]
+                rows[index] =
+                    min(
+                        merged.lowerBound, band.lowerBound)...max(
+                        merged.upperBound, band.upperBound)
+            } else {
+                rows.append(band)
+            }
+        }
+        return rows
     }
 
     /// Pure hit test. `updateDrag` is the only production caller.
@@ -568,25 +621,23 @@ public final class LayoutEditorModel: ObservableObject {
         edit { $0.showsNumberRow = enabled }
     }
 
-    /// **Seeded, not empty.** A row switched on and left blank is a row the user
-    /// has to populate before it does anything.
-    ///
-    /// Seeded with `KeyboardCustomization.actionRow` rather than with cursor keys:
-    /// that is what the row ships holding, so switching it off and on again gives
-    /// back what was there rather than something else. It used to seed
-    /// arrows-and-hide, which was right while the row was called the cursor row
-    /// and wrong the moment it became the action row.
-    public func setExtraRow(enabled: Bool) {
-        edit { layout in
-            layout.cursorRow = enabled ? KeyboardCustomization.actionRow : []
-        }
-        if enabled == false, let selection, rowKind(of: selection) == nil {
-            self.selection = nil
-        }
-    }
+    // **There is deliberately no `setExtraRow(enabled:)`, and there was one.**
+    // It backed an "Extra row" switch in the editor, and that row is the
+    // *action* row — CopyClip, Fix, settings, Rewrite, dictation — so one tap on
+    // a control named after a position rather than its contents emptied the
+    // product's whole AI surface. The row empties a key at a time by dragging,
+    // and any preset fills it again.
 
-    public func setKeyHeight(_ height: CGFloat) {
-        edit { $0.geometry.keyHeight = Self.clamp(height, to: LayoutGeometry.keyHeightRange) }
+    /// **Takes the band it is changing, and the letters are one band.** The
+    /// action row and the space row each answer to their own slider; the three
+    /// letter rows and the number row share one, because a stagger inside the
+    /// letter grid reads as a rendering fault rather than a preference. See
+    /// `LayoutGeometry.RowBand`.
+    public func setKeyHeight(_ height: CGFloat, for band: LayoutGeometry.RowBand = .letters) {
+        edit {
+            $0.geometry.setHeight(
+                Self.clamp(height, to: LayoutGeometry.keyHeightRange), for: band)
+        }
     }
 
     public func setRowSpacing(_ spacing: CGFloat) {

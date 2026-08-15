@@ -54,11 +54,11 @@ extension KeyboardView {
             let referenceSlidingRows = 3 + (layout.showsNumberRow ? 1 : 0)
             let slidingKeyHeight =
                 controller.plane == .letters
-                ? layout.geometry.keyHeight
+                ? layout.geometry.height(.letters)
                 : Theme.Metrics.fittedKeyHeight(
                     slidingRows: slidingRows.count,
                     referenceRows: referenceSlidingRows,
-                    keyHeight: layout.geometry.keyHeight,
+                    keyHeight: layout.geometry.height(.letters),
                     rowSpacing: layout.geometry.rowSpacing)
             // **Search puts the letters back and takes the action row instead**,
             // which is the exact opposite trade to the panel below it. Typing a
@@ -79,7 +79,7 @@ extension KeyboardView {
                     ZStack {
                         rowsView(
                             actionRows, availableWidth: available, unit: unit,
-                            height: layout.geometry.keyHeight,
+                            height: layout.geometry.height(.action),
                             rowSpacing: layout.geometry.rowSpacing
                         )
                         .opacity(showActionRow ? 1 : 0)
@@ -88,7 +88,7 @@ extension KeyboardView {
 
                         if searchingEmoji {
                             EmojiResultsStrip(
-                                controller: controller, height: layout.geometry.keyHeight
+                                controller: controller, height: layout.geometry.height(.action)
                             )
                             .frame(width: gridWidth)
                             .frame(
@@ -99,7 +99,7 @@ extension KeyboardView {
                         }
                         if searchingCopyclip {
                             CopyClipResultsStrip(
-                                controller: controller, height: layout.geometry.keyHeight
+                                controller: controller, height: layout.geometry.height(.action)
                             )
                             .frame(width: gridWidth)
                             .frame(
@@ -146,7 +146,7 @@ extension KeyboardView {
                         if !bottomRows.isEmpty {
                             rowsView(
                                 bottomRows, availableWidth: available, unit: unit,
-                                height: layout.geometry.keyHeight,
+                                height: layout.geometry.height(.bottom),
                                 rowSpacing: layout.geometry.rowSpacing
                             )
                         }
@@ -160,14 +160,20 @@ extension KeyboardView {
                     // Same width and reach pin as the keys, so one-handed mode
                     // does not leave a full-bleed emoji panel over a narrowed row.
                     if controller.overlay == .emoji {
-                        EmojiPanel(controller: controller, keyHeight: layout.geometry.keyHeight)
-                            .frame(width: gridWidth)
-                            .frame(
-                                maxWidth: .infinity,
-                                alignment: reachAlignment(layout.geometry.reach)
-                            )
-                            .environment(\.layoutDirection, .leftToRight)
-                            .transition(panelTransition)
+                        // `.bottom`, not `.letters`: this panel covers the letter
+                        // rows *and* the space row, so its category strip is the
+                        // row standing where the space bar was.
+                        EmojiPanel(
+                            controller: controller,
+                            keyHeight: layout.geometry.height(.bottom)
+                        )
+                        .frame(width: gridWidth)
+                        .frame(
+                            maxWidth: .infinity,
+                            alignment: reachAlignment(layout.geometry.reach)
+                        )
+                        .environment(\.layoutDirection, .leftToRight)
+                        .transition(panelTransition)
                     }
 
                     if controller.overlay == .copyclip {

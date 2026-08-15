@@ -82,6 +82,36 @@ final class LayoutValidatorTests: XCTestCase {
         XCTAssertTrue(kinds(layout).contains(.geometryOutOfRange))
     }
 
+    /// **Every band, not only the letters.** The rail read `geometry.keyHeight`
+    /// alone when that was the only height there was, and a layout hand-edited
+    /// into the App Group — or written by a future preset — can now put the
+    /// action row at 4 pt and the space bar at 200 while the letters stay legal.
+    /// Each band is checked on its own here, because a loop that only ever
+    /// happened to read the first one would pass a single combined fixture.
+    func testAnyRowHeightOutsideTheRangeIsAnError() {
+        for band in LayoutGeometry.RowBand.allCases {
+            var tooTall = KeyboardCustomization.default
+            tooTall.geometry.setHeight(LayoutGeometry.keyHeightRange.upperBound + 1, for: band)
+            XCTAssertTrue(
+                kinds(tooTall).contains(.geometryOutOfRange),
+                "\(band.rawValue) above the ceiling was accepted")
+
+            var tooShort = KeyboardCustomization.default
+            tooShort.geometry.setHeight(LayoutGeometry.keyHeightRange.lowerBound - 1, for: band)
+            XCTAssertTrue(
+                kinds(tooShort).contains(.geometryOutOfRange),
+                "\(band.rawValue) below the floor was accepted")
+        }
+    }
+
+    /// The bands are independent, so a legal one must not be reported.
+    func testRowsAtDifferentLegalHeightsAreAccepted() {
+        var layout = KeyboardCustomization.default
+        layout.geometry.setHeight(LayoutGeometry.keyHeightRange.upperBound, for: .action)
+        layout.geometry.setHeight(LayoutGeometry.keyHeightRange.lowerBound, for: .bottom)
+        XCTAssertEqual(errors(layout), [])
+    }
+
     func testRowSpacingOutsideTheRangeIsAnError() {
         var layout = KeyboardCustomization.default
         layout.geometry.rowSpacing = 40
@@ -168,31 +198,25 @@ final class LayoutValidatorTests: XCTestCase {
 
     // MARK: The cost the user cannot see
 
-    /// **The shipped layout must not warn**, or the warning is noise on a screen
-    /// the user has not touched yet.
-    func testTheShippedLayoutDoesNotCostScreenContext() {
-        XCTAssertFalse(
-            LayoutValidator.issues(in: .default)
-                .contains { $0.kind == .costsScreenContext })
-    }
-
-    /// A tall layout warns rather than blocking. Past the measured cliff in
-    /// `FrameReduction.Band.maximumOwnUI` the fingerprint band starts eating the
-    /// host's own message lines and two conversations collide, so screen context
-    /// degrades — but typing does not, so it is the user's trade to make and the
-    /// only unacceptable outcome is making it silently.
-    func testATallLayoutWarnsThatItCostsScreenContext() {
+    /// **A layout past the fingerprint cliff is silent now, and that is the
+    /// point.** The warning that used to fire here named a cost the user could
+    /// not act on and reported a choice they had just made deliberately, so it
+    /// was a permanent amber row above the keyboard. Nothing else about the
+    /// cliff moved: the rail on the *shipped default* is
+    /// `CustomLayoutTests.testTheShippedLayoutStillFitsUnderTheFingerprintCliff`.
+    func testATallLayoutRaisesNothingAndDoesNotBlockDone() {
         var layout = KeyboardCustomization.default
         layout.showsNumberRow = true
         layout.geometry.keyHeight = LayoutGeometry.keyHeightRange.upperBound
 
-        let issues = LayoutValidator.issues(in: layout)
+        XCTAssertGreaterThan(
+            Theme.Metrics.totalHeight(for: layout),
+            LayoutValidator.screenContextHeightLimit,
+            "this layout is not past the cliff, so its silence proves nothing")
         XCTAssertTrue(
-            issues.contains { $0.kind == .costsScreenContext && $0.severity == .warning },
-            "a keyboard past the fingerprint cliff has to say so where the choice is made")
-        XCTAssertTrue(
-            LayoutValidator.isUsable(layout),
-            "it costs screen context and nothing else, so it must not block Done")
+            LayoutValidator.issues(in: layout).isEmpty,
+            "a tall keyboard is the user's trade to make, and the editor no longer narrates it")
+        XCTAssertTrue(LayoutValidator.isUsable(layout))
     }
 
     /// The threshold is read from the measured constant, not restated beside it.

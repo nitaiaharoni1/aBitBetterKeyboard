@@ -68,18 +68,23 @@ final class LayoutStoreTests: XCTestCase {
     func testAnEditedLayoutMigratesTheOldInternalGlobeToSettings() throws {
         var old = KeyboardCustomization.default
         old.preset = nil
-        old.bottomRow = old.bottomRow.map { slot in
+        old.cursorRow = old.cursorRow.map { slot in
             guard slot.action == .settings else { return slot }
             var migrated = slot
             migrated.action = .globe
             return migrated
         }
+        let encoded =
+            old.barLeading + old.barTrailing + old.bottomRow + old.cursorRow
+        XCTAssertFalse(encoded.contains { $0.action == .settings })
         defaults.set(try JSONEncoder().encode(old), forKey: SharedStore.layoutKey)
 
         let decoded = SharedStore.decodeLayout(from: defaults)
+        let slots =
+            decoded.barLeading + decoded.barTrailing + decoded.bottomRow + decoded.cursorRow
 
-        XCTAssertTrue(decoded.bottomRow.contains { $0.action == .settings })
-        XCTAssertFalse(decoded.bottomRow.contains { $0.action == .globe })
+        XCTAssertTrue(slots.contains { $0.action == .settings })
+        XCTAssertFalse(slots.contains { $0.action == .globe })
     }
 
     /// **A layout missing the globe decodes fine, and that is deliberate.**
@@ -93,6 +98,51 @@ final class LayoutStoreTests: XCTestCase {
         without.bottomRow.removeAll { $0.action == .globe }
         defaults.set(try JSONEncoder().encode(without), forKey: SharedStore.layoutKey)
         XCTAssertEqual(SharedStore.decodeLayout(from: defaults), without)
+    }
+
+    /// **A layout stored before per-row heights existed keeps the keyboard it
+    /// described.**
+    ///
+    /// The JSON here is what every shipped build wrote: one `keyHeight`, no
+    /// `actionRowHeight`, no `bottomRowHeight`. Both failure modes are real and
+    /// silent in opposite directions — decoding the missing keys as required
+    /// throws, which drops a tuned layout back to the shipped default on the
+    /// next launch, and defaulting them to `Theme.Metrics.keyHeight` reshapes a
+    /// Compact keyboard's action and space rows to 43 pt behind the user's back.
+    /// The rule is that a missing key means "this row matched the letters",
+    /// because that is the only keyboard the old model could describe.
+    ///
+    /// The fixture is today's encoding with the two new keys *deleted* rather
+    /// than a hand-written blob: `SlotAction` and `SlotWidth` each carry their
+    /// own nested representation, so spelling a whole layout out by hand would
+    /// be a second copy of the schema that goes stale on the next unrelated
+    /// field. Deleting the keys reproduces exactly what an old build wrote.
+    func testALayoutStoredBeforePerRowHeightsKeepsOneHeightForEveryRow() throws {
+        var compact = try XCTUnwrap(LayoutPreset.named("compact")).customization
+        compact.preset = nil
+        let letterHeight = compact.geometry.keyHeight
+        XCTAssertNotEqual(
+            letterHeight, Theme.Metrics.keyHeight,
+            "Compact must differ from the shipped constant, or a wrong fallback still passes")
+
+        var object = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: JSONEncoder().encode(compact))
+                as? [String: Any])
+        var geometryJSON = try XCTUnwrap(object["geometry"] as? [String: Any])
+        geometryJSON.removeValue(forKey: "actionRowHeight")
+        geometryJSON.removeValue(forKey: "bottomRowHeight")
+        object["geometry"] = geometryJSON
+
+        let old = try JSONSerialization.data(withJSONObject: object)
+        let geometry = try JSONDecoder().decode(KeyboardCustomization.self, from: old).geometry
+
+        XCTAssertEqual(geometry.keyHeight, letterHeight, accuracy: 0.001)
+        XCTAssertEqual(
+            geometry.height(.action), letterHeight, accuracy: 0.001,
+            "an old layout's action row was its letter height, not the shipped 43")
+        XCTAssertEqual(
+            geometry.height(.bottom), letterHeight, accuracy: 0.001,
+            "an old layout's space row was its letter height, not the shipped 43")
     }
 
     /// **The keyboard is a second process.** `load()` fills the published copy
