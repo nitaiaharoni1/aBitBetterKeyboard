@@ -261,6 +261,31 @@ final class KeyboardViewController: UIInputViewController {
         ScreenContextSession.shared.startConsuming(
             .shared, as: .keyboard, ownUIHeightFraction: ownUIHeightFraction())
         recordPresence()
+        recordMemory()
+    }
+
+    /// The one warning iOS sends before it starts killing, and the only reason
+    /// this override exists. A keyboard extension that has received one has been
+    /// close; see `KeyboardMemoryPeak`.
+    override func didReceiveMemoryWarning() {
+        super.didReceiveMemoryWarning()
+        recordMemory(warning: true)
+    }
+
+    /// Folds this process's high-water mark into the record the app reads.
+    ///
+    /// The reading is taken here rather than on the queue, so it describes the
+    /// moment that called it. The write is dispatched for the reason
+    /// `recordPresence()` gives: it is file I/O and it must not sit between the
+    /// user tapping the globe key and the keys appearing. `MemoryReading.peakMB`
+    /// is the kernel's own high-water mark, so nothing is lost by writing it
+    /// late — a peak reached while the emoji grid was open is still in it when
+    /// the keyboard goes away.
+    private func recordMemory(warning: Bool = false) {
+        guard let reading = MemoryReading.current() else { return }
+        DispatchQueue.global(qos: .utility).async {
+            KeyboardMemoryPeak.record(reading, warning: warning)
+        }
     }
 
     /// Leaves the containing app the one piece of evidence it can have that this
@@ -396,6 +421,11 @@ final class KeyboardViewController: UIInputViewController {
         // iOS tears a keyboard extension down without warning and there is no
         // callback that reliably fires when it does.
         PersonalLanguageModel.shared.save()
+        // The end of a visit, which is the last moment the whole visit's peak is
+        // certainly still readable. A kill lands between here and the next
+        // appearance and takes its own ledger with it; see `KeyboardMemoryPeak`
+        // for what that does and does not leave provable.
+        recordMemory()
     }
 
     /// How WhatsApp, Notes and every other host decide writing direction.

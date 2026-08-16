@@ -6,10 +6,15 @@ import XCTest
 /// The evidence the containing app has that its keyboard exists.
 ///
 /// Every test here writes into a scratch directory rather than the App Group,
-/// because this target carries no App Group entitlement — `SharedContainer.url`
-/// is nil in it, which is exactly the state the real keyboard is in before the
-/// user grants Full Access. That is why `record(hasFullAccess:at:)` and
-/// `load(from:)` take a URL.
+/// which is why `record(hasFullAccess:at:)` and `load(from:)` take a URL.
+///
+/// **The reason is not the one this comment used to give.** It said
+/// `SharedContainer.url` is nil in this target, matching the state a real keyboard
+/// is in before Full Access. Measured 2026-08-16, it is not: the iOS 26 Simulator
+/// hands this target a real container despite the missing entitlement, the same
+/// way `UserDefaults(suiteName:)` succeeds without one. So reaching the container
+/// from a test proves nothing about a device and writes into state the app and
+/// keyboard both read. See `KeyboardMemoryPeakTests`, where that was measured.
 final class KeyboardPresenceTests: XCTestCase {
 
     private var directory: URL!
