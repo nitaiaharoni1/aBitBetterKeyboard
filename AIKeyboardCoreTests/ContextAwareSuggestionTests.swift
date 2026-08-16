@@ -337,13 +337,21 @@ final class ContextAwareSuggestionTests: XCTestCase {
     /// decision could not see that two of the four typed letters had been spent
     /// assuming a reading.
     ///
-    /// Three premises are asserted as well as the behaviour, because each one is a
-    /// cheaper fix that does not work. `תרופה` is in the seed list, so "the winner
-    /// must be seed-reachable" does not exclude it. The candidate is still
-    /// *offered*, so a build that fixed this by deleting the two-clitic reading
-    /// would fail here rather than pass. And the bold slot is the typed word,
-    /// which is the only thing that rejects the old build — `להתרופה` was in the
-    /// bar either way.
+    /// `תרופה` is in the seed list, which is asserted here, so "the winner must be
+    /// seed-reachable" does not exclude this reading and was never the fix.
+    ///
+    /// **`להתרופה` is no longer in the bar at all, and that is a later change
+    /// rather than a weaker test.** This used to assert the candidate was still
+    /// *offered*, on the grounds that a build which fixed the commit by deleting
+    /// the two-clitic reading would be throwing away `מהעבודה` with it.
+    /// `readingIsSpelledOut` draws the line somewhere that argument could not
+    /// reach: not at the depth of the reading but at whether the dictionary spells
+    /// the glued form out at all. `מהעבודה` is Apple's own first completion for
+    /// `מהעבו` and survives; `להתרופה` appears in no list and is not generated. So
+    /// the control the old assertion existed to provide has moved to
+    /// `testACliticReadingWithLettersBehindItStillCommits`, which is a stronger
+    /// place for it — it fails on the *commit* rather than on the presence of a
+    /// word in a slot.
     @MainActor
     func testAStackedCliticReadingDoesNotTakeTheSpaceBar() {
         XCTAssertTrue(
@@ -354,14 +362,53 @@ final class ContextAwareSuggestionTests: XCTestCase {
         let results = SuggestionEngine.suggestions(
             prefix: "להתר", context: "", languages: [.hebrew, .english],
             personal: emptyPersonal())
-        XCTAssertTrue(
+        XCTAssertFalse(
             results.contains { $0.text == "להתרופה" },
-            "got \(results.map(\.text)) — the reading is still offered; only the bold "
-                + "slot moves, and a build that stopped generating it proves nothing")
+            "got \(results.map(\.text)) — no dictionary lists להתרופה, so a reading that "
+                + "invented it must not reach the bar")
         XCTAssertEqual(
             results.first(where: \.isDefault)?.text, "להתר",
             "space committed \(results.first(where: \.isDefault)?.text ?? "nothing") "
                 + "four letters into להתראות: \(results.map(\.text))")
+    }
+
+    /// **A reading is a guess, and until this gate existed nothing checked the
+    /// guess against anything.** `מנ` is read as `מ` + `נ`, the seed list is asked
+    /// what starts with `נ` and answers with the commonest words it has, and the
+    /// clitic goes back on: `מנכון`, `מנחמד`, `מנפגש`. All three arrive `.seed`,
+    /// which outscores every completion `UITextChecker` has, so all three drawn
+    /// slots held a non-word and `מנהל` — Apple's second completion — was nowhere.
+    /// The same shape reached a real phone as `מכסהרורי`.
+    ///
+    /// Both halves are asserted. The junk must be gone, and the words Apple offers
+    /// for those same letters must be there, because a build that simply stopped
+    /// splitting Hebrew would pass the first half and fail
+    /// `testCliticSplitReachesAWordNoDictionaryLists` — which is the control, kept
+    /// deliberately in another test so this one cannot quietly become it.
+    @MainActor
+    func testASplitReadingMayNotInventAWordTheDictionaryDoesNotList() {
+        for (typed, invented) in [("מנ", "מנכון"), ("מכסה", "מכסהרורי"), ("בב", "בבבקשה")] {
+            let results = SuggestionEngine.suggestions(
+                prefix: typed, context: "", languages: [.hebrew, .english],
+                personal: emptyPersonal())
+            XCTAssertFalse(
+                results.contains { $0.text == invented },
+                "\(typed) offered \(invented): \(results.map(\.text))")
+        }
+
+        // A set rather than one word, because Apple's Hebrew completion list
+        // reorders itself between identical runs — see the corpus's own
+        // `he-comp-03/04/05`. Every member is a real word it offers for these two
+        // letters, so "one of them reached the bar" is stable where "מנהל is in
+        // slot 2" is not.
+        let listed: Set<String> = ["מנת", "מנהל", "מנסה", "מניות", "מנסים", "מניח", "מנהלת"]
+        let results = SuggestionEngine.suggestions(
+            prefix: "מנ", context: "", languages: [.hebrew, .english],
+            personal: emptyPersonal())
+        XCTAssertTrue(
+            results.contains { listed.contains($0.text) },
+            "got \(results.map(\.text)) — the three slots the invented words were "
+                + "holding have to come back to the words the dictionary does list")
     }
 
     /// **Two real Hebrew words sharing a prefix, and space picked one of them.**

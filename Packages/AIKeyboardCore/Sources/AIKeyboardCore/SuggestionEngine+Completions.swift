@@ -134,6 +134,16 @@ extension SuggestionEngine {
         let lower = core.lowercased()
         var out: [Candidate] = []
 
+        // Apple's own completions for the word as it was actually typed, fetched
+        // once and shown to two sources. `checkerCandidates` offers them; the
+        // Hebrew split reading below is *checked against* them. See
+        // `readingIsSpelledOut` for why, and note that it is one call rather than
+        // the two the split path used to add on top of this one.
+        let checkerLocale = typedLanguage.spellCheckerLocale
+        let directQuery = checkerQuery(of: core, in: context)
+        let directCompletions =
+            checkerLocale.map { checkerCompletions(of: core, locale: $0, query: directQuery) } ?? []
+
         // The literal keystrokes always stay available, so the engine can never
         // trap the user into a word they did not want.
         out.append(Candidate(text: prefix, language: typedLanguage, source: .typed))
@@ -237,7 +247,9 @@ extension SuggestionEngine {
         out += documentCandidates(for: core, in: context, typedLanguage: typedLanguage)
 
         // The bundled seed list, read through every Hebrew reading of the prefix.
-        out += seedCandidates(for: core, typedLanguage: typedLanguage, personal: personal)
+        out += seedCandidates(
+            for: core, typedLanguage: typedLanguage, personal: personal,
+            spelledOut: directCompletions)
 
         // Latin letters inside a Hebrew sentence, ranked before the dictionary.
         // Only here: in an English sentence Apple's ranking is the better judge and
@@ -259,7 +271,8 @@ extension SuggestionEngine {
         }
 
         out += checkerCandidates(
-            for: core, in: context, typedLanguage: typedLanguage, personal: personal)
+            for: core, typedLanguage: typedLanguage, personal: personal,
+            completions: directCompletions, query: directQuery, locale: checkerLocale)
 
         // The field gets its say last, over everything already collected, so a
         // word any earlier pair is known to be followed by climbs whichever
@@ -358,18 +371,72 @@ extension SuggestionEngine {
         return nil
     }
 
+    /// Whether the dictionary agrees that a word reached by taking Hebrew apart is
+    /// a word at all.
+    ///
+    /// **The split is the engine's own guess, and until this gate existed nothing
+    /// ever checked it against anything.** `seedCandidates` reads `מנ` as `מ` + `נ`,
+    /// asks the seed list what starts with `נ`, gets `נכון` / `נחמד` / `נפגש` — the
+    /// commonest words there are — glues the clitic back on and offers `מנכון`,
+    /// `מנחמד`, `מנפגש`. None of those is a word. They arrive `.seed`, which scores
+    /// 3000 less 500 a clitic, so they beat every completion `UITextChecker` has and
+    /// take **all three drawn slots**, and the word the user is typing is not in the
+    /// bar at all. Measured 2026-08-16 over 121 keystroke moments from 55 common
+    /// Hebrew words: **17 moments drew a non-word (26 slots of the 363 there are),
+    /// and the word being typed was missing from 30 of them.** The same shape is
+    /// what put `מכסהרורי` on a real phone — that one comes through the split path's
+    /// own `UITextChecker` call rather than the seed list, which is why the gate is
+    /// asked of both and why that call is gone.
+    ///
+    /// The test is the dictionary's completion list **for the word as it was
+    /// actually typed**, which is already being fetched for `checkerCandidates`. A
+    /// reading may therefore *re-rank* what Apple offers and may not invent
+    /// anything: `לעבו` still reaches `לעבודה` because Apple lists it third and the
+    /// seed prior pulls it to first, which is exactly what the split was built for.
+    ///
+    /// **The premise this file was written under is no longer true and that is
+    /// what makes the gate cheap.** `HebrewMorphology` says no dictionary lists the
+    /// glued forms. On the iOS 26.2 Simulator `UITextChecker` lists every one of
+    /// them: `לעבודה` is 3rd for `לעבו`, `בעבודה` 1st for `בעבו`, `מהעבודה` 1st for
+    /// `מהעבו`, `מהעיר` 1st for `מהעי`, `מהגן` 3rd for `מהג` — all five controls the
+    /// split exists to serve. What morphology still buys is the *ranking*, since
+    /// Apple has no frequency model; what it was also doing was manufacturing words.
+    ///
+    /// **An empty list is not a contradiction.** Apple answers nothing for plenty of
+    /// Hebrew prefixes (`צהרי` is one), and a gate that read silence as refusal
+    /// would switch morphology off exactly where no other source can help.
+    static func readingIsSpelledOut(_ word: String, among completions: [String]) -> Bool {
+        guard !completions.isEmpty else { return true }
+        let folded = SeedLanguageModel.fold(word)
+        return completions.contains { SeedLanguageModel.fold($0) == folded }
+    }
+
     /// Seed-list completions, including the ones only reachable by taking a Hebrew
     /// word apart.
     ///
     /// For English this is a plain prefix search. For Hebrew it runs once per
     /// reading from `HebrewMorphology.splits` — `לעבו` as itself, and as `ל` +
     /// `עבו` — and puts the clitic back on whatever the stem completed to. That
-    /// second reading is the one that reaches `לעבודה`; no dictionary lists the
-    /// glued form, so without it the word is unreachable no matter how good the
-    /// ranking is.
+    /// second reading is what pulls `לעבודה` past the two verbs Apple ranks above
+    /// it.
+    ///
+    /// **Every split reading is checked against the dictionary before it is
+    /// offered; only the unsplit one is trusted on its own.** See
+    /// `readingIsSpelledOut` for the measurement. `spelledOut` is Apple's completion
+    /// list for the typed word, passed in because `completions(for:)` already has
+    /// it.
+    ///
+    /// **What a learned word is allowed to do here, and why it is the exception.**
+    /// A clitic on a word this person types is `לסאפא` — a form Apple has never
+    /// heard of and never will, since the stem is not in its dictionary either. The
+    /// gate above asks a dictionary whether a word exists, and for the learned tier
+    /// the answer is always no and always uninformative, so asking it there would
+    /// delete precisely the words the personal model exists to supply. Two sightings
+    /// are still needed before `words(startingWith:)` will name one.
     @MainActor
     private static func seedCandidates(
-        for prefix: String, typedLanguage: KeyboardLanguage, personal: PersonalLanguageModel
+        for prefix: String, typedLanguage: KeyboardLanguage, personal: PersonalLanguageModel,
+        spelledOut: [String]
     ) -> [Candidate] {
         var out: [Candidate] = []
         let readings: [(prefix: String, stem: String)] =
@@ -383,11 +450,12 @@ extension SuggestionEngine {
             let personalStems = personal.words(
                 startingWith: reading.stem, in: typedLanguage, limit: 2)
             for (index, stem) in seedStems.enumerated() {
+                let glued = matchCase(
+                    of: prefix, applyingTo: reading.prefix + stem, in: typedLanguage)
+                guard depth == 0 || readingIsSpelledOut(glued, among: spelledOut) else { continue }
                 out.append(
                     Candidate(
-                        text: matchCase(
-                            of: prefix, applyingTo: reading.prefix + stem, in: typedLanguage),
-                        language: typedLanguage, source: .seed, cliticDepth: depth,
+                        text: glued, language: typedLanguage, source: .seed, cliticDepth: depth,
                         ordinal: index))
             }
             for (index, stem) in personalStems.enumerated() {
@@ -398,49 +466,32 @@ extension SuggestionEngine {
                         language: typedLanguage, source: .learned, cliticDepth: depth,
                         ordinal: index))
             }
-            // Hebrew's own dictionary, asked about the stem rather than the glued
-            // word, which is the only form it has an entry for. Only for a split
-            // reading: the unsplit one is what `checkerCandidates` already asks
-            // about, and asking twice would double every English completion.
+            // **`UITextChecker` used to be asked about the invented stem too, and
+            // that call is gone.** It existed because the seed list is a few hundred
+            // words and has nothing to say about most stems, so a reading it could
+            // not answer fell through to Apple's dictionary — asked about a stem
+            // this engine made up. What came back was glued to the clitic and
+            // offered: `מכסה` was read as `מ` + `כסה`, Apple completed `כסה` to
+            // `כסהרה` and `כסהרורי`, and the bar on a real phone held `מכסהרה` and
+            // `מכסהרורי` beside `מכסהו`. That is the defect this whole gate was
+            // written for, arriving through the one source the gate would have had
+            // to veto on every single call.
             //
-            // **And never about a single letter.** The seed list above answers a
-            // one-letter stem from a few hundred ranked words, which is how `מהג`
-            // reaches `מהגן`; `UITextChecker` would answer the same question with
-            // every word in Hebrew that starts with that letter, unranked.
+            // Under `readingIsSpelledOut` the call cannot produce anything new: a
+            // glued form only survives if Apple already lists it for the typed word,
+            // and `checkerCandidates` offers that same list at `cliticDepth` 0,
+            // which scores 500 a letter *higher*, so `rank` keeps the unsplit copy
+            // and the split one was always going to be dropped as a duplicate.
             //
-            // **And never when the seed already answered this reading**, which is
-            // a latency rule with a number behind it. `UITextChecker.completions`
-            // costs a few milliseconds a call, and a Hebrew word has up to three
-            // readings, so asking for every one of them put `הכתו` at 15 ms on a
-            // keystroke budget of about 20 ms for the whole key press — drawing
-            // included. The seed is the ranked source and the checker is the
-            // fallback for what it does not know; asking the fallback about a
-            // question already answered was buying duplicates at the worst
-            // possible moment.
-            //
-            // **Measured over four runs of the 90 corpus entries, warm, on the iOS
-            // 26.2 Simulator — and one run is not evidence here either.** Median
-            // lands at 1.1-1.3 ms and the worst entry at 10-16 ms, with *which*
-            // entry is slowest changing between runs of identical code; a single
-            // run also produced a 27 ms outlier that did not reproduce. What is
-            // stable is the shape: the slow entries are always Hebrew words where
-            // the seed has nothing and more than one reading has to be asked, and
-            // `UITextChecker.completions` is what costs. The corpus score does not
-            // move at all across those runs, which is the number to trust. Before
-            // this rule the same measurement sat one call per reading higher.
-            // The cost that remains is what morphology buys and is not removable
-            // from here.
-            guard depth > 0, reading.stem.count >= 2, seedStems.isEmpty,
-                let locale = typedLanguage.spellCheckerLocale
-            else { continue }
-            for (index, completion) in checkerCompletions(of: reading.stem, locale: locale)
-                .prefix(2).enumerated()
-            {
-                out.append(
-                    Candidate(
-                        text: reading.prefix + completion, language: typedLanguage,
-                        source: .checker, cliticDepth: depth, ordinal: index))
-            }
+            // It takes a *call count* with it and not a measured saving, which is
+            // worth stating precisely because the comment that used to be here
+            // defended this path with a latency argument. A Hebrew keystroke now
+            // makes exactly one `UITextChecker.completions` call where it could
+            // make three. Wall clock did not move: median over the 90 corpus
+            // entries read 2.28 and 1.62 ms across two runs before and 2.28 and
+            // 1.77 ms after, and the worst entry swung between 18 and 94 ms on
+            // runs of identical code. The arithmetic is real and this instrument
+            // cannot see it.
         }
         return out
     }
@@ -457,8 +508,13 @@ extension SuggestionEngine {
     /// `completions(forPartialWordRange:in:language:)` could not see `The
     /// elephant ate. The ele` and had no way to prefer `elephant` over
     /// `election`. The current word is appended to `context` and the range
-    /// points at it; a split Hebrew stem still asks about the stem alone,
-    /// because that stem is not a span of the document.
+    /// points at it.
+    ///
+    /// **The list arrives rather than being fetched, because two callers need the
+    /// same one.** `completions(for:)` asks Apple once and hands it here to be
+    /// offered and to `seedCandidates` to be checked against; see
+    /// `readingIsSpelledOut`. Fetching it in both places would pay for the most
+    /// expensive call on the keystroke path twice to get the same answer.
     ///
     /// **Measured, disclosed gap in the correction half.** `recieve` completes to
     /// nothing, so the correction branch fires and `guesses` gives `receive`.
@@ -470,8 +526,8 @@ extension SuggestionEngine {
     /// than it returns once a frequency prior exists.
     @MainActor
     private static func checkerCandidates(
-        for word: String, in context: String, typedLanguage: KeyboardLanguage,
-        personal: PersonalLanguageModel
+        for word: String, typedLanguage: KeyboardLanguage, personal: PersonalLanguageModel,
+        completions: [String], query: CheckerQuery, locale: String?
     )
         -> [Candidate]
     {
@@ -479,13 +535,12 @@ extension SuggestionEngine {
         // Persian is not in `UITextChecker.availableLanguages` at all. There is
         // nothing to fall back to: another language's dictionary would offer
         // another language's words, which is worse than offering none.
-        guard let locale = typedLanguage.spellCheckerLocale else { return [] }
+        guard let locale else { return [] }
         let lower = word.lowercased()
         var out: [Candidate] = []
-        let query = checkerQuery(of: word, in: context)
 
         out +=
-            checkerCompletions(of: word, locale: locale, query: query)
+            completions
             .prefix(8)
             .enumerated()
             .map {

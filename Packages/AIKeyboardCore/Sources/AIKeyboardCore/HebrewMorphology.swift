@@ -18,6 +18,19 @@ import Foundation
 /// word list, and the `ל` goes back on. One seed entry for `עבודה` then serves
 /// `לעבודה`, `בעבודה`, `מהעבודה` and `שבעבודה`.
 ///
+/// **"No dictionary lists the glued forms" is measurably false now, and what the
+/// split buys is the ranking rather than the reachability.** Measured on the iOS
+/// 26.2 Simulator, 2026-08-16: `UITextChecker` lists `לעבודה` third for `לעבו`,
+/// `בעבודה` first for `בעבו`, `מהעבודה` first for `מהעבו`, `מהעיר` first for
+/// `מהעי` and `מהגן` third for `מהג` — every control this file was written for.
+/// It has no frequency model, so the order it puts them in is not a ranking and
+/// the seed prior is still what pulls the noun past the two verbs. But the split
+/// was also *manufacturing* words nobody lists, and gluing a clitic back onto the
+/// commonest thing the seed list happened to start with cost a quarter of Hebrew
+/// typing: see `SuggestionEngine.readingIsSpelledOut`, which is what every split
+/// reading now has to get past, and `.claude/rules/suggestion-bar.md` for the
+/// numbers.
+///
 /// **Every split is a guess and the caller is told so.** `ב` is a preposition and
 /// also the first letter of `בית`; `מהג` splits as `מ`+`הג`, `מה`+`ג`, or nothing
 /// at all. So this returns *all* the readings, longest prefix last, and the
@@ -54,6 +67,14 @@ enum HebrewMorphology {
     /// seed list about short stems, which is a few hundred ranked words, and never
     /// asks `UITextChecker`, which would answer `ל` + `א` with every word in
     /// Hebrew beginning with alef.
+    ///
+    /// **A ranked list was not enough on its own, and the one-letter stem is where
+    /// that showed.** `מנ` is `מ` + `נ`, and the commonest seed words starting with
+    /// nun are `נכון`, `נחמד` and `נפגש`, so the bar offered `מנכון`, `מנחמד` and
+    /// `מנפגש` — three non-words, in all three slots, outranking everything Apple
+    /// had to say about those two letters. `SuggestionEngine.readingIsSpelledOut`
+    /// is the gate that stopped it, and `מהגן` still gets through: the dictionary
+    /// lists it.
     static func splits(of word: String) -> [(prefix: String, stem: String)] {
         let characters = Array(word)
         var out: [(prefix: String, stem: String)] = [("", word)]
