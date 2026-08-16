@@ -93,6 +93,53 @@ extension SuggestionBar {
 
     var chipSize: CGSize { Self.chipSize(for: orientation) }
 
+    /// The undo's own size, which is the same chip every other control in this
+    /// row is drawn at.
+    ///
+    /// **It was a hardcoded `44 × 40` with no orientation guard, and
+    /// `.frame(height:)` does not clip.** In landscape's 30 pt row that drew a
+    /// 40 pt control 5 pt into the host above and 5 pt onto the 26 pt top key
+    /// row below, for the one keystroke after a Fix, a Rewrite, a Reply or a
+    /// CopyClip paste — our own UI above the height `ownUIHeightFraction`
+    /// publishes, and a key row half covered by it. It never moved the published
+    /// height, so no fingerprint sweep could see it, and
+    /// `testTheLandscapeActionStripCostsNoHeightAtAll` could not either: that
+    /// test asks `chipSize`, and this control did not go through `chipSize`.
+    ///
+    /// Portrait is untouched — `chipSize(for: .portrait)` is the same 44 × 40
+    /// this always drew — so the fix is one orientation's sizing and nothing
+    /// about the button's behaviour, its brand *tint* rather than fill, or where
+    /// it sits.
+    public static func revertButtonSize(
+        for orientation: KeyboardGeometry.Orientation
+    ) -> CGSize {
+        chipSize(for: orientation)
+    }
+
+    /// Every size this bar draws a control at, named, in one orientation.
+    ///
+    /// **A row budget is only as good as the widest thing that ignores it.**
+    /// `chipSize` was the one control size a test could read, so the assertion
+    /// that landscape's strip "costs no height at all" held five action chips to
+    /// the 30 pt row and was blind to the sixth control beside them. Anything
+    /// this bar draws answers here, and `LandscapeGeometryTests` walks the list
+    /// rather than one entry of it — so a control added with a frame of its own
+    /// has a place to be declared, and one that is not declared is the only way
+    /// left to reintroduce NIT-118.
+    ///
+    /// `toneButton`'s 68 × 40 is deliberately absent: `slotButton` swaps it for
+    /// an `edgeButton` at `chipSize` on the `where orientation == .landscape`
+    /// branch, so it is never drawn in the row this is budgeted against. That
+    /// premise is asserted beside the walk rather than assumed.
+    public static func controlSizes(
+        for orientation: KeyboardGeometry.Orientation
+    ) -> [(name: String, size: CGSize)] {
+        [
+            ("chip", chipSize(for: orientation)),
+            ("undo", revertButtonSize(for: orientation))
+        ]
+    }
+
     /// Where to send a reader looking for the AI actions, named once.
     ///
     /// For the reason `ToneSetting.settingsNote` gives: a glyph is not a name. The
@@ -315,7 +362,12 @@ extension SuggestionBar {
     /// It names the action it undoes rather than saying "Undo", because by the time
     /// it is read the field has already changed and the word is the only thing
     /// saying *what* changed it.
+    ///
+    /// **Its size comes from `revertButtonSize`, not from a pair of numbers
+    /// written here.** See that function: the pair written here was 44 × 40 in
+    /// both orientations, and landscape's row is 30.
     var revertButton: some View {
+        let size = Self.revertButtonSize(for: orientation)
         // The origin names itself, so a clip pasted from CopyClip is "Undo paste"
         // here without this file learning what a clip is. See
         // `RevertibleEdit.Origin.undoLabel`.
@@ -326,7 +378,7 @@ extension SuggestionBar {
             Image(systemName: "arrow.uturn.backward")
                 .font(Theme.Glyph.font(17))
                 .foregroundStyle(Theme.Brand.solid)
-                .frame(width: 44, height: 40)
+                .frame(width: size.width, height: size.height)
                 .background(
                     RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                         .fill(Theme.Brand.solid.opacity(0.14))

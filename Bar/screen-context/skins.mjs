@@ -239,16 +239,22 @@ export const LANDSCAPE_DEVICE = {
 /** `Theme.Metrics.Landscape`, in points, exactly as
  *  `totalHeight(for:showsBanner:orientation:)` adds them up: no banner at any
  *  `showsBanner`, a 30 pt suggestion bar, and a key area of three letter rows
- *  plus the bottom row at 26 pt with 8 pt gaps and portrait's own 4+4 insets.
+ *  plus the bottom row at 26 pt with 4 pt gaps and portrait's own 4+4 insets.
  *
- *  26*4 + 8*3 + 8 = 136, and 0 + 30 + 136 = 166. `LandscapeGeometryTests`
+ *  26*4 + 4*3 + 8 = 124, and 0 + 30 + 124 = 154. `LandscapeGeometryTests`
  *  asserts both numbers; they are restated here rather than imported because
  *  this is JavaScript, and the harness prints them so a drift is visible in the
- *  output rather than buried. */
+ *  output rather than buried.
+ *
+ *  **`rowSpacing` was 8 and the total was 166, which is NIT-114.** That put the
+ *  keyboard over `FrameReduction.Band.maximumOwnUI` on every phone narrower
+ *  than 394.25 pt, and this harness is what measured the consequence: 30 of 30
+ *  own-false invalidations at 375. The 12 pt came out of the row gap because it
+ *  is the one vertical dimension in landscape that is not a touch target. */
 export const OWN_KEYBOARD_LANDSCAPE = {
   suggestionHeight: 30,
   keyHeight: 26,
-  rowSpacing: 8,
+  rowSpacing: 4,
   topInset: 4,
   bottomInset: 4,
   get keyAreaHeight() {

@@ -43,6 +43,7 @@
     { "word": "חברים", "keyboard": "he_IL" },
     { "word": "ילדים", "keyboard": "he_IL" },
     { "word": "הודעה", "keyboard": "he_IL" },
+    { "word": "הודעות", "keyboard": "he_IL", "probes": "The plural of the entry above, typed for itself. Hebrew inflects by replacing the ending rather than adding to it, so hasDistinctHebrewLexemes has to read הודעה / הודעות as one word where hasPrefix reads two — that is the half of the Hebrew commit gate that must not over-refuse." },
     { "word": "טלפון", "keyboard": "he_IL" },
     { "word": "מסעדה", "keyboard": "he_IL" },
     { "word": "אוכל", "keyboard": "he_IL" },
@@ -98,6 +99,8 @@
     { "word": "Nitai’s", "keyboard": "en_US", "probes": "The curly one, which is what a host field with smart quotes actually stores. It committed as `Nita’s` while the straight form was safe." },
     { "word": "Nitai,", "keyboard": "en_US", "context": "Hi ", "probes": "A name with a comma after it is the commonest way a name reaches a chat field, and it is the shape that survived the first personal-dictionary fix: `Hi Nitai,` still committed as `Hi Nit`." },
     { "word": "Handi", "keyboard": "en_US", "probes": "Shipped in the personal dictionary. `Handing` / `Handicap` is what the checker makes of it; do not pin which." },
-    { "word": "Wispr", "keyboard": "en_US", "probes": "Shipped in the personal dictionary. Committed as `Wiser`." }
+    { "word": "Wispr", "keyboard": "en_US", "probes": "Shipped in the personal dictionary. Committed as `Wiser`." },
+    { "word": "akuo", "intended": "שלום", "keyboard": "en_US", "context": "אני רוצה להגיד ", "probes": "The wrong layout inside a Hebrew sentence, which corpus wl-01 only asks of an empty field. This is the control for the code-switch gate: the sentence is Hebrew and the keystrokes are Latin, exactly as they are for `scr` in `screenshot`, and the difference is that these letters spell nothing in their own alphabet. The transposition must still commit." },
+    { "word": ",usv", "intended": "תודה", "keyboard": "en_US", "context": "אני רוצה להגיד ", "probes": "The same control with a mark in it. `,` on QWERTY is `ת` on the Hebrew layout, so this is four Hebrew letters and no punctuation, and it is the entry that proves the layout rule reads keystrokes rather than a trimmed word." }
   ]
 }

@@ -364,6 +364,36 @@ extension KeyboardController {
         "'’-\u{05BE}\u{05F3}\u{05F4}\u{00B7}\u{200C}".contains(character)
     }
 
+    /// An item picked out of a character key's popup, replacing the letter that
+    /// key has already typed.
+    ///
+    /// **Delete-then-retype, because the letter is already in the field.** The
+    /// key commits on the lift now (NIT-108) and `KeyView.endPress` reports that
+    /// lift one line above the pick, so by the time this runs the base letter is
+    /// standing where the alternate has to go. The delete does not go through
+    /// `press(.backspace)`: this is a key the user never pressed, and routing it
+    /// there would click twice for one keystroke.
+    ///
+    /// **The last line is the whole reason this is a function rather than two
+    /// calls at the call site.** A word reached through the popup is a word
+    /// placed by hand, and `isCorrectingWordByHand` is what keeps the space bar
+    /// from correcting it — `צ׳יפס`, `col·legi` and `café` are exactly the words
+    /// no dictionary holds. The popup rode on `deleteBackward`'s own snapshot for
+    /// that, and **that snapshot is the word *left standing*, so it is `""`
+    /// whenever the mark is on the first letter of the word** — which is where
+    /// Hebrew's geresh always is. An empty prefix is refused by
+    /// `isCorrectingWordByHand`, and has to be, because it is a prefix of every
+    /// word (`deletePreviousWord` sets exactly that). So the snapshot is retaken
+    /// from the word the popup actually left in the field, one insert later:
+    /// `צ׳` rather than nothing, `café` rather than `caf`. Re-reading the same
+    /// expression `deleteBackward` used means a search box, where the retype
+    /// never reaches the document, records exactly what it already recorded.
+    public func insertAlternate(_ alternate: String) {
+        deleteBackward()
+        press(.character(alternate))
+        deletedWordPrefix = currentWordPrefix
+    }
+
     func insertSpace() {
         Feedback.keyPress()
         clearRevertibleEdit()

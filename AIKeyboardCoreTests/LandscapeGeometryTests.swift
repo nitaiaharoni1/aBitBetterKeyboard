@@ -65,13 +65,36 @@ final class LandscapeGeometryTests: XCTestCase {
     }
 
     /// The arithmetic in `Theme.Metrics.Landscape`'s doc comment: 3 letter rows
-    /// and the bottom row at 26pt, 3 gaps at 8pt, portrait's own 8pt of top and
+    /// and the bottom row at 26pt, 3 gaps at 4pt, portrait's own 8pt of top and
     /// bottom inset, a 30pt suggestion bar, no banner and no action row.
     func testLandscapeTotalHeightIsExact() {
         XCTAssertEqual(
-            Theme.Metrics.totalHeight(for: .default, orientation: .landscape), 166, accuracy: 0.001)
+            Theme.Metrics.totalHeight(for: .default, orientation: .landscape), 154, accuracy: 0.001)
         XCTAssertEqual(
-            Theme.Metrics.keyAreaHeight(for: .default, orientation: .landscape), 136, accuracy: 0.001)
+            Theme.Metrics.keyAreaHeight(for: .default, orientation: .landscape), 124, accuracy: 0.001)
+    }
+
+    /// **The 12 pt NIT-114 had to find came out of the row gap and out of
+    /// nothing else**, so this states where rather than only how much: a build
+    /// that reached 154 by shaving the keys, the bar or the insets passes
+    /// `testLandscapeTotalHeightIsExact` and fails here.
+    ///
+    /// The reason is in `Theme.Metrics.Landscape`: a landscape key is about
+    /// 81 × 26, every mistap risk on it is vertical, and `KeyView` puts
+    /// `.contentShape(Rectangle())` on the cap's own frame — so the key height
+    /// is the whole of the touch target and the gap between two rows is dead
+    /// space. Paying the cap out of the gap costs no target a point; paying it
+    /// out of the key height costs every one of them.
+    func testLandscapeFoundTheHeightInTheGapRatherThanInTheTargets() {
+        XCTAssertEqual(Theme.Metrics.Landscape.keyHeight, 26, accuracy: 0.001)
+        XCTAssertEqual(Theme.Metrics.Landscape.suggestionBarHeight, 30, accuracy: 0.001)
+        XCTAssertEqual(Theme.Metrics.Landscape.rowSpacing, 4, accuracy: 0.001)
+        XCTAssertEqual(
+            Theme.Metrics.keyAreaHeight(for: .default, orientation: .landscape),
+            Theme.Metrics.Landscape.keyHeight * 4 + Theme.Metrics.Landscape.rowSpacing * 3
+                + Theme.Metrics.topInset + Theme.Metrics.bottomInset,
+            accuracy: 0.001,
+            "the landscape key area is no longer four rows, three gaps and portrait's own insets")
     }
 
     /// Landscape never shows the banner, so a live reading or a refusal cannot
@@ -132,30 +155,100 @@ final class LandscapeGeometryTests: XCTestCase {
         XCTAssertLessThanOrEqual(fraction, FrameReduction.Band.maximumOwnUI)
     }
 
-    /// **How much room is actually left, because the inequality above hides it.**
-    /// Landscape totals 166 pt of a 402 pt screen, which is 0.4129 against a cap
-    /// of 368/874 = 0.4211. That is a margin of about 0.0081, and 0.0081 of 402
-    /// pt is **roughly 3 points**.
+    /// Every landscape screen height this keyboard ships to, which is the
+    /// portrait *width* of every iPhone the package's iOS 17 floor still
+    /// reaches. Kept in step with `frame-hash-landscape.mjs`'s `ALL_DEVICES`,
+    /// which renders the same list.
+    private static let shippingLandscapeHeights: [(height: CGFloat, phones: String)] = [
+        (375, "SE 2/3, XS, 11 Pro, 12 mini, 13 mini"),
+        (390, "12, 12 Pro, 13, 13 Pro, 14"),
+        (393, "14 Pro, 15, 15 Pro, 16, 16e"),
+        (402, "16 Pro, 17, 17 Pro"),
+        (414, "XR, 11, XS Max, 11 Pro Max"),
+        (428, "12 Pro Max, 13 Pro Max, 14 Plus"),
+        (430, "14 Pro Max, 15 Plus, 15 Pro Max, 16 Plus"),
+        (440, "16 Pro Max, 17 Pro Max")
+    ]
+
+    /// **NIT-114, and the assertion this file did not have.** Every check here
+    /// used to be taken at `referenceLandscapeScreenHeight` — 402, one row above
+    /// break-even — and that is precisely why a live defect survived two
+    /// tickets: the cap is a *fraction* of the landscape screen height and
+    /// `Theme.Metrics` spends *points*, so the margin is a different number on
+    /// every phone and the reference one is not the phone that binds.
     ///
-    /// Three points is one row's spacing, not a comfortable budget. Anything
+    /// At the 166 pt landscape keyboard, break-even is `166 / 0.4210526` =
+    /// 394.25 pt, so **five of the eight shipping widths were over the cap**:
+    /// 375 by 8.1 pt, 390 by 1.8 and 393 by 0.5. Over it,
+    /// `FrameReduction.bottomCrop(ownUI:)` clamps and the rows it refuses to
+    /// crop are rows of our own keyboard — at 375 that reaches the Reply chip,
+    /// whose `ControlSweep` runs for the whole of a read, and
+    /// `Bar/screen-context/harness/run-fingerprint-landscape.sh` measured 30 of
+    /// 30 frames taking a fresh identity from it. That is a screen reading the
+    /// user paid a cloud call for, retired as stale by our own animation.
+    ///
+    /// So this walks every width rather than the reference one, and 375 is the
+    /// row that fails against the 166 pt build.
+    func testTheLandscapeKeyboardFitsUnderTheCapOnEveryWidthItShipsTo() {
+        for device in Self.shippingLandscapeHeights {
+            let fraction = KeyboardGeometry.ownUIHeightFraction(
+                screenHeight: device.height, layout: .default, orientation: .landscape)
+            let spare = (FrameReduction.Band.maximumOwnUI - fraction) * Double(device.height)
+            XCTAssertGreaterThan(
+                spare, 0,
+                "landscape crosses the fingerprint cap by \(-spare) pt on a \(device.height) pt "
+                    + "screen (\(device.phones)); the answer is a shorter keyboard, never a "
+                    + "larger cap")
+        }
+    }
+
+    /// **How much room is actually left on the phone that binds, because the
+    /// inequality above hides it.**
+    ///
+    /// The narrowest landscape screen this ships to is 375 pt
+    /// (`Theme.Metrics.Landscape.narrowestScreenHeight`), where the budget is
+    /// `0.4210526 × 375` = 157.9 pt against a 154 pt keyboard. That is a margin
+    /// of **about 3.9 points** — larger than the 3 pt portrait itself runs on,
+    /// and it only grows from here: 10.2 at 390, 15.3 at 402, 31.3 at 440.
+    ///
+    /// Four points is one row's spacing, not a comfortable budget. Anything
     /// added to the landscape keyboard — a taller bar, a row, a few points of
-    /// padding — crosses the cap, and crossing it is not a layout bug: the
-    /// capture process then crops a band that still contains part of our own UI,
-    /// our shimmer moves the fingerprint on its own, and a stale screen reading
-    /// is offered as fresh. That failure was measured at 30 of 30 frames once
-    /// already; `.claude/rules/screen-context.md` has it.
+    /// padding — crosses the cap on this phone first, and crossing it is not a
+    /// layout bug: the capture process then crops a band that still contains
+    /// part of our own UI, the Reply chip's sweep moves the fingerprint on its
+    /// own, and a stale screen reading is offered as fresh. That failure was
+    /// measured at 30 of 30 frames on this exact width;
+    /// `.claude/rules/screen-context.md` has it.
     ///
     /// So this asserts the margin rather than the inequality. If it fails, the
     /// number in the message tells you exactly how much you have overspent, and
-    /// the answer is to make landscape shorter, never to raise the cap.
-    func testTheLandscapeMarginAgainstTheCapIsAboutThreePoints() {
-        let screen = KeyboardGeometry.referenceLandscapeScreenHeight
+    /// the answer is to make landscape shorter, never to raise the cap. Against
+    /// the 166 pt build the margin here is **−8.1**, so both assertions fail.
+    func testTheLandscapeMarginOnTheNarrowestPhoneIsAboutFourPoints() {
+        let screen = Theme.Metrics.Landscape.narrowestScreenHeight
+        XCTAssertEqual(
+            screen, Self.shippingLandscapeHeights[0].height,
+            "the narrowest phone moved; the constant the geometry is derived from has to move too")
         let fraction = KeyboardGeometry.ownUIHeightFraction(
             screenHeight: screen, layout: .default, orientation: .landscape)
         let spare = (FrameReduction.Band.maximumOwnUI - fraction) * Double(screen)
         XCTAssertEqual(
-            spare, 3.26, accuracy: 0.5,
-            "the landscape height budget moved; there were about 3 points of room and now there are \(spare)")
+            spare, 3.89, accuracy: 0.5,
+            "the landscape height budget moved; there were about 3.9 points of room on a 375 pt "
+                + "screen and now there are \(spare)")
+        XCTAssertGreaterThan(
+            spare, 0, "landscape now crosses the fingerprint cap on the phone that binds")
+    }
+
+    /// The reference phone keeps its own margin recorded, because it is the
+    /// device every other number under `Bar/screen-context/` is measured on and
+    /// a reader comparing the two should not have to derive one of them.
+    func testTheLandscapeMarginOnTheReferencePhoneIsAboutFifteenPoints() {
+        let screen = KeyboardGeometry.referenceLandscapeScreenHeight
+        let fraction = KeyboardGeometry.ownUIHeightFraction(
+            screenHeight: screen, layout: .default, orientation: .landscape)
+        let spare = (FrameReduction.Band.maximumOwnUI - fraction) * Double(screen)
+        XCTAssertEqual(spare, 15.26, accuracy: 0.5)
         XCTAssertGreaterThan(spare, 0, "landscape now crosses the fingerprint cap")
     }
 
@@ -174,12 +267,14 @@ final class LandscapeGeometryTests: XCTestCase {
     /// constant regardless of the input layout, so this is really re-asserting
     /// `testLandscapeHeightIgnoresTheUsersNumberRowAndActionRow`'s point against
     /// the cap directly.
+    /// Asked at the narrowest screen rather than the reference one, because that
+    /// is the width the cap actually binds on.
     func testARoomyLayoutStillFitsUnderTheCapInLandscape() {
         var roomy = KeyboardCustomization.default
         roomy.showsNumberRow = true
         roomy.geometry.keyHeight = LayoutGeometry.keyHeightRange.upperBound
         let fraction = KeyboardGeometry.ownUIHeightFraction(
-            screenHeight: KeyboardGeometry.referenceLandscapeScreenHeight,
+            screenHeight: Theme.Metrics.Landscape.narrowestScreenHeight,
             layout: roomy,
             orientation: .landscape)
         XCTAssertLessThanOrEqual(fraction, FrameReduction.Band.maximumOwnUI)
@@ -246,32 +341,77 @@ final class LandscapeGeometryTests: XCTestCase {
     /// and this is the assertion that says so in points.**
     ///
     /// The two ways to get this wrong both grow the total: giving landscape its
-    /// action row back (a sixth row at `Landscape.keyHeight` plus a gap is 34 pt,
-    /// so 200), or making the bar taller to fit 40 pt chips (172 at the shipped
+    /// action row back (a sixth row at `Landscape.keyHeight` plus a gap is 30 pt,
+    /// so 184), or making the bar taller to fit 40 pt chips (164 at the portrait
     /// 44 × 40). Both are rejected here, and both would also fail
-    /// `testTheLandscapeMarginAgainstTheCapIsAboutThreePoints`, which is the
+    /// `testTheLandscapeMarginOnTheNarrowestPhoneIsAboutFourPoints`, which is the
     /// point: there was never room for either.
+    ///
+    /// **This asked `chipSize` and only `chipSize`, which is how NIT-118 got
+    /// past it.** `revertButton` carried a hardcoded 44 × 40 with no orientation
+    /// guard, `.frame(height:)` does not clip, and the control never touched the
+    /// sizing helper — so a 40 pt button drew in a 30 pt row, 5 pt into the host
+    /// above and 5 pt onto the 26 pt top key row below, for the one keystroke
+    /// after a Fix, Rewrite, Reply or CopyClip paste. It is `controlSizes` that
+    /// is walked now, so the assertion covers every control the bar can draw
+    /// rather than the ones that opted in.
     func testTheLandscapeActionStripCostsNoHeightAtAll() {
         XCTAssertEqual(
-            Theme.Metrics.totalHeight(for: .default, orientation: .landscape), 166,
+            Theme.Metrics.totalHeight(for: .default, orientation: .landscape), 154,
             accuracy: 0.001)
         XCTAssertFalse(
             SuggestionBar.landscapeActions(for: .default).isEmpty,
-            "the strip is empty, so 166 is only the height of a keyboard that lost the row")
+            "the strip is empty, so 154 is only the height of a keyboard that lost the row")
 
-        let chip = SuggestionBar.chipSize(for: .landscape)
-        XCTAssertLessThanOrEqual(
-            chip.height, SuggestionBar.barHeight(for: .landscape),
-            "a chip taller than its row draws past the height the keyboard published")
-        // Width is the axis landscape has: the chip keeps the full portrait
+        let row = SuggestionBar.barHeight(for: .landscape)
+        let controls = SuggestionBar.controlSizes(for: .landscape)
+        XCTAssertGreaterThan(controls.count, 1, "the walk is back to one control, which is NIT-118")
+        for control in controls {
+            XCTAssertLessThanOrEqual(
+                control.size.height, row,
+                "the bar's \(control.name) is \(control.size.height) pt in a \(row) pt row, so it "
+                    + "draws past the height the keyboard published")
+        }
+        // Width is the axis landscape has: every control keeps the full portrait
         // target across and gives up only height.
-        XCTAssertEqual(chip.width, SuggestionBar.chipSize(for: .portrait).width)
+        for (index, control) in controls.enumerated() {
+            XCTAssertEqual(
+                control.size.width, SuggestionBar.controlSizes(for: .portrait)[index].size.width,
+                "the bar's \(control.name) gave up width, which landscape has plenty of")
+        }
 
         let fraction = KeyboardGeometry.ownUIHeightFraction(
-            screenHeight: KeyboardGeometry.referenceLandscapeScreenHeight,
+            screenHeight: Theme.Metrics.Landscape.narrowestScreenHeight,
             layout: .default,
             orientation: .landscape)
         XCTAssertLessThanOrEqual(fraction, FrameReduction.Band.maximumOwnUI)
+    }
+
+    /// **NIT-118: the undo is a control this bar draws, so it is held to the row
+    /// like every other one.**
+    ///
+    /// It was a hardcoded `.frame(width: 44, height: 40)` built from
+    /// `candidates` with no orientation guard. It does not change the published
+    /// height, so no fingerprint sweep can see it — what it does is draw 5 pt of
+    /// our own UI *above* the height `ownUIHeightFraction` publishes, and cover
+    /// the top half of a 26 pt key row, for the one keystroke a revert is live.
+    ///
+    /// The first assertion is the one that rejects the shipped build: 40 against
+    /// a 30 pt row. The second is what stops the repair being a landscape-only
+    /// special case that quietly reshapes the portrait button — portrait's chip
+    /// is the same 44 × 40 the literal was, so that half must not move at all.
+    func testTheUndoFitsTheRowItIsDrawnInAndPortraitIsUntouched() {
+        XCTAssertLessThanOrEqual(
+            SuggestionBar.revertButtonSize(for: .landscape).height,
+            SuggestionBar.barHeight(for: .landscape),
+            "the undo draws past the row, into the host above it and the top key row below it")
+        XCTAssertEqual(
+            SuggestionBar.revertButtonSize(for: .portrait), CGSize(width: 44, height: 40),
+            "the portrait undo changed size; this was a landscape sizing fix, not a redesign")
+        XCTAssertEqual(
+            SuggestionBar.revertButtonSize(for: .landscape),
+            SuggestionBar.chipSize(for: .landscape),
+            "the undo carries a size of its own again rather than the row's own chip")
     }
 
     /// **Every control the row carried is on the bar, in the order it carried

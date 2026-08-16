@@ -8,6 +8,15 @@ struct DictionaryView: View {
     @EnvironmentObject private var store: SharedStore
     @Environment(\.scenePhase) private var scenePhase
 
+    /// Measured for `FullAccessNeededBanner`: the keyboard reads
+    /// `storedPersonalDictionary` through `UserDefaults` at the moment of the
+    /// keystroke, so without Full Access it falls back to its own process-local
+    /// copy — `SharedStore.shippedPersonalDictionary` — and every name added
+    /// here is autocorrected away while this editor counts it and reports
+    /// success. Re-read on every return to the foreground, like `KeysView`'s
+    /// copy, because the switch is thrown in Settings and nothing notifies the
+    /// app.
+    @State private var setup = SetupState()
     @State private var newWord = ""
     @State private var learned: [LearnedWord] = []
     @State private var query = ""
@@ -26,12 +35,25 @@ struct DictionaryView: View {
     /// the count in the header is still the true total.
     private static let collapsedRowCount = 12
 
+    /// Mirrors `SetupState.languagesNeedFullAccess`'s hedge: `setup.fullAccess`
+    /// can only ever *confirm* a yes, so this says "once Full Access is on"
+    /// rather than asserting it is off right now. It names what the keyboard
+    /// falls back to rather than claiming the save failed, because the save is
+    /// real either way and only the reading of it is blocked.
+    private static let fullAccessMessage =
+        "The keyboard can only read this list once Full Access is on. Words are still saved; until "
+        + "then it protects the names it shipped with and autocorrects the rest."
+
     var body: some View {
         ZStack {
             AmbientBackground()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Space.md) {
+                    if setup.fullAccess != .confirmed {
+                        FullAccessNeededBanner(
+                            message: Self.fullAccessMessage, context: "dictionary")
+                    }
                     addField
 
                     if isEmpty {
@@ -65,9 +87,15 @@ struct DictionaryView: View {
         .navigationTitle("Personal dictionary")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
-        .onAppear(perform: refreshLearned)
+        .onAppear {
+            setup = .current(store: store)
+            refreshLearned()
+        }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { refreshLearned() }
+            if phase == .active {
+                setup = .current(store: store)
+                refreshLearned()
+            }
         }
     }
 

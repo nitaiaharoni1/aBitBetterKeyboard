@@ -11,10 +11,13 @@
 // are not the same question:
 //
 //   * The cap is a **fraction** and the keyboard is **points**. An iPhone 17 Pro
-//     rotated is 402 pt tall, so our 166 pt keyboard is 0.4129 of it; a 375 pt
-//     landscape screen (iPhone SE, XS, 13 mini) makes the same keyboard 0.4427,
-//     which is over the 0.4211 cap. `bottomCrop(ownUI:)` then clamps, and the
-//     rows the clamp refuses to crop are rows of *our own keyboard*.
+//     rotated is 402 pt tall; a 375 pt landscape screen (iPhone SE, XS, 13 mini)
+//     is the narrowest this ships to, and the same point height is a larger
+//     fraction of it. At the 166 pt keyboard that was 0.4427 against the 0.4211
+//     cap, `bottomCrop(ownUI:)` clamped, and the rows the clamp refused to crop
+//     were rows of *our own keyboard* — this harness measured 30 of 30 frames
+//     invalidated by our own Reply sweep there. NIT-114 took the keyboard to
+//     154 pt, which is 0.4107 at 375 and under the cap on every width below.
 //   * The moving part is different. Landscape draws no `ActionBanner`, so the
 //     three shimmer lines the portrait sweep was built around are not there.
 //     What runs for the whole of a read is `ControlSweep` on the Reply chip,

@@ -81,11 +81,16 @@ func fingerprint(_ frame: Frame, bottomCrop: Double) -> FrameFingerprint {
 /// `Theme.Metrics.totalHeight(for:showsBanner:orientation: .landscape)`.
 ///
 /// 0 (no banner, at any `showsBanner`) + 30 (`Landscape.suggestionBarHeight`)
-/// + 136 (`26 * 4 + 8 * 3 + 4 + 4`). Restated rather than imported because this
+/// + 124 (`26 * 4 + 4 * 3 + 4 + 4`). Restated rather than imported because this
 /// harness compiles one file out of `AIKeyboardShared` and `Theme` is not in it;
 /// `LandscapeGeometryTests.testLandscapeTotalHeightIsExact` is what holds the
 /// two together.
-let landscapeOwnUIPoints = 166.0
+///
+/// **It was 166, and that is NIT-114.** Break-even against the cap is
+/// `total / 0.4210526`: at 166 that is 394.25 pt, above five of the eight
+/// shipping landscape widths, and this harness scored 30 of 30 own-false at
+/// 375. At 154 it is 365.75, below every width this ships to.
+let landscapeOwnUIPoints = 154.0
 
 /// `SuggestionBar.chipSize(for: .landscape).height` is 26 in a 30 pt row, so a
 /// chip's own top edge sits 2 pt below the top of our keyboard. That 2 pt is the

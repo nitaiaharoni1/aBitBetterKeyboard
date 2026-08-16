@@ -364,31 +364,177 @@ final class ContextAwareSuggestionTests: XCTestCase {
                 + "four letters into להתראות: \(results.map(\.text))")
     }
 
-    /// The other half of the same defect, and it arrives through a different
-    /// source: `להתרא` bolded `להתראיין`, which is `UITextChecker` completing
-    /// `התרא` — a stem `HebrewMorphology.splits` invented — because the seed list
-    /// had nothing to say about that reading.
+    /// **Two real Hebrew words sharing a prefix, and space picked one of them.**
+    /// `להתראות` ("goodbye") and `להתראיין` ("to be interviewed") agree for five
+    /// letters, so five letters into either one the space bar inserted the other
+    /// and the user was wrong whichever they had meant.
     ///
-    /// **The offered word is deliberately not pinned.** Apple's Hebrew completion
-    /// list for a given stem moves between runs (see the `he-comp-04` /
-    /// `he-comp-05` note in `.claude/rules/suggestion-bar.md`), so the premise is
-    /// asserted as "something longer than the keystrokes is still offered" rather
-    /// than as `להתראיין`. The typed echo is excluded from that check, because
-    /// `SuggestionEngine` always returns it and `contains { $0.hasPrefix(typed) }`
-    /// is true of a completely dead engine.
+    /// **This test was written for a different mechanism and the measurement says
+    /// that mechanism was never here.** It was named for a `UITextChecker`
+    /// completion of a stem `HebrewMorphology.splits` invented, on the theory that
+    /// `להתראיין` arrived through `ל` + `התרא`. Read out of the engine, the winner
+    /// at this prefix is `.checker` at `cliticDepth` **0**, score 1000: Apple
+    /// completes the *glued* form itself, and the split reading that
+    /// `commitTrustsReading` does refuse scores 500 lower and never reaches the
+    /// bar. So the gate this test was committed alongside cannot fail it, which is
+    /// what "compiled but never run" hid. `testTheCommitGateReadsTheReadingAndNotThe
+    /// Length` covers that gate directly and does not depend on Apple's list.
+    ///
+    /// What is left is an ambiguity, and the pair diverging in *both* directions is
+    /// the proof: `Bar/typing/sweep` types both words and gets the other one at
+    /// this exact keystroke either way. That is `respon` → `respond` / `response`
+    /// in Hebrew. `hasDistinctHebrewLexemes` is the test that separates it from an
+    /// ordinary inflection, and the winner arriving `.checker` — with no frequency
+    /// prior behind it at all — is what keeps the rule off `בעבו` → `בעבודה`.
+    ///
+    /// **Which word is offered is deliberately not pinned.** Apple's Hebrew list
+    /// moves between runs (the `he-comp-04` / `he-comp-05` note in
+    /// `.claude/rules/suggestion-bar.md`), and here it moves *within* one process:
+    /// the sweep measured this prefix answering `להתראיין` in one place and
+    /// `להתראות` in another. So the premise is asserted as "two different
+    /// completions are still offered", which is what makes the keystrokes
+    /// ambiguous, rather than as either spelling. The typed echo is excluded,
+    /// because `SuggestionEngine` always returns it and `contains {
+    /// $0.hasPrefix(typed) }` is true of a completely dead engine.
     @MainActor
-    func testACheckerCompletionOfASplitStemDoesNotTakeTheSpaceBar() {
+    func testTwoHebrewWordsSharingAPrefixDoNotTakeTheSpaceBar() {
         let results = SuggestionEngine.suggestions(
             prefix: "להתרא", context: "", languages: [.hebrew, .english],
             personal: emptyPersonal())
+        let offered = results.map(\.text).filter { $0 != "להתרא" && $0.hasPrefix("להתרא") }
+        XCTAssertGreaterThan(
+            offered.count, 1,
+            "got \(results.map(\.text)) — the keystrokes have to still be ambiguous for "
+                + "this to be the case it is named after; one offer would make it "
+                + "an ordinary completion and this test vacuous")
         XCTAssertTrue(
-            results.contains { $0.text != "להתרא" && $0.text.hasPrefix("להתרא") },
-            "got \(results.map(\.text)) — the split reading has to still reach the bar, "
-                + "or this test passes against an engine that offers nothing at all")
+            SuggestionEngine.hasDistinctHebrewLexemes(offered),
+            "\(offered) read as one word inflected, so the premise is gone: the bold "
+                + "slot below would be right to finish it")
         XCTAssertEqual(
             results.first(where: \.isDefault)?.text, "להתרא",
             "space committed \(results.first(where: \.isDefault)?.text ?? "nothing") "
-                + "five letters into להתראות: \(results.map(\.text))")
+                + "five letters into a word that could still be either: \(results.map(\.text))")
+    }
+
+    /// The control, and the reason the rule above is a lexeme test rather than
+    /// "Apple's list may not finish a Hebrew word".
+    ///
+    /// One letter further on, `להתראו` has only one word left behind it, and the
+    /// forms Apple offers beside it (`להתראותם`, `להתראותן`) are that word with a
+    /// possessive on the end. The space bar has to finish it. A build that refused
+    /// every `.checker` completion in Hebrew would pass the test above and fail
+    /// here, and it would cost four keystrokes across two words in the sweep.
+    @MainActor
+    func testAHebrewCompletionWithOneWordBehindItStillCommits() {
+        for context in ["", "אוקיי "] {
+            let results = SuggestionEngine.suggestions(
+                prefix: "להתראו", context: context, languages: [.hebrew, .english],
+                personal: emptyPersonal())
+            XCTAssertEqual(
+                results.first(where: \.isDefault)?.text, "להתראות",
+                "space kept \(results.first(where: \.isDefault)?.text ?? "nothing") after "
+                    + "\(context.isEmpty ? "nothing" : context): \(results.map(\.text))")
+        }
+    }
+
+    /// The lexeme test on its own, away from Apple's list, so a checker whose
+    /// Hebrew answers moved cannot make the two tests above pass or fail for the
+    /// wrong reason.
+    ///
+    /// Each row rejects a different cheaper rule. **Hebrew inflects by replacing
+    /// the ending, not by adding to it**, so `hasDistinctLexemes` — which compares
+    /// with `hasPrefix` and is right for `schedule` / `scheduled` — reads
+    /// `הודעה` / `הודעות` as two words; widening it to Hebrew is the fix that was
+    /// measured and rejected, because it stops the correct `בעבו` → `בעבודה`. And
+    /// a stem comparison *alone* is not enough either: a letter changes shape when
+    /// it stops being last, so `להתראיינה` does not begin with `להתראיין` on the
+    /// code points at all.
+    func testTheHebrewLexemeTestKnowsAnInflectionFromASecondWord() {
+        XCTAssertTrue(
+            SuggestionEngine.hasDistinctHebrewLexemes(["להתראיין", "להתראות"]),
+            "the pair this whole rule exists for read as one word")
+        XCTAssertFalse(
+            SuggestionEngine.hasDistinctHebrewLexemes(["הודעה", "הודעות"]),
+            "a feminine singular and its plural are one word; hasPrefix says otherwise, "
+                + "which is exactly why this is not hasDistinctLexemes")
+        XCTAssertFalse(
+            SuggestionEngine.hasDistinctHebrewLexemes(["בעבודה", "בעבודות"]),
+            "the control the recorded objection is about, with the clitic still on")
+        XCTAssertFalse(
+            SuggestionEngine.hasDistinctHebrewLexemes(["להתראיין", "להתראיינה"]),
+            "the final nun goes back to its ordinary shape the moment anything follows "
+                + "it, so a prefix test without the shape fold reads one word as two")
+        XCTAssertFalse(
+            SuggestionEngine.hasDistinctHebrewLexemes(["להתראות", "להתראותם"]),
+            "a possessive hung off the end is the English shape and the prefix half "
+                + "already answers it")
+        XCTAssertTrue(
+            SuggestionEngine.hasDistinctHebrewLexemes(["להתחיל", "להתחייב"]),
+            "to begin and to commit oneself are two words, and the bar offers both "
+                + "five letters in")
+        XCTAssertFalse(
+            SuggestionEngine.hasDistinctHebrewLexemes(["הודעה"]),
+            "one offer is not an ambiguity")
+        XCTAssertEqual(
+            SuggestionEngine.hebrewLexemeStem("עבודות"), "עבוד",
+            "the plural ending has to come off for the two spellings to meet")
+        XCTAssertEqual(
+            SuggestionEngine.hebrewLexemeStem("להתראיין"), "להתראיין",
+            "the five final forms are not endings; stripping the nun here would fold "
+                + "this word onto להתראות and take the whole rule with it")
+    }
+
+    /// **The wrong-layout rule was beating the rule this product is for.**
+    /// Three letters into `screenshot` after `אני מצרף `, `scr` committed `דבר`:
+    /// `LayoutTransposition` fires at exactly three letters, arrives `.layout` at
+    /// 9045, and `shouldAutocorrect` answered on the different-script branch above
+    /// every other question — outranking `codeSwitchVocabulary`, where `screenshot`
+    /// was already sitting in slot 2 and which exists for this exact sentence
+    /// (corpus `cs-05`). It self-heals at four letters, which is why nothing in the
+    /// frozen 90 could see it.
+    ///
+    /// The premise is asserted as well as the behaviour: the transposition has to
+    /// still be *offered*, or a build that simply stopped generating it would pass
+    /// here while breaking `wl-01`.
+    @MainActor
+    func testADeliberateCodeSwitchIsNotTreatedAsTheWrongLayout() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "scr", context: "אני מצרף ", languages: [.english, .hebrew],
+            personal: emptyPersonal())
+        XCTAssertTrue(
+            results.contains { SuggestionEngine.dominantLanguage(in: $0.text)?.script == .hebrew },
+            "got \(results.map(\.text)) — the transposition still has to reach the bar; "
+                + "only the bold slot moves")
+        XCTAssertEqual(
+            results.first(where: \.isDefault)?.text, "scr",
+            "space committed \(results.first(where: \.isDefault)?.text ?? "nothing") three "
+                + "letters into screenshot: \(results.map(\.text))")
+    }
+
+    /// The control, and the case the wrong-layout rule was written for: the same
+    /// Hebrew sentence, the same Latin keystrokes, and this time they spell nothing
+    /// at all in the alphabet they were keyed in.
+    ///
+    /// **The frozen corpus only asks this of an empty field** (`wl-01`, `wl-02`,
+    /// `wl-03` all type into nothing), so the sentence signal the rule above turns
+    /// on was never under test. A gate that refused the transposition whenever the
+    /// sentence is in the other script would pass every corpus entry and destroy
+    /// the feature on the phone, because a person who forgot the globe key is
+    /// almost always mid-Hebrew-message. `Bar/typing/sweep/words.json` carries both
+    /// of these now.
+    @MainActor
+    func testTheWrongLayoutIsStillCorrectedInsideAHebrewSentence() {
+        for (typed, meant) in [("akuo", "שלום"), (",usv", "תודה")] {
+            let results = SuggestionEngine.suggestions(
+                prefix: typed, context: "אני רוצה להגיד ", languages: [.english, .hebrew],
+                personal: emptyPersonal())
+            XCTAssertEqual(
+                results.first(where: \.isDefault)?.text, meant,
+                "space kept \(results.first(where: \.isDefault)?.text ?? "nothing") for "
+                    + "\(typed), which spells nothing in the alphabet it was typed in: "
+                    + "\(results.map(\.text))")
+        }
     }
 
     /// **The control half, and the case every cheap gate breaks.** A clitic

@@ -444,6 +444,58 @@ final class PersonalDictionaryTests: XCTestCase {
         }
     }
 
+    /// **An entry owns the common word it is built on, for as many keystrokes as
+    /// they share.** `KeyboardKit` ships in `SharedStore.shippedPersonalDictionary`
+    /// on every install, and `keyb`, `keybo`, `keyboa` and `keyboar` all committed
+    /// it — four consecutive keystrokes of the word *keyboard* replaced by a brand
+    /// name on a stock phone, with `keyboard` sitting unbolded in slot 2 the whole
+    /// way and only the eighth letter saving it, where `isKnownWord` finally
+    /// refuses the four-letter gate. `Danielle` does the same to somebody typing
+    /// *Daniel*. The list exists so a name is never destroyed; it was destroying
+    /// the ordinary words those names are built on.
+    ///
+    /// The guard that was already here only ever protected an **exact** match, so
+    /// it could not fire on a shared prefix, and `.personal` is the second highest
+    /// source tier there is — so the entry wins the ranking outright and the gate
+    /// commits the winner.
+    ///
+    /// **Both halves are asserted.** The entry has to still be *offered*, or a
+    /// build that dropped `KeyboardKit` from the shipped list would pass this while
+    /// breaking the four tests above it. Found by `Bar/typing/sweep`, which types
+    /// whole words letter by letter; the frozen 90 has no entry for any of these
+    /// moments.
+    func testAnEntryDoesNotOwnTheCommonWordItExtends() {
+        SharedStore.shared.personalDictionary = SharedStore.shippedPersonalDictionary
+
+        for typed in ["keyb", "keybo", "keyboa", "keyboar"] {
+            let controller = KeyboardController(
+                target: MockTextTarget(text: typed), language: .english)
+            XCTAssertTrue(
+                controller.suggestions.contains { $0.text == "KeyboardKit" },
+                "\(typed) no longer offers the entry at all, so this proves nothing: "
+                    + "\(controller.suggestions.map(\.text))")
+            XCTAssertEqual(
+                committed(typed, in: .english), "\(typed) ",
+                "the space bar put a brand name over the word keyboard")
+        }
+    }
+
+    /// The other half, and the reason the rule above is not "an entry may never
+    /// finish a word".
+    ///
+    /// When nothing else completes the same keystrokes, the entry is the only
+    /// reading there is and finishing it is the whole point of having the list.
+    /// A build that simply refused every personal completion would pass the test
+    /// above and fail here.
+    func testAnEntryStillFinishesAWordNothingElseIsCompeting() {
+        SharedStore.shared.personalDictionary = ["Zzalpha"]
+
+        XCTAssertEqual(
+            committed("Zzalph", in: .english), "Zzalpha ",
+            "nothing else in the bar starts with those letters, so the entry is the "
+                + "only reading of them and the space bar should finish it")
+    }
+
     /// And it protects only the words on it. A keyboard that stopped correcting
     /// everything the moment the list was non-empty would be a worse bug than the
     /// one this fixes, and it is the shape a misplaced early `return` would take.

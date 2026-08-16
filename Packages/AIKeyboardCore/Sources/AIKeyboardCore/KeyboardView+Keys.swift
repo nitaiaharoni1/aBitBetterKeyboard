@@ -418,8 +418,9 @@ extension KeyboardView {
 
     /// What lifting a finger on the second or later item of a key's popup does.
     ///
-    /// A letter has already inserted its character on finger-down, so picking an
-    /// accent is a replacement: delete, then type the alternate. A grouped key
+    /// A letter has already inserted its character on the lift one line above the
+    /// pick, so picking an accent is a replacement and
+    /// `KeyboardController.insertAlternate` is what that means. A grouped key
     /// has already appended a stroke, so picking a letter pins that stroke. The
     /// rewrite key, Fix and CopyClip have deliberately run nothing yet (see
     /// `KeyView.runsOnLift`), so picking a row is the whole action.
@@ -442,9 +443,6 @@ extension KeyboardView {
         if key.groupedLetters != nil {
             return { letter in _ = controller.pinGroupedLetter(letter) }
         }
-        return { alternate in
-            controller.deleteBackward()
-            controller.press(.character(alternate))
-        }
+        return { alternate in controller.insertAlternate(alternate) }
     }
 }

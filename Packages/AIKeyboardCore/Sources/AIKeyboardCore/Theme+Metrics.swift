@@ -104,7 +104,7 @@ extension Theme {
 
         /// **Landscape is a separate branch of the geometry, not a scaled-down
         /// portrait.** iPhone 17 Pro portrait is 874pt tall; rotated, it is 402 —
-        /// and `FrameReduction.Band.maximumOwnUI` (368/874, ≈0.421) is a fraction
+        /// and `FrameReduction.Band.maximumOwnUI` (368/874, ≈0.4211) is a fraction
         /// of screen height, not a point budget, so the same fraction of 402pt
         /// leaves only ≈169pt for the *whole* keyboard, against 368pt in
         /// portrait. Scaling every portrait row down by that same ~46% would put
@@ -118,17 +118,66 @@ extension Theme {
         /// | | height |
         /// |---|---|
         /// | 3 letter rows + bottom row | `26 × 4 = 104` |
-        /// | 3 row gaps at `Landscape.rowSpacing` (8) | `24` |
+        /// | 3 row gaps at `Landscape.rowSpacing` (4) | `12` |
         /// | top + bottom inset (unchanged from portrait) | `8` |
-        /// | **key area** | **136** |
+        /// | **key area** | **124** |
         /// | suggestion bar | `30` |
-        /// | **total** | **166** |
+        /// | **total** | **154** |
         ///
-        /// 166 / 402 ≈ 0.4129, under the 0.4210 cap with about 3pt to spare —
-        /// deliberately not spent on taller keys, the same rule portrait's own
-        /// 3pt of headroom is under. Landscape has never been swept the way
-        /// `Bar/screen-context/harness/run-fingerprint.sh` swept portrait, so
-        /// that margin is untested slack rather than a measured one.
+        /// **The number that has to be satisfied is 375, not 402, and reading it
+        /// off the reference phone is what left a live defect standing for the
+        /// whole of NIT-18 and NIT-101.** The cap is a fraction of the *landscape
+        /// screen height*, which is the phone's portrait width, so the budget is
+        /// a different number of points on every phone and the narrowest one
+        /// binds. Break-even is `total / 0.4210526`; at the previous 166 pt that
+        /// is **394.25 pt**, above five shipping widths. The 166 pt keyboard was
+        /// therefore over the cap on the iPhone SE 2/3, XS, 11 Pro, 12 mini and
+        /// 13 mini (`H = 375`, 8.1 pt over), the 12 / 13 / 14 (390, 1.8 over) and
+        /// the 14 Pro / 15 / 16 / 16e (393, 0.5 over). Over the cap
+        /// `FrameReduction.bottomCrop(ownUI:)` clamps, and the rows it then
+        /// refuses to crop are rows of **our own keyboard** — at 375 that reaches
+        /// the Reply chip, whose `ControlSweep` runs for the whole of a read, and
+        /// `Bar/screen-context/harness/run-fingerprint-landscape.sh` measured
+        /// **30 of 30** frames taking a fresh identity from it. That is the same
+        /// defect `FrameReduction` was rewritten to remove, arriving in an
+        /// orientation nobody had swept.
+        ///
+        /// **The 12 pt came out of the row gap, and out of nothing else, because
+        /// the row gap is the only vertical dimension in landscape that is not a
+        /// touch target.** A landscape key is about 81 × 26, so every mistap risk
+        /// is vertical and the key height is the whole of it; `KeyView` puts
+        /// `.contentShape(Rectangle())` on the cap's own frame, so the gap
+        /// between two rows is dead space a touch lands in and nothing happens.
+        /// Cutting 8 → 4 therefore pays the entire overspend without shrinking a
+        /// single target by a point, and it keeps the cap idiom: the crisp part
+        /// of `KeyView`'s depth recipe is a 2 pt contact line (`restContactY`),
+        /// which still clears, and what is lost is part of an ambient lift its
+        /// own comment calls "barely there" (6% black). The other candidates all
+        /// cost something a user can feel — the bar is 30 pt around a 26 pt chip
+        /// and hosts the whole shed action row, and 26 pt keys are already under
+        /// `minTouchTarget` and under `LayoutGeometry.keyHeightRange`'s own 36 pt
+        /// floor.
+        ///
+        /// **One geometry for every phone, rather than a budget per device.** The
+        /// obvious alternative is to keep 166 where it fits and shorten only the
+        /// narrow phones, which means the geometry takes a measured screen height
+        /// — and that height would have to be obtained and agreed on in four
+        /// places (`KeyboardGeometry.ownUIHeightFraction`, the host constraint in
+        /// `KeyboardViewController`, `KeyboardView`'s grid frame and
+        /// `KeyboardView+Keys`), one of which already falls back to a reference
+        /// height when there is no window. A keyboard drawn from a measured
+        /// screen and a fraction published from a fallback is the band moving
+        /// under a reading in flight, which is the failure `landscapeLayout`
+        /// exists to make impossible. Since the 12 pt comes entirely out of dead
+        /// space, spending it on every phone costs no phone a target, so the
+        /// plumbing buys nothing worth that risk.
+        ///
+        /// 154 / 375 = 0.4107 against the 0.4211 cap, so the margin on the phone
+        /// that binds is **3.9 pt** and it grows with the screen: 10.2 at 390,
+        /// 11.5 at 393, 15.3 at 402, 31.3 at 440.
+        /// `LandscapeGeometryTests.testTheLandscapeKeyboardFitsUnderTheCapOnEveryWidthItShipsTo`
+        /// asserts every one of them, and 375 is the row that fails against the
+        /// 166 pt build.
         ///
         /// 26pt keys are shorter than `Theme.Metrics.minTouchTarget` (44) and
         /// `LayoutGeometry.keyHeightRange`'s own 36pt floor — both portrait
@@ -138,7 +187,21 @@ extension Theme {
         public enum Landscape {
             public static let suggestionBarHeight: CGFloat = 30
             public static let keyHeight: CGFloat = 26
-            public static let rowSpacing: CGFloat = 8
+            /// **4, paid down from 8 so the keyboard fits the narrowest phone it
+            /// ships to.** See the table above: this is the one vertical
+            /// dimension landscape spends that no thumb ever aims at.
+            public static let rowSpacing: CGFloat = 4
+
+            /// The landscape screen height every number here has to satisfy: the
+            /// portrait *width* of the narrowest iPhone this package's iOS 17
+            /// floor still reaches (SE 2/3, XS, 11 Pro, 12 mini, 13 mini).
+            ///
+            /// `KeyboardGeometry.referenceLandscapeScreenHeight` (402) is the
+            /// device every other number under `Bar/screen-context/` is measured
+            /// on; this is the device the *cap* is decided on, and they are not
+            /// the same phone. Checking only the reference one is exactly how a
+            /// 30-of-30 defect survived two tickets.
+            public static let narrowestScreenHeight: CGFloat = 375
         }
 
         /// The layout landscape actually draws: the caller's rows and reach, with

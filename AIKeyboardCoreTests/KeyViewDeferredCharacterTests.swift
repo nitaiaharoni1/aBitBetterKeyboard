@@ -286,9 +286,14 @@ final class KeyViewDeferredCharacterTests: XCTestCase {
 
     /// A word reached through the accents popup is a word placed by hand, so the
     /// space bar must not correct it — `צ׳יפס`, `col·legi` and `café` are exactly
-    /// the words no dictionary holds. That protection comes from the handler's
-    /// `deleteBackward()`, which is the reason the base letter is committed before
-    /// the pick rather than dropped. See `.claude/rules/suggestion-bar.md`.
+    /// the words no dictionary holds. See `.claude/rules/suggestion-bar.md`.
+    ///
+    /// **The field is empty on purpose, and that is the half the popup never
+    /// had.** The protection used to ride on the handler's `deleteBackward()`,
+    /// which snapshots the word *left standing* — so an accent on the first
+    /// letter of a word left `""`, and `isCorrectingWordByHand` refuses an empty
+    /// prefix because it is a prefix of every word. `insertAlternate` retakes the
+    /// snapshot from the word the pick actually left in the field.
     func testAnAccentStillCountsAsAHandRepair() throws {
         let (controller, _) = controller()
         let view = KeyboardView(controller: controller)
@@ -301,6 +306,48 @@ final class KeyViewDeferredCharacterTests: XCTestCase {
         XCTAssertTrue(
             controller.isCorrectingWordByHand,
             "a letter placed through the popup is no longer protected from autocorrect")
+    }
+
+    /// **The same protection carried through the letters typed after the mark,
+    /// which is where autocorrect would actually strike.** `צ׳יפס` is the word
+    /// the rule is written about and its geresh is on the *first* letter, so
+    /// nothing stands behind the popup's delete and the old snapshot was empty
+    /// for the whole word. Space is what would swap it, and space is four
+    /// keystrokes later.
+    ///
+    /// The control half at the end is what rejects the over-broad repair: a fix
+    /// that armed the flag on every insert, rather than on the popup's own, would
+    /// protect a word nobody has touched and switch autocorrect off for good.
+    func testTheProtectionSurvivesTypingOnFromAMarkOnTheFirstLetter() throws {
+        let (controller, target) = controller()
+        controller.language = .hebrew
+        let view = KeyboardView(controller: controller)
+        let handler = try XCTUnwrap(
+            view.alternateHandler(for: try letterSpec("צ", in: .hebrew)),
+            "every Hebrew letter carries its geresh")
+
+        controller.characterTouch(.began(.character("צ"), CGPoint(x: 0.5, y: 0.5)))
+        controller.characterTouch(.ended)
+        handler("צ׳")
+        XCTAssertEqual(target.text, "צ׳", "the geresh did not replace the letter it belongs to")
+
+        for letter in "יפס" { controller.press(.character(String(letter))) }
+
+        XCTAssertEqual(target.text, "צ׳יפס")
+        XCTAssertTrue(
+            controller.isCorrectingWordByHand,
+            "typing on from a hand-placed mark lost the protection before the space that swaps it")
+
+        // A second controller rather than a space, because a space commits the
+        // word and `learnWordJustCommitted` would teach the shared store its own
+        // vocabulary — the `PersonalLanguageModel` trap in
+        // `.claude/rules/suggestion-bar.md`.
+        let (typed, _) = self.controller()
+        typed.language = .hebrew
+        for letter in "צ׳יפס" { typed.press(.character(String(letter))) }
+        XCTAssertFalse(
+            typed.isCorrectingWordByHand,
+            "the same word typed without the popup was protected, so nothing is corrected any more")
     }
 
     // MARK: Nothing may be stranded

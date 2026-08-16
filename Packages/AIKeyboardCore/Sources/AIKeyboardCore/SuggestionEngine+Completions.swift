@@ -629,11 +629,73 @@ extension SuggestionEngine {
         // `PersonalLanguageModel.protectThreshold`.
         if personal.isProtected(word, in: typedLanguage) { return false }
 
+        // **An entry that merely *extends* a word does not own it, and the guard
+        // above only ever protected an exact match.** `.personal` is the second
+        // highest tier there is, so anything on that list wins the ranking outright
+        // — and `KeyboardKit`, which every install ships, took `keyb`, `keybo`,
+        // `keyboa` and `keyboar` from somebody typing *keyboard*, with `keyboard`
+        // sitting unbolded in slot 2 the whole way and only the eighth letter
+        // saving it. `Danielle` does the same to somebody typing *Daniel*. The list
+        // exists so that a name is never destroyed; it must not destroy the
+        // ordinary words those names are built on.
+        //
+        // **The line is what the typed letters can still be.** An entry may finish
+        // a word nothing else is competing for — `Zzalph` → `Zzalpha` is the whole
+        // point of having the list — and may not when another source completes the
+        // same keystrokes, because then it is winning on its tier rather than on
+        // the evidence. Same shape as the unfinished-stem rules further down, asked
+        // of the offered slots rather than of a word list.
+        let offers = results.dropFirst()
+        if !typed.isEmpty, let first = offers.first {
+            let entry = comparable(first.text)
+            let contested = offers.dropFirst().contains {
+                let other = comparable($0.text)
+                return other != entry && other != typed && other.hasPrefix(typed)
+            }
+            if entry != typed, entry.hasPrefix(typed), contested,
+                supplementary.contains(where: { comparable($0) == entry })
+            {
+                return false
+            }
+        }
+
         // The wrong layout is not a spelling mistake and is not judged like one:
         // the candidate is in a different alphabet, so `isKnownWord` on the typed
         // characters can never object.
-        if let first = results.dropFirst().first, first.language.script != typedLanguage.script {
-            return true
+        if let first = offers.first, first.language.script != typedLanguage.script {
+            // **Unless the sentence says the switch was deliberate, and this rule
+            // was beating the one this product is for.** Three letters into
+            // `screenshot` after `אני מצרף `, `scr` committed `דבר`: every gate in
+            // `LayoutTransposition.correction` passes at exactly three letters —
+            // `scr` is no English word, absent from the seed, and `ד ב ר` are the
+            // keys `s c r` sit on and a common Hebrew word — so the rule for
+            // somebody who forgot the globe key outranked `codeSwitchVocabulary`,
+            // where `screenshot` was already offered and which exists for this
+            // exact sentence (corpus `cs-05`).
+            //
+            // **What separates the two is what the keystrokes still spell.** A
+            // wrong-layout typist produces a whole word of gibberish in the plane
+            // they are not on: `akuo`, `,usv` and `יקךךם` complete to nothing in
+            // the script they were keyed in, and the bar has no candidate for them
+            // except the transposition. A code-switcher produces the start of a
+            // real word and keeps going. Both signals are already here — the
+            // sentence's own script and the other offered slots — so this costs no
+            // new constant. An empty context has no dominant language and answers
+            // nil, which leaves the rule exactly as it was: corpus `wl-01`,
+            // `wl-02` and `wl-03` all type into an empty field.
+            let switching =
+                SuggestionEngine.dominantLanguage(in: context).map {
+                    $0.script != typedLanguage.script
+                } ?? false
+            let stillSpellingSomething = offers.dropFirst().contains {
+                let other = comparable($0.text)
+                return $0.language.script == typedLanguage.script && other != typed
+                    && other.hasPrefix(typed)
+            }
+            // Refused rather than fallen through: the questions below are all about
+            // a candidate in the typed word's own alphabet, and the four-letter
+            // gate at the bottom would happily commit this one on its way past.
+            return !(switching && stillSpellingSomething)
         }
 
         // **Asked before the seed list, not after, and the order is the rule.**
@@ -792,6 +854,46 @@ extension SuggestionEngine {
             if !contextual.contains(winner) { return false }
         }
 
+        // **Two real Hebrew words sharing a prefix, and Apple's list is not a
+        // ranking.** `להתראות` ("goodbye") and `להתראיין` ("to be interviewed")
+        // share five letters, so five letters into either one the space bar
+        // inserted the other — measured in both directions, which is what makes it
+        // an ambiguity rather than a bad candidate. It is `respon` →
+        // `respond` / `response` in Hebrew, and neither existing call site of
+        // `hasDistinctLexemes` can reach it: the seed-based one asks
+        // `SeedLanguageModel.words(startingWith:)` and the seed has no `להתר` entry
+        // at all, and the offered-slots one below is scoped to a Latin stem.
+        //
+        // **Gated on where the winner came from, and that is what keeps the
+        // controls.** Widening the offered-slots test to Hebrew on its own breaks
+        // `בעבו` → `בעבודה`, because `בעבור` is offered beside it and really is a
+        // different word; that objection was recorded before this rule existed and
+        // is still true. What separates the two is provenance, read out of the
+        // engine: `בעבודה` arrives `.seed` at 2500 and `מהעבודה` `.seed` at 2400 —
+        // the common core saying which word this is — while `להתראיין` arrives
+        // `.checker` at 1000, and `UITextChecker` has no frequency model at all, so
+        // "first in Apple's list" is no evidence about which of two real words a
+        // person meant. A completion with no prior behind it may offer; it may not
+        // finish. The sentence can still overrule it, exactly as it can for the
+        // English stem below.
+        if prefixCompletion, typedLanguage.script == .hebrew, first.source == .checker {
+            // The readings the keystrokes are ambiguous between, which is the
+            // candidates that continue from them. A correction disagrees with a key
+            // that was pressed and is not one of them.
+            let readings = offers.map(\.text).filter {
+                let other = SeedLanguageModel.fold($0)
+                return other != typedFolded && other.hasPrefix(typedFolded)
+            }
+            if hasDistinctHebrewLexemes(readings) {
+                let contextual = Set(
+                    contextFollowers(
+                        last: previousWords, field: documentWords(in: context), context: context,
+                        language: typedLanguage, personal: personal
+                    ).map(SeedLanguageModel.fold))
+                if !contextual.contains(winner) { return false }
+            }
+        }
+
         // **A Latin stem inside a Hebrew sentence is unfinished the same way,
         // and the seed list cannot say so.** `screensh` is not in the seed, so
         // the block above never sees `screenshotted` / `screenshotting` — two
@@ -885,6 +987,97 @@ extension SuggestionEngine {
         return folded.dropFirst().contains { other in
             !other.hasPrefix(head) && !head.hasPrefix(other)
         }
+    }
+
+    /// The same question in Hebrew: `hasDistinctLexemes` with the one move that
+    /// language makes and English does not.
+    ///
+    /// **English inflects by adding letters; Hebrew replaces them.** `schedule` →
+    /// `scheduled` keeps the whole word at the front, which is why the prefix test
+    /// works there. `עבודה` pluralises to `עבודות`, which does *not* start with
+    /// `עבודה`, so the prefix test alone reads one word as two — and that is
+    /// precisely why widening `hasDistinctLexemes` to Hebrew stops the correct
+    /// `בעבו` → `בעבודה`. The objection was recorded with the slots behind it in
+    /// `.claude/rules/suggestion-bar.md` before this existed; the answer is not to
+    /// abandon the prefix test but to add the ending swap beside it.
+    ///
+    /// So two completions are one word when either holds, and different words only
+    /// when neither does:
+    ///
+    /// - one still starts with the other — `להתראות` / `להתראותם`, `להתראיין` /
+    ///   `להתראיינה`, which is a possessive or a gender hung off the end and is the
+    ///   same shape English has;
+    /// - or the same stem is left once the ending comes off — `הודעה` / `הודעות`,
+    ///   `עבודה` / `עבודות`, which is the shape only Hebrew has.
+    ///
+    /// `להתראות` and `להתראיין` fail both and are, correctly, two words: neither
+    /// starts with the other, and `להתרא` is not `להתראיין`.
+    ///
+    /// **Asked only of candidates that complete the typed letters.** A correction
+    /// deletes a key that was pressed rather than continuing from it — `להתראי`
+    /// offers `התראי`, an imperative reached by dropping the lamed — and a word
+    /// that disagrees with the keystrokes is not one of the readings they are
+    /// ambiguous *between*. The caller filters; including them made this refuse
+    /// four completions that were on their way to the right word.
+    static func hasDistinctHebrewLexemes(_ words: [String]) -> Bool {
+        guard words.count >= 2 else { return false }
+        let folded = words.map { hebrewShapeFolded(SeedLanguageModel.fold($0)) }
+        let head = folded[0]
+        let headStem = hebrewLexemeStem(head)
+        return folded.dropFirst().contains { other in
+            !other.hasPrefix(head) && !head.hasPrefix(other)
+                && hebrewLexemeStem(other) != headStem
+        }
+    }
+
+    /// Hebrew's five final forms written as their ordinary shapes, so two
+    /// spellings of one letter compare equal.
+    ///
+    /// **A letter changes shape when it stops being last, and that defeats a
+    /// prefix test on its own.** `להתראיין` ends in a final nun; the moment
+    /// anything is added the nun goes back to its ordinary shape, so
+    /// `להתראיינה` does not start with `להתראיין` on the code points at all — and
+    /// `hasDistinctHebrewLexemes` duly read one word as two and refused two
+    /// keystrokes that were on their way to the right one. `SeedLanguageModel`
+    /// folds the same way before measuring edit distance and records the same
+    /// surprise about `שלמו` / `שלום`. Both invert `HebrewMorphology.finalForms`,
+    /// which is where the fact itself lives, rather than each spelling out the
+    /// five pairs.
+    private static let hebrewOrdinaryForms: [Character: Character] =
+        HebrewMorphology.finalForms.reduce(into: [:]) { $0[$1.value] = $1.key }
+
+    private static func hebrewShapeFolded(_ word: String) -> String {
+        guard word.contains(where: { hebrewOrdinaryForms[$0] != nil }) else { return word }
+        return String(word.map { hebrewOrdinaryForms[$0] ?? $0 })
+    }
+
+    /// A Hebrew word with one inflectional ending taken off, or the word itself.
+    ///
+    /// Number and gender, and nothing beyond that: `ות` and `ים` are the two
+    /// plurals, `ה` is the feminine singular, `ת` its construct form and `י` the
+    /// first-person possessive, so `עבודה`, `עבודות`, `עבודת` and `עבודתי` all
+    /// reduce to `עבוד`. Longest ending first, so `יות` is not read as a `ת` with
+    /// two letters in front of it.
+    ///
+    /// **The five final forms are deliberately absent, and that is the trap.**
+    /// `ם` and `ן` do end plenty of inflections, and they are also ordinary root
+    /// letters at the end of a word: stripping them turns `להתראיין` into
+    /// `להתראיי` and then into the same stem as `להתראות`, which is the one pair
+    /// this whole rule exists to keep apart. Anything a longer ending would have
+    /// caught is caught by the prefix half of `hasDistinctHebrewLexemes` instead.
+    ///
+    /// **Not a morphological analyser** — no roots, no binyanim, no pronoun
+    /// suffixes — because the only question it is asked is whether two completions
+    /// of the *same keystrokes* are the same word, and both sides already share a
+    /// long prefix. A stem shorter than two letters is refused for the reason
+    /// `HebrewMorphology` lets only the seed list answer a one-letter stem: below
+    /// that there is not enough word left to have been inflected.
+    static func hebrewLexemeStem(_ word: String) -> String {
+        for ending in ["יות", "ות", "ים", "ה", "ת", "י"] where word.hasSuffix(ending) {
+            let stem = String(word.dropLast(ending.count))
+            if stem.count >= 2 { return stem }
+        }
+        return word
     }
 
     /// The word inside what was typed, with the marks that sit at its edges
