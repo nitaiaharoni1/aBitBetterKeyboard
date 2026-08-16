@@ -26,6 +26,39 @@ extension KeyboardView {
         rowID != KeyboardLayout.RowID.bottom
     }
 
+    /// Whether the bottom row is dropped outright rather than merely uncovered.
+    ///
+    /// **The CopyClip list is the one panel with nothing of its own under that
+    /// row, so it is the one panel the row can be taken away for.** The rule
+    /// above keeps `123`, space, the full stop, return and Emoji on screen
+    /// because a panel that covered them would take its own exit with it — and
+    /// for the emoji grid that is the whole argument, since `אבג` *is* that
+    /// Emoji key (`KeyView.label`'s `isEmojiOpen` branch). CopyClip is not
+    /// reached from the bottom row and is not left from it: the key that closes
+    /// the list is in the action row, which `Overlay.showsActionRow` keeps drawn,
+    /// and the two controls the list actually wants — undo and delete — are
+    /// `CopyClipControlRow` inside the panel. So five keys sat under it doing
+    /// nothing but cost the clips a row and a half of height.
+    ///
+    /// **Asked of the exit rather than hardcoded**, because the layout editor
+    /// lets a user move CopyClip anywhere, and a user who put it in the bottom
+    /// row would be dropping the only way out along with the row. That is the
+    /// defect `KeyboardCustomization.actionRow`'s own note records happening to
+    /// Emoji, arriving through a different door. Landscape is answered by the
+    /// same line for free: `Theme.Metrics.landscapeLayout(basedOn:)` empties
+    /// `cursorRow`, so this returns false there and the row stays — which is
+    /// what landscape wants anyway, having shed the action row and having about
+    /// 60 pt of panel to spend.
+    ///
+    /// `.copyclipSearch` is deliberately not included: search puts the letters
+    /// back and needs a space bar and a return key under them.
+    static func dropsBottomRow(
+        overlay: KeyboardOverlay, layout: KeyboardCustomization
+    ) -> Bool {
+        guard overlay == .copyclip else { return false }
+        return layout.cursorRow.contains { $0.action == .copyclip }
+    }
+
     // MARK: Keys
 
     var keyGrid: some View {
@@ -246,7 +279,18 @@ extension KeyboardView {
                 // `EmojiPanel.rowCount(forGridHeight:)` pays for: four rows of
                 // emoji in portrait rather than five, and two in landscape rather
                 // than five specks.
-                if !bottomRows.isEmpty {
+                //
+                // **The CopyClip list is the exception, and `dropsBottomRow` is
+                // the whole of it.** Removing the row rather than hiding it is
+                // what hands its height to the panel: the letters beside it are
+                // `.fixedSize`, so the flexible child of this stack is the panel,
+                // and its `CopyClipControlRow` — undo and delete — lands where
+                // the space row was. The keyboard's published height does not
+                // move, because `Theme.Metrics.keyAreaHeight(for:)` is a
+                // function of the layout and knows nothing about overlays.
+                if !bottomRows.isEmpty,
+                    !Self.dropsBottomRow(overlay: controller.overlay, layout: layout)
+                {
                     rowsView(
                         bottomRows, availableWidth: available, unit: unit,
                         height: layout.geometry.height(.bottom),

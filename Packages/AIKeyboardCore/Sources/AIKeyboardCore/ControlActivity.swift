@@ -232,7 +232,9 @@ private struct ControlActivityPreview: View {
             }
             .foregroundStyle(Theme.Text.onBrand)
         }
-        .frame(width: 74, height: 43)
+        // The action row's own height, read rather than restated: this preview
+        // is of a control that only ever lives in that row.
+        .frame(width: 74, height: Theme.Metrics.actionRowHeight)
     }
 }
 

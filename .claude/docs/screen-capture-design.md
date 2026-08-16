@@ -995,9 +995,10 @@ The table above was taken over frames rendered with the **host's** keyboard, or 
 is not the state any real reading is ever measured in. A reading exists only because the
 user tapped Reply on *our* keyboard, so our keyboard is on screen for the whole five-second
 read — with `AIResultPanel.loading` repainting three shimmer lines at `workingPhase += 0.03`
-every 16 ms. On an iPhone 17 Pro our keyboard at its tallest is 292 pt of 874 pt, which is
-**32% of the fingerprint band**, and SHA-256 moves on a one-level change in any of the 2,048
-samples.
+every 16 ms. On an iPhone 17 Pro our keyboard at its tallest is 365 pt of 874 pt, which is
+**41.8% of the fingerprint band**, and SHA-256 moves on a one-level change in any of the 2,048
+samples. (292 pt was the keyboard of the day this was written, before the action row and the
+banner; `FrameReduction.Band.maximumOwnUI` is the 368 pt line it may not cross.)
 
 So `frame-hash.mjs` now renders three more variants per scene: the scene with our keyboard
 up and the result panel loading at shimmer phase 0.10, the same at phase 0.60, and the

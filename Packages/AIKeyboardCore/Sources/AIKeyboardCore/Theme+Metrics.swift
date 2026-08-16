@@ -32,7 +32,85 @@ extension Theme {
         /// row, or a taller banner, costs a conversation switch on every screen
         /// read.
         public static let bannerHeight: CGFloat = 58
-        public static let keyHeight: CGFloat = 43
+        /// The letter rows and the space row. **44, up from 43, and the four points
+        /// came out of the action row** — see `actionRowHeight`.
+        ///
+        /// **The top letter row now starts 4 pt higher, and one thing follows it
+        /// off the grid.** `KeyView.calloutBubbleSize` is
+        /// `max(width × 1.4, height × 1.15, 44)`, so a letter balloon is 50.6 pt
+        /// plus a 12 pt neck and reaches 59.6 pt above the key it belongs to,
+        /// against a top row that now begins at 55 pt into the grid: it paints
+        /// **4.6 pt over the suggestion bar** while a top-row key is held, where
+        /// it used to stop 0.55 pt short. That is Apple's own arrangement — a
+        /// system callout rises clear of the keyboard, which is why
+        /// `KeyboardViewController` sets `clipsToBounds = false` — and at the
+        /// default text size the candidates occupy the bar's upper 28 pt, so the
+        /// intrusion lands on empty chrome. At the accessibility sizes the
+        /// candidate line box reaches 32.9 pt and about 1.4 pt of its descender
+        /// box is covered for as long as the finger is down. Recorded rather than
+        /// repaired: the alternative is a shorter balloon or a shorter key, and
+        /// both undo the thing this height was moved for.
+        public static let keyHeight: CGFloat = 44
+
+        /// The action row (`cursorRow`: CopyClip, Fix, settings, Rewrite,
+        /// dictation).
+        ///
+        /// **39, and it is a transfer rather than a saving.** The total may not
+        /// grow — 365 pt sits 3 pt under the 368 pt fingerprint cliff, which
+        /// `testTheShippedLayoutStillFitsUnderTheFingerprintCliff` holds — so the
+        /// letter keys can only get taller if a row in the same grid gets shorter
+        /// by exactly what they gain. Four rows carry `keyHeight` (three letters
+        /// and the space row) and each takes a point, so this pays four:
+        /// `4 × 44 + 39 = 4 × 43 + 43`, and `keyAreaHeight(for: .default)`
+        /// publishes the same 271 it did before.
+        ///
+        /// **It balances for the shipped default and for nothing else, and that
+        /// is the right scope rather than an oversight.** `keyAreaHeight(for:)`
+        /// multiplies `keyHeight` by however many rows the layout draws, so a
+        /// keyboard with the number row on has five rows on the taller number and
+        /// comes out 1 pt up, and one with `cursorRow` emptied has no action row
+        /// left to take the four points off and comes out 4 pt up. Neither
+        /// matters, for opposite reasons: the number-row layouts were already
+        /// ~50 pt past the cliff and that is the user's trade to make — see
+        /// `LayoutValidator`, which deliberately stopped warning about it — while
+        /// dropping the action row saves a whole 51 pt band, so 4 pt back leaves
+        /// it far under. The rail belongs to the default, and the default is what
+        /// this is balanced against.
+        ///
+        /// **The action row is the row that can afford it**, and the reason is
+        /// what the two rows are for. These five are chosen once and then aimed
+        /// at deliberately, one at a time, with the eye on them; the letters are
+        /// hit at speed by a thumb that is looking at the message. It is also the
+        /// row with the fewest keys, so every one of them is wide — the five share
+        /// the full width against ten or eleven letters — and a wide key at 39 pt
+        /// is a bigger target than a narrow one at 43.
+        ///
+        /// Above `LayoutGeometry.keyHeightRange`'s 36 pt floor, so the layout
+        /// editor's rail does not fire on a keyboard nobody has touched. Below
+        /// `minTouchTarget`, as the 43 pt keyboard already was.
+        ///
+        /// **What 39 costs, measured against real SF Pro and SF Symbols metrics
+        /// rather than eyeballed, because this row is now close to full.** A
+        /// captioned action key is a 15 pt symbol over a 9 pt caption capped at
+        /// `Theme.Glyph.lightFloor`, with `spacing: 1` and no vertical padding —
+        /// see `KeyView.actionLabel`. CopyClip is the tallest, because
+        /// `clipboard` renders 21 pt against Fix's and Rewrite's 17: **32.6 pt at
+        /// the default text size and 37.31 at the accessibility cap, leaving
+        /// 1.69 pt in a 39 pt cap.** It fits at every Dynamic Type size and there
+        /// is nothing to clip it if it stops — `KeyboardViewController` sets
+        /// `clipsToBounds = false` on purpose — so the failure mode is a caption
+        /// leaning on the cap edge. A second line of caption, a symbol taller
+        /// than `clipboard`, or raising `lightFloor` is what spends the last of
+        /// it; the row has no more to give without taking the four points back.
+        ///
+        /// Two things that share this band shrank with it and are the measured
+        /// cost of the trade. `EmojiResultsStrip` draws its cells square at the
+        /// row height, so a search result is a **39 × 39** target where a mistap
+        /// puts the wrong emoji in somebody's message — still wider than a letter
+        /// key, which is about 33 pt across on a 393 pt phone, and reachable at
+        /// 36 already for anyone who dragged this slider down. `CopyClipResultsStrip`
+        /// loses about 9% of its preview text per chip and clips nothing.
+        public static let actionRowHeight: CGFloat = 39
         /// Points the numbers row gives the space row.
         ///
         /// **A transfer, not a growth.** The shipped total sits 3 pt under the
@@ -286,7 +364,7 @@ extension Theme {
         /// SwiftKey's numbers and symbols pages are four rows. The letters plane
         /// is three, and `KeyboardCustomization.rowCount` follows the letters
         /// plane so the host height — and the 368 pt fingerprint cliff — does
-        /// not move when the user taps 123. Four rows at the shipped 43 pt would
+        /// not move when the user taps 123. Four rows at the shipped 44 pt would
         /// be that move. This squeezes the extra row into the same block three
         /// letter rows already occupy; a layout that already turned the number
         /// row on has paid for the fourth slot and is left alone.

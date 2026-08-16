@@ -176,12 +176,12 @@ final class EmojiModeTests: XCTestCase {
     }
 
     /// **How many rows fit, and the two ends are the ones that matter.** Portrait
-    /// ships a 110pt grid and landscape a 60pt one; the old constant five put a
+    /// ships a 118pt grid and landscape a 60pt one; the old constant five put a
     /// 12pt cell in the latter. The floor is what is held, so the count gives.
     func testTheRowCountFollowsTheHeightItHasToFillRatherThanAConstant() {
-        // Portrait, shipped geometry: 3 letter rows at 43 and 2 gaps at 12 is a
-        // 153pt panel, less the 43pt category strip.
-        XCTAssertEqual(EmojiPanel.rowCount(forGridHeight: 110), 4)
+        // Portrait, shipped geometry: 3 letter rows at 44 and 2 gaps at 12 is a
+        // 156pt panel, less the 38pt category strip.
+        XCTAssertEqual(EmojiPanel.rowCount(forGridHeight: 118), 4)
         // Landscape: 3 rows at 26 and 2 gaps at 4 is 86, less a 26pt strip.
         XCTAssertEqual(EmojiPanel.rowCount(forGridHeight: 60), 2)
         // A number row switched on pays for the fifth back.
@@ -199,12 +199,100 @@ final class EmojiModeTests: XCTestCase {
         for keyHeight in stride(from: 36.0, through: 56.0, by: 4) {
             for spacing in stride(from: 8.0, through: 16.0, by: 4) {
                 let panel = 3 * keyHeight + 2 * spacing
-                let grid = panel - keyHeight
+                let grid = panel - EmojiPanel.categoryRowHeight(forKeyHeight: keyHeight)
                 let cell = grid / CGFloat(EmojiPanel.rowCount(forGridHeight: grid))
                 XCTAssertGreaterThanOrEqual(
                     cell, EmojiPanel.minimumCellHeight,
                     "key \(keyHeight), spacing \(spacing) gives a \(cell)pt cell")
             }
+        }
+    }
+
+    /// **The category strip is shorter than the key it is modelled on, and the
+    /// grid above it takes every point.** The panel's own height is fixed by
+    /// `KeyboardView.panelCovers(rowID:)`, so this is the only way an emoji gets
+    /// bigger without the keyboard growing past the fingerprint cliff.
+    ///
+    /// The equal-height strip is the build these reject, so `lessThan` is what
+    /// does the work — comparing the grid to `panel - strip` is true of any strip
+    /// height at all, including the old one.
+    func testTheCategoryStripIsShorterThanAKeySoTheGridIsTaller() {
+        let key = Theme.Metrics.keyHeight
+        let strip = EmojiPanel.categoryRowHeight(forKeyHeight: key)
+        XCTAssertLessThan(strip, key, "the strip is still a full key tall")
+
+        // What the shipped panel actually measures: three letter rows and two
+        // gaps, less the strip. Four rows either way — the height buys taller
+        // cells rather than a fifth row, which is what `rowCount` says spare
+        // height is for.
+        let panel = key * 3 + Theme.Metrics.rowSpacing * 2
+        let grid = panel - strip
+        XCTAssertEqual(EmojiPanel.rowCount(forGridHeight: grid), 4)
+        XCTAssertGreaterThan(
+            grid / 4, (panel - key) / 4,
+            "the cells did not grow, so the strip gave nothing away")
+
+        // **Landscape is the clamp, not the rule.** Its key is 26pt, under the
+        // 30pt floor, and a bare floor would draw a strip *taller* than the row
+        // it is modelled on out of a panel that is only about 86pt.
+        XCTAssertEqual(
+            EmojiPanel.categoryRowHeight(forKeyHeight: Theme.Metrics.Landscape.keyHeight),
+            Theme.Metrics.Landscape.keyHeight,
+            "landscape's strip grew instead of staying put")
+        // And the shortest keyboard the editor can build stops at the floor
+        // rather than following the key down.
+        XCTAssertEqual(
+            EmojiPanel.categoryRowHeight(
+                forKeyHeight: LayoutGeometry.keyHeightRange.lowerBound), 30)
+    }
+
+    /// **`123` on the bottom row is drawn under an open grid, and for the whole
+    /// life of that arrangement it did nothing a user could see.** The row is
+    /// deliberately outside the panel's stack (`panelCovers(rowID:)`), so the key
+    /// stayed tappable and moved `plane` behind the grid — redrawing rows nobody
+    /// could see while the emoji sat exactly where they were.
+    ///
+    /// Asserting on `plane` alone passes against the broken build, which is the
+    /// trap here: the plane always moved. The overlay is what has to close.
+    @MainActor
+    func testTappingNumbersFromTheEmojiGridLeavesTheGrid() {
+        // Opening the clip list reads the pasteboard into the App Group, which
+        // this simulator hands the test target for real. Same guard every test
+        // in `CopyClipModeTests` carries.
+        let clips = SharedStore.shared.copyclipRecord
+        defer { SharedStore.shared.copyclipRecord = clips }
+        let controller = KeyboardController(target: MockTextTarget())
+        controller.show(.emoji)
+        XCTAssertEqual(controller.overlay, .emoji)
+
+        controller.press(.plane(.numbers, label: "123"))
+        XCTAssertEqual(controller.plane, .numbers)
+        XCTAssertEqual(
+            controller.overlay, KeyboardOverlay.none,
+            "the digits arrived behind the grid that was covering them")
+
+        // **The CopyClip list is answered by the same line**, and it has to be:
+        // `KeyboardView.dropsBottomRow` only drops this key when the key that
+        // closes the list is in the action row, so a user who moved CopyClip down
+        // here would otherwise meet the same invisible switch.
+        controller.show(.copyclip)
+        controller.press(.plane(.numbers, label: "123"))
+        XCTAssertEqual(
+            controller.overlay, KeyboardOverlay.none,
+            "the digits arrived behind the clip list")
+
+        // **Search is the exception and it is deliberate.** The plane switch falls
+        // through `consumeForEmojiSearch` so a query can be typed in either
+        // alphabet, and closing the box would be the plane key deleting what had
+        // been typed into it. Both search states put the letters back, which is
+        // the property the branch is actually asked about.
+        for search in [KeyboardOverlay.emojiSearch, .copyclipSearch] {
+            controller.show(search)
+            controller.press(.plane(.letters, label: "ABC"))
+            XCTAssertEqual(controller.plane, .letters)
+            XCTAssertEqual(
+                controller.overlay, search,
+                "the plane switch closed the search box it was typed into")
         }
     }
 

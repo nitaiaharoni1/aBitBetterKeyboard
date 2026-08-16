@@ -29,9 +29,10 @@ struct LayoutGeometrySection: View {
             SectionHeader(title: "Size and rows")
             Card {
                 VStack(spacing: Theme.Space.sm) {
-                    // Without this, three sliders reading "43pt" sit directly
-                    // above one reading "12pt" and nothing says the first three
-                    // are heights and the fourth is the gap between them.
+                    // Without this, three sliders reading "44pt", "39pt" and
+                    // "44pt" sit directly above one reading "12pt" and nothing
+                    // says the first three are heights and the fourth is the gap
+                    // between them.
                     Text("Row height")
                         .font(Theme.Fonts.caption)
                         .foregroundStyle(Theme.Text.secondary)

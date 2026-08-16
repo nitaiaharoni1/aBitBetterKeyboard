@@ -37,7 +37,7 @@ extension KeyView {
     /// **The key does not grow with Dynamic Type — only the user's own choice
     /// in the layout editor does that (`LayoutGeometry.RowBand`) — so growth
     /// has to saturate short of the cap, or the glyph collides with the row
-    /// above and below it.** The shipped default (43pt key, a 22-25pt glyph)
+    /// above and below it.** The shipped default (44pt key, a 22-25pt glyph)
     /// sits at roughly half its height; 0.75 leaves real room to grow before
     /// it saturates and still clears the rounded corner at every height
     /// `LayoutGeometry.keyHeightRange` allows (36...56).
@@ -93,7 +93,7 @@ extension KeyView {
         // **The height ceiling must never fall below `base`.** The numbers and
         // symbols planes squeeze a fourth row into the letters plane's
         // three-row block (`Theme.Metrics.fittedKeyHeight`), which ships at
-        // roughly 29pt against a 43pt letter key — well under `base *
+        // roughly 30pt against a 44pt letter key — well under `base *
         // heightFraction`. Without the floor, a digit key would render
         // *smaller* than it does today the moment this runs at the system
         // default (`.large`, where `scaled == base`). A row that is already

@@ -28,10 +28,52 @@ public struct EmojiPanel: View {
 
     @ObservedObject var controller: KeyboardController
 
-    /// The keyboard's own key height, so the category row is the same size as the
-    /// bottom row it is modelled on. Passed in because it is a user setting —
-    /// `LayoutGeometry.keyHeight` moves between 36 and 56.
+    /// The keyboard's own key height, which the category row is modelled on.
+    /// Passed in because it is a user setting — `LayoutGeometry.keyHeight` moves
+    /// between 36 and 56. What the row is actually drawn at is
+    /// `categoryRowHeight(forKeyHeight:)`.
     let keyHeight: CGFloat
+
+    /// How tall the category strip is drawn, given the keyboard's own key height.
+    ///
+    /// **Six points shorter than a key, and the grid above takes every one of
+    /// them.** The panel's own height is fixed — it fills the block the letter
+    /// rows occupy and nothing here can change that (see `KeyboardView
+    /// .panelCovers(rowID:)`) — so `gridHeight` is whatever this row does not
+    /// take, and shortening it is the only way an emoji gets bigger without the
+    /// keyboard growing past the 368 pt fingerprint cliff.
+    ///
+    /// **This row can afford it and the bottom row underneath cannot**, which is
+    /// why the two no longer match. Ten tabs and a delete key is a row of
+    /// signposts: a tab is aimed at once, deliberately, and a miss scrolls the
+    /// strip to the wrong section rather than typing the wrong thing into
+    /// somebody's message. The space row below it is keys.
+    ///
+    /// It does not usually buy a row — at the shipped size the grid goes from 110
+    /// to 118 pt against `minimumCellHeight`'s 26, still four — it makes the four
+    /// cells taller, which is what `rowCount(forGridHeight:)` says the panel wants
+    /// from spare height in the first place.
+    ///
+    /// **Two clamps, and the upper one is landscape.** The 30 pt floor is for the
+    /// shortest keyboard the editor can build; `min(keyHeight, …)` is because
+    /// landscape's key is 26 pt (`Theme.Metrics.Landscape.keyHeight`), where a
+    /// bare floor would make this row *taller* than the row it is modelled on and
+    /// take 4 pt off a grid that is only about 60 pt to begin with. Below 30 pt
+    /// the strip simply stays a key tall and gives nothing away.
+    ///
+    /// **Measured, both what it buys and what it costs.** The grid goes 110 → 118
+    /// pt, the cell 27.5 → 29.5, and the emoji itself 21.45 → 23.0, a 7% gain;
+    /// the tallest tab glyph at `Theme.Glyph.font(19)` is 25 pt (`fork.knife`,
+    /// `lightbulb`), so 38 pt clears every one of them by 13. The cost is the
+    /// target: a tab is **34 × 38** on a 402 pt phone and `KeyStyleButton` puts
+    /// its `contentShape` on its own frame, so the gap below absorbs nothing and
+    /// a low tap misses. Both axes were already under `minTouchTarget` and the
+    /// consequence of a miss here is a strip scrolled to the wrong section, not a
+    /// character in somebody's message, which is the whole reason this is the row
+    /// that pays.
+    static func categoryRowHeight(forKeyHeight keyHeight: CGFloat) -> CGFloat {
+        min(keyHeight, max(30, keyHeight - 6))
+    }
 
     /// **How many rows fit, rather than a number.** It was a hardcoded five, on
     /// the argument that five is a floor rather than a taste: four is what the
@@ -42,13 +84,13 @@ public struct EmojiPanel: View {
     /// height. The panel used to be 208 pt because it covered the letter rows
     /// *and* the space row; it covers only the letter rows now — see
     /// `KeyboardView.panelCovers(rowID:)` — so the grid under the category strip
-    /// is 110 pt in portrait and **60 pt in landscape**, where the whole keyboard
+    /// is 118 pt in portrait and **60 pt in landscape**, where the whole keyboard
     /// is 116. Five rows of a 60 pt grid is a 12 pt cell holding a 9 pt emoji.
     /// Landscape was already the worst case at 18 pt and a fixed count would have
     /// taken it to 15.
     ///
     /// So the cell height is what is held steady and the count is what gives:
-    /// every configuration lands between 27 and 33 pt a cell instead of swinging
+    /// every configuration lands between 26 and 32 pt a cell instead of swinging
     /// from 15 to 44. Portrait's default takes four, a number row or a tall
     /// `keyHeight` takes five back, and landscape takes two — which is more emoji
     /// on screen than five rows of specks, because what this panel gives is the
@@ -120,7 +162,8 @@ public struct EmojiPanel: View {
         GeometryReader { geo in
             let columns = max(1, (geo.size.width / Self.targetCellWidth).rounded())
             let cellWidth = geo.size.width / columns
-            let gridHeight = max(0, geo.size.height - keyHeight)
+            let stripHeight = Self.categoryRowHeight(forKeyHeight: keyHeight)
+            let gridHeight = max(0, geo.size.height - stripHeight)
             let wanted = Self.rowCount(forGridHeight: gridHeight)
             // The cells on screen divide the height they were built for, not the
             // height that has just been measured. They are the same number every
@@ -138,7 +181,7 @@ public struct EmojiPanel: View {
 
                 EmojiCategoryRow(
                     selected: selectedCategory,
-                    height: keyHeight,
+                    height: stripHeight,
                     isRightToLeft: controller.language.isRightToLeft,
                     // The section's *first cell*, not the section. `ForEach(sections)`
                     // gives the loop its identity but puts no view on screen with
@@ -491,6 +534,8 @@ struct LeadingEmojiCategoryKey: PreferenceKey {
 struct EmojiCategoryRow: View {
 
     let selected: String
+    /// `EmojiPanel.categoryRowHeight(forKeyHeight:)`, which is shorter than the
+    /// key it is modelled on so the grid above can be taller.
     let height: CGFloat
     let isRightToLeft: Bool
     let onSelect: (String) -> Void

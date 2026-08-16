@@ -194,8 +194,53 @@ final class CustomLayoutTests: XCTestCase {
 
     func testDefaultGeometryMatchesTheShippedMetrics() {
         XCTAssertEqual(KeyboardCustomization.default.geometry.keyHeight, Theme.Metrics.keyHeight)
+        XCTAssertEqual(
+            KeyboardCustomization.default.geometry.actionRowHeight, Theme.Metrics.actionRowHeight)
+        XCTAssertEqual(
+            KeyboardCustomization.default.geometry.bottomRowHeight, Theme.Metrics.keyHeight,
+            "the space row is a key, and `keyAreaHeight`'s four-row arithmetic reads it as one")
         XCTAssertEqual(KeyboardCustomization.default.geometry.rowSpacing, Theme.Metrics.rowSpacing)
         XCTAssertEqual(KeyboardCustomization.default.geometry.reach, .full)
+    }
+
+    /// **The letter keys took a point each and the action row paid for all four.**
+    ///
+    /// The total may not grow — see
+    /// `testTheShippedLayoutStillFitsUnderTheFingerprintCliff` — so a taller key
+    /// is a transfer or it is nothing. Four rows carry `keyHeight` (three letters
+    /// and the space row) and 215 is what those four plus the action row summed
+    /// to before and after, which is the assertion the equal-height keyboard
+    /// fails: comparing each band to itself is true of any heights at all.
+    ///
+    /// The action row is the row that can afford it: five keys chosen one at a
+    /// time with the eye on them, each far wider than a letter, against a grid a
+    /// thumb hits at speed.
+    func testTheShorterActionRowPaysForTheTallerLetterKeys() {
+        let geometry = KeyboardCustomization.default.geometry
+        XCTAssertLessThan(
+            geometry.height(.action), geometry.height(.letters),
+            "an equal-height action row is the keyboard this transfer replaced")
+        XCTAssertEqual(
+            geometry.height(.letters) * 4 + geometry.height(.action), 215, accuracy: 0.001,
+            "the taller keys were not paid for, so the keyboard grew")
+        XCTAssertTrue(
+            LayoutGeometry.keyHeightRange.contains(geometry.height(.action)),
+            "the editor's height rail now fires on a keyboard nobody has touched")
+
+        // **The balance is the default's and only the default's**, because
+        // `keyAreaHeight(for:)` multiplies `keyHeight` by the rows a layout
+        // actually draws: the number row puts a fifth row on the taller number
+        // and an emptied `cursorRow` leaves nothing to take the four points off.
+        // Both are the user's own trade and both stay far the right side of the
+        // rail — the first was already ~50pt past it, the second sheds a whole
+        // band — so what is pinned is that the *default* did not move.
+        XCTAssertEqual(Theme.Metrics.keyAreaHeight(for: .default), 271, accuracy: 0.001)
+        var noActionRow = KeyboardCustomization.default
+        noActionRow.cursorRow = []
+        XCTAssertLessThan(
+            Theme.Metrics.totalHeight(for: noActionRow),
+            LayoutValidator.screenContextHeightLimit,
+            "shedding the action row and keeping its four points crossed the cliff")
     }
 
     func testRowCountFollowsTheOptionalRows() {

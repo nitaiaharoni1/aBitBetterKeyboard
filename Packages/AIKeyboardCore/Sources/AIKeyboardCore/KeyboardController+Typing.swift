@@ -68,7 +68,36 @@ extension KeyboardController {
         case .backspace:
             deleteBackward()
         case .plane(let destination, _):
-            Feedback.modifierPress()
+            // **A plane the user cannot see is not a plane they switched to.**
+            // `123` sits beside Emoji on the bottom row, which is the one row a
+            // panel may not cover, so it stays tappable while the grid is up —
+            // and tapping it moved `plane` behind the grid, redrawing rows nobody
+            // could see and leaving the emoji exactly where they were. The key
+            // answered nothing. Asking for the digits is asking to type, so the
+            // grid closes and the plane arrives on screen together.
+            //
+            // **`showsLetterKeys` is the question, not a list of overlays**, and
+            // the difference is a keyboard a user can build: `KeyboardView+Keys`
+            // usually drops this row while the CopyClip list is open, but only
+            // when the key that closes the list is in the action row, so somebody
+            // who moved CopyClip down here keeps `123` under the panel and would
+            // meet the same invisible switch. The panels that hide the letters
+            // are exactly the panels a plane switch has to close.
+            //
+            // The two search states are deliberately not among them: they put the
+            // letters back, and `consumeForEmojiSearch` lets the plane switch
+            // through on purpose so a query can be typed in either alphabet —
+            // closing the box here would be this key deleting what was typed
+            // into it.
+            //
+            // `show(.none)` fires the modifier haptic itself, so this key takes
+            // its own in the `else` or it buzzes twice for one tap, which is the
+            // defect `case .emoji` below records.
+            if overlay.showsLetterKeys {
+                Feedback.modifierPress()
+            } else {
+                show(.none)
+            }
             withAnimation(Theme.Motion.quick) { plane = destination }
         case .globe:
             Feedback.modifierPress()

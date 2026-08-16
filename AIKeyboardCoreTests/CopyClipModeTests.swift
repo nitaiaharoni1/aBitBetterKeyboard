@@ -25,6 +25,51 @@ final class CopyClipModeTests: XCTestCase {
         XCTAssertFalse(KeyboardOverlay.copyclipSearch.showsActionRow)
     }
 
+    /// **The space row is dropped while the list is open, and the list takes its
+    /// height.** `123`, Emoji, space, the full stop and return are drawn under
+    /// the emoji grid because the grid's own way out is among them; nothing in
+    /// that row closes the CopyClip list, and the two controls the list wants —
+    /// undo and delete — are `CopyClipControlRow` inside the panel. So the row
+    /// was five keys costing the clips a row and a half of height.
+    ///
+    /// **The way out is what is asserted, not the row.** The editor lets a user
+    /// move CopyClip anywhere; a build that dropped the row unconditionally would
+    /// strand somebody who had put it on the bottom row, which is the defect
+    /// `KeyboardCustomization.actionRow` records happening to Emoji.
+    func testTheSpaceRowIsDroppedWhileTheCopyClipListIsOpen() {
+        let layout = KeyboardCustomization.default
+        XCTAssertTrue(
+            KeyboardView.dropsBottomRow(overlay: .copyclip, layout: layout),
+            "the space row is still drawn under the clips it is crowding")
+        XCTAssertTrue(
+            layout.cursorRow.contains { $0.action == .copyclip },
+            "the row is dropped on the strength of an exit that is not there")
+        XCTAssertTrue(KeyboardOverlay.copyclip.showsActionRow)
+
+        // Every other state keeps the row. Search needs a space bar and a return
+        // key under the letters it puts back; the emoji grid needs `אבג`.
+        for overlay in [KeyboardOverlay.none, .copyclipSearch, .emoji, .emojiSearch] {
+            XCTAssertFalse(
+                KeyboardView.dropsBottomRow(overlay: overlay, layout: layout),
+                "\(overlay) dropped the row it types with")
+        }
+
+        // A user who moved CopyClip into the bottom row keeps the row, or the
+        // panel would be drawn over the only key that closes it.
+        var moved = layout
+        moved.cursorRow = layout.cursorRow.filter { $0.action != .copyclip }
+        moved.bottomRow.append(SlotSpec(action: .copyclip))
+        XCTAssertFalse(
+            KeyboardView.dropsBottomRow(overlay: .copyclip, layout: moved),
+            "the list dropped the row holding the key that closes it")
+
+        // Landscape sheds `cursorRow` outright, so the same line keeps the row
+        // there without knowing anything about orientation.
+        XCTAssertFalse(
+            KeyboardView.dropsBottomRow(
+                overlay: .copyclip, layout: Theme.Metrics.landscapeLayout(basedOn: layout)))
+    }
+
     func testInsertClipWritesTheDocumentAndLeavesThePanelOpen() {
         let before = SharedStore.shared.copyclipRecord
         defer { SharedStore.shared.copyclipRecord = before }

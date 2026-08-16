@@ -120,7 +120,7 @@ final class DynamicTypeScalingTests: XCTestCase {
     /// A compressed row must not shrink because of Dynamic Type, only fail to
     /// grow. The numbers/symbols plane squeezes a fourth row into the letters
     /// plane's three-row block (`Theme.Metrics.fittedKeyHeight`), which ships
-    /// at roughly 29pt against a 43pt letter key — under `base *
+    /// at roughly 30pt against a 44pt letter key — under `base *
     /// characterHeightCeiling` (25 * 0.75 ≈ 18.75) even before Dynamic Type
     /// touches it. A version that applied the height ceiling with no floor at
     /// `base` returns *less* than `base` here at the system default, which
@@ -128,9 +128,10 @@ final class DynamicTypeScalingTests: XCTestCase {
     /// today's digit keys, not a Dynamic Type behaviour at all.
     func testACompressedRowDoesNotShrinkAtTheSystemDefault() {
         let fittedHeight = Theme.Metrics.fittedKeyHeight(
-            slidingRows: 4, referenceRows: 3, keyHeight: 43, rowSpacing: 12)
+            slidingRows: 4, referenceRows: 3, keyHeight: Theme.Metrics.keyHeight,
+            rowSpacing: Theme.Metrics.rowSpacing)
         XCTAssertLessThan(
-            fittedHeight, 43 * KeyView.characterHeightCeiling,
+            fittedHeight, Theme.Metrics.keyHeight * KeyView.characterHeightCeiling,
             "the fixture should exercise the compressed case")
         let atDefault = KeyView.scaledGlyphSize(
             base: 25, dynamicTypeSize: .large, width: 100, height: fittedHeight)

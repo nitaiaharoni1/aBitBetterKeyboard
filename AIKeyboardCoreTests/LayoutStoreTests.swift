@@ -130,7 +130,7 @@ final class LayoutStoreTests: XCTestCase {
     /// silent in opposite directions — decoding the missing keys as required
     /// throws, which drops a tuned layout back to the shipped default on the
     /// next launch, and defaulting them to `Theme.Metrics.keyHeight` reshapes a
-    /// Compact keyboard's action and space rows to 43 pt behind the user's back.
+    /// Compact keyboard's action and space rows to 44 pt behind the user's back.
     /// The rule is that a missing key means "this row matched the letters",
     /// because that is the only keyboard the old model could describe.
     ///
@@ -161,10 +161,10 @@ final class LayoutStoreTests: XCTestCase {
         XCTAssertEqual(geometry.keyHeight, letterHeight, accuracy: 0.001)
         XCTAssertEqual(
             geometry.height(.action), letterHeight, accuracy: 0.001,
-            "an old layout's action row was its letter height, not the shipped 43")
+            "an old layout's action row was its letter height, not the shipped 39")
         XCTAssertEqual(
             geometry.height(.bottom), letterHeight, accuracy: 0.001,
-            "an old layout's space row was its letter height, not the shipped 43")
+            "an old layout's space row was its letter height, not the shipped 44")
     }
 
     /// **The keyboard is a second process.** `load()` fills the published copy

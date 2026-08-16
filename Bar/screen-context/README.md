@@ -122,7 +122,9 @@ harness builds the near pairs instead: seven renders per scene.
 renders are the same two tests asked of the state a reading is *actually* measured in: a
 reading exists only because the user tapped Reply on our keyboard, so our keyboard is on
 screen for the whole five-second read, repainting three shimmer lines at 60 Hz. On an
-iPhone 17 Pro it covers 292 pt of 874 pt — 33.4% of the fingerprint band.
+iPhone 17 Pro it covers 365 pt of 874 pt — 41.8% of the fingerprint band. (292 pt was
+the keyboard of the day this was measured; the rows added since are what moved it, and
+`FrameReduction.Band.maximumOwnUI` is the 368 pt line it may not cross.)
 
 Measured 2026-08-08, SHA-256 of the 32x64 reduction:
 
@@ -176,10 +178,16 @@ on one phone does not automatically fit in the other on another — and the
 landscape screen height is the phone's *portrait width*, which ranges from 375 to
 440 across the phones the `iOS 17` floor still reaches.
 
-Landscape spends 166 pt (`Theme.Metrics.Landscape`: no banner at any
-`showsBanner`, a 30 pt bar, a 136 pt key area). The budget is `0.4210526 × H`.
-Break-even is **394.25 pt**, so 375, 390 and 393 pt landscape screens are all over
-it. `renderLandscape` puts our landscape keyboard on the same 30 scenes — no
+Landscape spends 154 pt (`Theme.Metrics.Landscape`: no banner at any
+`showsBanner`, a 30 pt bar, a 124 pt key area). The budget is `0.4210526 × H`, so
+break-even is `total / 0.4210526` = **365.75 pt**, under the 375 pt of the
+narrowest phone this still reaches and therefore clear on every one of them.
+
+**It was 166 pt until NIT-114**, where break-even was 394.25 and the 375, 390 and
+393 pt screens were all over it; `Theme.Metrics.Landscape.rowSpacing` paying 12 pt
+out of the row gap is what closed it, and
+`LandscapeGeometryTests.testTheLandscapeKeyboardFitsUnderTheCapOnEveryWidthItShipsTo`
+is what holds it. `renderLandscape` puts our landscape keyboard on the same 30 scenes — no
 banner, the action row's five controls as chips on the bar, and `ControlSweep`
 running on the Reply chip, which is what animates for the whole of a read once
 the banner is gone.

@@ -222,14 +222,23 @@ public struct LayoutGeometry: Codable, Equatable, Sendable {
     public var reach: Reach
 
     /// **36pt is the floor, not `Theme.Metrics.minTouchTarget`'s 44.** The
-    /// keyboard already ships at 43, so a rail set at Apple's comfortable minimum
-    /// would fire on the untouched default, and a rail that fires on the default
-    /// is noise rather than a rail.
+    /// keyboard ships at 44 for the letters and **39 for the action row**, so a
+    /// rail set at Apple's comfortable minimum would fire on the untouched
+    /// default, and a rail that fires on the default is noise rather than a rail.
+    /// The action row is the band that makes that concrete now rather than a
+    /// hypothetical: it is 3pt off this floor by design.
     public static let keyHeightRange: ClosedRange<CGFloat> = 36...56
     public static let rowSpacingRange: ClosedRange<CGFloat> = 8...16
 
     /// Today's `Theme.Metrics` values, so the shipped default is a no-op.
-    public static let `default` = LayoutGeometry(keyHeight: 43, rowSpacing: 12, reach: .full)
+    ///
+    /// Spelled out rather than read from `Theme.Metrics`, so
+    /// `testDefaultGeometryMatchesTheShippedMetrics` is comparing two numbers
+    /// somebody had to keep in step rather than one number with itself. The
+    /// action row is shorter than the letters on purpose; `Theme.Metrics
+    /// .actionRowHeight` carries the arithmetic that keeps the total unmoved.
+    public static let `default` = LayoutGeometry(
+        keyHeight: 44, rowSpacing: 12, reach: .full, actionRowHeight: 39)
 
     public func height(_ band: RowBand) -> CGFloat {
         switch band {
