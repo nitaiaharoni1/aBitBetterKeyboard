@@ -360,7 +360,11 @@ extension KeyboardController {
     }
 
     /// Apostrophe, hyphen, maqaf, geresh, gershayim, Catalan interpunt, ZWNJ.
-    private static func staysInsideWord(_ character: Character) -> Bool {
+    ///
+    /// Not private: `selectedWord` asks the same question of the character after
+    /// a selection, and two lists of the marks that live inside a word is one
+    /// list that can disagree with itself about Hebrew's geresh.
+    static func staysInsideWord(_ character: Character) -> Bool {
         "'’-\u{05BE}\u{05F3}\u{05F4}\u{00B7}\u{200C}".contains(character)
     }
 

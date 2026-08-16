@@ -18,6 +18,47 @@ extension KeyboardController {
         return String(before.reversed().prefix { !$0.isWhitespace }.reversed())
     }
 
+    /// The word the suggestion bar is scoring: a whole word the host has
+    /// selected, otherwise the partial word behind the cursor.
+    ///
+    /// **Double-tapping a word is how a person asks "what else could this be",
+    /// and the bar used to answer about something else entirely.** With a range
+    /// selected, `documentContextBeforeInput` stops at the *start* of it, so
+    /// `currentWordPrefix` is whatever run of characters sits in front of the
+    /// selection — usually nothing at all, which scored the bar as if a new word
+    /// were being started in the middle of a sentence.
+    public var wordUnderConsideration: String { selectedWord ?? currentWordPrefix }
+
+    /// The selection, when it is exactly one whole word and nothing else.
+    ///
+    /// Three boundary tests, because a selection that is *part* of a word is a
+    /// different question and any answer to it would be typed over half a word:
+    /// the selection is one token, nothing is joined to its leading end, and
+    /// nothing is joined to its trailing end. `wordCore` is what asks the
+    /// leading question, not `isEmpty` — an opening bracket or quote in front of
+    /// the selection is not a word joined to it, and `("recieve")` is the
+    /// ordinary way a misspelling arrives wearing marks it does not own.
+    /// `staysInsideWord` asks the trailing one, so selecting `don` out of
+    /// `don't` is refused for the same reason typing an apostrophe does not
+    /// finish a word.
+    ///
+    /// A selection that is nothing but punctuation has no core to look up and is
+    /// not a word either: `wordCore` answers `""` for it, and `""` is a prefix of
+    /// every entry in every list this engine reads — the same trap `comparable`'s
+    /// callers already guard.
+    var selectedWord: String? {
+        guard let selection else { return nil }
+        guard !selection.contains(where: { $0.isWhitespace || $0.isNewline }) else { return nil }
+        guard !SuggestionEngine.wordCore(selection).isEmpty else { return nil }
+        guard SuggestionEngine.wordCore(currentWordPrefix).isEmpty else { return nil }
+        if let next = contextAfter.first,
+            next.isLetter || next.isNumber || KeyboardController.staysInsideWord(next)
+        {
+            return nil
+        }
+        return selection
+    }
+
     /// Trailing whitespace plus the non-whitespace run in front of it.
     ///
     /// **A hold has to take the spaces with the word, or it stalls.** One
@@ -109,8 +150,21 @@ extension KeyboardController {
     /// Swaps the partial word behind the cursor for a candidate.
     func replaceCurrentWord(with replacement: String) {
         if selection != nil {
+            // One backspace takes the whole selection, and the marks it was
+            // wearing go with it: the engine was asked about `wordCore`, so the
+            // candidate for a selected `Nitai's` is `Nitai` and inserting it
+            // bare deletes the possessive. The same rule the caret path below
+            // follows, asked of the selection instead of the keystrokes.
+            //
+            // **Only for a whole selected word.** "Which marks did this word
+            // wear" has no answer for a range spanning two of them: `wordCore`
+            // trims the full stop off a selected `hello world.` and the mark
+            // would come back glued to a one-word candidate. Read before the
+            // delete, which is what clears the selection.
+            let word = selectedWord
             target?.deleteBackward()
-            target?.insertText(replacement)
+            target?.insertText(
+                word.map { Self.restoringEdgeMarks(of: $0, to: replacement) } ?? replacement)
             return
         }
         let typed = currentWordPrefix

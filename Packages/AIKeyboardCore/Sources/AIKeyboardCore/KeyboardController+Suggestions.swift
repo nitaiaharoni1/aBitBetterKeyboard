@@ -36,9 +36,22 @@ extension KeyboardController {
             dropIdleTypingIfStale()
             return
         }
-        let prefix = currentWordPrefix
+        // A whole word the host has selected is scored in place of the word
+        // behind the cursor — with a range selected there is nothing being typed,
+        // and `documentContextBeforeInput` stops in front of the selection, so
+        // the two never overlap. See `selectedWord`, which costs one `selectedText`
+        // read and nothing else when there is no selection.
         let before = contextBefore
-        let context = prefix.isEmpty ? before : String(before.dropLast(prefix.count))
+        // Held rather than re-read: every one of these is a call into the host,
+        // this function runs on every keystroke, and the local tier's whole
+        // budget is about a millisecond.
+        let typed = currentWordPrefix
+        let selected = selectedWord
+        let prefix = selected ?? typed
+        // Everything in front of what is being scored. A selection is not part of
+        // the before-context at all, and `selectedWord` refuses one with a word
+        // joined to its leading end, so this drops nothing in that case.
+        let context = String(before.dropLast(typed.count))
         let results = SuggestionEngine.suggestions(
             prefix: prefix,
             context: context,
@@ -47,7 +60,11 @@ extension KeyboardController {
             personal: personal
         )
         suggestions = pinningDefaultToTypedIfNeeded(results, prefix: prefix)
-        askForRefinement(prefix: prefix, context: context)
+        // **Not for a selection.** The async tier predicts what somebody typing
+        // is about to type, and nobody is typing; `applyRefinement` would drop
+        // the answer anyway, because the prefix it hands back is not
+        // `currentWordPrefix`.
+        if selected == nil { askForRefinement(prefix: prefix, context: context) }
         dropIdleTypingIfStale()
     }
 
@@ -56,12 +73,26 @@ extension KeyboardController {
     /// is not allowed: Autocorrect is off, or the user is backspacing through
     /// this word. Next-word suggestions (empty prefix) are never auto-committed
     /// anyway; leave their middle bold alone.
+    ///
+    /// **A selection has no default at all, which is a third answer rather than
+    /// a harder version of the second.** Over a range the space bar types a
+    /// space, the way it does on the system keyboard (`insertSpace` refuses the
+    /// commit there), so no candidate is "inserted when you press space" and
+    /// none may be drawn as if it were. Pinning slot 0 the way the other two
+    /// reasons do would not do that job here: slot 0 *is* the selected word, so
+    /// under any rule that draws the default it comes back at the user, bold, in
+    /// the middle slot. The word is already in the field and highlighted in it;
+    /// the bar's three slots are for the words that could take its place.
     private func pinningDefaultToTypedIfNeeded(
         _ results: [Suggestion], prefix: String
     )
         -> [Suggestion]
     {
-        if !prefix.isEmpty, !store.storedAutocorrect || isCorrectingWordByHand {
+        guard !prefix.isEmpty else { return results }
+        if selection != nil {
+            return results.map { Suggestion(text: $0.text, language: $0.language) }
+        }
+        if !store.storedAutocorrect || isCorrectingWordByHand {
             return SuggestionEngine.markDefault(results, at: 0)
         }
         return results
@@ -369,16 +400,34 @@ extension KeyboardController {
         // and `press(_:)` is where every other one gets its click.
         Feedback.keyClick(.tock)
         endGroupedWord()
+        // Read before the replacement, because it is the replacement that clears
+        // the selection.
+        let overSelectedWord = selectedWord != nil
         replaceCurrentWord(with: suggestion.text)
         // The candidate may already carry a mark (`hello,`). The space-bar path
         // skips a word that is already terminated so `hello.` + space does not
         // count twice; a tap is the first time this word is committed.
         recordCommittedWord(SuggestionEngine.wordCore(suggestion.text))
-        target?.insertText(" ")
-        lastLearnedFolded = nil
-        // Committed on purpose, so the hand repair this word may have been under is
-        // over — the same line `insertSpace` ends on, for the same reason.
-        deletedWordPrefix = nil
+        if overSelectedWord {
+            // **No space, because a selected word is repaired in place.** The
+            // spacing around it is already in the field, and `I recieve it` would
+            // come back `I receive  it`. Nothing is being finished here either:
+            // the caret is sitting in the middle of somebody's sentence.
+            //
+            // A word picked over a selection is hand-placed, exactly as one
+            // reached through the accents popup is, so the next space must not
+            // overrule it — see `isCorrectingWordByHand`. Read out of the field
+            // rather than taken from the candidate, because `replaceCurrentWord`
+            // may have given it back a mark the candidate did not carry.
+            deletedWordPrefix = currentWordPrefix
+        } else {
+            target?.insertText(" ")
+            lastLearnedFolded = nil
+            // Committed on purpose, so the hand repair this word may have been
+            // under is over — the same line `insertSpace` ends on, for the same
+            // reason.
+            deletedWordPrefix = nil
+        }
         pendingAutocorrectUndo = nil
         refreshSuggestions()
         reportInteraction(.suggestion)

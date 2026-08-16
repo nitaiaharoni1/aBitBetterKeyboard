@@ -221,13 +221,20 @@ public struct SuggestionBar: View {
     /// find the keystrokes. The typed echo is not drawn: it is already in the
     /// field. Only the drawing order changes here.
     private var suggestions: some View {
+        // `wordUnderConsideration`, not `currentWordPrefix`: the echo the bar
+        // drops is whatever the engine was scored on, and for a selected word
+        // that is the selection. Drawing it would spend a slot on a tap that
+        // replaces a word with itself.
         let slots = Self.centeredSlots(
-            controller.suggestions, typed: controller.currentWordPrefix)
+            controller.suggestions, typed: controller.wordUnderConsideration)
+        // Asked once for the whole row rather than per slot: it is a call into
+        // the host, and the three candidates are three evaluations of `candidate`.
+        let overSelectedWord = controller.selectedWord != nil
         return HStack(spacing: 0) {
             ForEach(0..<SuggestionEngine.barSlots, id: \.self) { slot in
                 if slot > 0 { candidateSeparator }
                 if let suggestion = slots[slot] {
-                    candidate(suggestion)
+                    candidate(suggestion, replacesSelection: overSelectedWord)
                         .accessibilityIdentifier("suggestion-\(slot)")
                 } else {
                     // `barHeight`, not a repeated 36: a floor taller than the row
@@ -293,7 +300,7 @@ public struct SuggestionBar: View {
         min(17 * Theme.DynamicType.scale(for: dynamicTypeSize), barHeight * 0.7)
     }
 
-    private func candidate(_ suggestion: Suggestion) -> some View {
+    private func candidate(_ suggestion: Suggestion, replacesSelection: Bool = false) -> some View {
         Button {
             controller.apply(suggestion)
         } label: {
@@ -318,7 +325,17 @@ public struct SuggestionBar: View {
         }
         .pressable(scale: 0.94)
         .accessibilityLabel(suggestion.text)
-        .accessibilityHint(suggestion.isDefault ? "Inserted when you press space" : "")
+        // **Three states, three sentences.** Over a selected word nothing is the
+        // default — space types a space over a range — so a bar that only ever
+        // explained the bold slot read out three bare words with no hint that any
+        // of them would land on the word the user had just selected. Same rule the
+        // microphone key is under: a control that gains a state gains a sentence.
+        .accessibilityHint(Self.candidateHint(suggestion, replacesSelection: replacesSelection))
+    }
+
+    static func candidateHint(_ suggestion: Suggestion, replacesSelection: Bool) -> String {
+        if replacesSelection { return "Replaces the selected word" }
+        return suggestion.isDefault ? "Inserted when you press space" : ""
     }
 
     // MARK: Rules

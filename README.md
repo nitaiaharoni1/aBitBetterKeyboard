@@ -64,6 +64,10 @@ xcrun swift-format --in-place --recursive \
   rather than mirroring for right-to-left
 - Suggestion bar with three fixed slots edge to edge; the AI actions live in a
   row above the keys, and both of the bar's ends ship empty
+- Select a whole word anywhere in the field and the bar answers about *that*
+  word: corrections for a misspelling, inflections for one that is already right
+  (`receive` offers `received` and `receiver`). A tap swaps it in place, adds no
+  space, and the next space bar does not second-guess the word you picked
 - Code-switching predictions: Latin words typed inside a Hebrew sentence get
   offered from a loanword list and tagged with the language they came from
 - Emoji panel, nine categories, plain Unicode with no bundled images
