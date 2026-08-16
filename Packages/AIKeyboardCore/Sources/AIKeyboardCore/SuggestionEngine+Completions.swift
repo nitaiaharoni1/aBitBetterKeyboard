@@ -251,17 +251,29 @@ extension SuggestionEngine {
             for: core, typedLanguage: typedLanguage, personal: personal,
             spelledOut: directCompletions)
 
-        // The endings Hebrew swaps rather than appends, for a word that is
-        // already a word.
-        if typedLanguage.script == .hebrew, let locale = checkerLocale {
+        // The other forms of a Hebrew word that is already a word. Two rules, one
+        // for what the language does regularly and one for what it does not, and
+        // they rank a tier and a half apart because a lookup is better evidence
+        // than a construction.
+        if typedLanguage.script == .hebrew {
             out +=
-                hebrewInflections(of: core, locale: locale)
+                hebrewIrregulars(of: core)
                 .enumerated()
                 .map {
                     Candidate(
-                        text: $0.element, language: typedLanguage, source: .inflection,
+                        text: $0.element, language: typedLanguage, source: .irregular,
                         ordinal: $0.offset)
                 }
+            if let locale = checkerLocale {
+                out +=
+                    hebrewInflections(of: core, locale: locale)
+                    .enumerated()
+                    .map {
+                        Candidate(
+                            text: $0.element, language: typedLanguage, source: .inflection,
+                            ordinal: $0.offset)
+                    }
+            }
         }
 
         // Latin letters inside a Hebrew sentence, ranked before the dictionary.
@@ -432,6 +444,69 @@ extension SuggestionEngine {
     /// word apart and not about building one.
     private static let hebrewInflectionEndings = ["ות", "ים", "ה", "ת", "י"]
 
+    /// Hebrew plurals that are not their singular plus an ending.
+    ///
+    /// **A lookup, deliberately, where everything else here is a rule.** `בית` →
+    /// `בתים` drops a letter and changes a vowel, `אישה` → `נשים` shares no letters
+    /// with its own singular, and `יד` → `ידיים` is a dual. Those are segholate
+    /// patterns and suppletive stems, real Hebrew morphology, and a three-slot
+    /// suggestion bar has no business modelling them. Twenty-one rows is the whole
+    /// of the problem people actually type.
+    ///
+    /// **Every row is here because it was measured missing, not because it looked
+    /// irregular.** The ending table was run over 45 candidate pairs on the iOS
+    /// 26.2 Simulator, 2026-08-16: it already reaches 22 of them — `מקום` →
+    /// `מקומות`, `חלון` → `חלונות`, `דרך` → `דרכים`, `מכונית` → `מכוניות` — because
+    /// `hebrewShapeFolded` puts the final letter back before the ending goes on, so
+    /// a word only *looks* irregular. Those 22 are not here and must not be added:
+    /// a row that duplicates the rule is a row that can disagree with it later.
+    ///
+    /// Two failures explain the 23 that did miss. Most are simply too short for the
+    /// floors that keep the rule from inventing — `בן`, `אח`, `יד` fail
+    /// `word.count >= 3`, and `בית`, `שנה`, `דלת`, `חנות` all leave a two-letter
+    /// stem once their apparent ending comes off. The rest reach the dictionary and
+    /// get the wrong answer: `אישה` is offered `אישות` and `אישים`, which are real
+    /// words and are not the plural of "woman".
+    ///
+    /// **The spellings are the corpus's, not the author's.** Modern Hebrew writes
+    /// several of these two ways, and `Resources/GroupedLexicon-he.txt` — 50,000
+    /// word forms ranked by frequency in real text — settles which: `אמהות`
+    /// (18,564) over `אימהות` (25,222), and `ידיים` / `עיניים` / `רגליים` over
+    /// `ידים` / `עינים` / `רגלים`, two of which the corpus does not contain at all.
+    ///
+    /// **`עם` and `אם` were measured, are correct, and are left out.** Their
+    /// plurals `עמים` and `אמהות` are real, but both singulars are two letters
+    /// whose commoner reading is a function word — "with" and "if" — and both
+    /// plurals sit past rank 6,000 where every other row here is inside 8,200. A
+    /// row is worth its slot when the noun reading is the likely one.
+    /// Internal rather than private so `ContextAwareSuggestionTests` can walk every
+    /// row against `UITextChecker`. A hand-written table is a place a typo ships
+    /// silently, and the language it is written in is not one most readers of this
+    /// file can proofread.
+    static let hebrewIrregularPlurals: [(singular: String, plural: String)] = [
+        ("אב", "אבות"), ("אח", "אחים"), ("אחות", "אחיות"), ("איש", "אנשים"),
+        ("אישה", "נשים"), ("בית", "בתים"), ("בן", "בנים"), ("בת", "בנות"),
+        ("גן", "גנים"), ("דלת", "דלתות"), ("חג", "חגים"), ("חנות", "חנויות"),
+        ("יד", "ידיים"), ("יום", "ימים"), ("עין", "עיניים"), ("עיר", "ערים"),
+        ("עץ", "עצים"), ("רגל", "רגליים"), ("שם", "שמות"), ("שנה", "שנים"),
+        ("שעה", "שעות")
+    ]
+
+    /// The table above read from either end, built once.
+    ///
+    /// Both directions, because the gap runs both ways and the reverse costs a
+    /// line: the same measurement showed `נשים`, `בתים` and `ימים` returning
+    /// nothing at all, where a regular plural already finds its own singular
+    /// (`פגישות` → `פגישה`) through the `ה` ending.
+    private static let hebrewIrregularForms: [String: [String]] = {
+        var out: [String: [String]] = [:]
+        for pair in hebrewIrregularPlurals {
+            out[SeedLanguageModel.fold(pair.singular), default: []].append(pair.plural)
+            out[SeedLanguageModel.fold(pair.plural), default: []].append(pair.singular)
+        }
+        return out
+    }()
+
     /// The other inflections of a Hebrew word that is already finished.
     ///
     /// **English gets this for free and Hebrew cannot, and the difference is the
@@ -492,9 +567,15 @@ extension SuggestionEngine {
     /// keystrokes* are one word, so both sides already share a long prefix; this
     /// one invents from a stem and needs the stricter floor. `בית` is the case:
     /// its `ת` looks like a feminine construct ending, stripping it leaves `בי`,
-    /// and `ביים` is a real word with nothing to do with a house. Its actual
-    /// plural is `בתים`, which no ending table reaches, and that is the honest
-    /// limit of this — it is a table of endings, not a morphological analyser.
+    /// and `ביים` is a real word with nothing to do with a house.
+    ///
+    /// **`hebrewIrregulars` is how `בית` reaches `בתים` anyway, and it is a
+    /// different function rather than a branch inside this one.** Every gate above
+    /// exists to stop this rule *inventing* a word, and a closed table of
+    /// twenty-one pairs invents nothing, so it should not have to pass tests
+    /// written for a guess: `בן`, `אח` and `יד` are two letters, which is exactly
+    /// why no rule can reach their plurals and precisely what the length floor
+    /// refuses.
     ///
     /// **The last letter goes back to its ordinary shape first.** `הולך` ends in a
     /// final kaf, and `הולך` + `ות` is not a word in any sense; `הולכ` + `ות` is
@@ -519,7 +600,22 @@ extension SuggestionEngine {
         guard !offered.isEmpty else { return [] }
         let folded = SeedLanguageModel.fold(word)
         return hebrewInflectionEndings.map { stem + $0 }
-            .filter { SeedLanguageModel.fold($0) != folded && offered.contains(SeedLanguageModel.fold($0)) }
+            .filter {
+                SeedLanguageModel.fold($0) != folded && offered.contains(SeedLanguageModel.fold($0))
+            }
+    }
+
+    /// The irregular counterparts of a Hebrew word, in either direction.
+    ///
+    /// **A separate function from `hebrewInflections`, and separate is the whole
+    /// design.** That one asks `UITextChecker` whether the word it just built
+    /// exists, needs the main actor to do it, and is held down by two length
+    /// floors — all of which are there because it *guesses*. This one reads a
+    /// closed table and guesses nothing, so it asks nothing, runs anywhere, and is
+    /// not subject to floors written for a generator. They also rank differently:
+    /// see `Source.irregular` for the measurement that separated them.
+    static func hebrewIrregulars(of word: String) -> [String] {
+        hebrewIrregularForms[SeedLanguageModel.fold(word)] ?? []
     }
 
     /// Seed-list completions, including the ones only reachable by taking a Hebrew

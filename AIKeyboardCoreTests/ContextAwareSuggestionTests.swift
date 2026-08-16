@@ -468,6 +468,81 @@ final class ContextAwareSuggestionTests: XCTestCase {
                 + "letters on the way to `בעבודה`")
     }
 
+    /// **A plural that is not its singular plus an ending, which no rule here can
+    /// build.** `בית` → `בתים` drops a letter and changes a vowel; `אישה` → `נשים`
+    /// shares no letters with its own singular.
+    ///
+    /// **Asserts the plural reaches a *drawn* slot, not merely that the lookup
+    /// returns it**, because the first version of this table did return it and the
+    /// user never saw one. Ranked at `.inflection` it lost to `בית-המשפט`,
+    /// `בן-ציון` and `שנהב` — real words out of Apple's completion list, which has
+    /// no frequency model — and fired on 5 of the 21 rows. `Source.irregular`
+    /// carries the measurement. `SuggestionEngine.barSlots` is 3, so a candidate
+    /// past index 3 in `suggestions` is a candidate nobody can tap.
+    func testAnIrregularHebrewPluralIsOfferedWhereNoEndingCouldReachIt() {
+        for (typed, wanted) in [
+            ("בית", "בתים"), ("אישה", "נשים"), ("שנה", "שנים"), ("יום", "ימים"),
+            ("בן", "בנים"), ("בתים", "בית")
+        ] {
+            let results = SuggestionEngine.suggestions(
+                prefix: typed, context: "", languages: [.hebrew, .english],
+                personal: emptyPersonal())
+            XCTAssertTrue(
+                results.map(\.text).contains(wanted),
+                "\(typed) did not offer \(wanted) in a drawn slot: \(results.map(\.text))")
+            XCTAssertEqual(
+                results.first(where: \.isDefault)?.text, typed,
+                "space replaced a finished word with its own plural: \(results.map(\.text))")
+        }
+
+        // The floor that makes the table necessary, still in place. `בית` looks
+        // like it carries a `ת` ending; stripping it leaves `בי`, and `ביים` is a
+        // real word about directing films.
+        let house = SuggestionEngine.suggestions(
+            prefix: "בית", context: "", languages: [.hebrew, .english],
+            personal: emptyPersonal())
+        XCTAssertFalse(
+            house.map(\.text).contains("ביים"),
+            "the three-letter stem floor stopped holding: \(house.map(\.text))")
+
+        // A word the ending rule already reaches is deliberately absent from the
+        // table, because a row that duplicates the rule is a row that can disagree
+        // with it later. `hebrewShapeFolded` puts the final mem back before `ות`
+        // goes on.
+        XCTAssertTrue(
+            SuggestionEngine.hebrewIrregulars(of: "מקום").isEmpty,
+            "מקומות is reachable by the ending rule and must not be in the table too")
+        XCTAssertTrue(
+            SuggestionEngine.hebrewInflections(of: "מקום", locale: "he_IL").contains("מקומות"),
+            "the ending rule stopped reaching מקומות, so the table's omission now costs a word")
+    }
+
+    /// Every row of a hand-written Hebrew table, against Apple's dictionary.
+    ///
+    /// **The one check a reader of `SuggestionEngine+Completions.swift` cannot
+    /// perform.** `hebrewIrregularPlurals` is 21 pairs of Hebrew, and a
+    /// transposed letter in one of them ships a non-word into the suggestion bar
+    /// with nothing to catch it — the exact defect NIT-129 was about, arriving
+    /// through a table instead of through morphology. `readingIsSpelledOut` and
+    /// the `offered` gate both exist to stop a *built* word being wrong and
+    /// neither is asked here, on purpose, so this is what stands in for them.
+    func testEveryIrregularPluralInTheTableIsARealHebrewWord() {
+        for (singular, plural) in SuggestionEngine.hebrewIrregularPlurals {
+            XCTAssertTrue(
+                SuggestionEngine.isKnownWord(singular, checkerLocale: "he_IL"),
+                "\(singular) is not a Hebrew word")
+            XCTAssertTrue(
+                SuggestionEngine.isKnownWord(plural, checkerLocale: "he_IL"),
+                "\(plural), the plural given for \(singular), is not a Hebrew word")
+            XCTAssertNotEqual(singular, plural, "\(singular) is its own plural")
+        }
+        // Both directions, because the gap runs both ways: a regular plural finds
+        // its own singular through the `ה` ending and an irregular one returned
+        // nothing at all.
+        XCTAssertEqual(SuggestionEngine.hebrewIrregulars(of: "אישה"), ["נשים"])
+        XCTAssertEqual(SuggestionEngine.hebrewIrregulars(of: "נשים"), ["אישה"])
+    }
+
     /// **Two real Hebrew words sharing a prefix, and space picked one of them.**
     /// `להתראות` ("goodbye") and `להתראיין` ("to be interviewed") agree for five
     /// letters, so five letters into either one the space bar inserted the other

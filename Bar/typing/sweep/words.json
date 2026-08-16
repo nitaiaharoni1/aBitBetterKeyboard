@@ -105,6 +105,22 @@
     { "word": "מכסה", "keyboard": "he_IL", "context": "איזה flows ביומיום היית ", "probes": "The bar on a real phone held `מכסהו`, `מכסהרה` and `מכסהרורי` at this word. Apple completes the invented stem `כסה` and the clitic goes back on, which is the split path's own UITextChecker call rather than the seed list; readingIsSpelledOut vetoes all of it and that call is gone." },
     { "word": "מנהל", "keyboard": "he_IL", "probes": "The one-letter stem at its worst. `מנ` is מ+נ, the commonest seed words behind nun are נכון/נחמד/נפגש, so all three drawn slots held a non-word while מנהל, Apple's own second completion, was nowhere." },
     { "word": "שולחן", "keyboard": "he_IL", "probes": "`שולח` is a real word and also שו+לחזור and שו+לחכות, so two slots were non-words and the table never appeared. The commit never moved here, which is why this sweep could not see any of it on its own: judge.py grades the bold slot and the defect was in the other two." },
-    { "word": "מחשב", "keyboard": "he_IL", "probes": "The half readingIsSpelledOut does not fix, kept so it stays visible. `מחש` offers מחשבון and מחשוב, both real words and both מ+חשבון readings, while מחשב sits below the seed and neighbour tiers. A cap on split readings was measured against this and swapped a real word for a neighbour." }
+    { "word": "מחשב", "keyboard": "he_IL", "probes": "The half readingIsSpelledOut does not fix, kept so it stays visible. `מחש` offers מחשבון and מחשוב, both real words and both מ+חשבון readings, while מחשב sits below the seed and neighbour tiers. A cap on split readings was measured against this and swapped a real word for a neighbour." },
+    { "word": "בית", "keyboard": "he_IL", "probes": "The plainest irregular plural: בתים drops a letter and changes a vowel. Its ת also looks like a feminine construct ending, so stripping it leaves the two-letter בי and the floor refuses, which is what keeps ביים (a real word, about directing films) out of the bar." },
+    { "word": "בן", "keyboard": "he_IL", "probes": "Two letters, so no rule can reach בנים. The table is checked before the length floor for exactly this shape." },
+    { "word": "שם", "keyboard": "he_IL", "probes": "Two letters and a homograph, name and there. שמות is rank 1,091 in real text, which is what earns it the slot where עמים and אמהות did not." },
+    { "word": "יד", "keyboard": "he_IL", "probes": "A dual, ידיים, not a plural. The corpus contains no ידים at all, which is how that spelling was chosen." },
+    { "word": "עין", "keyboard": "he_IL", "probes": "The other dual, and the one where the ending rule already answers: it offers עינים, so עיניים has to lead it. Reads whether the lookup wins the ordinal tie-break." },
+    { "word": "אישה", "keyboard": "he_IL", "probes": "Suppletive: נשים shares no letters with its own singular. The ending rule reaches אישות and אישים here, which are real words and are not the plural of woman, so this is the case where the table has to outrank a wrong answer rather than fill an empty slot." },
+    { "word": "איש", "keyboard": "he_IL", "probes": "The masculine half of the same suppletion, אנשים." },
+    { "word": "עיר", "keyboard": "he_IL", "probes": "A vowel change, ערים. The ending rule finds only עירה." },
+    { "word": "יום", "keyboard": "he_IL", "probes": "ימים, and the commonest word in this group by far. Watch that the bar for the first two letters is unchanged." },
+    { "word": "שנה", "keyboard": "he_IL", "probes": "Stem שנ is two letters, so the floor refuses and שנים (rank 53, one of the commonest words in the language) was unreachable." },
+    { "word": "שעה", "keyboard": "he_IL", "probes": "The same two-letter stem, שעות." },
+    { "word": "דלת", "keyboard": "he_IL", "probes": "Stripping the apparent ת ending leaves דל, so דלתות needs the table even though the ending itself is regular." },
+    { "word": "חנות", "keyboard": "he_IL", "probes": "Ends in ות already; חנויות is not that word plus anything." },
+    { "word": "נשים", "keyboard": "he_IL", "probes": "The reverse direction. A regular plural finds its own singular through the ה ending (פגישות reaches פגישה); an irregular one returned nothing at all." },
+    { "word": "בתים", "keyboard": "he_IL", "probes": "The reverse of the first entry." },
+    { "word": "מקום", "keyboard": "he_IL", "probes": "The control that must not move. hebrewShapeFolded puts the final mem back before the ending goes on, so מקומות is already reached by the rule and is deliberately absent from the table: a row that duplicates the rule is a row that can disagree with it later." }
   ]
 }

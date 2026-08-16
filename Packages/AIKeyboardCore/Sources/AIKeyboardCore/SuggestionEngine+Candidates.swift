@@ -48,6 +48,15 @@ extension SuggestionEngine {
     /// *how sure* we are, and no amount of frequency inside a weaker source should
     /// climb over a stronger one. A word the user typed into Settings by hand
     /// outranks anything Apple's dictionary has to say about it, always.
+    ///
+    /// **Numbered in tens, and `score` multiplies by 100, so a tier is still worth
+    /// the same 1000 it always was.** Every value here was one apart and the scale
+    /// had no way to say "between these two" — which is a thing this ranking needs
+    /// to say: `hebrewIrregularPlurals` is a looked-up word and belongs above the
+    /// unranked completion list and the neighbour guess, and below the frequency
+    /// prior. The alternative was reusing `.seed` for it, which throws away the
+    /// provenance this type exists to carry. No score moved when the values were
+    /// widened; `irregular` is the only new one.
     enum Source: Int, Comparable {
         /// Another ending on a Hebrew word that is already finished — `רוצה` →
         /// `רוצים`. See `SuggestionEngine.hebrewInflections`.
@@ -61,11 +70,11 @@ extension SuggestionEngine {
         /// drew a bar with empty slots because `UITextChecker` had nothing — and
         /// it makes the change safe to measure, since no moment where the bar was
         /// already full can move.
-        case inflection = -1
+        case inflection = -10
         /// `UITextChecker.guesses` — a correction, i.e. a claim the user mis-typed.
         case correction = 0
         /// `UITextChecker.completions` — a longer word starting with what was typed.
-        case checker = 1
+        case checker = 10
         /// A word list this repo wrote for Latin words inside Hebrew sentences.
         ///
         /// **Above both the checker and the seed list, and that is the entire
@@ -76,7 +85,7 @@ extension SuggestionEngine {
         /// `SuggestionEngineTests` after the first reordering. Only ever populated
         /// when the sentence around the word is Hebrew, so it cannot outrank
         /// Apple's ranking inside an English one.
-        case codeSwitch = 5
+        case codeSwitch = 50
         /// A common word one keystroke away from what was typed.
         ///
         /// **Below a completion, because it disagrees with a key that was
@@ -85,9 +94,33 @@ extension SuggestionEngine {
         /// typing out of the bar. A completion is consistent with every keystroke
         /// so far; a neighbour asserts that one of them was a mistake, which is a
         /// larger claim and needs to lose the tie.
-        case neighbour = 2
+        case neighbour = 20
+        /// A Hebrew plural no ending can build, read out of
+        /// `SuggestionEngine.hebrewIrregularPlurals`.
+        ///
+        /// **Above the completion list and the neighbour, below the frequency
+        /// prior, and every one of those three placements was measured.** At
+        /// `.inflection` — where the rule that *builds* endings correctly sits — it
+        /// filled only the slots nothing else wanted, which turned out to be 5 of
+        /// the 21 words in the table: `בית` drew `בית-המשפט`, `ביתי`, `בית-הספר`,
+        /// `בן` drew three surnames, and `שנה` drew `שנהב` ("ivory") while `שנים`
+        /// — rank 53 in 50,000 words of real Hebrew — was nowhere. Those all come
+        /// from `UITextChecker`, which has no frequency model, so a hand-checked
+        /// table of the commonest words in the language is the better evidence and
+        /// has to outrank it.
+        ///
+        /// **It is not `.seed`, and the gap below that tier is deliberate.** The
+        /// seed list carries a frequency order this table does not, so a seed word
+        /// arrives with up to 300 of rank behind it and wins; and a seed reading at
+        /// one clitic lands on exactly 2500, which is why this is 26 and not 25.
+        ///
+        /// Nothing here can be committed by the space bar. Every word in the table
+        /// is a word, and `shouldAutocorrect` refuses at `SeedLanguageModel.knows`
+        /// or at `!known` in the four-letter gate for all of them — measured as
+        /// zero commits moved across the sweep.
+        case irregular = 26
         /// The bundled seed list.
-        case seed = 3
+        case seed = 30
         /// A word already committed in this field.
         ///
         /// **Above the seed list, because the field is a better prior than the
@@ -96,17 +129,17 @@ extension SuggestionEngine {
         /// sitting in front of it. Below code-switch and learned: a word this
         /// person always types, or a Latin work-word inside a Hebrew sentence, is
         /// still a stronger claim than "it appeared once above".
-        case document = 4
+        case document = 40
         /// A word this user types often.
-        case learned = 6
+        case learned = 60
         /// Deterministic orthography: a dropped apostrophe, a Hebrew final form.
-        case orthography = 7
+        case orthography = 70
         /// The user's own dictionary, or `UILexicon`.
-        case personal = 8
+        case personal = 80
         /// The same keys on the other layout, landing on a common word.
-        case layout = 9
+        case layout = 90
         /// Exactly what was keyed. Never ranked — it is pinned to slot zero.
-        case typed = 10
+        case typed = 100
 
         static func < (lhs: Source, rhs: Source) -> Bool { lhs.rawValue < rhs.rawValue }
     }
@@ -115,7 +148,9 @@ extension SuggestionEngine {
     ///
     /// Three terms, and they are deliberately readable rather than tuned:
     ///
-    /// - **the source**, worth 1000 each, so tiers never interleave;
+    /// - **the source**, worth 1000 a tier, so tiers never interleave. `Source` is
+    ///   numbered in tens against a multiplier of 100, which is what leaves room
+    ///   for a half-step like `.irregular`;
     /// - **the sentence**, worth 400 — enough to move a candidate a full tier,
     ///   because "the word before it was `בעוד`" is stronger evidence than which
     ///   dictionary a word came out of. This is the term that puts `תור` after
@@ -135,7 +170,7 @@ extension SuggestionEngine {
     /// confidence, while still leaving `לעבו` → `לעבודה` far ahead of anything
     /// Apple's dictionary offers for the glued form.
     static func score(_ candidate: Candidate) -> Double {
-        var total = Double(candidate.source.rawValue) * 1000
+        var total = Double(candidate.source.rawValue) * 100
         if candidate.followsContext { total += 400 }
         if let rank = SeedLanguageModel.rank(of: candidate.text, in: candidate.language) {
             // Rank 0 is worth the full 300 and it decays; the exact curve does not
