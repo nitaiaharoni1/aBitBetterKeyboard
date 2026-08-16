@@ -220,11 +220,180 @@ function ownKeyboard(spec) {
 </div>`;
 }
 
+// ---------------------------------------------------------------------------
+// Landscape
+// ---------------------------------------------------------------------------
+
+/** The same iPhone 17 Pro, rotated. `Theme.Metrics` is in points and
+ *  `FrameReduction.Band.maximumOwnUI` is a *fraction*, so the short axis is the
+ *  one the cap is spent against and it is the portrait width, not the height. */
+export const LANDSCAPE_DEVICE = {
+  name: "iPhone 17 Pro (landscape)",
+  cssWidth: 874,
+  cssHeight: 402,
+  scale: 3,
+  pixelWidth: 2622,
+  pixelHeight: 1206,
+};
+
+/** `Theme.Metrics.Landscape`, in points, exactly as
+ *  `totalHeight(for:showsBanner:orientation:)` adds them up: no banner at any
+ *  `showsBanner`, a 30 pt suggestion bar, and a key area of three letter rows
+ *  plus the bottom row at 26 pt with 8 pt gaps and portrait's own 4+4 insets.
+ *
+ *  26*4 + 8*3 + 8 = 136, and 0 + 30 + 136 = 166. `LandscapeGeometryTests`
+ *  asserts both numbers; they are restated here rather than imported because
+ *  this is JavaScript, and the harness prints them so a drift is visible in the
+ *  output rather than buried. */
+export const OWN_KEYBOARD_LANDSCAPE = {
+  suggestionHeight: 30,
+  keyHeight: 26,
+  rowSpacing: 8,
+  topInset: 4,
+  bottomInset: 4,
+  get keyAreaHeight() {
+    return this.keyHeight * 4 + this.rowSpacing * 3 + this.topInset + this.bottomInset;
+  },
+  get totalHeight() {
+    return this.suggestionHeight + this.keyAreaHeight;
+  },
+  /** `SuggestionBar.chipSize(for: .landscape)`. */
+  chip: { width: 44, height: 26 },
+  /** What `CaptureIntent.ownUIHeightPermille` carries on a screen this tall. */
+  screenFraction(screenHeight = LANDSCAPE_DEVICE.cssHeight) {
+    return this.totalHeight / screenHeight;
+  },
+};
+
+/** The portrait shell, re-sized. Appended after every other block so it wins on
+ *  source order at equal specificity.
+ *
+ *  **Three things here are approximations and they are named rather than
+ *  hidden.** iOS hides the status bar on an iPhone in landscape, so it is
+ *  collapsed rather than kept at its portrait 62 pt. The app nav bars keep their
+ *  portrait heights, where a real landscape iPhone shortens them by about 12 pt
+ *  — that pushes host content *down* toward the crop, so it is the conservative
+ *  direction. And the host's own keyboard is re-sized to landscape metrics
+ *  rather than re-drawn, because what the fingerprint sees of it is a dense
+ *  patch of chrome either way. */
+const LANDSCAPE_CSS = `
+html,body{width:${LANDSCAPE_DEVICE.cssWidth}px;height:${LANDSCAPE_DEVICE.cssHeight}px}
+.screen{width:${LANDSCAPE_DEVICE.cssWidth}px;height:${LANDSCAPE_DEVICE.cssHeight}px}
+.island{display:none}
+.statusbar{flex:0 0 0;height:0;padding:0;overflow:hidden}
+.home-ind{bottom:5px;width:230px}
+.kb{padding-bottom:12px}
+.kb-sugg{height:30px}
+.kb-sugg span{font-size:14px}
+.kb-row{gap:6px;margin-bottom:8px}
+.kb-key{width:74px;height:26px;font-size:18px}
+.kb-key.wide{width:96px;font-size:13px}
+.kb-key.space{width:360px;font-size:13px}
+.kb-key.act{width:180px;font-size:13px}
+`;
+
+const OWN_LANDSCAPE_CSS = `
+.ownl{--bg:#D1D3D9;--panel:#E6E8ED;--label:#000;--sub:#3C3C43;--txt1:#0B0B0F}
+[data-appearance="dark"] .ownl{--bg:#161618;--panel:#2C2C2E;--label:#fff;--sub:#C7C7CC;--txt1:#F5F5F7}
+.ownl{flex:0 0 auto;z-index:45;height:${OWN_KEYBOARD_LANDSCAPE.totalHeight}px;background:var(--bg);
+  color:var(--label);display:flex;flex-direction:column;direction:ltr}
+.ownl.overlay{position:absolute;left:0;right:0;bottom:0}
+.ownl .lsugg{flex:0 0 ${OWN_KEYBOARD_LANDSCAPE.suggestionHeight}px;display:flex;align-items:center;padding:0 4px}
+.ownl .lchip{width:${OWN_KEYBOARD_LANDSCAPE.chip.width}px;height:${OWN_KEYBOARD_LANDSCAPE.chip.height}px;
+  border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--sub)}
+.ownl .lsep{width:1px;height:18px;background:rgba(60,60,67,.22)}
+.ownl .lcand{flex:1;text-align:center;font-size:15px;color:var(--label)}
+.ownl .lreply{position:relative;width:${OWN_KEYBOARD_LANDSCAPE.chip.width}px;
+  height:${OWN_KEYBOARD_LANDSCAPE.chip.height}px;border-radius:8px;overflow:hidden;
+  background:linear-gradient(135deg,#EE7442,#D9632F);color:#fff;display:flex;align-items:center;
+  justify-content:center;font-size:13px;font-weight:600}
+.ownl .lsweep{position:absolute;top:0;bottom:0;left:0;border-radius:7px;background:rgba(255,255,255,.4)}
+.ownl .lkeys{flex:1;padding:${OWN_KEYBOARD_LANDSCAPE.topInset}px 3px ${OWN_KEYBOARD_LANDSCAPE.bottomInset}px;
+  display:flex;flex-direction:column;gap:${OWN_KEYBOARD_LANDSCAPE.rowSpacing}px}
+.ownl .lrow{display:flex;justify-content:center;gap:6px;flex:0 0 ${OWN_KEYBOARD_LANDSCAPE.keyHeight}px}
+.ownl .lkey{height:${OWN_KEYBOARD_LANDSCAPE.keyHeight}px;border-radius:5px;background:var(--panel);
+  display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--txt1)}
+`;
+
+/** Our own keyboard as landscape draws it, with a model call running.
+ *
+ *  **The moving part is a chip, not a banner, and that is the whole reason this
+ *  render exists.** Landscape shows no `ActionBanner` at any `showsBanner`, so
+ *  the three shimmer lines the portrait variant was built around are not on
+ *  screen at all. What is on screen for the whole of a read is
+ *  `ControlSweep`: a capsule of `segmentFraction` (0.32) of the chip's width,
+ *  white at `fillOpacity` (0.4), clipped to the chip and offset by
+ *  `phase % 1 * (width + segment) - segment`. It rides the Reply chip, which
+ *  ships on `barTrailing` and is what `KeyActivity.resolve` lights during a
+ *  screen read.
+ *
+ *  The action row is shed in landscape, so its five controls are chips on this
+ *  bar — `SuggestionBar.landscapeActions(for:)`, in the order
+ *  `LandscapeGeometryTests` pins: CopyClip, Fix, Emoji, Rewrite, dictation. */
+function ownKeyboardLandscape(spec) {
+  const phase = spec.phase ?? 0;
+  const lang = spec.lang === "he" ? "he" : "en";
+  const chip = OWN_KEYBOARD_LANDSCAPE.chip;
+  const segment = chip.width * 0.32;
+  const offset = ((phase % 1) + 1) % 1 * (chip.width + segment) - segment;
+
+  const strip = ["\u{1F4CB}", "✦", "☺", "✨", "\u{1F3A4}"]
+    .map((g) => `<div class="lchip">${ch(g)}</div>`)
+    .join("");
+  const cands = (lang === "he" ? ["אני", "תודה", "בסדר"] : ["I", "The", "Sure"])
+    .map((c) => ch(c, "lcand"))
+    .join("");
+  const reply =
+    `<div class="lreply">${ch("Reply")}` +
+    `<div class="lsweep" style="width:${segment}px;transform:translateX(${offset}px)"></div></div>`;
+
+  const rows = KB_ROWS[lang];
+  const key = (c, width) => `<div class="lkey" style="width:${width}px">${ch(c)}</div>`;
+  // Ten reference columns across 874 pt less the 3 pt side inset each side and
+  // nine 6 pt gutters, which is `KeyWidth`'s own arithmetic at this width.
+  const unit = (LANDSCAPE_DEVICE.cssWidth - 6 - 9 * 6) / 10;
+  const shift = lang === "he" ? "" : "⇧";
+  const keys = [
+    `<div class="lrow">${rows[0].map((c) => key(c, unit)).join("")}</div>`,
+    `<div class="lrow">${rows[1].map((c) => key(c, unit)).join("")}</div>`,
+    `<div class="lrow">${key(shift || "", unit * 1.5)}` +
+      rows[2].map((c) => key(c, unit)).join("") +
+      `${key("⌫", unit * 1.5)}</div>`,
+    `<div class="lrow">${key("123", unit * 1.25)}${key("⚙", unit)}` +
+      `${key(lang === "he" ? "רווח" : "space", unit * 4.5)}${key(".", unit)}` +
+      `${key(lang === "he" ? "שורה" : "return", unit * 1.5)}</div>`,
+  ].join("");
+
+  return `<div class="ownl ${spec.overlay ? "overlay" : ""}">
+  <div class="lsugg">${strip}<div class="lsep"></div>${cands}<div class="lsep"></div>${reply}</div>
+  <div class="lkeys">${keys}</div>
+</div>`;
+}
+
+/** One scene, rendered on a rotated screen.
+ *
+ *  The same `render` the corpus uses, with the shell re-sized by a stylesheet
+ *  appended after every other block. It is the portrait skins relaid, not a
+ *  photograph of a real app in landscape: the bubbles are percentage-width so
+ *  they widen and fewer of them fit, which is the shape that matters here, but
+ *  no real app's landscape-specific chrome is reproduced. Say so beside any
+ *  number taken from it. */
+export function renderLandscape(scene, screenHeight = LANDSCAPE_DEVICE.cssHeight) {
+  const html = render(scene);
+  // The short axis is the whole question: the cap is a fraction of it and our
+  // keyboard is 166 points of it whatever it measures, so the harness renders
+  // the same scene at each shipping phone's landscape height.
+  const height = `\nhtml,body{height:${screenHeight}px}\n.screen{height:${screenHeight}px}\n`;
+  const injected = `${OWN_LANDSCAPE_CSS}${LANDSCAPE_CSS}${height}</style>`;
+  if (!html.includes("</style>")) throw new Error("the page shell has no <style> to extend");
+  return html.replace("</style>", injected);
+}
+
 /** The iOS keyboard. Forty-odd single letters an inch from the message text —
  *  the densest patch of chrome on any of these screens. */
 function keyboard(spec) {
   if (!spec) return "";
-  if (spec.ours) return ownKeyboard(spec);
+  if (spec.ours) return spec.landscape ? ownKeyboardLandscape(spec) : ownKeyboard(spec);
   const lang = spec.lang ?? "en";
   const rows = KB_ROWS[lang];
   const key = (c, cls = "") => `<div class="kb-key ${cls}">${ch(c)}</div>`;

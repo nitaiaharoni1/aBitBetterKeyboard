@@ -363,6 +363,7 @@ extension KeyboardView {
                         : nil,
                 onAlternate: alternateHandler(for: key),
                 onSpaceTouch: key.cap == .space ? { controller.spaceBarTouch($0) } : nil,
+                onCharacterTouch: characterTouchHandler(for: key),
                 onPopupLayerChange: popupLayerHandler(for: key)
             )
             // The overlay sits outside KeyView so VoiceOver can see ReplayKit's
@@ -389,6 +390,18 @@ extension KeyboardView {
                 }
             }
         }
+    }
+
+    /// Character keys report a touch instead of a press, and its presence is what
+    /// makes them wait for the lift (NIT-108, `KeyView.defersCharacterToLift`).
+    ///
+    /// Every other key stays on `onPress`, which stays immediate. So does this
+    /// key's own `onPress`: a VoiceOver rotor pick of an accent has no lift behind
+    /// it, so `KeyView.commitAlternate` replays the press rather than opening a
+    /// touch nothing would ever close.
+    func characterTouchHandler(for key: KeySpec) -> ((CharacterTouchPhase) -> Void)? {
+        guard case .character = key.cap else { return nil }
+        return { controller.characterTouch($0) }
     }
 
     /// Fix, Rewrite and CopyClip tell the action row to climb over the letters

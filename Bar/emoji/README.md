@@ -42,13 +42,25 @@ niqqud in four places — 🐏 is `אַיִל`, 🛷 is `מִזְחֶלֶת`, �
 has `מַסְכֵּת` among its keywords — and `"אַיִל".hasPrefix("א")` is **false** in
 Swift and true in Python, because the first `Character` is alef *with* its
 patah. That put 🐏 in the results for `א` on one side and not the other and
-shifted every rank below it. `EmojiSearch`'s own doc comment says CLDR's Hebrew
-carries no niqqud to strip; for those four strings it does.
+shifted every rank below it. `EmojiSearch`'s doc comment used to say CLDR's
+Hebrew carries no niqqud to strip; it now names the four strings that carry it.
 
-**The window is five, and the strip shows about nine.** `EmojiSearch`'s doc
-comment measures itself against nine visible cells. Five is used here because it
+**Folding the niqqud away was then measured, and it is not worth doing.** Three
+of the four are already reachable unpointed, because CLDR carries the bare
+spelling as a *keyword* even where it points the *name*: `איל` answers 🐏 first,
+`מזחלת` answers 🛷 first, `מורה` answers 👩‍🏫 second. Only 🩺's `מַסְכֵּת` has no
+unpointed route. Folding both sides — the query in `normalise` and the
+catalogue, which has to be both, since stripping the query alone leaves the
+catalogue string pointed and the two still never meet — leaves this corpus
+byte-identical at 56/76, 69/76, 0.819 under the ranker of the day. The whole
+gain is `מסכת` reaching 🩺; the price is folding 1,870 strings per keystroke
+unless `EmojiCatalog` folds them once at load. Not taken.
+
+**The window is five, and the strip shows about nine.** Five is used because it
 is stricter and because a thumb goes to the first two or three; a number quoted
-against a nine-wide window would be higher and would mean less.
+against a nine-wide window would be higher and would mean less. `EmojiSearch`'s
+doc comment used to carry its own reading against nine cells and 29 queries; it
+now quotes this corpus, so there is one set of numbers rather than two.
 
 **One run is one run, but not in the way the other corpora mean it.** There is
 no model and no judge here: the ranker is deterministic, so two runs of
@@ -103,37 +115,40 @@ mixed them and produced entries that read as a pass and a fail at once.
 
 ## Today's reading
 
-**2026-08-16, working tree over `9909bd15`**, catalogue `8a9748c8cbdea345`,
+**2026-08-16, working tree over `9ec51c2c`**, catalogue `8a9748c8cbdea345`,
 corpus `94b02ff5ead39007`. Numbers move when any of those move; `results.json`
-carries all four so a stale reading is tellable from a current one.
+carries all four so a stale reading is tellable from a current one. This reading
+is **after** the NIT-112 change below; the one before it was 56/76, 69/76,
+0.819, 6/10, and `keyword-covers-everything` in `variants.py` reproduces it.
 
 | | |
 |---|---|
-| **first** | **56 / 76** |
-| **strip** | **69 / 76** |
-| **MRR** | **0.819** over 76 entries with a definite target |
+| **first** | **58 / 76** |
+| **strip** | **70 / 76** |
+| **MRR** | **0.837** over 76 entries with a definite target |
 | **clean** | **6 / 10** entries carrying a `mustNotRank` list |
 | **empty** | **4 / 4** |
-| open | 19 entries; 3 answered from the sample at rank 1, 17 inside five |
+| open | 19 entries; 4 answered from the sample at rank 1, 17 inside five |
 | known gaps | 2, red on purpose |
 
 99 entries: 58 English, 41 Hebrew.
 
-The three the Swift suite already fails, with the rank of the right answer:
+`heart` is fixed and answers ❤️. The two that remain, with the rank of the right
+answer:
 
 | query | answer | should be | rank of the right one |
 |---|---|---|---|
-| `heart` | 🫀 🏠 💏 💗 🤎 | ❤️ | **10** |
 | `לב` | 🫀 💏 💗 🤎 🤍 | ❤️ | **9** |
 | `car` | 🚕 🚙 🛻 🛞 🚚 | 🚗 | **6** |
 
-**🏠 second for `heart` was not in the record before this corpus existed.** CLDR
-lists `heart` among 🏠's keywords (as in "the heart of the home"), and the
-keyword rung beats every name rung, so a house outranks eight actual hearts.
-`music` is worse and was also unrecorded: 🥁 🪈 🎸 🎻 🪕, with 🎵 at **rank 10**
-and `מוזיקה` at **12**. The same shape runs through a dozen entries — a related
-*object* wins because its name is shorter, and nothing in the data says which
-emoji a concept is actually spelled with.
+**🏠 second for `heart` was not in the record before this corpus existed**, and
+it is what the change below removed. CLDR lists `heart` among 🏠's keywords (as
+in "the heart of the home"), the keyword rung outscored every name rung, and a
+house outranked eight actual hearts. `music` is worse and was also unrecorded:
+🥁 🪈 🎸 🎻 🪕, with 🎵 at **rank 10** and `מוזיקה` at **12**, and it did not
+move. The same shape runs through a dozen entries — a related *object* wins
+because its name is shorter, and nothing in the data says which emoji a concept
+is actually spelled with.
 
 ### The two entries that are red on purpose
 
@@ -187,45 +202,79 @@ user who wants the organ can see it without typing another letter.
 So `testHebrewFindsWhatEnglishFinds` is the one that is right, and the `לב` pair
 inside `testRecentsWinACloseCallAndLoseToAName` is what should be replaced — by
 the cat pair, which tests the boost without depending on a ranking anybody
-disputes. **No Swift was changed here.** This is the recommendation the corpus
-now stands behind.
+disputes.
 
-## What the ranker change should be
+**Done, and the replacement was checked for the same fault it was fixing.** The
+test now asserts `results(for: "cat", recent: ["🐱", "🙏", "👍"]).first == "🐱"`
+with `results(for: "cat").first == "🐈"` as the control. 🐈 is named `cat` and
+scores `(rung 0, −1.0, 3)`; 🐱 is `cat face` and scores `(rung 1, −0.5, 8)`, so
+the two rungs are what the boost has to close. Set `recentBoost` to 0 and the
+first assertion answers **🐈** and fails, which is the proof it is not inert —
+the `rec-cat` direction, 🐈 in recents, passes at either setting because 🐈 is
+rank 1 for `cat` with recents empty anyway. The control is boost-independent on
+purpose. `לב` is left to `testHebrewFindsWhatEnglishFinds`, which still fails,
+and to `he-lev`, which still reads rank 9: no ordering of the signals in the
+data fixes it, for the reason below.
+
+## What the ranker change was
 
 `variants.py` scores candidates in about a second each. Everything except the
-one rule under test stays as it ships, so a delta is attributable.
+one rule under test stays as it ships, so a delta is attributable. `shipping`
+means *today's* engine, so the rule that was replaced is kept beside it under
+its own name.
 
-| variant | first | strip | MRR | clean | `car` | `heart` | `לב` |
-|---|---|---|---|---|---|---|---|
-| **shipping** | 56/76 | 69/76 | 0.819 | 6/10 | 🚕🚙🛻 | 🫀🏠💏 | 🫀💏💗 |
-| keyword scored by its own length | 52/76 | 69/76 | 0.784 | 7/10 | 🚃🚞🚋 | 🥰😘😻 | 🫀😻💌 |
-| keyword scored by the shortest name in the query's script | 51/76 | 71/76 | 0.786 | 6/10 | 🚕🛞🚋 | 💏🏠❤️ | 🫀💏💗 |
-| **a name word outranks an exact keyword** | **60/76** | 69/76 | **0.852** | **8/10** | 🚋🚓🏎️ | **❤️**🩷💙 | 🫀💗🤎 |
-| the same, plus giving 🫀 a Hebrew name of its own | 60/76 | 69/76 | 0.852 | 8/10 | 🚋🚓🏎️ | ❤️🩷💙 | 💗🤎🤍 |
+| variant | first | strip | MRR | clean | `car` | `heart` | `ירח` | `moon` |
+|---|---|---|---|---|---|---|---|---|
+| **shipping** (a keyword is worth half a name) | **58/76** | **70/76** | **0.837** | 6/10 | 🚕🚙🛻 | **❤️**🫀🏠 | **🌙**🎑🌑 | **🌙**🎑🌑 |
+| keyword-covers-everything (what shipped before) | 56/76 | 69/76 | 0.819 | 6/10 | 🚕🚙🛻 | 🫀🏠💏 | 🌙🎑🌑 | 🌙🎑🌑 |
+| keyword scored by its own length | 52/76 | 69/76 | 0.784 | 7/10 | 🚃🚞🚋 | 🥰😘😻 | 🎑🌑🌒 | 🥮🎑🌑 |
+| keyword scored by the shortest name in the query's script | 51/76 | 71/76 | 0.786 | 6/10 | 🚕🛞🚋 | 💏🏠❤️ | 🌙🎑🌑 | 🌑🥮🌕 |
+| a name word outranks an exact keyword (the plain split) | 60/76 | 69/76 | 0.852 | 8/10 | 🚋🚓🏎️ | ❤️🩷💙 | 🎑🌑🌕 | 🌑🥮🌕 |
+| the same, plus giving 🫀 a Hebrew name of its own | 60/76 | 69/76 | 0.852 | 8/10 | 🚋🚓🏎️ | ❤️🩷💙 | 🎑🌑🌕 | 🌑🥮🌕 |
+| a keyword is worth a third of a name | 59/76 | 70/76 | 0.845 | 7/10 | 🚋🚕🚙 | ❤️🩷💙 | 🎑🌑🌕 | 🌑🥮🌕 |
+| a keyword is worth 0.48 of a name | 59/76 | 70/76 | 0.846 | 7/10 | 🚕🚙🛻 | ❤️🩷💙 | 🌙🎑🌑 | 🌑🌙🎑 |
 
 **The two rejected repairs are confirmed rejected**, now against a frozen corpus
 rather than a remembered run: −4 and −5 on `first`, and `heart` answers 🥰 and
 💏. Nobody has to try them again.
 
-**The one worth taking to a Swift change is the third**, and it is a rung split
-rather than a tiebreak. `score` puts "an exact keyword" and "a whole word of a
-name" on the same rung and gives the keyword branch `coverage: -1`, so an exact
-keyword *always* beats a name that merely contains the word. That single line is
-what puts 🏠 above eight hearts. Separating them — name word at rung 1, exact
-keyword at rung 2 — is worth **+4 on `first`, +0.033 MRR and +2 on `clean`**,
-and it fixes `heart` outright: ❤️ goes from rank 10 to rank 1.
+**The plain rung split was rejected too, and that is the interesting one.**
+`score` put "an exact keyword" and "a whole word of a name" on the same rung and
+gave the keyword branch `coverage: -1`, which no name word can reach, so an
+exact keyword *always* beat a name that merely contained the word. That single
+value is what put 🏠 above eight hearts. Separating them into two rungs is worth
+**+4 on `first`, +0.033 MRR and +2 on `clean`** and fixes `heart` outright — and
+it costs `ירח` rank **1 → 13** and `car` **6 → 12**, because "ירח מלא" and
+"police car" carry the word in a name where 🌙 and 🚗 only ever had it as a
+keyword. Hebrew is the language this keyboard exists for. A headline that rises
+while the priority language falls twelve places is what a corpus is supposed to
+catch, not to license.
 
-**It is not free, and the cost is the reason to measure before shipping it.**
-26 entries move. `moon` goes 1 → 4, `ירח` goes 1 → 13, `קשת` 1 → 2, and **`car`
-gets worse**, 6 → 12, because "tram car" and "police car" carry the word in a
-name where 🚗 is named `automobile` and only ever had it as a keyword. Against
-that: `party`, `phone`, `money`, `apple`, `angry`, `טלפון`, `כסף`, `עץ`, `כועס`,
-`עצוב`, `גשם` and `heart` all move to rank 1. Whoever takes it should decide
-whether losing the moon to win the heart is the trade they want — which is now a
-decision with numbers under it instead of an argument.
+**What shipped is the same idea with a price on it instead of an absolute.** The
+keyword branch's coverage is `EmojiSearch.exactKeywordCoverage`, −0.5: an exact
+keyword ranks as a name word filling exactly half of its name. A name word
+beats it when the query is more than half the name and loses when it is less.
+"red heart" is 5 of 9 and clears it, so `heart` goes rank 10 → 1; "new moon" is
+4 of 8 and does not, so `moon` still answers 🌙. **Exactly three entries move
+and all three move forwards** — `heart`, `money` and `apple`, each to rank 1 —
+for +2 on `first`, +1 on `strip` and +0.018 MRR. Nothing that answered at rank 1
+stops answering at rank 1. `clean` does not move: 💏 carries `heart` and `לב` as
+keywords, and half a name is not enough to push it past rank 5.
 
-**`heart` is a ranking bug. `לב` is not, and `car` is not.** That is the finding
-worth keeping out of all of this:
+**Half is a statement; 0.48 is a fitted number.** The two rows below the split
+are the near misses. A third of a name scores best of anything tried (+4, +0.036
+MRR, +2 `clean`) and still moves 21 entries, `ירח` and `moon` from 1 to 4 and
+`קשת` from 1 to 2 — and it drops `flower` and `פרח` out of the strip entirely,
+which **no column here can see**, because both carry an open `acceptable` list
+and an open list cannot fail. 0.48 costs only `moon`, 1 → 2, and buys one more
+on `first` and one more on `clean`; the entire difference between it and 0.5 is
+whether a name word filling *exactly* half its name wins, and there is no
+sentence for 0.48 that is not "the number that let `new moon` through".
+Everything in [0.5, 0.555] scores identically, so 0.5 is the middle of a
+plateau rather than a peak on a curve.
+
+**`heart` was a ranking bug and is fixed. `לב` is not one, and `car` is not.**
+That is the finding worth keeping out of all of this:
 
 - `לב` cannot be fixed by any ordering of the signals in the data. 🫀's Hebrew
   name *is* the query, so it takes rung 0 outright. Even with the data fix
@@ -234,12 +283,15 @@ worth keeping out of all of this:
   `לב לבן` at six, and coverage prefers the shorter. Length is not centrality
   and no rearrangement of it will become centrality.
 - `car` is the same. 🚗 is `automobile`; the query reaches it only as a keyword,
-  and every rung change tested here moves it further down.
+  so it sits behind five short-named vehicles that carry `car` as a keyword too,
+  and no rung change tested here moved it up. The shipped change leaves it at 6;
+  every variant that beats it on the headline moves it to 7 or 12.
 
 So the honest read is unchanged and now measured: **what is missing is a
 frequency signal, the gap `SeedLanguageModel` fills for words, and CLDR has
-none.** The rung split is a real +4 that can ship on its own merits and will not
-close those two. Closing them needs a per-emoji centrality list, bundled the way
+none.** The +2 that shipped is real and does not close those two, and neither
+would the +4 that did not. Closing them needs a per-emoji centrality list,
+bundled the way
 `GroupedLexicon-{en,he}.txt` is bundled with its own `NOTICE`, and picking a
 source for it with a licence this repo can carry is its own piece of work. The
 corpus is ready to score it the day it exists.
@@ -278,7 +330,8 @@ all stamped in the file itself:
   too, so the entry passes without exercising the boost. `rec-cat-face` was
   added for that reason and is the half doing the work. Adding the mirror image
   is completing a probe, not fitting one — "whichever of the two is in recents
-  should be first" is a claim in both directions.
+  should be first" is a claim in both directions. `EmojiModeTests` takes the
+  `rec-cat-face` direction for exactly this reason.
 
 `selftest.py` runs before every score and rejects a corpus that cannot do its
 job: an entry carrying no judgement at all (which `score.py` would bucket as

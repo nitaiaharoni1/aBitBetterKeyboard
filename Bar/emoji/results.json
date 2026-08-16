@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "generated": "2026-08-16",
-  "commit": "9909bd15",
+  "commit": "9ec51c2c",
   "engine": "rank.py, checked against the shipping Swift by swift-check.sh",
   "corpus": "94b02ff5ead39007",
   "catalogue": "8a9748c8cbdea345",
@@ -10,18 +10,18 @@
     "entries": 99,
     "window": 5,
     "first": {
-      "pass": 56,
+      "pass": 58,
       "of": 76
     },
     "strip": {
-      "pass": 69,
+      "pass": 70,
       "of": 76
     },
-    "mrr": 0.8188,
+    "mrr": 0.8372,
     "mrrOver": 76,
     "open": {
       "entries": 19,
-      "firstFromTheSample": 3,
+      "firstFromTheSample": 4,
       "stripFromTheSample": 17
     },
     "negative": {
@@ -41,15 +41,15 @@
       "category": "name-vs-keyword",
       "query": "heart",
       "top": [
+        "❤️",
         "🫀",
         "🏠",
         "💏",
-        "💗",
-        "🤎"
+        "💗"
       ],
-      "targetRank": 10,
-      "first": "fail",
-      "strip": "fail",
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
       "judged": true,
       "violations": [
         "💏"
@@ -420,14 +420,14 @@
       "category": "ambiguous",
       "query": "money",
       "top": [
+        "💰",
         "🪙",
         "💎",
         "💴",
-        "💵",
-        "💶"
+        "💵"
       ],
-      "targetRank": 4,
-      "first": "unjudged",
+      "targetRank": 1,
+      "first": "pass",
       "strip": "pass",
       "judged": false,
       "violations": []
@@ -767,11 +767,11 @@
       "category": "ambiguous",
       "query": "birthday",
       "top": [
+        "🎂",
         "🎈",
         "🥳",
         "💐",
-        "🎁",
-        "🎉"
+        "🎁"
       ],
       "targetRank": 1,
       "first": "pass",
@@ -785,12 +785,12 @@
       "category": "single-concept",
       "query": "apple",
       "top": [
-        "🥧",
         "🍎",
+        "🥧",
         "🍏"
       ],
-      "targetRank": 2,
-      "first": "fail",
+      "targetRank": 1,
+      "first": "pass",
       "strip": "pass",
       "judged": true,
       "violations": []
@@ -1022,7 +1022,7 @@
         "🦴",
         "🐩",
         "🦦",
-        "🐶"
+        "🦭"
       ],
       "targetRank": 1,
       "first": "pass",

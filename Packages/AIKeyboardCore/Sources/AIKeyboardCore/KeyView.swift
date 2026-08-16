@@ -75,6 +75,14 @@ public struct KeyView: View {
     /// a touch here may still turn into a language slide, so it reports the touch
     /// and lets the controller decide whether it was a space.
     let onSpaceTouch: ((SpaceTouchPhase) -> Void)?
+    /// Set on every character key, and its presence is what makes that key defer.
+    ///
+    /// Same shape as `onSpaceTouch` and for a related reason: the touch's meaning
+    /// is not settled on finger-down, because a long press may pick an alternate
+    /// instead. `onPress` stays wired as well and stays immediate — a VoiceOver
+    /// rotor pick has no lift behind it and goes through `commitAlternate`, which
+    /// must type now rather than park.
+    let onCharacterTouch: ((CharacterTouchPhase) -> Void)?
     /// Set on Fix, Rewrite and CopyClip so the action row can climb over the
     /// letters for the length of the hold. A preference from every key was a
     /// frame late and a letter press could raise the wrong block.
@@ -129,6 +137,7 @@ public struct KeyView: View {
         onRepeat: (() -> Void)? = nil,
         onAlternate: ((String) -> Void)? = nil,
         onSpaceTouch: ((SpaceTouchPhase) -> Void)? = nil,
+        onCharacterTouch: ((CharacterTouchPhase) -> Void)? = nil,
         onPopupLayerChange: ((Bool) -> Void)? = nil
     ) {
         self.spec = spec
@@ -154,6 +163,7 @@ public struct KeyView: View {
         self.onRepeat = onRepeat
         self.onAlternate = onAlternate
         self.onSpaceTouch = onSpaceTouch
+        self.onCharacterTouch = onCharacterTouch
         self.onPopupLayerChange = onPopupLayerChange
     }
 

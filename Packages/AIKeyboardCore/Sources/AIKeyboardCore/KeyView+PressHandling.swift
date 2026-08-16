@@ -1,5 +1,34 @@
 import SwiftUI
 
+/// One touch on a character key, from the finger landing to whatever ends it.
+///
+/// **The sibling of `SpaceTouchPhase`, and it exists for the same reason.** A
+/// character key used to settle its meaning on finger-down; it now settles it on
+/// the lift, because a long press must not put a letter in the document that the
+/// alternate the user is reaching for is about to replace. So the key reports a
+/// touch instead of a press, and `KeyboardController.characterTouch(_:)` decides
+/// when the character is actually typed — see `beginCharacterTouch` for the two
+/// moments that can be, and for why rollover is settled on the *next* finger-down
+/// rather than on this one's lift.
+///
+/// There is no `moved` and no `cancelled`. A character key has nothing to steer
+/// with a slide except its own popup, which `KeyView` reads for itself, and a
+/// touch taken away by a banner or a plane switch still owes the character —
+/// finger-down is what the user meant by it, and the keyboard before this change
+/// had already written it by then. The one case that does *not* owe it is the
+/// keyboard coming back up over a new field, where no `KeyView` survives to
+/// report anything at all; `KeyboardController.discardPendingCharacter` is that
+/// path and it is a discard rather than a report.
+public enum CharacterTouchPhase: Equatable, Sendable {
+    /// A finger landed on this key, at this point inside it. Nothing is typed
+    /// yet. The point is what a grouped cap reads as a soft pin; every other
+    /// key ignores it.
+    case began(KeyCap, CGPoint)
+    /// The touch is over, by any route — a lift, a cancelled gesture, or the key
+    /// leaving the screen underneath the finger. The character is typed now.
+    case ended
+}
+
 extension KeyView {
 
     // MARK: Press handling
@@ -10,11 +39,12 @@ extension KeyView {
 
     /// The one-tap rewrite key, Fix and CopyClip, when they have items to offer.
     ///
-    /// **They commit on lift rather than on finger-down, and they are the only
-    /// keys besides the space bar that do.** Every other key acts immediately
-    /// because that is what makes typing feel instant, and for a letter a long
-    /// press that picks an alternate simply replaces the character already
-    /// inserted. These two run a *model call*: firing on finger-down would
+    /// **They commit on lift rather than on finger-down, and their reason for it
+    /// is not the letters' reason.** A character key defers too now (see
+    /// `defersCharacterToLift`) so that a hold writes nothing until it is
+    /// released; every remaining key acts immediately, because that is what makes
+    /// shift, delete and the plane switch feel instant. These three run a *model
+    /// call*, which is a different cost: firing on finger-down would
     /// spend one on the default pass every time the user held the key to
     /// choose a different one, and `beginWork` cancels its predecessor, so
     /// the answer being paid for would be thrown away by the style that was
@@ -28,6 +58,37 @@ extension KeyView {
         case .copyclip: return copyclipAlternates.count > 1
         default: return false
         }
+    }
+
+    /// Every character key: the letter is typed on the lift, not on the
+    /// finger-down.
+    ///
+    /// **This is the one behaviour on the keyboard that trades latency for
+    /// correctness, so it is worth saying what it buys and what it costs.** A
+    /// long press on a letter opens the accents strip, and until NIT-108 the
+    /// letter was already in the document by then — picking `é` was a delete
+    /// followed by a retype, and holding a key with no intention of picking
+    /// anything wrote a character while the finger was still down. Deferring to
+    /// the lift means a held key writes nothing until it is released, which is
+    /// what the issue asks for. The cost is real and is paid on every keystroke:
+    /// the character now lands one dwell time (roughly 60–120 ms) after the
+    /// finger touches the glass, where Apple's own keyboard lands it on contact.
+    ///
+    /// **Three things deliberately do not move with it.** The press balloon and
+    /// the pressed cap still track `isTouching`, so the key still answers the
+    /// instant it is touched. The click and the thud still play on the
+    /// finger-down — `KeyboardController.beginCharacterTouch` plays them, and
+    /// tells the deferred press they are already spent — because a late haptic
+    /// is felt where a late glyph is only seen. And key repeat is untouched:
+    /// `startRepeatIfNeeded` only ever ran for delete, so holding a letter still
+    /// types exactly one letter, once.
+    ///
+    /// Gated on the closure rather than on the cap alone so a `KeyView` built
+    /// without one — a preview, a test asking only about geometry — keeps the
+    /// old immediate path and does not silently swallow its keystrokes.
+    var defersCharacterToLift: Bool {
+        guard onCharacterTouch != nil, case .character = spec.cap else { return false }
+        return true
     }
 
     /// **The disabled check the key makes for itself, rather than trusting
@@ -53,14 +114,19 @@ extension KeyView {
                 guard acceptsTouches else { return }
                 guard isPressed else {
                     isPressed = true
-                    // Every key but this one commits on finger-down, which is
-                    // what makes typing feel immediate. The space bar defers,
-                    // because the same touch may still turn out to be a language
-                    // slide. `SpaceTouchPhase` carries why deferring beat
-                    // inserting and repairing, and `KeyboardController.press`
-                    // carries what deferring costs and how it is paid.
+                    // Three keys defer and the rest commit here. The space bar
+                    // defers because the same touch may still turn out to be a
+                    // language slide (`SpaceTouchPhase`). A character key defers
+                    // because a hold may still turn out to be reaching for an
+                    // alternate (`defersCharacterToLift`). Fix, Rewrite and
+                    // CopyClip defer because they spend a model call
+                    // (`runsOnLift`). Everything else — shift, delete, the plane
+                    // switch, return — acts now, which is what makes those keys
+                    // feel immediate and is what keeps delete repeating.
                     if slidesForLanguage {
                         onSpaceTouch?(.began)
+                    } else if defersCharacterToLift {
+                        onCharacterTouch?(.began(spec.cap, unitPoint(value.startLocation)))
                     } else if !runsOnLift {
                         onPress(spec.cap, unitPoint(value.startLocation))
                     }
@@ -114,14 +180,27 @@ extension KeyView {
                     location: value.location,
                     keyMinX: keyMinXInCanvas,
                     canvasWidth: keyboardCanvasWidth)
+                // **The character goes in here, one line above the alternate that
+                // may be about to replace it.** `endPress()` reports `.ended`,
+                // which is what types a deferred letter, so an accent is still
+                // the delete-then-retype `KeyboardView.alternateHandler` is
+                // written for, and a grouped cap still has its stroke appended
+                // before the popup pins a letter out of it. Doing it the other
+                // way — dropping the pending character and inserting the accent
+                // straight — would look tidier and would take `deletedWordPrefix`
+                // with it, and `צ׳יפס`, `col·legi` and `café` are exactly the
+                // words autocorrect destroys when it does not know a hand placed
+                // them. See `.claude/rules/suggestion-bar.md`.
                 endPress()
                 // Rest is what the key would have done on its own — the character
-                // it already inserted, or the default tone it has not run yet —
-                // so lifting on that item means the long press changed nothing.
+                // it has just typed, or the default tone it has not run yet — so
+                // lifting on that item means the long press changed nothing.
                 // Slot 0 is that item for letters; the period popup puts `.`
                 // later, so this is `alternateRestIndex`, not `> 0`.
                 guard picked != alternateRestIndex else {
-                    // The tap this key deferred. See `runsOnLift`.
+                    // The tap this key deferred. See `runsOnLift`. A character
+                    // key's deferred tap was already paid by `endPress()` above,
+                    // and `runsOnLift` is false for it, so it does not pay twice.
                     if runsOnLift { onPress(spec.cap, unitPoint(value.startLocation)) }
                     return
                 }
@@ -190,6 +269,20 @@ extension KeyView {
         alternatesTask?.cancel()
         alternatesTask = nil
         if wasPressed, slidesForLanguage { onSpaceTouch?(.cancelled) }
+        // **Every way a character touch can end arrives here, and all of them
+        // owe the character.** A lift, a gesture the system cancelled, a finger
+        // that slid off the key, and the key being taken off screen mid-press
+        // all land in this one function — which is exactly why the commit is
+        // here and not in `onEnded`, where a cancelled touch would silently
+        // swallow a keystroke the user had already felt the keyboard answer.
+        // The pre-NIT-108 build had written the character on the way in, so
+        // committing on every exit is the behaviour being preserved rather than
+        // a new decision.
+        //
+        // `wasPressed` is what makes it fire once: a normal lift reaches this
+        // twice, from `onEnded` and again from the gesture state resetting
+        // behind it, and the second pass sees the flag already cleared.
+        if wasPressed, defersCharacterToLift { onCharacterTouch?(.ended) }
     }
 
     /// Delete accelerates while held, the way every other keyboard behaves.

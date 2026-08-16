@@ -13,6 +13,11 @@ frozen corpus instead of remembered.
 A variant is a replacement for `rank.score`. Everything else — the catalogue,
 the sort, the recents boost — stays exactly as it ships, so a delta is
 attributable to the one rule that moved.
+
+`shipping` always means *today's* shipping engine, so it moves when the Swift
+moves. The rule it replaced is kept beside it as `keyword-covers-everything`,
+which is what rung 1 was before NIT-112, or the row that decided the change
+would stop being reproducible the moment the change landed.
 """
 
 from __future__ import annotations
@@ -54,34 +59,87 @@ def keyword_own_length(needle, names, keywords):
     The obvious reading of `Match.length`'s own doc comment. An exact keyword
     covers all of itself, so every exact-keyword match ties at the needle's
     length and catalogue order breaks it.
+
+    Scored against the pre-NIT-112 rung 1, which is the rule it was a repair
+    for, so the −4 it was rejected on stays the number it was rejected on.
     """
-    return _score(needle, names, keywords, keyword_length="needle")
+    return _score(needle, names, keywords, keyword_length="needle", keyword_coverage=-1.0)
 
 
 def keyword_same_script(needle, names, keywords):
     """Repair 2: an exact keyword's `length` is the shortest name in the
     query's own script, so an English query is never decided by a Hebrew name.
+
+    Also scored against the pre-NIT-112 rung 1, for the same reason.
     """
-    return _score(needle, names, keywords, keyword_length="script")
+    return _score(needle, names, keywords, keyword_length="script", keyword_coverage=-1.0)
+
+
+def keyword_covers_everything(needle, names, keywords):
+    """Rung 1 as it was before NIT-112: an exact keyword's coverage is −1.
+
+    No name word can ever reach −1, so an exact keyword always beat a name that
+    merely contains the word. That is what put 🏠 second for `heart`: `heart` is
+    among 🏠's CLDR keywords, and no rearrangement of `length` could help,
+    because the keyword branch had already won on coverage.
+    """
+    return _score(needle, names, keywords, keyword_coverage=-1.0)
 
 
 def name_word_outranks_keyword(needle, names, keywords):
-    """A whole word of a *name* is a stronger claim than an exact keyword.
+    """The plain rung split: a name word at rung 1, an exact keyword at rung 2.
 
-    The shipping engine puts them on one rung and gives the keyword branch
-    coverage −1, so an exact keyword always beats a name that merely contains
-    the word. That is what puts 🏠 second for `heart`: `heart` is among 🏠's
-    CLDR keywords, and no rearrangement of `length` can help, because the
-    keyword branch has already won on coverage.
+    **Measured, and rejected.** +4 on `first`, +0.033 MRR, +2 on `clean`, and it
+    fixes `heart` outright — while `ירח` falls from rank 1 to 13 and `car` from
+    6 to 12, because "ירח מלא" and "police car" carry the word in a name where
+    🌙 and 🚗 only ever had it as a keyword. A twelve-place regression on a
+    common Hebrew word does not get paid for by a headline, in a keyboard whose
+    reason to exist is Hebrew.
     """
-    return _score(needle, names, keywords, split_rung_one=True)
+    return _score(needle, names, keywords, split_rung_one=True, keyword_coverage=-1.0)
 
 
-def _score(needle, names, keywords, keyword_length="shortest", split_rung_one=False):
+def keyword_worth_a_third(needle, names, keywords):
+    """The split, softened: an exact keyword is worth a third of a name.
+
+    The best headline of anything tried for NIT-112 — +4 `first`, +0.036 MRR,
+    +2 `clean` — and it still moves 21 entries, `ירח` and `moon` from rank 1 to
+    4 and `קשת` from 1 to 2. It also takes `flower` and `פרח` out of the strip
+    entirely, which **no column can see**: both carry an open `acceptable` list,
+    and an open list cannot fail. Kept here as the reminder that a rising
+    headline and a worse keyboard are not exclusive.
+    """
+    return _score(needle, names, keywords, keyword_coverage=-1.0 / 3.0)
+
+
+def keyword_just_under_half(needle, names, keywords):
+    """Half, less a hair: 0.48 rather than the 0.5 that shipped.
+
+    The whole difference between this and shipping is whether a name word
+    filling *exactly* half its name outranks an exact keyword. Saying yes is
+    worth one more on `first` and one more on `clean` — `flower`, `angry`,
+    `טלפון` and `כסף` improve — and costs `moon` its rank 1 to 🌑 "new moon",
+    4 of 8. Rejected because the constant is then fitted rather than stated:
+    there is no sentence for 0.48 that is not "the number that let `new moon`
+    through". Everything in [0.5, 0.555] scores identically to shipping.
+    """
+    return _score(needle, names, keywords, keyword_coverage=-0.48)
+
+
+def _score(
+    needle,
+    names,
+    keywords,
+    keyword_length="shortest",
+    split_rung_one=False,
+    keyword_coverage=None,
+):
     keyword_words = [w for w in keywords.split(" ") if w]
     needle_clusters = rank.graphemes(needle)
     needle_length = len(needle_clusters)
     hebrew = _is_hebrew(needle)
+    if keyword_coverage is None:
+        keyword_coverage = rank.EXACT_KEYWORD_COVERAGE
     best = rank.NONE
 
     def coverage(length):
@@ -105,7 +163,7 @@ def _score(needle, names, keywords, keyword_length="shortest", split_rung_one=Fa
             length = min(
                 (rank.swift_count(n) for n in names), default=rank.INT_MAX
             )
-        best = min(best, (exact_keyword, -1.0, length))
+        best = min(best, (exact_keyword, keyword_coverage, length))
     for name in names:
         if any(rank.swift_equal(w, needle) for w in name.split(" ") if w):
             length = rank.swift_count(name)
@@ -127,9 +185,12 @@ def _score(needle, names, keywords, keyword_length="shortest", split_rung_one=Fa
 
 VARIANTS = {
     "shipping": shipping,
+    "keyword-covers-everything": keyword_covers_everything,
     "keyword-own-length": keyword_own_length,
     "keyword-same-script": keyword_same_script,
     "name-word-outranks-keyword": name_word_outranks_keyword,
+    "keyword-worth-a-third": keyword_worth_a_third,
+    "keyword-just-under-half": keyword_just_under_half,
 }
 
 # A data change rather than a ranker change, kept next to them because the
@@ -191,7 +252,7 @@ def main() -> int:
             )
 
     print("")
-    print("The three named queries under each variant:")
+    print("The five argued-about queries under each variant:")
     for name, patch in conditions:
         original = SHIPPING
         catalogue = rank.catalog()
@@ -201,7 +262,8 @@ def main() -> int:
             for emoji, names in DATA_PATCH.items():
                 catalogue.names[emoji] = names
         answers = "  ".join(
-            f"{q}: {''.join(rank.results(q, [], 3))}" for q in ("car", "heart", "לב")
+            f"{q}: {''.join(rank.results(q, [], 3))}"
+            for q in ("car", "heart", "לב", "ירח", "moon")
         )
         rank.score = original
         for emoji, names in saved.items():

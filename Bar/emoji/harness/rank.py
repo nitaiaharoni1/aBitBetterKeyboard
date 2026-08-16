@@ -43,6 +43,11 @@ NONE = (INT_MAX, 0.0, INT_MAX)
 # `EmojiSearch.recentBoost`.
 RECENT_BOOST = 2
 
+# `EmojiSearch.exactKeywordCoverage`: what an exact keyword is worth on rung 1,
+# in `Match.coverage`'s units. Half, so a name word outranks it when the query
+# is more than half the name and loses when it is less.
+EXACT_KEYWORD_COVERAGE = -0.5
+
 
 class Catalog:
     """`EmojiCatalog`, loaded the way `EmojiCatalog.load()` loads it.
@@ -202,6 +207,11 @@ def score(needle: str, names: list[str], keywords: str) -> tuple[int, float, int
     locales**, which is why an English query can be decided by a Hebrew name.
     That is faithfully reproduced. It is the defect NIT-106 exists to measure,
     and a port that quietly fixed it would measure a keyboard nobody has.
+
+    **The keyword branch's coverage is `EXACT_KEYWORD_COVERAGE`, not −1.** That
+    is the NIT-112 change and it is in the shipping Swift; `variants.py` still
+    carries the −1 version and the plain rung split next to it, so the numbers
+    that decided it stay reproducible.
     """
     keyword_words = [w for w in keywords.split(" ") if w]
     needle_clusters = graphemes(needle)
@@ -213,7 +223,7 @@ def score(needle: str, names: list[str], keywords: str) -> tuple[int, float, int
             return (0, -1.0, swift_count(name))
 
     if any(swift_equal(w, needle) for w in keyword_words):
-        best = min(best, (1, -1.0, _shortest(names)))
+        best = min(best, (1, EXACT_KEYWORD_COVERAGE, _shortest(names)))
     for name in names:
         if any(swift_equal(w, needle) for w in name.split(" ") if w):
             length = swift_count(name)

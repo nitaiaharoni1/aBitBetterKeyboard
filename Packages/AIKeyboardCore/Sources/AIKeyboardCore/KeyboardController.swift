@@ -403,6 +403,17 @@ public final class KeyboardController: ObservableObject {
     var lastSpaceTapAt: Date?
     var spaceTouch = SpaceSwipe.Touch()
 
+    /// The character key that is down and has not typed anything yet.
+    ///
+    /// **One slot, on the controller, because rollover cannot be settled inside a
+    /// key.** A character key defers its letter to the lift (NIT-108, see
+    /// `KeyView.defersCharacterToLift`), and a fast typist has the next key down
+    /// before the last one is up — so the order the letters land in has to be
+    /// decided by something both keys can reach, exactly as the space bar's debt
+    /// already is one property above. Nothing draws this, so it is not
+    /// `@Published`. See `beginCharacterTouch`.
+    var pendingCharacter: (cap: KeyCap, unitPoint: CGPoint?)?
+
     /// A word somebody is deleting from is a word they are correcting on
     /// purpose, and the space bar must not overrule them. See `isCorrectingWordByHand`.
     var deletedWordPrefix: String?
@@ -887,6 +898,13 @@ public final class KeyboardController: ObservableObject {
     /// resetting unconditionally is how dismissing and reopening flipped a
     /// WhatsApp draft onto the left.
     public func prepareForNewDocument() {
+        // **Before anything reads the field.** A character key parks its letter
+        // until the finger lifts, and a keyboard torn down mid-press gets no
+        // reliable disappear callback — so a letter can survive on an instance
+        // iOS reuses across fields and across host apps. Typing it here would put
+        // a character from the last app into this one. See
+        // `discardPendingCharacter`.
+        discardPendingCharacter()
         // First, because the two answers are independent and this one feeds the
         // other: which keys are drawn is the field's declared trait, which way the
         // host lays the text out is what is already sitting in it. Switching to a

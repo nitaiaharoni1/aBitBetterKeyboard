@@ -15,15 +15,11 @@ extension KeyboardController {
     /// `t` comes back as one word autocorrected from `schedt`. Paying here means
     /// the space is typed in the order the fingers made it and against the
     /// candidate that was on screen when it was pressed.
-    public func press(_ cap: KeyCap, at unitPoint: CGPoint? = nil) {
-        if cap != .space, spaceTouch.interrupted() {
-            // Clicks *before* this key does, for the reason the space is typed
-            // before it: the other thumb pressed it first. `insertSpace` is
-            // reached from here as well as from the `.space` branch below, and
-            // only that branch goes through the line under this block.
-            Feedback.keyClick(KeyCap.space.clickSound)
-            insertSpace()
-        }
+    ///
+    /// It is two open touches now rather than one — a character key defers to its
+    /// lift as well — and `payOpenTouches(before:)` is where both are settled.
+    public func press(_ cap: KeyCap, at unitPoint: CGPoint? = nil, playsFeedback: Bool = true) {
+        payOpenTouches(before: cap)
 
         // **One click for this key, here, and nowhere else.** Which sound is the
         // cap's own business (`KeyCap.clickSound`); this is the only line that
@@ -32,12 +28,24 @@ extension KeyboardController {
         // the accents popup click twice, since that popup reaches this function
         // through a `deleteBackward()` the user never pressed. Above the
         // emoji-search branch, because a key typing into that box is still a key.
-        Feedback.keyClick(cap.clickSound)
+        //
+        // `playsFeedback` is false on exactly one path: a character key whose
+        // finger-down already clicked and thudded and whose letter is only now
+        // being typed. See `beginCharacterTouch`.
+        if playsFeedback { Feedback.keyClick(cap.clickSound) }
 
         // A search box is the one thing on this keyboard that types into
         // something other than the document, so it gets first refusal on the key.
-        if overlay == .emojiSearch, consumeForEmojiSearch(cap) { return }
-        if overlay == .copyclipSearch, consumeForCopyclipSearch(cap) { return }
+        if overlay == .emojiSearch,
+            consumeForEmojiSearch(cap, playsFeedback: playsFeedback)
+        {
+            return
+        }
+        if overlay == .copyclipSearch,
+            consumeForCopyclipSearch(cap, playsFeedback: playsFeedback)
+        {
+            return
+        }
 
         // A grouped word is a claim about the characters directly behind the
         // cursor, so anything that moves the cursor, opens a plane, switches
@@ -54,7 +62,7 @@ extension KeyboardController {
 
         switch cap {
         case .character(let value):
-            insertCharacter(value, at: unitPoint)
+            insertCharacter(value, at: unitPoint, playsFeedback: playsFeedback)
         case .shift:
             toggleShift()
         case .backspace:
@@ -167,13 +175,126 @@ extension KeyboardController {
         }
     }
 
+    // MARK: A character key's own touch
+
+    /// One touch on a character key, forwarded from `KeyView`.
+    ///
+    /// The counterpart of `spaceBarTouch(_:)`, and the same division of labour:
+    /// the key reports what the finger did and the controller decides what the
+    /// document gets.
+    public func characterTouch(_ phase: CharacterTouchPhase) {
+        switch phase {
+        case .began(let cap, let point):
+            beginCharacterTouch(cap, at: point)
+        case .ended:
+            commitCharacterTouch()
+        }
+    }
+
+    /// A finger landed on a character key. Nothing is typed yet.
+    ///
+    /// **The letter waits for the lift so a long press can replace it**, which is
+    /// NIT-108 and is argued in `KeyView.defersCharacterToLift`. Two things about
+    /// the wait are load-bearing here rather than there.
+    ///
+    /// **The rollover answer is this function, not the lift.** A fast typist has
+    /// the next key down before the last one is up, and lifts them in whatever
+    /// order the hands happen to take — press `a`, press `b`, lift `b`, lift `a`
+    /// is an ordinary thing for two thumbs to do, and committing on lift alone
+    /// would spell it `ba`. So the *arrival* of a touch is what settles the one
+    /// before it: every key that acts pays the open ones first, and a letter can
+    /// therefore never outrun a letter that went down earlier. The longest a
+    /// character can be held back is the dwell of the finger that is still on it,
+    /// and only when nothing else has been pressed since.
+    ///
+    /// **The click and the thud stay on the finger-down.** They are the half of
+    /// the answer a thumb feels rather than reads, and moving them to the lift
+    /// would make the whole key feel like a button that fires on release. The
+    /// deferred press is told they are already spent (`playsFeedback: false`),
+    /// because one tap buzzing twice is the Emoji key's defect recorded in
+    /// `.claude/rules/keyboard-layout.md`.
+    public func beginCharacterTouch(_ cap: KeyCap, at unitPoint: CGPoint? = nil) {
+        payOpenTouches(before: cap)
+        Feedback.keyClick(cap.clickSound)
+        Feedback.keyPress()
+        pendingCharacter = (cap, unitPoint)
+    }
+
+    /// Types the character a finger has been holding, if one is waiting.
+    ///
+    /// **Idempotent, and every exit path a touch has calls it.** `KeyView.endPress`
+    /// runs on a lift, on a cancelled gesture and on the key leaving the screen,
+    /// and a normal lift reaches it twice; clearing the slot before typing is what
+    /// makes the second call and the cancellation-after-lift ordering harmless.
+    @discardableResult
+    public func commitCharacterTouch() -> Bool {
+        guard let pending = pendingCharacter else { return false }
+        // Cleared first: `press` pays open touches of its own, and a slot still
+        // holding this character would send it straight back in here.
+        pendingCharacter = nil
+        press(pending.cap, at: pending.unitPoint, playsFeedback: false)
+        return true
+    }
+
+    /// Throws away a character no finger is still holding, without typing it.
+    ///
+    /// **The one path that discards rather than commits, and the reason is that
+    /// the document it was meant for is gone.** iOS keeps one extension instance
+    /// alive across fields *and across host apps* (`.claude/rules/keyboard-wiring.md`),
+    /// and a keyboard torn down mid-press is not promised a `SwiftUI` disappear
+    /// callback — so without this, a character parked in a WhatsApp reply could be
+    /// typed into the Notes field the keyboard came back up over. That is the
+    /// "pending state becomes a character from the last app" failure, and it is
+    /// strictly worse than losing the keystroke: the user saw the keyboard go
+    /// away, and nothing they did in the old field belongs in the new one.
+    ///
+    /// Called from `prepareForNewDocument()`, which `KeyboardViewController`
+    /// runs from `viewWillAppear`. Every *other* way a touch ends still commits,
+    /// through `KeyView.endPress` — see `CharacterTouchPhase.ended`.
+    public func discardPendingCharacter() {
+        pendingCharacter = nil
+    }
+
+    /// What touches still on the glass owe the document, paid before the key that
+    /// is about to act.
+    ///
+    /// **Order is the whole job, and the character goes first.** The two can only
+    /// ever be open together in one order: a character key landing on top of an
+    /// open space bar pays that space on the way in, so a character that is still
+    /// parked while a space is owed can only have been parked *before* that space
+    /// bar was touched. Three fingers on the glass is what reaches it — a thumb
+    /// resting on a letter, the other on space, and a third key pressed under both
+    /// — and paying the space first there would spell `a b` as ` ab`. In the
+    /// ordinary two-finger case the character commit is a no-op and this order
+    /// costs nothing.
+    /// **The debt is claimed before either is paid, and that is what makes the
+    /// order hold.** `commitCharacterTouch` goes back through `press`, which pays
+    /// open touches of its own — so settling the space first inside that nested
+    /// call would put it back in front of the character it is supposed to follow.
+    /// `interrupted()` marks the space spent as it answers, so the nested pass
+    /// finds nothing left to do and the space lands where this function puts it.
+    func payOpenTouches(before cap: KeyCap? = nil) {
+        let owesSpace = cap != .space && spaceTouch.interrupted()
+        commitCharacterTouch()
+        if owesSpace {
+            // Clicks *before* this key does, for the reason the space is typed
+            // before it: the other thumb pressed it first. `insertSpace` is
+            // reached from here as well as from `press`'s own `.space` branch,
+            // and only that branch goes through this function's click line.
+            Feedback.keyClick(KeyCap.space.clickSound)
+            insertSpace()
+        }
+    }
+
     /// Shifted through `KeyboardLanguage.uppercased`, which is the one place that
     /// knows Turkish has two i's — and the one place that holds the language's
     /// `Locale`, so this does not build one per keystroke. The key cap, the
     /// callout and the long-press popup go through the same call, or the key
     /// shows one letter and types another.
-    func insertCharacter(_ value: String, at unitPoint: CGPoint? = nil) {
-        Feedback.keyPress()
+    func insertCharacter(
+        _ value: String, at unitPoint: CGPoint? = nil, playsFeedback: Bool = true
+    ) {
+        if playsFeedback { Feedback.keyPress() }
         // A key carrying several letters types no letter of its own: it adds one
         // keystroke to the word in progress and the decoder says what that word
         // is. A single letter arriving *while* a grouped word is open is the
@@ -550,10 +671,12 @@ extension KeyboardController {
     /// swallowed so it cannot reach the document. Everything else falls through
     /// too, so a control the user put in the suggestion bar behaves the same here
     /// as it does anywhere.
-    func consumeForEmojiSearch(_ cap: KeyCap) -> Bool {
+    func consumeForEmojiSearch(_ cap: KeyCap, playsFeedback: Bool = true) -> Bool {
         switch cap {
         case .character(let value):
-            Feedback.keyPress()
+            // A letter typed into the box is still a deferred letter, so its thud
+            // may already have played on the finger-down. See `press`.
+            if playsFeedback { Feedback.keyPress() }
             setEmojiQuery(emojiQuery + (shift.isUppercase ? language.uppercased(value) : value))
             if shift == .on { shift = .off }
             return true
@@ -589,10 +712,11 @@ extension KeyboardController {
         emojiResults = EmojiSearch.results(for: query, recent: recentEmoji)
     }
 
-    func consumeForCopyclipSearch(_ cap: KeyCap) -> Bool {
+    func consumeForCopyclipSearch(_ cap: KeyCap, playsFeedback: Bool = true) -> Bool {
         switch cap {
         case .character(let value):
-            Feedback.keyPress()
+            // Same as `consumeForEmojiSearch`: the thud may already be spent.
+            if playsFeedback { Feedback.keyPress() }
             setCopyclipQuery(
                 copyclipQuery + (shift.isUppercase ? language.uppercased(value) : value))
             if shift == .on { shift = .off }

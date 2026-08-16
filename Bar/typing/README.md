@@ -1,6 +1,6 @@
-# Typing: the corpus, the harness and the stock-keyboard reference
+# Typing: the corpus, the harness, the sweep and the stock-keyboard reference
 
-Three things live here, and they answer three different questions.
+Four things live here, and they answer four different questions.
 
 `harness/` is **the invigilator**: it runs the real `SuggestionEngine` over all 90
 entries and grades the answers.
@@ -51,6 +51,22 @@ is a different number.
 
 Key proximity re-ranks neighbour *offers* by +50 when the differing letters sit
 on adjacent keys. It does not change what space commits.
+
+## Sweep
+
+`sweep/` is **the other exam**, and it asks a question the frozen 90 cannot.
+
+```bash
+Bar/typing/sweep/run.sh              # two runs, ~25 s
+```
+
+It types whole words letter by letter through the same harness and judges the
+bold slot against *the word being typed*, which the corpus never knows: an entry
+there is a prefix and a list of acceptable answers, so it grades plausibility,
+and `להתר` → `להתרופה` is a plausible completion of four letters and the wrong
+word. Add words to `sweep/words.json`; the corpus it generates is disposable.
+`harness/run.sh` reads `TYPING_CORPUS` so it can be pointed at that generated
+file, or at any other corpus of the same shape. `sweep/README.md` has the rest.
 
 ## Async corpus
 

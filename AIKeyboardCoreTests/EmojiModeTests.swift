@@ -119,13 +119,24 @@ final class EmojiModeTests: XCTestCase {
     /// The boost is bounded at two rungs on purpose. An emoji in recents should
     /// win a close call, and must never win against an emoji the query actually
     /// names — or typing `pizza` with 😂 in recents answers 😂.
+    ///
+    /// **The close call used to be `לב`, and it only worked because of the bug
+    /// beside it.** It pinned 🫀 as the empty-recents answer, which is the very
+    /// ranking `testHebrewFindsWhatEnglishFinds` and `Bar/emoji/corpus.json` both
+    /// say is wrong — a control that is itself the defect. The cat pair is a real
+    /// tie nobody disputes: 🐈 is named `cat` and takes rung 0, 🐱 is `cat face`
+    /// and takes rung 1, so the boost is the only thing that can reorder them.
+    ///
+    /// **Written against the boostless build**, because the other half of the
+    /// pair is inert: `cat` with recents empty already answers 🐈, so putting 🐈
+    /// in recents passes without exercising anything. With `recentBoost` at 0,
+    /// 🐱 stays on rung 1 and the first assertion below answers 🐈 and fails,
+    /// which is what makes it a test of the boost rather than of the catalogue.
     func testRecentsWinACloseCallAndLoseToAName() {
         let recent = ["😂", "🙏", "❤️", "👍", "🔥"]
 
-        // 🫀 is named exactly "לב"; ❤️ is "לב אדום". Without the boost the
-        // anatomical heart wins, which is not what anybody typing לב wants.
-        XCTAssertEqual(EmojiSearch.results(for: "לב", recent: recent).first, "❤️")
-        XCTAssertEqual(EmojiSearch.results(for: "לב").first, "🫀")
+        XCTAssertEqual(EmojiSearch.results(for: "cat", recent: ["🐱", "🙏", "👍"]).first, "🐱")
+        XCTAssertEqual(EmojiSearch.results(for: "cat").first, "🐈")
 
         // But a recent emoji does not hijack a query that names another outright.
         XCTAssertEqual(EmojiSearch.results(for: "pizza", recent: recent).first, "🍕")

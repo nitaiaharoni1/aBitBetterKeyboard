@@ -11,12 +11,13 @@ import Foundation
 ///
 /// **What this cannot do, said plainly.** CLDR carries no frequency and no "this
 /// is *the* emoji for this word", so there is no centrality signal to sort by —
-/// `Match.coverage` is the closest thing the data has. Measured over 29 English
-/// and Hebrew queries, the obvious answer comes back first for 22 and inside the
-/// first five for 28, and the strip shows about nine at once. The remaining
-/// spread is between emoji that all mean the right thing: `party` leads with 🪅
-/// before 🎉, `cake` with 🥮 before 🍰. Tuning past this would be fitting one
-/// person's taste to 1,870 rows.
+/// `Match.coverage` is the closest thing the data has. Measured over
+/// `Bar/emoji/corpus.json`, 99 frozen queries in both languages: the judged
+/// answer comes back first for 58 of the 76 entries that can fail and inside the
+/// first five for 70. The remaining spread is mostly between emoji that all mean
+/// the right thing: `party` leads with 🪅 before 🎉, `cake` with 🥮 before 🍰.
+/// Tuning past what that corpus can distinguish would be fitting one person's
+/// taste to 1,870 rows.
 ///
 /// **Hebrew morphology is the real gap.** Matching is by whole word and by
 /// prefix, so `בוכה` finds 😭 and `בכי` — the same root, a different form — finds
@@ -33,8 +34,9 @@ public enum EmojiSearch {
         /// more coverage sorts first. **This is what puts the actual car first.**
         /// CLDR names 🚗 "automobile", so no name rung reaches it for `car` at all
         /// — while "police car" and "tram car" reach it on the name and buried it
-        /// under six other vehicles. An exact keyword covers all of itself, and
-        /// 3 of "police car"'s 10 characters is not a match of the same strength.
+        /// under six other vehicles. 3 of "police car"'s 10 characters is not a
+        /// match of the same strength as a keyword that *is* the query, which is
+        /// what `exactKeywordCoverage` prices.
         var coverage: Double
         /// Length of the name that earned the rung. The tiebreak of last resort
         /// before catalogue order, on the reasoning that "red heart" is a better
@@ -60,6 +62,31 @@ public enum EmojiSearch {
     /// absolute: a recent keyword-prefix match still loses to a fresh emoji whose
     /// *name* is the query, which is what stops `pizza` answering 😂.
     static let recentBoost = 2
+
+    /// What an exact keyword is worth on rung 1, in `Match.coverage`'s own units:
+    /// a keyword ranks as a name word filling exactly half of its name.
+    ///
+    /// **It used to be −1, which no name word can reach**, so an exact keyword
+    /// always beat a name merely containing the word. That single value is what
+    /// put 🏠 second for `heart`: CLDR lists `heart` among the house's keywords,
+    /// and ❤️ — whose name *is* "red heart" — could not overtake it at any length.
+    ///
+    /// **Zero, the obvious repair, is worse, and that is measured rather than
+    /// argued.** Letting a name word beat an exact keyword outright is +4 on
+    /// `Bar/emoji`'s `first` and does fix `heart`, and it costs `ירח` rank 1 → 13
+    /// and `car` 6 → 12, because "ירח מלא" and "police car" carry the word in a
+    /// name where 🌙 and 🚗 only ever had it as a keyword. Hebrew is the language
+    /// this keyboard exists for; a headline that rises while it falls is not a
+    /// repair. `Bar/emoji/harness/variants.py` holds both, and three others.
+    ///
+    /// Half is the threshold where a name word is more of its name than not.
+    /// "red heart" is 5 of 9 and clears it, which takes `heart` from rank 10 to
+    /// rank 1; "new moon" is 4 of 8 and does not, so `moon` still answers 🌙.
+    /// Over the 99-query corpus exactly three entries move and all three move
+    /// forwards — `heart`, `money` and `apple`, each to rank 1 — for +2 on
+    /// `first`, +1 on `strip` and +0.018 MRR, with nothing that answered at rank
+    /// 1 losing the place.
+    static let exactKeywordCoverage = -0.5
 
     /// Emoji for a query, best first.
     public static func results(
@@ -96,8 +123,25 @@ public enum EmojiSearch {
     }
 
     /// Lowercased and trimmed. Nothing else: the catalogue is lowercased by the
-    /// generator, so no search folds 1,870 strings on its first keystroke, and
-    /// CLDR's Hebrew carries no niqqud to strip.
+    /// generator, so no search folds 1,870 strings on its first keystroke.
+    ///
+    /// **Niqqud is not stripped, and CLDR's Hebrew does carry it** — in exactly
+    /// four places: 🐏 is `אַיִל`, 🛷 is `מִזְחֶלֶת`, 👩‍🏫 is `מוֹרָה`, and 🩺 has
+    /// `מַסְכֵּת` among its keywords. That is load-bearing rather than trivia,
+    /// because every comparison below works on grapheme clusters:
+    /// `"אַיִל".hasPrefix("א")` is **false**, since the first `Character` is alef
+    /// *with* its patah. `Bar/emoji`'s Python port used code points, got 🐏's
+    /// results wrong on that one string, and `swift-check.sh` is what caught it.
+    ///
+    /// **Folding them was measured and is not worth it.** Stripping here alone
+    /// would achieve nothing — the catalogue side keeps its marks, so the two
+    /// still never meet — and folding both sides leaves the corpus byte-identical
+    /// at 56/76 first, 69/76 strip, 0.819 MRR. Three of the four are already
+    /// reachable unpointed, because CLDR carries the bare spelling as a keyword
+    /// even where the name is pointed: `איל` answers 🐏 first, `מזחלת` answers 🛷
+    /// first, `מורה` answers 👩‍🏫 second. The entire gain is `מסכת` reaching 🩺,
+    /// against folding 1,870 strings per keystroke unless `EmojiCatalog` folds
+    /// them once at load.
     static func normalise(_ query: String) -> String {
         query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
@@ -110,11 +154,14 @@ public enum EmojiSearch {
             return Match(rung: 0, coverage: -1, length: name.count)
         }
 
-        // An exact keyword and a whole word of a name are one rung. The keyword
-        // covers all of itself and so wins the tie against a long name that merely
-        // contains the word — see `Match.coverage`.
+        // An exact keyword and a whole word of a name are one rung, and
+        // `exactKeywordCoverage` is where the two meet: a name word wins when the
+        // query is more than half of the name, and loses when it is less. At
+        // exactly half they tie and `length` settles it, the same way it settles
+        // every other draw on this rung.
         if keywordWords.contains(where: { $0 == needle }) {
-            best = min(best, Match(rung: 1, coverage: -1, length: shortest(names)))
+            best = min(
+                best, Match(rung: 1, coverage: exactKeywordCoverage, length: shortest(names)))
         }
         for name in names where name.split(separator: " ").contains(where: { $0 == needle }) {
             best = min(best, Match(rung: 1, coverage: coverage(needle, name.count), length: name.count))

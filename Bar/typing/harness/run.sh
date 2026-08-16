@@ -4,6 +4,14 @@
 #
 #   Bar/typing/harness/run.sh              # writes Bar/typing/engine_outputs.json
 #   Bar/typing/harness/run.sh /tmp/out.json
+#   TYPING_CORPUS=sweep/corpus.json Bar/typing/harness/run.sh /tmp/out.json
+#
+# `TYPING_CORPUS` is the same variable `score.py` reads, so a corpus that is not
+# the frozen 90 is named once and both halves of the run agree about it. The
+# README has claimed since the first sweep that this script "takes any corpus
+# with the same shape"; it did not — the corpus path was hardcoded here and only
+# the *output* path was an argument, so every ad-hoc sweep had to edit this file
+# or copy it. `sweep/` is the caller that needed it.
 #
 # Compiles for the iOS Simulator and runs there, because `UITextChecker` is
 # UIKit. macOS would spell-check with `NSSpellChecker`, a different dictionary
@@ -17,14 +25,18 @@ here="$(cd "$(dirname "$0")" && pwd)"
 core="$here/../../../Packages/AIKeyboardCore/Sources/AIKeyboardCore"
 shared="$here/../../../Packages/AIKeyboardCore/Sources/AIKeyboardShared"
 out="${1:-$here/../engine_outputs.json}"
+corpus="${TYPING_CORPUS:-$here/../corpus.json}"
 # Absolute, always. `simctl spawn` runs the binary with the *device's* data
 # directory as its working directory, so a relative path given on the command
-# line is written somewhere inside the simulator and the run looks like it wrote
-# nothing. The default above is already absolute; this is for the argument.
-case "$out" in
-    /*) ;;
-    *) out="$PWD/$out" ;;
-esac
+# line is read or written somewhere inside the simulator and the run looks like
+# it did nothing. The defaults above are already absolute; this is for the two
+# paths that can arrive relative.
+for name in out corpus; do
+    case "${!name}" in
+        /*) ;;
+        *) printf -v "$name" '%s' "$PWD/${!name}" ;;
+    esac
+done
 
 build="$(mktemp -d)"
 trap 'rm -rf "$build"' EXIT
@@ -60,6 +72,6 @@ device="${SIMULATOR_DEVICE:-booted}"
 # sandbox; simctl spawn shares the host filesystem, so absolute paths work.
 LANGUAGE_MODEL_JSON="$core/Resources/LanguageModel.json" \
     SIMCTL_CHILD_LANGUAGE_MODEL_JSON="$core/Resources/LanguageModel.json" \
-    xcrun simctl spawn "$device" "$build/harness" "$here/../corpus.json" "$out"
+    xcrun simctl spawn "$device" "$build/harness" "$corpus" "$out"
 
 echo "engine outputs: $out"

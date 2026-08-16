@@ -162,6 +162,54 @@ only worked with one of them would show up. It also carries a witness check: ove
 that does *not* exclude our keyboard, the shimmer still moves the identity on 30/30 scenes.
 A harness that cannot fail proves nothing.
 
+## The fourth question: what happens when the phone is sideways
+
+```bash
+node harness/frame-hash-landscape.mjs       # all six shipping landscape heights, ~12 min
+HEIGHTS=375,402 node harness/...            # a subset
+harness/run-fingerprint-landscape.sh        # the shipping Swift over the same renders
+```
+
+Everything above is portrait. `FrameReduction.Band.maximumOwnUI` is a **fraction**
+and `Theme.Metrics` spends **points**, so a keyboard that fits in one orientation
+on one phone does not automatically fit in the other on another — and the
+landscape screen height is the phone's *portrait width*, which ranges from 375 to
+440 across the phones the `iOS 17` floor still reaches.
+
+Landscape spends 166 pt (`Theme.Metrics.Landscape`: no banner at any
+`showsBanner`, a 30 pt bar, a 136 pt key area). The budget is `0.4210526 × H`.
+Break-even is **394.25 pt**, so 375, 390 and 393 pt landscape screens are all over
+it. `renderLandscape` puts our landscape keyboard on the same 30 scenes — no
+banner, the action row's five controls as chips on the bar, and `ControlSweep`
+running on the Reply chip, which is what animates for the whole of a read once
+the banner is gone.
+
+Measured 2026-08-16, two runs, and again with the shipping Swift:
+
+| landscape height | phones | ours | crop | ours left in band | own false |
+| --- | --- | --- | --- | --- | --- |
+| **375** | SE 2/3, XS, 11 Pro, 12 mini, 13 mini | 44.27% | 42.11% | **8.1 pt** | **30/30** |
+| 390 | 12, 13, 14 | 42.56% | 42.11% | 1.8 pt | 0/30 |
+| 393 | 14 Pro, 15, 16 | 42.24% | 42.11% | 0.5 pt | 0/30 |
+| 402 | 16 Pro, 17 Pro | 41.29% | 41.29% | none | 0/30 |
+| 430 | 15 Plus, 16 Plus | 38.60% | 38.60% | none | 0/30 |
+| 440 | 16 Pro Max, 17 Pro Max | 37.73% | 37.73% | none | 0/30 |
+
+The chip sits 2 pt inside the bar, so an overspend under 2 pt leaves only bar
+background in the band and an overspend over it puts the sweep there. 375 is the
+only shipping height past that line and it fails completely: every frame takes a
+new identity from our own animation, which is the 30-of-30 defect the band
+measurement exists to prevent, in an orientation nothing had swept.
+
+**Two limits, stated rather than buried.** The `miss` and `own miss` columns sit
+at 0 to 2 and move between runs of identical code, always on `ml-*` — landscape
+shows about three messages, so a Mail thread's newest message lands at the fold
+and its two renders are sometimes byte-identical. Nothing rests on those columns;
+`own false` has zero variance across both runs and both resamplers. And these are
+the portrait skins relaid on a rotated shell, not real apps in landscape: bubbles
+widen because they are percentage-width, but no landscape-specific chrome is
+reproduced and the status bar is collapsed rather than redrawn.
+
 ## Coverage
 
 30 images. 15 light, 15 dark.
