@@ -93,8 +93,14 @@ public enum KeyboardOverlay: Equatable, Sendable {
     /// `KeyboardController.adoptSearchShift(from:)`.
     public var isSearch: Bool { self == .emojiSearch || self == .copyclipSearch }
 
-    /// Letters (and the space row) are on screen. Hidden, not removed, while a
-    /// panel covers them so the overlay keeps the same height.
+    /// The letter rows are on screen. Hidden, not removed, while a panel covers
+    /// them so the overlay keeps the same height.
+    ///
+    /// **The space row is not one of them, and it used to be.** A panel covered
+    /// the letters *and* the bottom row, which put `123`, space, the full stop,
+    /// return — and, once Emoji moved down there, the only key that closes the
+    /// grid — underneath the grid. `KeyboardView+Keys` draws the bottom row
+    /// outside the panel's stack now, so this answers for the sliding rows alone.
     public var showsLetterKeys: Bool {
         self == .none || self == .emojiSearch || self == .copyclipSearch
     }

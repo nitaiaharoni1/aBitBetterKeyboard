@@ -24,13 +24,15 @@ extension SuggestionBar {
     /// **It is a superset rather than a second opinion, and each addition is a
     /// route that would otherwise close.** `barCatalogue` answers "what may a
     /// user *choose* to put on the bar", and Fix and Settings are absent from it
-    /// because they are keys with a home elsewhere — Fix ships in the action row
-    /// and the gear on the bottom row. Landscape is the one orientation where
-    /// that home is not drawn: Fix is one of the three AI actions and would
-    /// otherwise be unreachable outright, and the gear is the only route from
-    /// this keyboard into the containing app, so a user who moved it up into
-    /// their action row would have no way into Settings at all while the phone is
-    /// sideways. Everything `barCatalogue` excludes stays excluded for the
+    /// because they are keys with a home elsewhere — both ship in the action row.
+    /// Landscape is the one orientation where that home is not drawn: Fix is one
+    /// of the three AI actions and would otherwise be unreachable outright, and
+    /// the gear is the only route from this keyboard into the containing app, so
+    /// without it here a sideways phone would have no way into Settings at all.
+    /// **That was a contingency and is now the shipped path**: the gear took the
+    /// action row's narrow centre when it traded seats with Emoji, so this union
+    /// is what draws it in landscape for every user rather than only for one who
+    /// moved it. Everything `barCatalogue` excludes stays excluded for the
     /// reasons written there: a space bar or a shift key in this row is not a
     /// keyboard, and delete's accelerating repeat is wired in `KeyView`, which
     /// does not draw this bar. `.text` and the plane keys go too, because they

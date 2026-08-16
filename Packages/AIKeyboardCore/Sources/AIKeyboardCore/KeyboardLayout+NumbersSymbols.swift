@@ -170,10 +170,12 @@ extension KeyboardLayout {
 
     // MARK: Bottom row
 
-    /// Sparkle, emoji and dictation live in the action row, so this row stays
+    /// Sparkle, the gear and dictation live in the action row, so this row stays
     /// close to the system layout: plane switch, globe, space, punctuation,
     /// return. Widths here are what `KeyboardCustomization.default.bottomRow`
-    /// copies — keep the two lists the same shape.
+    /// copies — keep the two lists the same shape. (The shipped default spends
+    /// the globe's slot on Emoji; this fallback has no globe to spend unless the
+    /// device asks for one, so it has neither.)
     public static func bottomRow(
         for language: KeyboardLanguage, plane: KeyboardPlane, showsGlobe: Bool
     ) -> KeyRow {

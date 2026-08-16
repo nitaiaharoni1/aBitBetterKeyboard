@@ -62,11 +62,11 @@ public struct LayoutPreset: Identifiable, Sendable {
                 layout.cursorRow = [
                     SlotSpec(action: .cursorLeft, width: .fill),
                     SlotSpec(action: .cursorRight, width: .fill),
-                    // The narrow centre key, same as the shipped action row: the
-                    // gear rides the bottom row in every preset now, so putting it
-                    // here as well would be the same action in two rows —
+                    // The narrow centre key, same as the shipped action row: Emoji
+                    // rides the bottom row in every preset now, so putting it here
+                    // as well would be the same action in two rows —
                     // `LayoutValidator` only sees duplicates *within* a row.
-                    SlotSpec(action: .emoji, width: .units(1.0)),
+                    SlotSpec(action: .settings, width: .units(1.0)),
                     SlotSpec(action: .text(","), width: .fill),
                     SlotSpec(action: .text("?"), width: .fill),
                     SlotSpec(action: .hideKeyboard, width: .fill)
@@ -88,9 +88,18 @@ public struct LayoutPreset: Identifiable, Sendable {
                 // `sparkles`. This slot was that sparkle until the menu behind it
                 // was deleted.
                 layout.barTrailing = [SlotSpec(action: .quickTone)]
+                // **This row is written out rather than amended, so a change to
+                // the default's seating does not reach it** — the `base` note
+                // below is only true of the presets that leave `bottomRow` alone.
+                // When Emoji and the gear traded seats the second time, this was
+                // the one place that would have kept the gear here *and* inherited
+                // the gear in `cursorRow`: two gears, no Emoji, and `LayoutValidator`
+                // silent because it only looks for a repeat inside one row.
+                // `testNoActionAppearsInTwoRowsOfAnyPreset` is what catches the
+                // next one.
                 layout.bottomRow = [
                     SlotSpec(action: .numbersPlane, width: .units(1.3)),
-                    SlotSpec(action: .settings, width: .units(1.0)),
+                    SlotSpec(action: .emoji, width: .units(1.0)),
                     SlotSpec(action: .reply, width: .units(1.2)),
                     SlotSpec(action: .space, width: .fill),
                     SlotSpec(action: .dictation, width: .units(1.0)),

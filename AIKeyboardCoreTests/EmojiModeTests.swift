@@ -145,15 +145,66 @@ final class EmojiModeTests: XCTestCase {
 
     // MARK: The grid's geometry
 
+    /// **Asked of every row count the panel can be built at, not of one.** The
+    /// count used to be a constant and these tests read it; it follows the height
+    /// now, because the panel stopped covering the bottom row and landscape's
+    /// grid is 60pt tall. Every piece of arithmetic below — the padding blanks,
+    /// the seams, the gaps, the column count the tab highlight is derived from —
+    /// is counted in multiples of it, so a build that got any of them right at
+    /// four and wrong at two would be right in portrait and broken sideways.
+    private func everyRowCount(
+        _ check: (Int) -> Void, file: StaticString = #filePath, line: UInt = #line
+    ) {
+        XCTAssertEqual(EmojiPanel.rowCountRange, 2...5, file: file, line: line)
+        for rowCount in EmojiPanel.rowCountRange { check(rowCount) }
+    }
+
     /// **Every category starts on a fresh column**, which is what lets the tab row
     /// work out the selected category from the scroll offset alone instead of a
     /// geometry read per cell. If a section is not a whole number of columns, the
     /// highlight drifts one tab further out with every category passed.
     func testEverySectionIsAWholeNumberOfColumns() {
-        for section in EmojiPanel.sections(recent: SharedStore.shippedRecentEmoji) {
-            XCTAssertEqual(
-                section.cells.count % EmojiPanel.rowCount, 0,
-                "\(section.id) is \(section.cells.count) cells")
+        everyRowCount { rowCount in
+            let sections = EmojiPanel.sections(
+                recent: SharedStore.shippedRecentEmoji, rowCount: rowCount)
+            for section in sections {
+                XCTAssertEqual(
+                    section.cells.count % rowCount, 0,
+                    "\(section.id) is \(section.cells.count) cells at \(rowCount) rows")
+            }
+        }
+    }
+
+    /// **How many rows fit, and the two ends are the ones that matter.** Portrait
+    /// ships a 110pt grid and landscape a 60pt one; the old constant five put a
+    /// 12pt cell in the latter. The floor is what is held, so the count gives.
+    func testTheRowCountFollowsTheHeightItHasToFillRatherThanAConstant() {
+        // Portrait, shipped geometry: 3 letter rows at 43 and 2 gaps at 12 is a
+        // 153pt panel, less the 43pt category strip.
+        XCTAssertEqual(EmojiPanel.rowCount(forGridHeight: 110), 4)
+        // Landscape: 3 rows at 26 and 2 gaps at 4 is 86, less a 26pt strip.
+        XCTAssertEqual(EmojiPanel.rowCount(forGridHeight: 60), 2)
+        // A number row switched on pays for the fifth back.
+        XCTAssertEqual(EmojiPanel.rowCount(forGridHeight: 165), 5)
+
+        // Clamped at both ends: a very tall grid grows its cells rather than
+        // thinning them, and a very short one stops at two rather than one.
+        XCTAssertEqual(EmojiPanel.rowCount(forGridHeight: 900), 5)
+        XCTAssertEqual(EmojiPanel.rowCount(forGridHeight: 20), 2)
+        XCTAssertEqual(EmojiPanel.rowCount(forGridHeight: 0), 2)
+
+        // And no configuration the layout model can describe draws a cell under
+        // the floor by more than the clamp allows. `LayoutGeometry.keyHeightRange`
+        // is 36...56 and `rowSpacingRange` 8...16.
+        for keyHeight in stride(from: 36.0, through: 56.0, by: 4) {
+            for spacing in stride(from: 8.0, through: 16.0, by: 4) {
+                let panel = 3 * keyHeight + 2 * spacing
+                let grid = panel - keyHeight
+                let cell = grid / CGFloat(EmojiPanel.rowCount(forGridHeight: grid))
+                XCTAssertGreaterThanOrEqual(
+                    cell, EmojiPanel.minimumCellHeight,
+                    "key \(keyHeight), spacing \(spacing) gives a \(cell)pt cell")
+            }
         }
     }
 
@@ -167,15 +218,20 @@ final class EmojiModeTests: XCTestCase {
     /// Asserted by demanding the anchor is a real cell, which is the only thing
     /// `ScrollViewReader` can actually find.
     func testEveryCategoryTabScrollsToACellThatExists() {
-        let sections = EmojiPanel.sections(recent: SharedStore.shippedRecentEmoji)
-        let cellIDs = Set(sections.flatMap { $0.cells.map(\.id) })
+        everyRowCount { rowCount in
+            let sections = EmojiPanel.sections(
+                recent: SharedStore.shippedRecentEmoji, rowCount: rowCount)
+            let cellIDs = Set(sections.flatMap { $0.cells.map(\.id) })
 
-        for id in [EmojiCatalog.recentID] + EmojiCatalog.categories.map(\.id) {
-            let anchor = EmojiPanel.anchorID(forCategory: id)
-            XCTAssertTrue(cellIDs.contains(anchor), "\(id) scrolls to \(anchor), which is not a cell")
+            for id in [EmojiCatalog.recentID] + EmojiCatalog.categories.map(\.id) {
+                let anchor = EmojiPanel.anchorID(forCategory: id)
+                XCTAssertTrue(
+                    cellIDs.contains(anchor),
+                    "\(id) scrolls to \(anchor) at \(rowCount) rows, which is not a cell")
+            }
+            // And the bug's own spelling: the bare category id is *not* addressable.
+            XCTAssertFalse(cellIDs.contains("Food"))
         }
-        // And the bug's own spelling: the bare category id is *not* addressable.
-        XCTAssertFalse(cellIDs.contains("Food"))
     }
 
     /// **The seam between two categories, which the sideways strip otherwise
@@ -187,22 +243,26 @@ final class EmojiModeTests: XCTestCase {
     /// because the obvious build marks cell zero alone: that draws a fifth of a
     /// hairline against the top row and reads as a stray tick, not a divider.
     func testTheSeamRunsDownEverySectionBoundaryButNotTheStripsOwnEdge() {
-        let sections = EmojiPanel.sections(recent: SharedStore.shippedRecentEmoji)
+        everyRowCount { rowCount in
+            let sections = EmojiPanel.sections(
+                recent: SharedStore.shippedRecentEmoji, rowCount: rowCount)
 
-        // Nothing to the left of Recent but the edge of the panel.
-        XCTAssertFalse(sections[0].cells.contains(where: \.leadsSection))
+            // Nothing to the left of Recent but the edge of the panel.
+            XCTAssertFalse(sections[0].cells.contains(where: \.leadsSection))
 
-        for section in sections.dropFirst() {
-            let ruled = section.cells.enumerated().filter { $0.element.leadsSection }.map(\.offset)
-            XCTAssertEqual(ruled, Array(0..<EmojiPanel.rowCount), section.id)
+            for section in sections.dropFirst() {
+                let ruled = section.cells.enumerated().filter { $0.element.leadsSection }
+                    .map(\.offset)
+                XCTAssertEqual(ruled, Array(0..<rowCount), "\(section.id) at \(rowCount) rows")
+            }
+
+            // And on a fresh install the list of recents is empty, so the section
+            // that opens the grid — and wears no seam — is Smileys, not Recent.
+            let fresh = EmojiPanel.sections(recent: [], rowCount: rowCount)
+            XCTAssertTrue(fresh[0].cells.isEmpty)
+            XCTAssertFalse(fresh[1].cells.contains(where: \.leadsSection))
+            XCTAssertTrue(fresh[2].cells.prefix(rowCount).allSatisfy(\.leadsSection))
         }
-
-        // And on a fresh install the list of recents is empty, so the section
-        // that opens the grid — and wears no seam — is Smileys, not Recent.
-        let fresh = EmojiPanel.sections(recent: [])
-        XCTAssertTrue(fresh[0].cells.isEmpty)
-        XCTAssertFalse(fresh[1].cells.contains(where: \.leadsSection))
-        XCTAssertTrue(fresh[2].cells.prefix(EmojiPanel.rowCount).allSatisfy(\.leadsSection))
     }
 
     /// **Two categories used to run into each other.** The seam is a 1pt overlay
@@ -212,53 +272,60 @@ final class EmojiModeTests: XCTestCase {
     /// or a tab would land on empty space, and not on the next section's leading
     /// edge, or tapping Food would open on a gutter.
     func testAGapSitsBetweenTwoCategoriesNotBeforeTheFirstOrAfterTheLast() {
-        let sections = EmojiPanel.sections(recent: SharedStore.shippedRecentEmoji)
+        everyRowCount { rowCount in
+            let sections = EmojiPanel.sections(
+                recent: SharedStore.shippedRecentEmoji, rowCount: rowCount)
 
-        XCTAssertFalse(
-            sections.last!.cells.contains(where: \.trailsSection),
-            "the last category has only the panel edge beyond it")
-
-        let bounded = sections.dropLast().filter { !$0.cells.isEmpty }
-        XCTAssertFalse(bounded.isEmpty)
-        for section in bounded {
-            let lastColumn = section.cells.suffix(EmojiPanel.rowCount)
-            XCTAssertTrue(
-                lastColumn.allSatisfy(\.trailsSection),
-                "\(section.id) last column should carry the gap")
-            let earlier = section.cells.dropLast(EmojiPanel.rowCount)
             XCTAssertFalse(
-                earlier.contains(where: \.trailsSection),
-                "\(section.id) earlier columns should not")
-        }
+                sections.last!.cells.contains(where: \.trailsSection),
+                "the last category has only the panel edge beyond it")
 
-        // Empty Recent is not a section that ends, so Smileys — the first
-        // category that actually draws — must not open with a gutter.
-        let fresh = EmojiPanel.sections(recent: [])
-        XCTAssertTrue(fresh[0].cells.isEmpty)
-        XCTAssertFalse(
-            fresh[1].cells.prefix(EmojiPanel.rowCount).contains(where: \.trailsSection))
-        XCTAssertTrue(
-            fresh[1].cells.suffix(EmojiPanel.rowCount).allSatisfy(\.trailsSection))
+            let bounded = sections.dropLast().filter { !$0.cells.isEmpty }
+            XCTAssertFalse(bounded.isEmpty)
+            for section in bounded {
+                let lastColumn = section.cells.suffix(rowCount)
+                XCTAssertTrue(
+                    lastColumn.allSatisfy(\.trailsSection),
+                    "\(section.id) last column should carry the gap at \(rowCount) rows")
+                let earlier = section.cells.dropLast(rowCount)
+                XCTAssertFalse(
+                    earlier.contains(where: \.trailsSection),
+                    "\(section.id) earlier columns should not")
+            }
+
+            // Empty Recent is not a section that ends, so Smileys — the first
+            // category that actually draws — must not open with a gutter.
+            let fresh = EmojiPanel.sections(recent: [], rowCount: rowCount)
+            XCTAssertTrue(fresh[0].cells.isEmpty)
+            XCTAssertFalse(fresh[1].cells.prefix(rowCount).contains(where: \.trailsSection))
+            XCTAssertTrue(fresh[1].cells.suffix(rowCount).allSatisfy(\.trailsSection))
+        }
     }
 
     func testTheSelectedTabFollowsTheScrollOffset() {
-        let sections = EmojiPanel.sections(recent: SharedStore.shippedRecentEmoji)
-        let width: CGFloat = 40
-        func tab(at offset: CGFloat) -> String {
-            EmojiPanel.category(atOffset: offset, cellWidth: width, in: sections)
+        everyRowCount { rowCount in
+            let sections = EmojiPanel.sections(
+                recent: SharedStore.shippedRecentEmoji, rowCount: rowCount)
+            let width: CGFloat = 40
+            func tab(at offset: CGFloat) -> String {
+                EmojiPanel.category(
+                    atOffset: offset, cellWidth: width, in: sections, rowCount: rowCount)
+            }
+
+            XCTAssertEqual(tab(at: 0), EmojiCatalog.recentID)
+            // Negative offsets happen: a rubber-band drag past the leading edge.
+            XCTAssertEqual(tab(at: -120), EmojiCatalog.recentID)
+
+            // One column past the end of Recent is the first real category.
+            let recentColumns = sections[0].cells.count / rowCount
+            XCTAssertEqual(
+                tab(at: CGFloat(recentColumns) * width), EmojiCatalog.categories[0].id,
+                "at \(rowCount) rows")
+
+            // Past the end of everything, the last tab stays lit rather than the
+            // computation running off the end of the list.
+            XCTAssertEqual(tab(at: 999_999), EmojiCatalog.categories.last?.id)
         }
-
-        XCTAssertEqual(tab(at: 0), EmojiCatalog.recentID)
-        // Negative offsets happen: a rubber-band drag past the leading edge.
-        XCTAssertEqual(tab(at: -120), EmojiCatalog.recentID)
-
-        // One column past the end of Recent is the first real category.
-        let recentColumns = sections[0].cells.count / EmojiPanel.rowCount
-        XCTAssertEqual(tab(at: CGFloat(recentColumns) * width), EmojiCatalog.categories[0].id)
-
-        // Past the end of everything, the last tab stays lit rather than the
-        // computation running off the end of the list.
-        XCTAssertEqual(tab(at: 999_999), EmojiCatalog.categories.last?.id)
     }
 
     /// **The Recent tab stayed orange after every other category was opened.**
@@ -297,5 +364,67 @@ final class EmojiModeTests: XCTestCase {
             EmojiPanel.selectedCategory(
                 current: "Food", leading: "Smileys", holdingTap: false),
             "Smileys")
+    }
+
+    // MARK: The way out
+
+    /// **An open grid has to keep a way back to the letters on screen, and since
+    /// Emoji and the gear traded seats the Emoji key on the bottom row is the only
+    /// one.**
+    ///
+    /// Written against the specific broken build, which is a straight seat swap
+    /// and nothing else: Emoji to the bottom row, the gear to the action row, and
+    /// `KeyboardView+Keys` still drawing the bottom row inside the panel's stack.
+    /// Every assertion here except the last passes against that build, and it
+    /// shipped a keyboard whose emoji grid could not be closed at all. Nothing
+    /// else notices — `showsLetterKeys` hid the row without knowing what was in
+    /// it, `LayoutValidator` has no opinion about a key that is present but
+    /// covered, and the landscape strip tests only ask about the bar.
+    ///
+    /// The last assertion is the one that rejects it, and it is deliberately not
+    /// "the bottom row contains Emoji" — that was true of the broken build too.
+    /// It is that the bottom row is *drawn* while the grid is open.
+    @MainActor
+    func testAnOpenEmojiGridAlwaysHasAWayBack() {
+        // Emoji ships on the bottom row, and no surface above the grid carries a
+        // second one that could close it.
+        let layout = KeyboardCustomization.default
+        XCTAssertTrue(layout.bottomRow.contains { $0.action == .emoji })
+        XCTAssertTrue(KeyboardOverlay.emoji.showsActionRow)
+        XCTAssertFalse(
+            (layout.cursorRow + layout.barLeading + layout.barTrailing)
+                .contains { $0.action == .emoji },
+            "an Emoji key above the grid would close it, and there is none")
+
+        // The key reads `אבג` rather than a smiling face while the grid is up, so
+        // it says what it does.
+        XCTAssertEqual(KeyboardLanguage.hebrew.lettersPlaneLabel, "אבג")
+        XCTAssertEqual(KeyboardLanguage.english.lettersPlaneLabel, "ABC")
+
+        // Tapping it really does leave the grid.
+        let controller = KeyboardController(target: RecordingTextTarget(), language: .hebrew)
+        controller.show(.emoji)
+        XCTAssertEqual(controller.overlay, .emoji)
+        controller.press(.emoji)
+        XCTAssertEqual(
+            controller.overlay, KeyboardOverlay.none,
+            "the Emoji key on the bottom row has to close the grid it opened")
+
+        // **And the row it sits in is not a row a panel may cover.** This is the
+        // assertion the broken build fails and the only one that does — there,
+        // the bottom row was inside the panel's own stack and `panelCovers` would
+        // have answered true for it. `showsLetterKeys` is unchanged either way,
+        // which is exactly why it cannot be the thing asserted on.
+        XCTAssertFalse(
+            KeyboardView.panelCovers(rowID: KeyboardLayout.RowID.bottom),
+            "the grid stands over the key that closes it")
+        // The three letter rows, the number row and the symbols plane's fourth row
+        // all still go under it.
+        for covered in [0, 1, 2, KeyboardLayout.RowID.numbers, KeyboardLayout.RowID.extraSymbols] {
+            XCTAssertTrue(KeyboardView.panelCovers(rowID: covered), "row \(covered)")
+        }
+        XCTAssertFalse(
+            KeyboardOverlay.emoji.showsLetterKeys,
+            "the letter rows are still the ones a panel replaces")
     }
 }

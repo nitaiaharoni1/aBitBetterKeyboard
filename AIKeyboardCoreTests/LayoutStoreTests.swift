@@ -74,6 +74,9 @@ final class LayoutStoreTests: XCTestCase {
     /// before `decodeLayout` was ever called. `replacingInternalGlobe` already
     /// runs over all four collections, so building the "old" layout the same way
     /// is what keeps this test about the migration rather than about the seating.
+    /// They have since traded back, which this survived untouched: that is the
+    /// whole point of asking all four rather than the one the gear happened to be
+    /// in.
     func testAnEditedLayoutMigratesTheOldInternalGlobeToSettings() throws {
         var old = KeyboardCustomization.default
         old.preset = nil

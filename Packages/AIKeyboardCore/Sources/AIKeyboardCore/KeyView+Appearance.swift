@@ -47,18 +47,19 @@ extension KeyView {
         // end up with a white cap's shadow or a white cap's graphite glyph.
         if isActionActive { return .action }
         switch spec.cap {
-        // Warm white stays dominant: letters, space, emoji, and the AI actions, whose
-        // accent is the glyph's tint rather than the cap.
+        // Warm white stays dominant: letters, space, the gear, and the AI actions,
+        // whose accent is the glyph's tint rather than the cap.
         //
-        // **Emoji is here and the gear is not, because the colour follows the
-        // seat rather than the key.** They swapped places: Emoji is now the narrow
-        // centre of the action row, between two warm-white AI caps, and the gear
-        // took Emoji's old bottom-row slot next to the deep-graphite `123`. Giving
-        // each one the cap its predecessor wore is what keeps both rows looking
-        // exactly as they did — a graphite key dropped into the middle of the
-        // action row, or a warm-white one beside `123`, would be the only cap in
-        // its row disagreeing with its neighbours.
-        case .character, .space, .quickTone, .aiReply, .aiFix, .emoji:
+        // **The gear is here and Emoji is not, because the colour follows the
+        // seat rather than the key.** They have swapped twice now, and this
+        // switch swaps with them: the gear holds the narrow centre of the action
+        // row between two warm-white AI caps, and Emoji is back in the bottom-row
+        // slot next to the deep-graphite `123`. Giving each one the cap its
+        // predecessor wore is what keeps both rows looking exactly as they did —
+        // a graphite key dropped into the middle of the action row, or a
+        // warm-white one beside `123`, would be the only cap in its row
+        // disagreeing with its neighbours.
+        case .character, .space, .quickTone, .aiReply, .aiFix, .settings:
             return .letter
         // The strongest controls: shift and the plane switch.
         case .shift, .plane:
@@ -66,7 +67,7 @@ extension KeyView {
         // The main action.
         case .ret:
             return .action
-        // Delete, settings, dictation and the neutral controls.
+        // Delete, emoji, dictation and the neutral controls.
         default:
             return .soft
         }

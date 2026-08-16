@@ -87,7 +87,7 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
         showsNumberRow: false,
         bottomRow: [
             SlotSpec(action: .numbersPlane, width: .units(1.3)),
-            SlotSpec(action: .settings, width: .units(1.0)),
+            SlotSpec(action: .emoji, width: .units(1.0)),
             SlotSpec(action: .space, width: .fill),
             SlotSpec(action: .punctuation, width: .units(1.0)),
             SlotSpec(action: .ret, width: .units(KeyboardLayout.functionKeyUnits))
@@ -102,16 +102,25 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
     /// to stop, and it sits at the far end rather than next to the keys a thumb
     /// is already travelling between.
     ///
-    /// CopyClip and Fix on the left, Rewrite and dictation on the right, Emoji
+    /// CopyClip and Fix on the left, Rewrite and dictation on the right, the gear
     /// 1.0 units in the true middle. Four `.fill` keys share the leftover so the
     /// centre key stays narrow in all 64 languages.
     ///
-    /// **Emoji and the gear traded places**, and 1.0 unit — `SlotWidth
-    /// .minimumUnits`, the narrowest a slot can be — is what makes the trade
-    /// worth making: Emoji went from a full-width key beside `123` to the one
-    /// narrow key in a row of four wide ones, and the gear took the bottom-row
-    /// slot it left. The cap colours followed the positions rather than the keys,
-    /// so each row looks exactly as it did — see `KeyView.capKind`.
+    /// **Emoji and the gear have traded places twice, and this is the second
+    /// trade: Emoji is back beside `123` and the gear holds the narrow centre.**
+    /// The seats keep their own widths and their own cap colours, so both rows
+    /// look exactly as they did either way round — see `KeyView.capKind`.
+    ///
+    /// **What the trade cost, and what paid for it.** While Emoji sat here it was
+    /// the only way out of its own grid: a panel hid the letter *and bottom* rows
+    /// and `showsActionRow` kept this one, so `KeyView.label` turning the Emoji
+    /// key into `ABC` / `אבג` was the entire exit. Moving Emoji down into a row
+    /// the grid covered would have stranded the user inside the grid. So the
+    /// bottom row is drawn outside the panel's own stack now
+    /// (`KeyboardView+Keys`), which is the iOS arrangement — `123` and `אבג` side
+    /// by side under an open grid — and it costs the grid a row of emoji, four
+    /// instead of five. `EmojiPanel.rowCount` carries that arithmetic and
+    /// `testAnOpenEmojiGridAlwaysHasAWayBack` holds the invariant.
     ///
     /// **This array is read in landscape even though the row is not drawn there.**
     /// `Theme.Metrics.landscapeLayout(basedOn:)` empties `cursorRow` because
@@ -122,7 +131,7 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
     public static let actionRow: [SlotSpec] = [
         SlotSpec(action: .copyclip, width: .fill),
         SlotSpec(action: .fix, width: .fill),
-        SlotSpec(action: .emoji, width: .units(1.0)),
+        SlotSpec(action: .settings, width: .units(1.0)),
         SlotSpec(action: .quickTone, width: .fill),
         SlotSpec(action: .dictation, width: .fill)
     ]

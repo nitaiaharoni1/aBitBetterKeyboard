@@ -110,8 +110,15 @@ extension KeyView {
             // plane's own label — `ABC`, `אבג`, `АБВ` — exactly as the `123` key
             // does when it is pointing home. The category row under the grid used
             // to carry a second `אבג` of its own; two keys a thumb's width apart
-            // doing one job is what that was, and this is the one that survived
-            // because it does not move when the grid opens.
+            // doing one job is what that was, and this is the one that survived.
+            //
+            // **This is now the whole exit from the grid, and what makes it one is
+            // in `KeyboardView+Keys` rather than here.** Emoji ships on the bottom
+            // row, and that row is drawn outside the panel's stack so a panel can
+            // never cover it. When Emoji sat in the action row this branch was a
+            // convenience; with the bottom row exposed it is the iOS arrangement —
+            // `123` and `אבג` side by side under the grid — and it is the only key
+            // on screen that closes the panel.
             //
             // Neutral rather than brand in both label states: `Theme.Brand` is
             // reserved for the AI moments, and this one opens a grid of pictures.

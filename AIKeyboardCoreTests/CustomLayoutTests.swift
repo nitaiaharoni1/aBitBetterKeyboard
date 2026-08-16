@@ -41,52 +41,55 @@ final class CustomLayoutTests: XCTestCase {
     func testTheDefaultBottomRow() {
         XCTAssertEqual(
             KeyboardCustomization.default.bottomRow.map(\.action),
-            [.numbersPlane, .settings, .space, .punctuation, .ret])
+            [.numbersPlane, .emoji, .space, .punctuation, .ret])
         XCTAssertFalse(
             KeyboardCustomization.default.bottomRow.contains { $0.action == .dictation },
             "dictation is on the action row; two of it is one too many")
     }
 
     /// Photographs the shipped action row so a fifth key cannot land by
-    /// accident, and so the narrow centre Emoji key cannot vanish later.
+    /// accident, and so the narrow centre key cannot vanish later.
     func testTheDefaultCompilesToTodaysRows() {
         XCTAssertEqual(
             KeyboardCustomization.actionRow.map(\.action),
-            [.copyclip, .fix, .emoji, .quickTone, .dictation])
+            [.copyclip, .fix, .settings, .quickTone, .dictation])
         let rows = KeyboardLayout.rows(
             for: .english, plane: .letters, showsGlobe: false, customization: .default)
         let action = rows.first { $0.id == KeyboardLayout.RowID.cursor }
         XCTAssertEqual(
             action?.keys.map(\.cap),
-            [.copyclip, .aiFix, .emoji, .quickTone, .dictation])
+            [.copyclip, .aiFix, .settings, .quickTone, .dictation])
     }
 
-    /// **Emoji and the gear swapped seats, and the width is half of what was
-    /// asked for.** The centre of the action row is the one narrow slot in a row
-    /// of four `.fill` keys, so a straight position swap would have left Emoji
-    /// exactly as wide as it was beside `123`. `SlotWidth.minimumUnits` is the
-    /// floor, and this is it: the narrowest key the layout model can describe.
-    func testEmojiTookTheNarrowCentreSeatAndTheGearTookTheBottomRow() {
-        let emoji = KeyboardCustomization.actionRow.first { $0.action == .emoji }
+    /// **Emoji and the gear have swapped seats twice, and the width belongs to
+    /// the seat both times.** The centre of the action row is the one narrow slot
+    /// in a row of four `.fill` keys, and the bottom row's slot beside `123` is
+    /// the same 1.0 unit, so whichever key is sitting where, neither one changes
+    /// size when they trade. `SlotWidth.minimumUnits` is the floor and both of
+    /// these are it: the narrowest key the layout model can describe.
+    func testTheGearTookTheNarrowCentreSeatAndEmojiTookTheBottomRow() {
+        let gear = KeyboardCustomization.actionRow.first { $0.action == .settings }
+        let emoji = KeyboardCustomization.default.bottomRow.first { $0.action == .emoji }
+        XCTAssertEqual(gear?.width, .units(SlotWidth.minimumUnits))
         XCTAssertEqual(emoji?.width, .units(SlotWidth.minimumUnits))
         XCTAssertFalse(
-            KeyboardCustomization.actionRow.contains { $0.action == .settings },
-            "the gear moved to the bottom row; two of it is one too many")
+            KeyboardCustomization.actionRow.contains { $0.action == .emoji },
+            "Emoji moved to the bottom row; two of it is one too many")
         XCTAssertFalse(
-            KeyboardCustomization.default.bottomRow.contains { $0.action == .emoji },
-            "Emoji moved to the action row; two of it is one too many")
+            KeyboardCustomization.default.bottomRow.contains { $0.action == .settings },
+            "the gear moved to the action row; two of it is one too many")
     }
 
     /// **The colours followed the seats rather than the keys**, so neither row
-    /// changed appearance: the action row's centre is still a warm-white cap
-    /// between two AI keys, and the key beside `123` is still soft graphite.
-    /// Asserted through `restsOnDarkCap` because that one bool is what decides
-    /// the fill, the glyph colour and the depth recipe all at once.
+    /// changed appearance across either swap: the action row's centre is still a
+    /// warm-white cap between two AI keys, and the key beside `123` is still soft
+    /// graphite. Asserted through `restsOnDarkCap` because that one bool is what
+    /// decides the fill, the glyph colour and the depth recipe all at once.
     func testTheCapColoursFollowedTheSwap() {
-        XCTAssertFalse(capView(.emoji).restsOnDarkCap, "Emoji took the gear's warm-white cap")
-        XCTAssertTrue(capView(.settings).restsOnDarkCap, "the gear took Emoji's graphite cap")
-        XCTAssertEqual(capView(.emoji).restingCap, capView(.aiFix).restingCap)
-        XCTAssertEqual(capView(.settings).restingCap, capView(.backspace).restingCap)
+        XCTAssertFalse(capView(.settings).restsOnDarkCap, "the gear took Emoji's warm-white cap")
+        XCTAssertTrue(capView(.emoji).restsOnDarkCap, "Emoji took the gear's graphite cap")
+        XCTAssertEqual(capView(.settings).restingCap, capView(.aiFix).restingCap)
+        XCTAssertEqual(capView(.emoji).restingCap, capView(.backspace).restingCap)
     }
 
     private func capView(_ cap: KeyCap) -> KeyView {
@@ -97,12 +100,51 @@ final class CustomLayoutTests: XCTestCase {
 
     /// Nothing the default ships appears in two rows at once.
     func testNoActionAppearsInTwoRowsOfTheDefault() {
-        let layout = KeyboardCustomization.default
+        assertNoDuplicateAction(in: .default, named: "the default")
+    }
+
+    /// **The same question of all five presets, because the default is the only
+    /// one this used to ask and the presets are where it actually breaks.**
+    /// "Power" writes its own `cursorRow` and "AI first" its own `bottomRow`, so
+    /// neither inherits a change to the default's seating — when Emoji and the
+    /// gear traded seats the second time, "Power" was left with Emoji in both
+    /// rows and "AI first" with the gear in both, and nothing in the build said
+    /// so. `LayoutValidator` cannot: it looks for a repeat *within* one row.
+    func testNoActionAppearsInTwoRowsOfAnyPreset() {
+        for preset in LayoutPreset.all {
+            assertNoDuplicateAction(in: preset.customization, named: preset.name)
+        }
+    }
+
+    /// The `.text` marks are filtered out because two commas in one layout is
+    /// something a user is allowed to build — see `testTwoSlotsWithTheSameAction
+    /// HaveDifferentIDs`.
+    private func assertNoDuplicateAction(
+        in layout: KeyboardCustomization, named name: String,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
         let all =
             (layout.bottomRow + layout.cursorRow + layout.barLeading + layout.barTrailing)
             .map(\.action)
             .filter { if case .text = $0 { return false } else { return true } }
-        XCTAssertEqual(Set(all).count, all.count, "an action ships in two places: \(all)")
+        XCTAssertEqual(
+            Set(all).count, all.count, "\(name) ships an action in two places: \(all)",
+            file: file, line: line)
+    }
+
+    /// **Every preset can reach Emoji and the gear**, which the duplicate check
+    /// above cannot see: a preset that seats both in one row has no repeat to
+    /// find, and a preset that drops one has none either. The gear is the only
+    /// route into the containing app and Emoji is the only route into the grid.
+    func testEveryPresetKeepsBothTradedKeys() {
+        for preset in LayoutPreset.all {
+            let layout = preset.customization
+            let all =
+                (layout.bottomRow + layout.cursorRow + layout.barLeading
+                + layout.barTrailing).map(\.action)
+            XCTAssertTrue(all.contains(.settings), "\(preset.name) has no way into Settings")
+            XCTAssertTrue(all.contains(.emoji), "\(preset.name) has no way into the emoji grid")
+        }
     }
 
     /// **The punctuation key is not `text(".")`, and the difference is four marks

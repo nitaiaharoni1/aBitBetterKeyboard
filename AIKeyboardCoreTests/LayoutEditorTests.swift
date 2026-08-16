@@ -75,7 +75,7 @@ final class LayoutEditorTests: XCTestCase {
 
     /// **Return, not the globe.** This reached for `.globe` in the shipped
     /// default and force-unwrapped it; no preset has placed that key since the slot
-    /// went to `.settings`, so the unwrap was nil and it *crashed the test runner*
+    /// went to `.emoji`, so the unwrap was nil and it *crashed the test runner*
     /// rather than failing. The globe is also no longer something the editor
     /// refuses — `KeyboardController.apply(_:)` puts it back when the device needs
     /// one, so the validator has no opinion left. Return is an essential that is
@@ -219,7 +219,13 @@ final class LayoutEditorTests: XCTestCase {
     /// with no word on it is the defect this argument exists for.
     func testTheLabelSwitchReportsWhatTheKeyIsActuallyDrawing() {
         let model = editor()
-        model.draft.cursorRow = KeyboardCustomization.actionRow
+        // Emoji is appended rather than looked up: it left the action row when it
+        // traded seats with the gear, and `first { $0.action == .emoji }!` on a
+        // row that no longer holds it is a nil force-unwrap, which *kills the
+        // runner* rather than failing one case. The rule under test is still about
+        // Emoji, so the fixture puts one there.
+        model.draft.cursorRow =
+            KeyboardCustomization.actionRow + [SlotSpec(action: .emoji, width: .fill)]
         let fix = model.draft.cursorRow.first { $0.action == .fix }!
         let emoji = model.draft.cursorRow.first { $0.action == .emoji }!
         let wide = KeyView.captionMinimumWidth + 20
@@ -632,7 +638,7 @@ final class LayoutEditorTests: XCTestCase {
     func testALateEndResizeFromAnotherKeyDoesNotCommit() throws {
         let model = editor()
         let key = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .punctuation })
-        let other = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .settings })
+        let other = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .emoji })
         let start = model.draft
         model.beginResize(key)
         model.updateResize(.units(2.5))
@@ -649,7 +655,7 @@ final class LayoutEditorTests: XCTestCase {
         // runner rather than failing one case, which is how the last change to
         // the shipped bottom row took eleven tests down with it.
         let key = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .punctuation })
-        let other = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .settings })
+        let other = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .emoji })
         let start = model.draft
         model.beginDrag(key)
         model.updateDrag(at: CGPoint(x: 20, y: 120), in: boardGeometry(model))

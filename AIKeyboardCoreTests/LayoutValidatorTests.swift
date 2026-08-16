@@ -274,7 +274,7 @@ final class LayoutValidatorTests: XCTestCase {
 
     /// **Return, not the globe, and the swap is the point.** Both of these used
     /// to reach for `.globe` in the shipped default and force-unwrap it. No preset
-    /// has placed that key since the slot went to `.settings`, so the unwrap was
+    /// has placed that key since the slot went to Emoji, so the unwrap was
     /// nil — and a nil unwrap in a test *crashes the runner* rather than failing
     /// it, which takes the rest of the bundle down with it and stitches the summary
     /// together across relaunches. The same trap is recorded three tests below,

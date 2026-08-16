@@ -33,9 +33,42 @@ public struct EmojiPanel: View {
     /// `LayoutGeometry.keyHeight` moves between 36 and 56.
     let keyHeight: CGFloat
 
-    /// Five, and it is a floor rather than a taste. Four is what the old vertical
-    /// grid showed, and the strip has to beat it to be worth the change.
-    static let rowCount = 5
+    /// **How many rows fit, rather than a number.** It was a hardcoded five, on
+    /// the argument that five is a floor rather than a taste: four is what the
+    /// vertical grid this replaced showed, and the horizontal strip had to beat it
+    /// to be worth the change.
+    ///
+    /// That was decided against one height and then read as if it held at every
+    /// height. The panel used to be 208 pt because it covered the letter rows
+    /// *and* the space row; it covers only the letter rows now — see
+    /// `KeyboardView.panelCovers(rowID:)` — so the grid under the category strip
+    /// is 110 pt in portrait and **60 pt in landscape**, where the whole keyboard
+    /// is 116. Five rows of a 60 pt grid is a 12 pt cell holding a 9 pt emoji.
+    /// Landscape was already the worst case at 18 pt and a fixed count would have
+    /// taken it to 15.
+    ///
+    /// So the cell height is what is held steady and the count is what gives:
+    /// every configuration lands between 27 and 33 pt a cell instead of swinging
+    /// from 15 to 44. Portrait's default takes four, a number row or a tall
+    /// `keyHeight` takes five back, and landscape takes two — which is more emoji
+    /// on screen than five rows of specks, because what this panel gives is the
+    /// horizontal scroll through all 1,870 in nine sections, and that never
+    /// depended on the row count.
+    static func rowCount(forGridHeight height: CGFloat) -> Int {
+        max(
+            Self.rowCountRange.lowerBound,
+            min(Self.rowCountRange.upperBound, Int(height / Self.minimumCellHeight)))
+    }
+
+    /// The shortest a cell may be before a row is dropped instead. A cell is
+    /// square-ish at `targetCellWidth`, and `cell` draws its emoji at 0.78 of the
+    /// smaller side, so 26 pt is a 20 pt glyph — the floor at which an emoji is
+    /// still a picture rather than a smudge.
+    static let minimumCellHeight: CGFloat = 26
+
+    /// Two is not a degenerate case, it is landscape. Five is the ceiling because
+    /// a taller grid should grow its emoji, not thin them.
+    static let rowCountRange = 2...5
 
     /// How long a tap keeps its tab orange while the strip is still jumping.
     /// Covers `Theme.Motion.duration` with a little slack, so a still-visible
@@ -63,6 +96,19 @@ public struct EmojiPanel: View {
     /// in `body` for why this is not a computed property.
     @State private var sections: [Section] = []
 
+    /// **The row count the cells in `sections` were actually laid out for**, which
+    /// is not always the one the current height wants. The blanks that pad a
+    /// section to a whole column are counted in multiples of it, so drawing a
+    /// `LazyHGrid` at a different number would slice columns across section
+    /// boundaries for the frame between a rotation and the rebuild. Reading the
+    /// count off the data rather than off the geometry keeps the two in step; the
+    /// wanted count lives in `rows` and `.task(id:)` closes the gap.
+    @State private var sectionRowCount = 0
+
+    /// How many rows the current height wants. Written from the layout pass, and
+    /// the only thing `.task(id:)` watches.
+    @State private var rows = 0
+
     private let scrollSpace = "emoji-strip"
 
     public init(controller: KeyboardController, keyHeight: CGFloat = Theme.Metrics.keyHeight) {
@@ -75,11 +121,20 @@ public struct EmojiPanel: View {
             let columns = max(1, (geo.size.width / Self.targetCellWidth).rounded())
             let cellWidth = geo.size.width / columns
             let gridHeight = max(0, geo.size.height - keyHeight)
-            let cellHeight = gridHeight / CGFloat(Self.rowCount)
+            let wanted = Self.rowCount(forGridHeight: gridHeight)
+            // The cells on screen divide the height they were built for, not the
+            // height that has just been measured. They are the same number every
+            // frame except the one after a rotation.
+            let cellHeight = gridHeight / CGFloat(max(1, sectionRowCount))
 
             VStack(spacing: 0) {
                 grid(cellWidth: cellWidth, cellHeight: cellHeight)
                     .frame(height: gridHeight)
+                    // `initial: true` because the first layout pass *is* the
+                    // change: `rows` starts at zero, which builds nothing, and
+                    // without this the grid would stay empty until something else
+                    // moved.
+                    .onChange(of: wanted, initial: true) { _, count in rows = count }
 
                 EmojiCategoryRow(
                     selected: selectedCategory,
@@ -108,9 +163,14 @@ public struct EmojiPanel: View {
         //
         // `visibleRecentEmoji`, never `recentEmoji`: the latter moves on every
         // pick, which would re-sort the Recent tab under the finger that picked.
-        .task { sections = Self.sections(recent: controller.visibleRecentEmoji) }
+        //
+        // **Keyed on `rows` as well**, so a rotation rebuilds it: the padding
+        // blanks and the seams are counted in multiples of the row count, and a
+        // landscape grid two rows tall drawn from cells padded to four is columns
+        // sliced across category boundaries.
+        .task(id: rows) { rebuildSections(recent: controller.visibleRecentEmoji) }
         .onChange(of: controller.visibleRecentEmoji) { _, recent in
-            sections = Self.sections(recent: recent)
+            rebuildSections(recent: recent)
         }
         // Same fill as the letters this grid replaced. `Keys.panel` is the
         // warmer lift the banner uses; painting it here left a cream rectangle
@@ -123,6 +183,14 @@ public struct EmojiPanel: View {
         .environment(\.layoutDirection, .leftToRight)
     }
 
+    /// Rebuilds the cells and records the count they were built for, in one step
+    /// so the two can never disagree.
+    private func rebuildSections(recent: [String]) {
+        guard rows > 0 else { return }
+        sections = Self.sections(recent: recent, rowCount: rows)
+        sectionRowCount = rows
+    }
+
     /// Set by a tab tap, consumed by the grid's `ScrollViewReader`. A piece of
     /// state rather than a direct call because the reader's proxy only exists
     /// inside the grid's own body.
@@ -131,7 +199,8 @@ public struct EmojiPanel: View {
     // MARK: Grid
 
     private func grid(cellWidth: CGFloat, cellHeight: CGFloat) -> some View {
-        let columns = sections.reduce(0) { $0 + $1.cells.count / Self.rowCount }
+        let drawnRows = max(1, sectionRowCount)
+        let columns = sections.reduce(0) { $0 + $1.cells.count / drawnRows }
         let gaps = sections.reduce(0) { $0 + ($1.cells.contains(where: \.trailsSection) ? 1 : 0) }
         let contentWidth = CGFloat(columns) * cellWidth + CGFloat(gaps) * Self.sectionGap
 
@@ -139,7 +208,7 @@ public struct EmojiPanel: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHGrid(
                     rows: Array(
-                        repeating: GridItem(.fixed(cellHeight), spacing: 0), count: Self.rowCount),
+                        repeating: GridItem(.fixed(cellHeight), spacing: 0), count: drawnRows),
                     spacing: 0
                 ) {
                     ForEach(sections, id: \.id) { section in
@@ -255,16 +324,21 @@ public struct EmojiPanel: View {
     /// Static so the view can cache it in `@State` while tests still ask for it
     /// directly — a `@State` array is empty until a body has been evaluated, and
     /// a test that read one would be measuring nothing.
-    static func sections(recent: [String]) -> [Section] {
+    static func sections(recent: [String], rowCount: Int) -> [Section] {
         // **The first section holding anything wears no seam.** A rule marks a
         // boundary between two sections, and the leading edge of the strip has
         // only the edge of the panel on its other side. Asked of the cells rather
         // than hardcoded to Recent, because on a fresh install `recent` is empty
         // and Smileys is what opens the grid.
-        var result = [section(id: EmojiCatalog.recentID, emoji: recent, rule: false)]
+        var result = [
+            section(id: EmojiCatalog.recentID, emoji: recent, rule: false, rowCount: rowCount)
+        ]
         var anythingBefore = !recent.isEmpty
         for category in EmojiCatalog.categories {
-            result.append(section(id: category.id, emoji: category.emoji, rule: anythingBefore))
+            result.append(
+                section(
+                    id: category.id, emoji: category.emoji, rule: anythingBefore,
+                    rowCount: rowCount))
             anythingBefore = anythingBefore || !category.emoji.isEmpty
         }
         return result.enumerated().map { index, section in
@@ -282,7 +356,7 @@ public struct EmojiPanel: View {
     /// once, here, because it has to agree exactly with the ids `section` mints.
     static func anchorID(forCategory id: String) -> String { "\(id)-0" }
 
-    private static func section(id: String, emoji: [String], rule: Bool) -> Section {
+    private static func section(id: String, emoji: [String], rule: Bool, rowCount: Int) -> Section {
         var cells = emoji.enumerated().map {
             Cell(
                 id: "\(id)-\($0.offset)", categoryID: id, emoji: $0.element,
@@ -312,11 +386,11 @@ public struct EmojiPanel: View {
     /// question and would go quiet the moment a category is wider than the screen,
     /// which most of them are.
     static func category(
-        atOffset offset: CGFloat, cellWidth: CGFloat, in sections: [Section]
+        atOffset offset: CGFloat, cellWidth: CGFloat, in sections: [Section], rowCount: Int
     )
         -> String
     {
-        guard cellWidth > 0, !sections.isEmpty else { return EmojiCatalog.recentID }
+        guard cellWidth > 0, rowCount > 0, !sections.isEmpty else { return EmojiCatalog.recentID }
         let column = Int(max(0, offset) / cellWidth)
         var consumed = 0
         for section in sections {
@@ -404,10 +478,16 @@ struct LeadingEmojiCategoryKey: PreferenceKey {
 /// the row's one keycap says it outright, and the hairline is gone with the
 /// reason for it.
 ///
-/// **There is no `אבג` key here.** The way back to the letters is the Emoji key
-/// in the action row, which says `אבג` while the grid is open — see
-/// `KeyView.label`. Two keys doing one job, a thumb's width apart, is what this
-/// row had before.
+/// **There is still no `אבג` key here, and the reason has changed.** It used to
+/// be that the Emoji key in the action row said `אבג` while the grid was open,
+/// and two keys a thumb's width apart doing one job is what this row had before.
+/// Emoji has since moved to the bottom row — see `KeyboardCustomization.default`
+/// — and the answer is the same because the bottom row is no longer covered:
+/// `KeyboardView+Keys` draws it outside the panel's own stack, so `123`, the
+/// space bar, the full stop and return stay under the grid, and the Emoji key
+/// among them reads `אבג`. That is the iOS arrangement. Adding one here would
+/// put two ways back on screen at once, ten points apart, and cost the ten tabs
+/// five points of width each to do it.
 struct EmojiCategoryRow: View {
 
     let selected: String

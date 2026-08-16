@@ -217,13 +217,13 @@ final class CustomLayoutCompilerTests: XCTestCase {
         let row = try XCTUnwrap(rows.first { $0.id == KeyboardLayout.RowID.bottom })
         XCTAssertEqual(
             row.keys.map(\.addressableID),
-            // `.settings` stands where the globe used to, and where Emoji stood
-            // between the two — Emoji has the narrow centre of the action row now.
-            // Nothing compiles a globe into a custom row —
+            // Emoji stands where the globe used to, and where the gear stood
+            // between the two — the gear has the narrow centre of the action row
+            // now. Nothing compiles a globe into a custom row —
             // `KeyboardController.apply(_:)` inserts one into the layout beforehand
             // when the device needs it, which is why this row has none even at
             // `showsGlobe: true`.
-            ["plane-123", "settings", "space", KeyboardLayout.punctuationKeyID, "return"])
+            ["plane-123", "emoji", "space", KeyboardLayout.punctuationKeyID, "return"])
     }
 
     /// A key that was never compiled from a slot has no suffix to strip.
@@ -242,14 +242,22 @@ final class CustomLayoutCompilerTests: XCTestCase {
     /// of `KeyView.actionLabel` and into this answer — at 40pt every one of the
     /// five would be false and the position rule could have been deleted without
     /// a test noticing.
+    ///
+    /// **Emoji is appended rather than found, and without that this test stopped
+    /// proving half of what it is named for.** It left the action row when it
+    /// traded seats with the gear, so looping over the shipped row alone would
+    /// check the dictation half of the rule and quietly pass a build that had
+    /// dropped the Emoji half entirely.
     func testTheShippedActionRowStillCaptionsEverythingButEmojiAndDictate() throws {
         var layout = KeyboardCustomization.default
-        layout.cursorRow = KeyboardCustomization.actionRow
+        layout.cursorRow =
+            KeyboardCustomization.actionRow + [SlotSpec(action: .emoji, width: .fill)]
         let rows = KeyboardLayout.rows(
             for: .english, plane: .letters, showsGlobe: true, customization: layout)
         let row = try XCTUnwrap(rows.first { $0.id == KeyboardLayout.RowID.cursor })
         let wide = KeyView.captionMinimumWidth + 20
 
+        XCTAssertTrue(row.keys.contains { $0.cap == .emoji }, "the Emoji half is unchecked")
         for key in row.keys {
             let named = key.showsActionCaption(inRow: row.id, width: wide)
             let expected = key.cap != .emoji && key.cap != .dictation

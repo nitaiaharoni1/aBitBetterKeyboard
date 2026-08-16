@@ -433,7 +433,7 @@ final class LandscapeGeometryTests: XCTestCase {
             KeyboardCustomization.default.cursorRow.map(\.action))
         XCTAssertEqual(
             SuggestionBar.landscapeActions(for: .default).map(\.action),
-            [.copyclip, .fix, .emoji, .quickTone, .dictation])
+            [.copyclip, .fix, .settings, .quickTone, .dictation])
     }
 
     /// A user is free to put Rewrite in the action row *and* on the trailing end
@@ -447,35 +447,41 @@ final class LandscapeGeometryTests: XCTestCase {
         let strip = SuggestionBar.landscapeActions(for: layout).map(\.action)
 
         XCTAssertFalse(strip.contains(.quickTone))
-        XCTAssertEqual(strip, [.copyclip, .fix, .emoji, .dictation])
+        XCTAssertEqual(strip, [.copyclip, .fix, .settings, .dictation])
     }
 
     /// **Settings is the only route from this keyboard into the containing app,
     /// so it may not be the thing an orientation drops.**
     ///
-    /// It ships on the bottom row, which landscape keeps, and the first assertion
-    /// is that premise: if the gear ever moves back into the action row by
-    /// default, the second half of this is what carries it. A user may make that
-    /// move themselves today, and then the bar is the only surface left that can
-    /// draw it — `.settings` is deliberately in `landscapeBarActions` and
-    /// deliberately not in `barCatalogue`, which is the list of what a user may
-    /// *choose* to put there.
+    /// **It now ships in the action row, which landscape sheds, so the bar is the
+    /// shipped route and not a contingency.** This test was written the other way
+    /// round — the gear on the bottom row, the bar carrying it only for a user who
+    /// had moved it — and the comment then said "if the gear ever moves back into
+    /// the action row by default, the second half of this is what carries it".
+    /// That is what happened when it traded seats with Emoji, so the two halves
+    /// have swapped: the shipped layout is the one the bar rescues, and the moved
+    /// layout is the one the bottom row draws directly.
+    ///
+    /// `.settings` is deliberately in `landscapeBarActions` and deliberately not
+    /// in `barCatalogue`, which is the list of what a user may *choose* to put
+    /// there.
     func testSettingsIsReachableInLandscapeWhereverTheUserPutsIt() {
         let landscape = Theme.Metrics.landscapeLayout(basedOn: .default)
-        XCTAssertTrue(
+        XCTAssertFalse(
             landscape.bottomRow.map(\.action).contains(.settings),
-            "the gear left the bottom row, so landscape's only route into the app is the bar")
+            "the gear is back on the bottom row, so this test is asking the wrong half")
+        XCTAssertTrue(
+            SuggestionBar.landscapeActions(for: .default).map(\.action).contains(.settings),
+            "the gear is in the row landscape sheds and on no other surface")
 
         var moved = KeyboardCustomization.default
-        moved.bottomRow.removeAll { $0.action == .settings }
-        moved.cursorRow.append(SlotSpec(action: .settings, width: .units(1.0)))
+        moved.cursorRow.removeAll { $0.action == .settings }
+        moved.bottomRow.append(SlotSpec(action: .settings, width: .units(1.0)))
 
-        XCTAssertFalse(
-            Theme.Metrics.landscapeLayout(basedOn: moved).bottomRow.map(\.action)
-                .contains(.settings))
         XCTAssertTrue(
-            SuggestionBar.landscapeActions(for: moved).map(\.action).contains(.settings),
-            "the gear is in a row landscape sheds and on no other surface")
+            Theme.Metrics.landscapeLayout(basedOn: moved).bottomRow.map(\.action)
+                .contains(.settings),
+            "a user who moved the gear down loses it in landscape")
     }
 
     /// A key with no glyph draws `questionmark` through `slotButton`'s fallback,
@@ -501,16 +507,17 @@ final class LandscapeGeometryTests: XCTestCase {
     /// **A panel opened in landscape has to keep the chip that closes it on
     /// screen, and the strip alone is not enough to promise that.** Both panels
     /// hide every letter key and landscape draws no search box, so
-    /// `landscapePanelControls(for:)` is the entire surface left; a build that
+    /// `landscapePanelControls(for:)` is the surface left on the bar; a build that
     /// listed the strip alone would let a user who keeps Emoji on a bar edge open
     /// the grid from a chip that then stops being drawn, because
     /// `landscapeActions(for:)` deduplicates it out of the strip.
+    ///
+    /// **The shipped layout is no longer the case this protects, and it is not
+    /// exposed either.** Emoji sits on the bottom row now, which the grid covers,
+    /// so no chip closes it — `EmojiCategoryRow`'s own `אבג` key does, in both
+    /// orientations, and `testAnOpenEmojiGridAlwaysHasAWayBack` is what holds
+    /// that. This still answers for the arrangements where a chip is the exit.
     func testEverythingThatCanOpenAPanelInLandscapeIsStillDrawnWhileItIsOpen() {
-        XCTAssertTrue(
-            SuggestionBar.landscapePanelControls(for: .default).map(\.action)
-                .contains(.emoji),
-            "the shipped Emoji chip vanishes the moment its own grid opens")
-
         var edgeOnly = KeyboardCustomization.default
         edgeOnly.cursorRow = []
         edgeOnly.barTrailing = [SlotSpec(action: .reply), SlotSpec(action: .emoji)]
@@ -519,6 +526,13 @@ final class LandscapeGeometryTests: XCTestCase {
             SuggestionBar.landscapePanelControls(for: edgeOnly).map(\.action)
                 .contains(.emoji),
             "a grid opened from a bar edge has nothing on screen that closes it")
+
+        var inActionRow = KeyboardCustomization.default
+        inActionRow.cursorRow = [SlotSpec(action: .emoji, width: .units(1.0))]
+        XCTAssertTrue(
+            SuggestionBar.landscapePanelControls(for: inActionRow).map(\.action)
+                .contains(.emoji),
+            "a user who put Emoji back in the action row loses its chip in landscape")
     }
 
     /// Landscape has about three points of margin, so the one thing in this bar

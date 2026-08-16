@@ -2,6 +2,30 @@ import SwiftUI
 
 extension KeyboardView {
 
+    // MARK: What a panel may cover
+
+    /// Whether the emoji grid and the CopyClip list are allowed to stand over
+    /// this row.
+    ///
+    /// **The bottom row is the one that says no, and the reason is that the key
+    /// closing the panel is in it.** Emoji ships beside `123` and `KeyView.label`
+    /// turns it into `ABC` / `אבג` while the grid is up, which is the iOS
+    /// arrangement; a panel drawn over that row takes the only exit off the
+    /// screen. This was true the moment Emoji and the gear traded seats, and
+    /// nothing else in the build could see it — `Overlay.showsLetterKeys` hides
+    /// rows without knowing what is in them, and `LayoutValidator` has no opinion
+    /// about a key that is present but covered.
+    ///
+    /// It is also the same split the language swipe already needed: the rows a
+    /// panel replaces are exactly the rows that slide, and the space row stays put
+    /// under both because the thumb is on it. One rule, two callers, rather than
+    /// two filters that happen to agree.
+    ///
+    /// `EmojiModeTests.testAnOpenEmojiGridAlwaysHasAWayBack` is what holds it.
+    static func panelCovers(rowID: Int) -> Bool {
+        rowID != KeyboardLayout.RowID.bottom
+    }
+
     // MARK: Keys
 
     var keyGrid: some View {
@@ -53,9 +77,11 @@ extension KeyboardView {
             let letterRows = rows.filter { $0.id != KeyboardLayout.RowID.cursor }
             let actionRows = rows.filter { $0.id == KeyboardLayout.RowID.cursor }
             // The space row stays put: the thumb is on it. Everything above it
-            // slides with the language, matching the strip rather than a pager.
-            let slidingRows = letterRows.filter { $0.id != KeyboardLayout.RowID.bottom }
-            let bottomRows = letterRows.filter { $0.id == KeyboardLayout.RowID.bottom }
+            // slides with the language, matching the strip rather than a pager —
+            // and everything above it is also exactly what a panel replaces, which
+            // is one rule rather than two coincidences. See `panelCovers(rowID:)`.
+            let slidingRows = letterRows.filter { Self.panelCovers(rowID: $0.id) }
+            let bottomRows = letterRows.filter { !Self.panelCovers(rowID: $0.id) }
             // Numbers and symbols draw SwiftKey's extra row. Fit those four into
             // the height three letter rows already occupy, so tapping 123 cannot
             // grow the keyboard past the fingerprint cliff. Letters never take
@@ -127,8 +153,8 @@ extension KeyboardView {
                 }
 
                 ZStack(alignment: .top) {
-                    // Letter / number / extra rows slide; the space row below does
-                    // not. Hidden (not removed) while a panel is up so the emoji
+                    // Letter / number / extra rows slide, and a panel covers
+                    // exactly these. Hidden (not removed) while one is up so the
                     // grid keeps the same height.
                     //
                     // **The sliding stack is a ZStack so old and new letters can
@@ -138,42 +164,36 @@ extension KeyboardView {
                     // shoved the space row into the bottom edge, and `.clipped()`
                     // then sliced the backspace row's own shadow off. Hugging the
                     // keys restores the same 12pt gap every other row has.
-                    VStack(spacing: layout.geometry.rowSpacing) {
-                        if !slidingRows.isEmpty {
-                            ZStack {
-                                rowsView(
-                                    slidingRows, availableWidth: available, unit: unit,
-                                    height: slidingKeyHeight,
-                                    rowSpacing: layout.geometry.rowSpacing
-                                )
-                                .id(controller.language)
-                                .transition(
-                                    SpaceSwipe.letterTransition(
-                                        step: controller.languageSlideStep,
-                                        reduceMotion: reduceMotion))
-                            }
-                            .fixedSize(horizontal: false, vertical: true)
-                        }
-                        if !bottomRows.isEmpty {
+                    if !slidingRows.isEmpty {
+                        ZStack {
                             rowsView(
-                                bottomRows, availableWidth: available, unit: unit,
-                                height: layout.geometry.height(.bottom),
+                                slidingRows, availableWidth: available, unit: unit,
+                                height: slidingKeyHeight,
                                 rowSpacing: layout.geometry.rowSpacing
                             )
+                            .id(controller.language)
+                            .transition(
+                                SpaceSwipe.letterTransition(
+                                    step: controller.languageSlideStep,
+                                    reduceMotion: reduceMotion))
                         }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .opacity(showLetterKeys ? 1 : 0)
+                        .allowsHitTesting(showLetterKeys)
+                        .keyboardGridChrome(width: gridWidth, reach: layout.geometry.reach)
                     }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .opacity(showLetterKeys ? 1 : 0)
-                    .allowsHitTesting(showLetterKeys)
-                    .keyboardGridChrome(width: gridWidth, reach: layout.geometry.reach)
 
                     // Over the letter area only — not over the action row above.
                     // Same width and reach pin as the keys, so one-handed mode
                     // does not leave a full-bleed emoji panel over a narrowed row.
                     if controller.overlay == .emoji {
-                        // `.bottom`, not `.letters`: this panel covers the letter
-                        // rows *and* the space row, so its category strip is the
-                        // row standing where the space bar was.
+                        // Still `.bottom` rather than `.letters`, and now for a
+                        // different reason. The strip used to *stand in* for the
+                        // space row because the panel covered it; the space row is
+                        // drawn now, right underneath, so the two are neighbours
+                        // and the strip takes its neighbour's height so the eye
+                        // reads one band of chrome rather than two of different
+                        // sizes.
                         EmojiPanel(
                             controller: controller,
                             keyHeight: layout.geometry.height(.bottom)
@@ -189,8 +209,8 @@ extension KeyboardView {
 
                     if controller.overlay == .copyclip {
                         // `.bottom`, for the reason `EmojiPanel` is given the same
-                        // band: this panel covers the space row too, so its control
-                        // row is the row standing where the space bar was.
+                        // band: its control row is this panel's own neighbour to
+                        // the space row and matches its height.
                         CopyClipPanel(
                             controller: controller,
                             keyHeight: layout.geometry.height(.bottom)
@@ -205,6 +225,47 @@ extension KeyboardView {
                     }
                 }
                 .zIndex(KeyPopupLayer.letters)
+
+                // **Outside the panel's ZStack, so nothing can ever cover it.**
+                // It used to be inside, sharing the letters' `showLetterKeys`
+                // opacity, and both panels were sized to the whole block — which
+                // meant an open emoji grid hid `123`, space, the full stop, return
+                // *and* the Emoji key that closes it. While Emoji sat in the
+                // action row that cost nothing, because the action row stays
+                // drawn; the moment Emoji moved down here it was the only way out
+                // of the grid and it was underneath the grid. Drawing this row
+                // unconditionally is what makes `KeyView.label`'s `isEmojiOpen`
+                // branch reachable: the Emoji key reads `ABC` / `אבג` while the
+                // grid is up, which is the iOS arrangement and needs no second key
+                // anywhere. `EmojiModeTests.testAnOpenEmojiGridAlwaysHasAWayBack`
+                // holds it.
+                //
+                // The keyboard's published height is untouched — the same three
+                // bands in the same order, with the split moved one container up —
+                // but the panel is a row shorter, which
+                // `EmojiPanel.rowCount(forGridHeight:)` pays for: four rows of
+                // emoji in portrait rather than five, and two in landscape rather
+                // than five specks.
+                if !bottomRows.isEmpty {
+                    rowsView(
+                        bottomRows, availableWidth: available, unit: unit,
+                        height: layout.geometry.height(.bottom),
+                        rowSpacing: layout.geometry.rowSpacing
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+                    .keyboardGridChrome(width: gridWidth, reach: layout.geometry.reach)
+                    // **The same layer as the letters, and declared after them.**
+                    // These two used to be one container at this z, with the space
+                    // row drawn second inside it; splitting them left this one at
+                    // the default zero, which is *under* both the letters (2) and
+                    // the action row (1). The full stop's long-press strip grows
+                    // upward into the letter rows, so it would have been painted
+                    // behind them — the same defect `KeyPopupLayer`'s own note
+                    // records for the action row. A tie is broken by declaration
+                    // order, so this reproduces the old paint order exactly, and it
+                    // is also a second reason a panel can never cover this row.
+                    .zIndex(KeyPopupLayer.letters)
+                }
             }
             .padding(.top, Theme.Metrics.topInset)
             .padding(.bottom, Theme.Metrics.bottomInset)
