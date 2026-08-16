@@ -8,6 +8,9 @@ is not typing.
 Bar/typing/sweep/run.sh                        # two runs, ~25 s, needs a booted simulator
 Bar/typing/sweep/run.sh --runs=3
 Bar/typing/sweep/run.sh --trace=בעבודה,מהעבודה # print a clean word's whole trail too
+
+# Would ranking by a frequency list have helped? No simulator, about a second.
+Bar/typing/sweep/frequency.py corpus.json run-1.json wordlist.txt --language=he
 ```
 
 It is the same invigilator as the frozen exam next door: `expand.py` turns
@@ -63,6 +66,24 @@ Three verdicts per keystroke:
 | `ontrack` | The bold slot is a prefix of the word being typed, up to the whole of it. |
 | `diverged` | Neither. Space would insert a word this person is not typing. |
 
+Two counts sit under the headline and neither is folded into it: offered slots
+holding a **non-word**, which is always a defect, and moments **without the
+target word**, which usually is not. That second one used to be a number nobody
+could act on — 311 of 664 — so it is now split by `SlotRecord.reachable`, which
+asks whether `UITextChecker`'s own completion list for that prefix holds the word
+being typed:
+
+| | 2026-08-16 | meaning |
+|---|---|---|
+| winnable by re-ranking | 81 | Apple has the word and the bar drew something else. **The only moments a ranking change can move**, and the denominator any such proposal has to be put against. |
+| no source has the word | 107 | Nothing generated it. No ranking reaches these. |
+| the rest | 123 | The last keystroke of a word, where the target *is* what was typed and the echo is excluded by definition. |
+
+It only asks the question where the target **continues** what was typed. 24 of
+the frozen 90 spell `intended` as a *correction* (`dont` → `don't`), which has no
+completion relationship with the keystrokes at all, and those report `n/a` rather
+than a false that would read as "no ranking could win this".
+
 `diverged` splits again, and the split matters more than it looks:
 
 - **`continues`** — every typed letter survives and the engine guessed a
@@ -89,6 +110,49 @@ different bold slot in the two places it was asked — `להתראיין` at one
 means the sequence is reproducible, not that the answer is stable. Read a finding
 that hangs on a single Hebrew completion with that in mind, and add the word to
 `words.json` in more than one context if it matters.
+
+## frequency.py
+
+Answers one question, offline, in about a second: **would ranking by this word
+list have helped?** It reads the corpus (which knows the word each keystroke was
+reaching for), a run (which knows the slots that were drawn), and a frequency
+list one word per line, and prints two numbers.
+
+- **gain** — moments where the bar is missing the target, Apple's list holds it,
+  and this list ranks it above every slot that *was* drawn.
+- **exposure** — moments where the bar **does** hold the target and this list
+  prefers some other drawn slot. The ceiling on the damage, not a prediction.
+
+**It exists because "prefer the commoner word" is the most natural idea anybody
+has about this engine and the honest answer is measurable before the work rather
+than after it.** Building it properly means loading tens of thousands of words on
+the keystroke path of a memory-capped extension, choosing a curve, and two runs a
+side on both instruments. This is the cheap version of the same question.
+
+**Measured 2026-08-16 against the two lists this repo already bundles** — Leipzig
+Wikipedia, 50,000 words each, CC BY 4.0, sitting in
+`AIKeyboardCore/Resources/GroupedLexicon-{he,en}.txt` for the grouped-keys
+exploration — two runs a side, identical both times:
+
+| list | gain | exposure |
+|---|---|---|
+| `GroupedLexicon-he.txt` | 4 | 48 |
+| `GroupedLexicon-en.txt` | 0 | 70 |
+
+Twelve to one against in Hebrew and unbounded in English, so it is neither a
+Hebrew problem nor a right-to-left one. It is a **domain** problem. The list is
+an encyclopedia's and the keyboard is a chat field's: `סליחה` is rank 37,467,
+`כשאני` 39,651, `מונית` 21,885, and `תודה` sits at 8,904 behind `עוד` at 118,
+because nobody writes "sorry" or "thanks" in an encyclopedia. `SeedLanguageModel`
+says its 353 words are ranked "against the kind of text this keyboard is typed
+into"; this is the measurement that says that property, and not the length of the
+list, is what makes them work. NIT-132.
+
+`--from` defaults to 3. At `--from=1` the Hebrew list scores 13 instead of 4, and
+five of those are moments like `ד` → `דרך`: with one letter typed it is naming
+the commonest word starting with it and is right only because this sweep's list
+is made of common words. A tool whose default flatters the idea it exists to test
+is a bad tool.
 
 ## words.json
 

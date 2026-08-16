@@ -22,6 +22,16 @@ struct CorpusEntry: Decodable {
     let keyboard: String
     let context: String
     let prefix: String
+    /// The word this entry is aimed at, when the corpus knows one.
+    ///
+    /// **Two corpora spell it and they do not mean the same thing.** In the sweep
+    /// it is the whole word being typed letter by letter, so it extends the
+    /// prefix. In the frozen 90 it is on 24 entries and means the *correction* —
+    /// `dont` → `don't`, `,usv` → `תודה` — which shares no completion relationship
+    /// with the keystrokes at all. `reachable` only asks its question of the first
+    /// kind and reports nil for the rest; 47 of the frozen entries carry
+    /// `acceptable` instead and none at all.
+    let intended: String?
 }
 
 struct CorpusFile: Decodable {
@@ -65,9 +75,25 @@ struct SlotRecord: Encodable {
     /// consults has never heard of is not a word it declined to rank — it is a
     /// word it made up.
     let misspelled: [String]
+    /// Whether `UITextChecker` lists the word being typed among its completions of
+    /// this prefix, when the corpus says what that word is. Nil when it does not.
+    ///
+    /// **The ceiling on every re-ranking idea, and without it "the bar is missing
+    /// the target word" is a number nobody can act on.** `judge.py` reports 311 of
+    /// 664 moments without the target, which sounds enormous and mostly is not:
+    /// one letter into `להתראות` nothing should offer the whole word, and no
+    /// ranking can offer a word no source generated. This column separates the two
+    /// — a moment where Apple's own list holds the target and the bar does not is a
+    /// moment some ranking could have won, and there are **14** of those in the
+    /// Hebrew sweep against 11 that nothing could reach.
+    ///
+    /// Read the count, not the flag: it is a property of Apple's dictionary rather
+    /// than of this engine, so it moves when iOS does and never when this repo
+    /// does.
+    let reachable: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case id, category, slots, defaultIndex = "default", commits, misspelled
+        case id, category, slots, defaultIndex = "default", commits, misspelled, reachable
     }
 }
 
@@ -145,6 +171,36 @@ func invented(_ text: String, in language: KeyboardLanguage, typed: String) -> B
     return !shippedPersonalDictionary.contains { SeedLanguageModel.fold($0) == folded }
 }
 
+/// Whether Apple's completion list for this prefix holds the word being typed.
+/// See `SlotRecord.reachable`.
+///
+/// Asked with the sentence around it, exactly as `SuggestionEngine` asks: the API
+/// reads the context to rank, so asking the isolated word would measure a
+/// different list from the one the engine saw.
+@MainActor
+func reachable(_ entry: CorpusEntry, in language: KeyboardLanguage) -> Bool? {
+    guard let intended = entry.intended, intended != entry.prefix,
+        let locale = language.spellCheckerLocale
+    else { return nil }
+    // **Only where the target continues what was typed.** A completion list is
+    // asked what a prefix grows into, so asking it about a *correction* measures
+    // nothing: `dont` → `don't` and `,usv` → `תודה` both come back false, and both
+    // are answered correctly elsewhere, by `guesses` and by `LayoutTransposition`.
+    // Reported as nil rather than false, or 24 frozen entries would read as
+    // "no ranking could win this" when no ranking was ever the question.
+    guard
+        SeedLanguageModel.fold(intended).hasPrefix(SeedLanguageModel.fold(entry.prefix))
+    else { return nil }
+    let text = entry.context + entry.prefix
+    let range = NSRange(
+        location: (entry.context as NSString).length, length: (entry.prefix as NSString).length)
+    guard range.length > 0 else { return nil }
+    let offered =
+        SuggestionEngine.sharedChecker.completions(
+            forPartialWordRange: range, in: text, language: locale) ?? []
+    return offered.contains { SeedLanguageModel.fold($0) == SeedLanguageModel.fold(intended) }
+}
+
 let records: [SlotRecord] = MainActor.assumeIsolated {
     // In-memory and empty. A scoring run must not inherit whatever the machine it
     // runs on has been typing, or two runs on two laptops disagree and neither is
@@ -182,8 +238,8 @@ let records: [SlotRecord] = MainActor.assumeIsolated {
         return (entry, results)
     }
 
-    // **Spelling is asked in a second pass, after every entry has been answered,
-    // and the order is load-bearing rather than tidy.** `UITextChecker`'s Hebrew
+    // **Spelling and reachability are asked in a second pass, after every entry has
+    // been answered, and the order is load-bearing rather than tidy.** `UITextChecker`'s Hebrew
     // answers depend on what that process has already asked it — the frozen
     // corpus records the instability on `he-comp-03/04/05` and the sweep found
     // one prefix answering differently in two places in a single run. Asking it
@@ -203,7 +259,8 @@ let records: [SlotRecord] = MainActor.assumeIsolated {
             // dropping index 0 there would hide a real offer.
             misspelled: results.filter { $0.text != entry.prefix }
                 .filter { invented($0.text, in: $0.language, typed: entry.prefix) }
-                .map(\.text))
+                .map(\.text),
+            reachable: reachable(entry, in: languages(forKeyboard: entry.keyboard)[0]))
     }
 }
 

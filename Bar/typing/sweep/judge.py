@@ -116,6 +116,7 @@ def judge(corpus, outputs):
             # measurement cannot be read as a clean one.
             "misspelled": record.get("misspelled"),
             "hasTarget": any(score.norm(s) == target for s in offered),
+            "reachable": record.get("reachable"),
         }
     return rows
 
@@ -136,11 +137,24 @@ def headline(rows, label):
         return
     bad = sum(1 for row in graded if row["misspelled"])
     slots = sum(len(row["misspelled"]) for row in graded)
-    missing = sum(1 for row in rows.values() if not row["hasTarget"])
+    missing = [row for row in rows.values() if not row["hasTarget"]]
     print(
         f"  {'':24s}      offered slots: {bad:4d} moments hold a NON-WORD ({slots} slots)"
-        f"   {missing:4d} without the target word"
+        f"   {len(missing):4d} without the target word"
     )
+    # **Of those, the ones some ranking could have won.** The raw count above is
+    # mostly not a defect — one letter into `להתראות` nothing should offer the
+    # whole word, and nothing can offer a word no source generated. A moment where
+    # Apple's own completion list holds the target and the bar does not is the only
+    # kind a re-ranking change can move, so that is the number to put a proposal
+    # against. See `SlotRecord.reachable`.
+    if any(row["reachable"] is not None for row in missing):
+        winnable = sum(1 for row in missing if row["reachable"])
+        dead = sum(1 for row in missing if row["reachable"] is False)
+        print(
+            f"  {'':24s}      of those missing: {winnable:4d} winnable by re-ranking"
+            f"   {dead:4d} no source has the word"
+        )
 
 
 def trail(runs, word, ids):
