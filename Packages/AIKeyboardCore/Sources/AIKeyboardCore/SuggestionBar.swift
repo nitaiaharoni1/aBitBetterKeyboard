@@ -218,8 +218,7 @@ public struct SuggestionBar: View {
     ///
     /// **The default sits in the middle, even when the engine left it at index
     /// 0.** Mid-word the array is still `[typed, best, next]` so the refiner can
-    /// find the keystrokes. The typed echo is not drawn: it is already in the
-    /// field. Only the drawing order changes here.
+    /// find the keystrokes. Only the drawing order changes here.
     private var suggestions: some View {
         // `wordUnderConsideration`, not `currentWordPrefix`: the echo the bar
         // drops is whatever the engine was scored on, and for a selected word
@@ -251,10 +250,42 @@ public struct SuggestionBar: View {
     /// Visual order for the three candidate slots: default in the middle, the
     /// others on either side, a lone word centered rather than hugging the left.
     ///
-    /// **The word already in the field is not an offer.** Mid-word the engine
-    /// still pins those keystrokes at index 0. Drawing them spent a slot on a
-    /// tap that types nothing new. Completions and corrections stay. An empty
-    /// prefix is next-word, so nothing is filtered.
+    /// **The word already in the field is drawn when the bar is completing it
+    /// and dropped when the bar is correcting it.** Mid-word the engine pins
+    /// those keystrokes at index 0 and marks them default whenever nothing is
+    /// going to replace them, so the echo is the answer to the question this row
+    /// exists to answer — and leaving it out meant that typing `hello` correctly
+    /// produced **no bold slot at all**: the default was on the word that had
+    /// just been filtered out, `firstIndex(where: \.isDefault) ?? 0` fell through
+    /// to a candidate carrying `isDefault == false`, and `candidate(_:)` draws
+    /// that `.light` with no `accessibilityHint`. The row that says what space
+    /// will do said nothing, about the one word it could have said it about.
+    ///
+    /// **Being the default is not enough on its own, and a Hebrew typo is why.**
+    /// `תדוה` and `טןב` are misspellings Apple's Hebrew checker calls real words,
+    /// so `shouldAutocorrect` deliberately declines to commit `תודה` and `טוב`
+    /// and leaves the default on the keystrokes — at which point boldening the
+    /// echo is a keyboard endorsing a typo it is holding the fix for, and
+    /// pushing that fix out of the middle to do it. The second question is
+    /// therefore whether anything on offer *continues* the keystrokes: a
+    /// completion agrees with every key that was pressed, so its presence is the
+    /// bar saying the word is still being typed, while a bar holding corrections
+    /// alone is saying the opposite. Measured over 44 inputs through the real
+    /// engine, that line lands on every one of them — `cat`, `dog`, `בית`, `אני`
+    /// and `מכונ` all carry a continuation, while `תדוה`, `טןב` and `qwt` carry
+    /// nothing but a correction. A word with no offers at all keeps its slot:
+    /// `כן`, `תודה` and `עכשיו` have no completions in any dictionary here, and
+    /// an empty bar is not an answer.
+    ///
+    /// **The continuation is looked for in every candidate, including the one
+    /// that will not fit.** `מכונ` on the way to `מכונית` arrives as `[מכונ*,
+    /// נכון, מוכן, מכונה]`, so the completion holding its slot open is the fourth
+    /// candidate and is pushed off the bar by the echo it justifies. That is the
+    /// right way round: whether the word is still being typed is something the
+    /// engine knows, and deciding it from the drawn slots instead would be
+    /// circular, since whether the echo is drawn is what changes them.
+    ///
+    /// An empty prefix is next-word, so nothing is filtered.
     static func centeredSlots(_ items: [Suggestion], typed: String = "") -> [Suggestion?] {
         var slots: [Suggestion?] = Array(repeating: nil, count: SuggestionEngine.barSlots)
         let offers: [Suggestion]
@@ -262,14 +293,22 @@ public struct SuggestionBar: View {
             offers = items
         } else {
             let key = SuggestionEngine.comparable(typed)
-            // "" is a prefix of every word. Equality against it would drop
-            // nothing useful and is the same trap `comparable`'s other
-            // callers already guard. A punctuation-only echo still matches
-            // by the raw keystrokes.
-            offers =
-                key.isEmpty
-                ? items.filter { $0.text != typed }
-                : items.filter { SuggestionEngine.comparable($0.text) != key }
+            // "" is a prefix of every word, which would make every offer a
+            // continuation as well as making equality meaningless — the same
+            // trap `comparable`'s other callers already guard. A
+            // punctuation-only echo is matched by the raw keystrokes instead.
+            let isEcho: (Suggestion) -> Bool
+            let continuesTyped: (Suggestion) -> Bool
+            if key.isEmpty {
+                isEcho = { $0.text == typed }
+                continuesTyped = { $0.text.hasPrefix(typed) }
+            } else {
+                isEcho = { SuggestionEngine.comparable($0.text) == key }
+                continuesTyped = { SuggestionEngine.comparable($0.text).hasPrefix(key) }
+            }
+            let offered = items.filter { !isEcho($0) }
+            let echoKeepsItsSlot = offered.isEmpty || offered.contains(where: continuesTyped)
+            offers = items.filter { !isEcho($0) || ($0.isDefault && echoKeepsItsSlot) }
         }
         guard !offers.isEmpty else { return slots }
         let defaultIndex = offers.firstIndex(where: \.isDefault) ?? 0

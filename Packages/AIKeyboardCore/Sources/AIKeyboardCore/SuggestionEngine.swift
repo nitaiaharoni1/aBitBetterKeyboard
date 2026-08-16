@@ -89,8 +89,10 @@ public enum SuggestionEngine {
     /// **Mid-word the engine has to return one more than this, and for the whole
     /// life of the bar it did not.** Slot zero is the literal keystrokes, pinned so
     /// the refiner and the space bar can always find what was keyed;
-    /// `SuggestionBar.centeredSlots` then drops that echo, because it is already in
-    /// the field and a slot spent on it hides a completion. Asking `rank` for three
+    /// `SuggestionBar.centeredSlots` draws that echo when it is the default *and*
+    /// something on offer continues it — bold, because then it is the word space
+    /// keeps — and drops it for a completion the rest of the time. Either way the
+    /// extra candidate is the one that fills the third slot. Asking `rank` for three
     /// therefore left **two** offers for three slots — measured over 234
     /// letter-by-letter keystroke moments across 30 Hebrew and 20 English words,
     /// 229 of them drew two candidates and a blank, and the frozen corpus shows the

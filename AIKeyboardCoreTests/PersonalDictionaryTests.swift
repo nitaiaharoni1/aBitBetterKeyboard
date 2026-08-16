@@ -425,6 +425,11 @@ final class PersonalDictionaryTests: XCTestCase {
     /// Asserted through `SuggestionBar.centeredSlots`, which is the drawing order,
     /// rather than through the engine array — the engine returning four proves
     /// nothing about what reaches the screen.
+    ///
+    /// **The echo takes one of the three when it holds the default**, which is
+    /// what tells the user their word is safe, so what this has to reject is a
+    /// bar that draws the echo and only *one* offer: the extra candidate the
+    /// engine returns is exactly what stops that happening.
     @MainActor
     func testTheBarDrawsThreeOffersAndNotTwo() {
         SharedStore.shared.personalDictionary = []
@@ -438,9 +443,16 @@ final class PersonalDictionaryTests: XCTestCase {
                 drawn.count, SuggestionEngine.barSlots,
                 "\(typed) filled \(drawn.count) of \(SuggestionEngine.barSlots) slots: "
                     + "\(controller.suggestions.map(\.text))")
-            XCTAssertFalse(
-                drawn.contains { SuggestionEngine.comparable($0.text) == typed },
-                "and the typed echo is still not one of them: \(drawn.map(\.text))")
+            // The echo takes at most one of the three, and only when it is the
+            // word space will keep. What has to stay true either way is that the
+            // rest of the row is real offers — a bar drawing the echo and one
+            // completion is the same defect this test was written for, arriving
+            // through the slot the echo now takes.
+            let key = SuggestionEngine.comparable(typed)
+            XCTAssertGreaterThanOrEqual(
+                drawn.filter { SuggestionEngine.comparable($0.text) != key }.count,
+                SuggestionEngine.barSlots - 1,
+                "\(typed) drew the echo and one offer, not two: \(drawn.map(\.text))")
         }
     }
 

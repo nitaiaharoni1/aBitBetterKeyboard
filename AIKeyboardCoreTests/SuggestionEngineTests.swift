@@ -315,22 +315,26 @@ extension SuggestionEngineTests {
         XCTAssertNotEqual(first, Suggestion(text: "hello", language: .english, isDefault: false))
     }
 
-    /// The engine pins the typed word at index 0. The bar does not draw that
-    /// echo: it is already in the field. A build that still puts `hel` in a
-    /// slot fails the first assertion.
-    func testTheTypedWordIsNotDrawn() {
+    /// The engine pins the typed word at index 0 and marks it default when
+    /// nothing is going to replace it. That is the case the bar has to draw:
+    /// bold, in the middle, saying the word is safe. A build that still throws
+    /// the echo away fails the first assertion.
+    func testTheTypedWordIsDrawnBoldWhenNothingWillReplaceIt() {
         let typed = Suggestion(text: "hel", language: .english, isDefault: true)
         let hello = Suggestion(text: "hello", language: .english)
         let help = Suggestion(text: "help", language: .english)
         let slots = SuggestionBar.centeredSlots([typed, hello, help], typed: "hel")
-        XCTAssertFalse(slots.contains { $0?.text == "hel" })
-        XCTAssertEqual(slots[1]?.text, "hello")
-        XCTAssertEqual(slots[0]?.text, "help")
+        XCTAssertEqual(slots[1]?.text, "hel")
+        XCTAssertEqual(
+            slots[1]?.isDefault, true,
+            "the middle slot is drawn bold from `isDefault`, so the echo has to carry it")
+        XCTAssertEqual(slots.map { $0?.text }, ["hello", "hel", "help"])
     }
 
-    /// Autocorrect already stores the default at index 1. Hiding the typed
-    /// echo must leave that correction in the middle.
-    func testACorrectionAlreadyInTheMiddleStaysThere() {
+    /// Autocorrect stores the default at index 1, and then the echo is an offer
+    /// that types nothing new again: it is dropped so the correction and the
+    /// runner-up get the room. A build that draws `sched` fails.
+    func testTheTypedWordIsNotDrawnWhenACorrectionTakesTheDefault() {
         let typed = Suggestion(text: "sched", language: .english)
         let schedule = Suggestion(text: "schedule", language: .english, isDefault: true)
         let scheduled = Suggestion(text: "scheduled", language: .english)
@@ -340,20 +344,49 @@ extension SuggestionEngineTests {
     }
 
     /// One leftover offer used to share the bar with the typed echo, so the
-    /// completion sat on the left third. Alone, it sits in the middle.
+    /// completion sat on the left third. Alone — the echo dropped because a
+    /// correction holds the default — it sits in the middle.
     func testALoneOfferSitsInTheMiddle() {
-        let typed = Suggestion(text: "qwt", language: .english, isDefault: true)
-        let only = Suggestion(text: "qwtxyz", language: .english)
+        let typed = Suggestion(text: "qwt", language: .english)
+        let only = Suggestion(text: "qwtxyz", language: .english, isDefault: true)
         let slots = SuggestionBar.centeredSlots([typed, only], typed: "qwt")
         XCTAssertEqual(slots.map { $0?.text }, [nil, "qwtxyz", nil])
     }
 
-    /// A finished word with nothing to complete or correct leaves the slots
-    /// empty. Drawing the echo there was the old bar.
-    func testATypedWordWithNoOfferLeavesTheBarEmpty() {
+    /// A word with nothing to complete or correct still gets the middle slot:
+    /// "this is fine as it is" is the answer, and an empty bar does not say it.
+    /// `כן`, `תודה` and `עכשיו` all reach the bar this way.
+    func testATypedWordWithNoOfferStillHoldsTheMiddleSlot() {
         let only = Suggestion(text: "qwt", language: .english, isDefault: true)
         let slots = SuggestionBar.centeredSlots([only], typed: "qwt")
-        XCTAssertEqual(slots.map { $0?.text }, [nil, nil, nil])
+        XCTAssertEqual(slots.map { $0?.text }, [nil, "qwt", nil])
+    }
+
+    /// **Holding the default is not enough to earn the slot.** `תדוה` is a
+    /// misspelling of `תודה` that Apple's Hebrew checker calls a real word, so
+    /// the engine offers the fix and deliberately does not commit it — and a bar
+    /// that bolds the typed word there is a keyboard endorsing a typo while
+    /// holding the fix, and pushing the fix out of the middle to do it. Nothing
+    /// on offer continues the keystrokes, so the echo goes.
+    func testTheEchoGivesUpItsSlotWhenTheBarIsOnlyOfferingACorrection() {
+        let typed = Suggestion(text: "תדוה", language: .hebrew, isDefault: true)
+        let fixed = Suggestion(text: "תודה", language: .hebrew)
+        let slots = SuggestionBar.centeredSlots([typed, fixed], typed: "תדוה")
+        XCTAssertEqual(slots.map { $0?.text }, [nil, "תודה", nil])
+    }
+
+    /// The other half of that line, and the reason it is not "any correction".
+    /// `מכונ` on the way to `מכונית` is one substitution from `נכון`, so the bar
+    /// really does hold a correction and a completion at once — and the
+    /// completion is the half that says this word is still being typed, so the
+    /// keystrokes keep the middle and the neighbour sits beside them.
+    func testACorrectionBesideACompletionStillLeavesTheKeystrokesBold() {
+        let typed = Suggestion(text: "מכונ", language: .hebrew, isDefault: true)
+        let neighbour = Suggestion(text: "נכון", language: .hebrew)
+        let completion = Suggestion(text: "מכונה", language: .hebrew)
+        let slots = SuggestionBar.centeredSlots(
+            [typed, neighbour, completion], typed: "מכונ")
+        XCTAssertEqual(slots.map { $0?.text }, ["נכון", "מכונ", "מכונה"])
     }
 
     /// Next-word has no typed echo, so the three predictions stay.
@@ -365,11 +398,17 @@ extension SuggestionEngineTests {
         XCTAssertEqual(slots.map { $0?.text }, ["you", "tomorrow", "soon"])
     }
 
-    /// A comma used to hide neighbours from the engine. It must not hide the
-    /// echo from the bar, or `hello` never reaches a slot.
-    func testATrailingMarkStillHidesOnlyTheEcho() {
-        let typed = Suggestion(text: "hel,", language: .english, isDefault: true)
-        let hello = Suggestion(text: "hello,", language: .english)
+    /// A comma used to hide neighbours from the engine, and it must not hide the
+    /// echo from the bar either — the bar has to *recognise* `hel,` as the word
+    /// in the field, or it draws it beside its own correction.
+    ///
+    /// **Asserted through the correction case on purpose.** When the echo holds
+    /// the default it is drawn whether or not the comparison matched, so that
+    /// half cannot fail. Only a default that has moved to a correction makes
+    /// the match load-bearing.
+    func testATrailingMarkStillHidesTheEchoBehindACorrection() {
+        let typed = Suggestion(text: "hel,", language: .english)
+        let hello = Suggestion(text: "hello,", language: .english, isDefault: true)
         let help = Suggestion(text: "help,", language: .english)
         let slots = SuggestionBar.centeredSlots([typed, hello, help], typed: "hel,")
         XCTAssertFalse(slots.contains { $0?.text == "hel," })
@@ -397,18 +436,23 @@ extension SuggestionEngineTests {
             "טוב was not the middle offer: \(slots.map { $0?.text })")
     }
 
-    /// Completions, not the prefix. A bar that still draws `hel` in any slot
-    /// fails even when `hello` is also present.
-    func testAnUnfinishedWordDrawsTheCompletionNotThePrefix() {
+    /// The prefix *and* the completions, through the real engine. `hel` is not
+    /// autocorrected to anything, so it keeps the default and the middle slot,
+    /// and `hello` has to be one of the two words beside it — a bar that spends
+    /// the whole row on the echo is the other way to get this wrong.
+    func testAnUnfinishedWordDrawsItselfBoldAndTheCompletionsBesideIt() {
         let results = SuggestionEngine.suggestions(
             prefix: "hel", context: "", languages: [.english],
             personal: PersonalLanguageModel(url: nil))
+        XCTAssertEqual(
+            results.first?.isDefault, true,
+            "the premise: nothing replaces `hel`, so the engine leaves the default on it")
         let slots = SuggestionBar.centeredSlots(results, typed: "hel")
-        XCTAssertFalse(
-            slots.contains { $0?.text.lowercased() == "hel" },
-            "the prefix was still drawn: \(slots.map { $0?.text })")
+        XCTAssertEqual(
+            slots[1]?.text.lowercased(), "hel",
+            "the typed word was not the bold slot: \(slots.map { $0?.text })")
         XCTAssertTrue(
-            slots.contains { $0?.text.lowercased() == "hello" },
-            "hello was not drawn: \(slots.map { $0?.text })")
+            [slots[0], slots[2]].contains { $0?.text.lowercased() == "hello" },
+            "hello was not drawn beside it: \(slots.map { $0?.text })")
     }
 }
