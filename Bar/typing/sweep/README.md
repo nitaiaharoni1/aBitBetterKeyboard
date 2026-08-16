@@ -111,6 +111,18 @@ last.
 
 ## What it found on 2026-08-16
 
+> **All four of the defects below were fixed the same day, in `4d5d03f7`, and
+> this section is kept as the record of what the sweep saw rather than as a list
+> of open findings.** After the fix, on the same machine: **597 moments, 481
+> held, 114 on track, 2 diverged**, and the two survivors are `ano` → `and` and
+> `im` → `I'm`, which are the documented English trades at the bottom of this
+> section and not defects. `keyb` holds what was typed with `KeyboardKit` still
+> offered; `scr` holds `scr` with the `דבר` transposition still offered; neither
+> `להתרא` moment commits either word. No new divergence appeared, and seven of
+> the nine verdicts that moved went from diverged to held. The rules are in
+> `.claude/rules/suggestion-bar.md`; the issues are NIT-115, NIT-116 and
+> NIT-117.
+
 Two runs, 583 moments, 460 held, 113 on track, **10 diverged in both runs**. A
 third and fourth run on the same machine agreed exactly; a fifth, run by somebody
 else, reported **9**, and the missing one is the instability described above —
