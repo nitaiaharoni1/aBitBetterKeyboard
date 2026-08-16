@@ -82,6 +82,11 @@ extension SuggestionEngine {
 
     /// Every candidate for the word in progress, ranked, three deep.
     ///
+    /// Ranked `Candidate`s rather than `Suggestion`s, because the caller has two
+    /// questions to ask of this list and only one of them is about the words: the
+    /// bar draws the text, and `shouldAutocorrect` asks where the winner came
+    /// from. See `SuggestionEngine.rank`.
+    ///
     /// - Parameters:
     ///   - prefix: the word being typed.
     ///   - previousWords: the committed words directly before it, in order, empty
@@ -108,7 +113,7 @@ extension SuggestionEngine {
         supplementary: [String],
         personal: PersonalLanguageModel,
         codeSwitching: Bool = false
-    ) -> [Suggestion] {
+    ) -> [Candidate] {
         // **Every source below is asked about the word, and mixing that with the
         // keystrokes is a defect all of its own.** The marks that sit at the edges
         // of what was typed belong to the sentence, not to the word: a lookup
@@ -201,7 +206,12 @@ extension SuggestionEngine {
             out +=
                 supplementary
                 .filter { comparable($0).hasPrefix(typed) && comparable($0) != typed }
-                .prefix(2)
+                // One per drawn slot. This was two, which was the number of offers
+                // the bar could show back when the engine returned three candidates
+                // including the typed echo; with a third slot to fill, a cap of two
+                // on the *highest* ranked source is a third name the user typed into
+                // Settings by hand that the bar can never reach.
+                .prefix(barSlots)
                 .enumerated()
                 .map {
                     Candidate(
@@ -268,7 +278,9 @@ extension SuggestionEngine {
         }
 
         stampPersonalCounts(&out, personal: personal)
-        return rank(out, limit: 3)
+        // One more than the bar draws: slot zero is the typed echo and the bar
+        // does not draw it. See `SuggestionEngine.barSlots`.
+        return rank(out, limit: barSlots + 1)
     }
 
     /// How often this person has committed each candidate. Asked once, here,
@@ -584,11 +596,18 @@ extension SuggestionEngine {
     /// reads as a list of reasons to override the user rather than a list of
     /// reasons not to. Every `return true` below is a case where the typed
     /// characters are known to be wrong; everything else keeps what they keyed.
+    ///
+    /// **Takes ranked candidates, not suggestions, and that is what fixed the
+    /// Hebrew commits.** A `Suggestion` is a word and a language; a `Candidate`
+    /// also carries the source it came from and how many clitics were stripped to
+    /// reach it, which is the whole basis on which `rank` decided it was the
+    /// winner. Asking the question here with that thrown away is why the space bar
+    /// committed `להתרופה`. See `commitTrustsReading`.
     @MainActor
     static func shouldAutocorrect(
         _ prefix: String, previousWords: [String], context: String = "",
         typedLanguage: KeyboardLanguage,
-        results: [Suggestion], supplementary: [String], personal: PersonalLanguageModel
+        results: [Candidate], supplementary: [String], personal: PersonalLanguageModel
     ) -> Bool {
         guard results.count > 1 else { return false }
         // The word, not the keystrokes, for every question below — the same string
@@ -626,7 +645,27 @@ extension SuggestionEngine {
         // `contractions` — and never again at runtime.
         if typedLanguage == .english, contractions[lower] != nil { return true }
 
-        if typedLanguage.script == .hebrew, hebrewFinalFormCorrection(of: word) != nil {
+        // **And only when the typed letters are not still going somewhere.** The
+        // rule is right about orthography — a *finished* Hebrew word may not end in
+        // the ordinary form of ‎כ מ נ פ צ‎ — and the seed gate on
+        // `hebrewFinalFormCorrection` was written to stop it firing on a word in
+        // progress. That gate asks whether the *corrected* word is common, which is
+        // the wrong half: `אף` ("nose") is one of the commonest words in the
+        // language, so `אפ` — two letters into `אפשר`, with `אפשר` and `אפשרות`
+        // sitting in the seed list — bolded `אף` and the space bar committed it.
+        // That is the loanword harm this rule already knows about (`אפ` is also how
+        // Hebrew writes "app") arriving through the mid-word door instead.
+        //
+        // Asking the seed list what the *typed* letters still complete to settles
+        // both: `שלומ`, `כספ` and `דרכ` continue to nothing, so they are finished
+        // words spelled wrong and space fixes them, while `אפ` and `צריכ` are words
+        // on their way somewhere and keep what was keyed. The correction is still
+        // offered in the bar either way — only the bold slot moves, which is the
+        // same split `testTheOtherFinalFormsAreCorrectedToo` and
+        // `testAWordInProgressIsNotCorrectedToItsOwnFinalForm` already draw.
+        if typedLanguage.script == .hebrew, hebrewFinalFormCorrection(of: word) != nil,
+            SeedLanguageModel.words(startingWith: word, in: typedLanguage, limit: 1).isEmpty
+        {
             return true
         }
 
@@ -636,7 +675,12 @@ extension SuggestionEngine {
         if SeedLanguageModel.knows(word, in: typedLanguage) { return false }
 
         guard let first = results.dropFirst().first else { return false }
+        // The reading has to be one the ranking trusts before any of the questions
+        // below are worth asking. Everything above this line is about the typed
+        // letters themselves; everything below is about the candidate.
+        guard commitTrustsReading(first, typed: word) else { return false }
         let winner = SeedLanguageModel.fold(first.text)
+        let typedFolded = SeedLanguageModel.fold(word)
 
         // **The sentence outvoting the dictionary, and the only place it does.**
         // `בעוד רבה` is two real Hebrew words that never appear in that order;
@@ -651,7 +695,18 @@ extension SuggestionEngine {
         // `isKnownWord` guard further down; letting sentence context override it
         // there would replace valid-but-uncommon English words (e.g. "sorrow"
         // after "See you") with whatever the seed bigram names first.
+        //
+        // **It replaces a word; it does not finish one, and leaving that unsaid
+        // cost a whole class of Hebrew keystroke.** `רבע` does not start with
+        // `רבה` — the keys disagree, which is what makes the sentence worth
+        // listening to. `לא` *does* start with `ל`, and the seed row `אני` → `לא`
+        // meant that one letter into `לעבודה` or `להתראות` the space bar was armed
+        // with a different word; the same row turned a lone `צ` into `צריך`.
+        // Finishing a word that is still being typed is the four-letter gate's job,
+        // and it has a length floor for exactly this reason. This rule has none, so
+        // it must not be allowed to do that job.
         if typedLanguage.script == .hebrew,
+            !winner.hasPrefix(typedFolded),
             SeedLanguageModel.followers(after: previousWords, in: typedLanguage)
                 .contains(where: { SeedLanguageModel.fold($0) == winner })
         {
@@ -691,7 +746,6 @@ extension SuggestionEngine {
         // `helo` → `hello` is longer, so it still returns true below. Asking
         // "does the typed word have completions" does not draw this line:
         // `helo` has them and should still correct.
-        let typedFolded = SeedLanguageModel.fold(word)
         let sameLengthSubstitution =
             neighbourMatch && typedFolded.count == winner.count
             && !SeedLanguageModel.isTransposition(winner, of: word)
@@ -774,6 +828,48 @@ extension SuggestionEngine {
         // clause stopped doing it.
         return word.count >= 4 && !known
             && !(sameLengthSubstitution && typedLanguage.script == .hebrew)
+    }
+
+    /// Whether the space bar may act on the reading this candidate was reached
+    /// through.
+    ///
+    /// **Only Hebrew ever reaches the body of this, and the split is the engine's
+    /// own guess about the user's word.** `HebrewMorphology.splits` returns every
+    /// way the typed letters could be read as clitics plus a stem and leaves the
+    /// choice to the ranking, which is why `score` charges half a tier per clitic
+    /// letter — a reading stacked on a reading. Offering a distrusted reading
+    /// costs a slot. *Committing* one puts a word in the field that the user never
+    /// typed a stem of: `להתר`, four letters into `להתראות` ("goodbye"), was read
+    /// as `ל` + `ה` + `תרופה` and the space bar inserted `להתרופה`, "to the
+    /// medicine".
+    ///
+    /// Two readings are distrusted, and neither of them is a count of the letters
+    /// a correction may add.
+    ///
+    /// **A `UITextChecker` completion of a stem the split invented.**
+    /// `seedCandidates` only asks the checker about a split reading when the seed
+    /// list had nothing to say about it (`seedStems.isEmpty`), so this is Apple's
+    /// unranked Hebrew completion list — the one the seed list exists to overrule,
+    /// which puts `הכתום` ahead of `הכתובת` — answering a question about a stem
+    /// this engine made up. It scores at half the checker's own tier, the weakest
+    /// thing in the bar that can still win one. `להתרא` reached `להתראיין` that
+    /// way, through `ל` + `התרא`.
+    ///
+    /// **A reading that assumes more than it rests on.** Every clitic letter is a
+    /// claim that a key the user pressed is a function word rather than part of
+    /// the word being completed, so those letters are spent and not earned: `לה` +
+    /// `תר` identifies a five-letter noun from two of the four letters typed.
+    /// Measuring the assumption against what is left of the word, rather than
+    /// against a constant, is what keeps the case every cheaper gate breaks —
+    /// `בעבו` still commits `בעבודה` (one clitic, three letters of stem) and
+    /// `מהעבו` still commits `מהעבודה` (two clitics, three letters of stem).
+    ///
+    /// Both readings are still *offered*. Only the bold slot moves, and a
+    /// deliberate tap still commits either one.
+    static func commitTrustsReading(_ candidate: Candidate, typed: String) -> Bool {
+        guard candidate.cliticDepth > 0 else { return true }
+        if candidate.source == .checker { return false }
+        return candidate.cliticDepth < typed.count - candidate.cliticDepth
     }
 
     /// Whether these completions are more than one word with a suffix stuck on.

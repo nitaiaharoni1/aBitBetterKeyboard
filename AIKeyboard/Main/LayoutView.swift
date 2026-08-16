@@ -305,7 +305,11 @@ struct LayoutView: View {
                         icon: "arrow.down")
                 }
             } else if let slot = model.selection {
-                LayoutKeyInspectorSection(model: model, slot: slot)
+                // The frame the canvas published for this very key, so the label
+                // switch inside can say what the keyboard below is actually
+                // drawing rather than what a unit count suggests.
+                LayoutKeyInspectorSection(
+                    model: model, slot: slot, drawnWidth: keyFrames[slot.id]?.width ?? 0)
             } else {
                 // Short, because `editableRowOutlines` is already answering
                 // "which rows" on the keyboard itself. Two grey instruction
@@ -749,7 +753,14 @@ private struct LayoutTray: View {
                     height: keyHeight,
                     language: .english,
                     shift: .off,
-                    showsActionCaption: item.action != .emoji && item.action != .dictation,
+                    // The same question the keyboard asks, for the row a tap
+                    // would add this key to. It used to be a hand-copied version
+                    // of the *action* row's rule, which drifted the moment the
+                    // width floor moved: a spare key is one letter wide, so the
+                    // answer is no either way, and a second copy of the rule was
+                    // only ever a chance to disagree with the real one.
+                    showsActionCaption: spec.showsActionCaption(
+                        inRow: KeyboardLayout.RowID.bottom, width: keyWidth),
                     usesNeutralActionTint: true,
                     onPress: { _, _ in }
                 )

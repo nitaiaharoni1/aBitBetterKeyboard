@@ -146,6 +146,16 @@ extension Theme {
         /// spacing substituted. Shared by `keyAreaHeight(for:orientation:)` and
         /// `KeyboardView+Keys`'s `keyGrid`, so the height this publishes and the
         /// grid that is actually drawn cannot drift apart.
+        ///
+        /// **Emptying `cursorRow` sheds the row, not the controls.** It is a
+        /// height decision and only a height decision: the five things that row
+        /// carries — CopyClip, Fix, Emoji, Rewrite and dictation in the shipped
+        /// arrangement — are drawn as chips on the suggestion bar instead, whose
+        /// own row is already inside the number this function feeds. See
+        /// `SuggestionBar.landscapeActions(for:)`, which reads the *unmodified*
+        /// layout for exactly that reason. So nothing here may be read as "the
+        /// user does not get these in landscape"; what they do not get is a
+        /// second band of keyboard to put them in.
         static func landscapeLayout(basedOn layout: KeyboardCustomization) -> KeyboardCustomization {
             var compact = layout
             compact.showsNumberRow = false

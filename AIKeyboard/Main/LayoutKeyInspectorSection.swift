@@ -18,6 +18,12 @@ import SwiftUI
 struct LayoutKeyInspectorSection: View {
     @ObservedObject var model: LayoutEditorModel
     let slot: SlotSpec
+    /// What this key measures on the canvas below, which is what decides whether
+    /// its name fits. Read off the frames the keyboard published rather than
+    /// derived from `slot.width`, for the reason `LayoutEditorModel.drawsLabel`
+    /// gives: a slot is units, and whether units clear the caption floor depends
+    /// on the phone and the language.
+    let drawnWidth: CGFloat
 
     var body: some View {
         let verdict = model.canRemove(slot)
@@ -47,7 +53,7 @@ struct LayoutKeyInspectorSection: View {
                 .disabled(resizing)
                 .accessibilityIdentifier("inspector-fill")
             }
-            actionMenu
+            optionsMenu
                 .frame(minWidth: 44, minHeight: 44)
                 .disabled(resizing)
             if verdict.isAllowed {
@@ -97,21 +103,46 @@ struct LayoutKeyInspectorSection: View {
         return 1
     }
 
-    private var actionMenu: some View {
+    /// **The label switch lives in here rather than beside Fill, and the reason
+    /// is arithmetic.** This band is `LayoutView.contextBandHeight` tall and one
+    /// row wide: on a 375 pt phone the Fill toggle, the menu, Remove and Close
+    /// already claim about 310 of the 327 points inside the card, which is why
+    /// the key's own name is `lineLimit(1)` and why the file's header warns that
+    /// a greedy `Toggle` truncates the title the user just tapped to read. A
+    /// second switch of the same shape would leave nothing for the name at all.
+    /// A `Toggle` inside a menu costs no width, and "what this key does" and
+    /// "what this key says" belong to each other.
+    private var optionsMenu: some View {
         let kind = model.rowKind(of: slot) ?? .bottom
         let options = model.catalogue(for: kind)
         let all = options.contains(slot.action) ? options : [slot.action] + options
         return Menu {
-            ForEach(all, id: \.self) { action in
-                Button(action.title) { model.setAction(action, for: slot) }
+            // Only the six keys that draw a name under a glyph. Everywhere else
+            // the cap *is* the label, and hiding it would leave a blank key.
+            // Bare, with no identifier of its own: a menu accepts `Button`,
+            // `Toggle`, `Picker`, `Divider`, `Section` and `Menu`, and a modifier
+            // on one of them is at best erased. XCUITest addresses a menu item by
+            // its label anyway.
+            if slot.action.hasLabel {
+                Toggle(
+                    "Show label",
+                    isOn: Binding(
+                        get: { model.drawsLabel(slot, drawnWidth: drawnWidth) },
+                        set: { model.setShowsLabel($0, for: slot) })
+                )
+            }
+            Section("Action") {
+                ForEach(all, id: \.self) { action in
+                    Button(action.title) { model.setAction(action, for: slot) }
+                }
             }
         } label: {
             Image(systemName: "ellipsis.circle")
                 .font(Theme.Fonts.callout)
                 .foregroundStyle(Theme.Brand.solid)
         }
-        .accessibilityLabel("Action")
-        .accessibilityIdentifier("inspector-action")
+        .accessibilityLabel("Options")
+        .accessibilityIdentifier("inspector-options")
     }
 
     private func dismiss() {

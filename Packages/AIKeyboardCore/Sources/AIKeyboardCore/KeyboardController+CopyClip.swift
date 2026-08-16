@@ -180,6 +180,23 @@ extension KeyboardController {
         insertClip(clip)
     }
 
+    /// Writes a clip into the field, leaves the panel open, and keeps the way back.
+    ///
+    /// **One tap can put a paragraph in somebody's message, and until this kept a
+    /// `revertibleEdit` there was nothing on screen that could take it out.** The
+    /// panel covers the letters, so the wrong card meant closing CopyClip, holding
+    /// a delete key the panel had hidden, and counting characters. It is the same
+    /// bargain Fix and Rewrite are drawn under — an edit the user did not type,
+    /// arriving whole — so it is recorded in the same slot and undone by the same
+    /// code. `.spanAtCursor` because an insert replaced nothing; `previous` is
+    /// empty for the same reason. `CopyClipControlRow` draws the undo while the
+    /// panel is up, `SuggestionBar` draws it once the letters are back, and the
+    /// next keystroke clears it either way.
+    ///
+    /// Set *after* the insertion, not before, for the reason `applyDirectly` sets
+    /// it after `replaceTargetText`: `refreshSuggestions` drops a way back that is
+    /// standing over an empty field, and the field is only non-empty once the text
+    /// has landed.
     public func insertClip(_ clip: Clip) {
         Feedback.keyPress()
         clearRevertibleEdit()
@@ -188,6 +205,8 @@ extension KeyboardController {
         if !consumeGroupedSkipLearn() { learnWordJustCommitted() }
         target?.insertText(clip.text.value)
         refreshSuggestions()
+        revertibleEdit = RevertibleEdit(
+            origin: .clip, previous: "", applied: clip.text.value, undo: .spanAtCursor)
         reportInteraction(.copyclip)
     }
 

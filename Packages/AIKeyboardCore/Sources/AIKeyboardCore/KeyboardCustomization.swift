@@ -63,7 +63,7 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
     ///
     /// - **`barLeading` is empty. `barTrailing` is Reply.** The three candidates
     ///   stay the bar's job. Reply is the one AI action that does not sit in the
-    ///   action row, so it can keep that row two-and-two around a narrow settings
+    ///   action row, so it can keep that row two-and-two around a narrow centre
     ///   key. A user who wants the trailing end empty can clear it in the editor.
     /// - **Dictation leaves the bottom row.** It would otherwise be on the
     ///   keyboard twice, and `LayoutValidator` would not say so: it warns about a
@@ -87,7 +87,7 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
         showsNumberRow: false,
         bottomRow: [
             SlotSpec(action: .numbersPlane, width: .units(1.3)),
-            SlotSpec(action: .emoji, width: .units(1.0)),
+            SlotSpec(action: .settings, width: .units(1.0)),
             SlotSpec(action: .space, width: .fill),
             SlotSpec(action: .punctuation, width: .units(1.0)),
             SlotSpec(action: .ret, width: .units(KeyboardLayout.functionKeyUnits))
@@ -102,13 +102,27 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
     /// to stop, and it sits at the far end rather than next to the keys a thumb
     /// is already travelling between.
     ///
-    /// CopyClip and Fix on the left, Rewrite and dictation on the right, settings
+    /// CopyClip and Fix on the left, Rewrite and dictation on the right, Emoji
     /// 1.0 units in the true middle. Four `.fill` keys share the leftover so the
-    /// gear stays narrow in all 64 languages.
+    /// centre key stays narrow in all 64 languages.
+    ///
+    /// **Emoji and the gear traded places**, and 1.0 unit — `SlotWidth
+    /// .minimumUnits`, the narrowest a slot can be — is what makes the trade
+    /// worth making: Emoji went from a full-width key beside `123` to the one
+    /// narrow key in a row of four wide ones, and the gear took the bottom-row
+    /// slot it left. The cap colours followed the positions rather than the keys,
+    /// so each row looks exactly as it did — see `KeyView.capKind`.
+    ///
+    /// **This array is read in landscape even though the row is not drawn there.**
+    /// `Theme.Metrics.landscapeLayout(basedOn:)` empties `cursorRow` because
+    /// there is no height for a second band, and `SuggestionBar.landscapeActions
+    /// (for:)` then puts these controls in the suggestion bar. So the order here
+    /// is the order a user sees in both orientations, and adding a control to
+    /// this row adds it to the landscape bar as well.
     public static let actionRow: [SlotSpec] = [
         SlotSpec(action: .copyclip, width: .fill),
         SlotSpec(action: .fix, width: .fill),
-        SlotSpec(action: .settings, width: .units(1.0)),
+        SlotSpec(action: .emoji, width: .units(1.0)),
         SlotSpec(action: .quickTone, width: .fill),
         SlotSpec(action: .dictation, width: .fill)
     ]

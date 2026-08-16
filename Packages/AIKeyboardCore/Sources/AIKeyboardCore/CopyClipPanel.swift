@@ -6,20 +6,46 @@ import SwiftUI
 /// press as the caps they replaced. The list is vertical because fifty clips
 /// are a scroll, not a grid. Search is the same swap emoji already makes:
 /// this panel goes, the letters come back, and the action row becomes matches.
+///
+/// The list does not take the whole panel: `CopyClipControlRow` stands along the
+/// bottom, holding the two controls covering the letters took away — a delete
+/// key, and a way to take back the clip that was just pasted.
 public struct CopyClipPanel: View {
     @ObservedObject var controller: KeyboardController
+
+    /// The keyboard's own key height, so the control row is the same size as the
+    /// space row it stands where — passed in for the reason `EmojiPanel` takes
+    /// it, because `LayoutGeometry.keyHeight` is a user setting between 36 and 56.
+    var keyHeight: CGFloat = Theme.Metrics.keyHeight
 
     /// A new pasteboard generation is waiting and offering `UIPasteControl`
     /// is the whole reason this file imports the state at all.
     private var awaitsPasteControl: Bool { controller.copyclipCaptureState == .control }
 
     public var body: some View {
-        Group {
-            if controller.clips.isEmpty && !awaitsPasteControl {
-                empty
-            } else {
-                list
+        VStack(spacing: 0) {
+            Group {
+                if controller.clips.isEmpty && !awaitsPasteControl {
+                    empty
+                } else {
+                    list
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // **The two keys the panel took away, given back.** This row costs the
+            // list one row of clips and costs the keyboard no height at all, which
+            // is the same trade `EmojiCategoryRow` makes one panel over: both are
+            // drawn inside the block the letter keys already occupy, so neither
+            // goes anywhere near the 368 pt fingerprint cliff.
+            CopyClipControlRow(
+                height: keyHeight,
+                isRightToLeft: controller.language.isRightToLeft,
+                undoLabel: controller.revertibleEdit?.origin.undoLabel,
+                onUndo: { controller.revertEdit() },
+                onDelete: { controller.press(.backspace) },
+                onDeleteRepeat: { controller.deletePreviousWord() }
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.Keys.background)
@@ -99,6 +125,123 @@ public struct CopyClipPanel: View {
             lines.append("Allow Full Access so CopyClip can see what you copy.")
         }
         return lines.joined(separator: "\n")
+    }
+}
+
+/// The row along the bottom of the panel: undo at one end, delete at the other.
+///
+/// **A panel that covers the letters has to carry whatever it covered that the
+/// user still needs, and this one carried nothing.** The emoji grid worked that
+/// out one file over — its category row pins a real delete key at the end,
+/// "because this row replaces the letters while it is up, so it *is* the only
+/// delete on screen" — and CopyClip has exactly the same shape with exactly the
+/// same gap: a mistyped word behind the cursor could not be repaired without
+/// closing the panel, and a clip tapped by accident could not be taken out at
+/// all.
+///
+/// **A toolbar, not a key row, which is why the two ends are empty in the
+/// middle.** The emoji row fills its width with ten category shortcuts and CopyClip
+/// has no equivalent; two keys pushed together in the centre would read as a
+/// fragment of a keyboard rather than as the panel's own controls. Splitting them
+/// also buys the thing that matters most here: one of these removes a character
+/// and the other removes an entire paste, so they are the two controls on this
+/// panel that must never be hit for each other. Delete keeps the trailing end it
+/// holds on every other row of this keyboard.
+///
+/// **Both keys wear the soft graphite cap, and the undo deliberately does not
+/// take the brand tint its twin in the suggestion bar wears.** That is
+/// `KeyView.actionTint`'s rule rather than an inconsistency: on a dark cap the
+/// glyph is `labelOnFunction`, because a brand tint on soft graphite is neither
+/// readable nor the neutral control the key is. The bar's revert sits on no cap
+/// at all, so it can afford to be orange.
+///
+/// **Undo stays on the row when there is nothing to take back, and only fades.**
+/// The suggestion bar's revert appears and disappears because there it is
+/// competing with three candidate slots for 52 pt; here it competes with empty
+/// panel, so the cost that bought that behaviour does not exist — and a control
+/// nobody can see until the moment they have already made the mistake is one
+/// nobody knows is there. It is the same answer Fix and Rewrite give over an
+/// empty field: the cap stays, the label goes to
+/// `KeyView.disabledLabelOpacity`, and the reason is said out loud for anyone who
+/// cannot see the dim.
+struct CopyClipControlRow: View {
+
+    let height: CGFloat
+    let isRightToLeft: Bool
+    /// What the undo would take back, already named by
+    /// `RevertibleEdit.Origin.undoLabel`. Nil is "nothing to take back", which is
+    /// the only thing this row knows about the undo slot — it draws a Fix's way
+    /// back exactly as it draws a paste's, because while this panel is up it is
+    /// the only surface that can.
+    let undoLabel: String?
+    let onUndo: () -> Void
+    let onDelete: () -> Void
+    let onDeleteRepeat: () -> Void
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        HStack(spacing: 0) {
+            undoKey
+            Spacer(minLength: Theme.Space.sm)
+            deleteKey
+        }
+        .frame(height: height)
+        // The same margin `EmojiCategoryRow` takes, for the same reason: this row
+        // is keys, and it lines up with the rhythm of the ones above rather than
+        // running to the glass.
+        .padding(.horizontal, Theme.Metrics.keySpacing)
+        .animation(Theme.Motion.content, value: undoLabel)
+    }
+
+    private var undoKey: some View {
+        KeyStyleButton(
+            // The width that means "wide enough for a caption" on every other key
+            // of this keyboard. Undo is the one control in the panel that is new,
+            // and a lone arrow says nothing about what it puts back.
+            width: KeyView.captionMinimumWidth, height: height,
+            // `revertEdit()` fires its own haptic, exactly as `deleteBackward`
+            // does for the key beside it.
+            feedback: nil,
+            restingCap: Theme.Keys.functionSoft,
+            capKind: .soft,
+            glyphColor: Theme.Keys.labelOnFunction,
+            isDisabled: undoLabel == nil,
+            action: onUndo
+        ) {
+            VStack(spacing: 1) {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(Theme.Glyph.medium(15))
+                Text("Undo")
+                    .font(Font(SuggestionBar.toneLabelFont(for: dynamicTypeSize)))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .accessibilityIdentifier("copyclip-undo")
+        .accessibilityLabel(undoLabel ?? "Undo")
+        .accessibilityHint(
+            undoLabel == nil ? "Nothing to take back yet" : "Puts back what you had written")
+    }
+
+    private var deleteKey: some View {
+        KeyStyleButton(
+            width: 42, height: height, repeats: true,
+            repeatAction: onDeleteRepeat,
+            // No `Feedback` call of its own: the delete already fires one per
+            // character, and the button's own press haptic on top of it made a
+            // single tap buzz twice. Same as the emoji panel's copy of this key.
+            feedback: nil,
+            restingCap: Theme.Keys.functionSoft,
+            capKind: .soft,
+            glyphColor: Theme.Keys.labelOnFunction,
+            action: onDelete
+        ) {
+            Image(systemName: KeyCap.backspaceSymbol(isRightToLeft: isRightToLeft))
+                .font(Theme.Glyph.font(19))
+        }
+        .accessibilityIdentifier("copyclip-delete")
+        .accessibilityLabel("Delete")
     }
 }
 

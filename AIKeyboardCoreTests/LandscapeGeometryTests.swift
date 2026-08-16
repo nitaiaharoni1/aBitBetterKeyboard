@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 
 @testable import AIKeyboardCore
@@ -203,5 +204,279 @@ final class LandscapeGeometryTests: XCTestCase {
     /// the safer, taller-budget case.
     func testASquareSizeReadsAsPortrait() {
         XCTAssertEqual(KeyboardGeometry.Orientation(width: 500, height: 500), .portrait)
+    }
+
+    // MARK: The row landscape sheds moves onto the bar
+
+    /// **The bar has to draw the row it was budgeted, and it drew the portrait
+    /// one in both orientations.** `totalHeight(for:showsBanner:orientation:)`
+    /// pays `Landscape.suggestionBarHeight` (30) for the strip in landscape while
+    /// `SuggestionBar` spelled `Theme.Metrics.suggestionBarHeight` (36) into its
+    /// own frame, so the landscape keyboard drew 6 pt more than the height it
+    /// asked the host for — on a form whose entire margin against the fingerprint
+    /// cap is about 3 pt (`testTheLandscapeMarginAgainstTheCapIsAboutThreePoints`
+    /// above).
+    ///
+    /// The second assertion is what rejects that build rather than the first:
+    /// asking for the two numbers separately can pass on a coincidence, but
+    /// "bar + key area is exactly the total" cannot — 36 + 136 is 172 against a
+    /// published 166. Landscape hosting the action row's controls is free only
+    /// because this equation holds, so it is asserted before anything about the
+    /// controls themselves.
+    func testTheBarDrawsExactlyTheRowLandscapeBudgetedForIt() {
+        XCTAssertEqual(
+            SuggestionBar.barHeight(for: .landscape),
+            Theme.Metrics.Landscape.suggestionBarHeight, accuracy: 0.001)
+        XCTAssertEqual(
+            SuggestionBar.barHeight(for: .portrait),
+            Theme.Metrics.suggestionBarHeight, accuracy: 0.001)
+
+        for orientation in [KeyboardGeometry.Orientation.portrait, .landscape] {
+            XCTAssertEqual(
+                Theme.Metrics.totalHeight(
+                    for: .default, showsBanner: false, orientation: orientation),
+                SuggestionBar.barHeight(for: orientation)
+                    + Theme.Metrics.keyAreaHeight(for: .default, orientation: orientation),
+                accuracy: 0.001,
+                "the bar draws a different row from the one the host was told about")
+        }
+    }
+
+    /// **Everything the bar gained in landscape had to cost the keyboard nothing,
+    /// and this is the assertion that says so in points.**
+    ///
+    /// The two ways to get this wrong both grow the total: giving landscape its
+    /// action row back (a sixth row at `Landscape.keyHeight` plus a gap is 34 pt,
+    /// so 200), or making the bar taller to fit 40 pt chips (172 at the shipped
+    /// 44 × 40). Both are rejected here, and both would also fail
+    /// `testTheLandscapeMarginAgainstTheCapIsAboutThreePoints`, which is the
+    /// point: there was never room for either.
+    func testTheLandscapeActionStripCostsNoHeightAtAll() {
+        XCTAssertEqual(
+            Theme.Metrics.totalHeight(for: .default, orientation: .landscape), 166,
+            accuracy: 0.001)
+        XCTAssertFalse(
+            SuggestionBar.landscapeActions(for: .default).isEmpty,
+            "the strip is empty, so 166 is only the height of a keyboard that lost the row")
+
+        let chip = SuggestionBar.chipSize(for: .landscape)
+        XCTAssertLessThanOrEqual(
+            chip.height, SuggestionBar.barHeight(for: .landscape),
+            "a chip taller than its row draws past the height the keyboard published")
+        // Width is the axis landscape has: the chip keeps the full portrait
+        // target across and gives up only height.
+        XCTAssertEqual(chip.width, SuggestionBar.chipSize(for: .portrait).width)
+
+        let fraction = KeyboardGeometry.ownUIHeightFraction(
+            screenHeight: KeyboardGeometry.referenceLandscapeScreenHeight,
+            layout: .default,
+            orientation: .landscape)
+        XCTAssertLessThanOrEqual(fraction, FrameReduction.Band.maximumOwnUI)
+    }
+
+    /// **Every control the row carried is on the bar, in the order it carried
+    /// them.** The premise first, as `testAPanelIsClosedInLandscapeBecauseNothing
+    /// ThereCouldCloseIt` states its own: landscape empties `cursorRow`, so these
+    /// five are drawn nowhere else at all.
+    ///
+    /// Today's build answers an empty array here, which is the whole ticket.
+    /// Order is asserted rather than membership because a set would pass against
+    /// a strip that shuffled the five under a thumb that had just learned them in
+    /// portrait.
+    func testTheActionsLandscapeShedsAreCarriedOnTheBarInstead() {
+        XCTAssertTrue(
+            Theme.Metrics.landscapeLayout(basedOn: .default).cursorRow.isEmpty,
+            "landscape keeps the action row, so the bar does not have to carry it")
+
+        XCTAssertEqual(
+            SuggestionBar.landscapeActions(for: .default).map(\.action),
+            KeyboardCustomization.default.cursorRow.map(\.action))
+        XCTAssertEqual(
+            SuggestionBar.landscapeActions(for: .default).map(\.action),
+            [.copyclip, .fix, .emoji, .quickTone, .dictation])
+    }
+
+    /// A user is free to put Rewrite in the action row *and* on the trailing end
+    /// of the bar: in portrait those are two rows and two controls, and in
+    /// landscape they collapse into one strip. A build that simply concatenated
+    /// draws the same action twice, side by side.
+    func testAnActionAlreadyOnTheBarIsNotDrawnTwiceInLandscape() {
+        var layout = KeyboardCustomization.default
+        layout.barTrailing = [SlotSpec(action: .reply), SlotSpec(action: .quickTone)]
+
+        let strip = SuggestionBar.landscapeActions(for: layout).map(\.action)
+
+        XCTAssertFalse(strip.contains(.quickTone))
+        XCTAssertEqual(strip, [.copyclip, .fix, .emoji, .dictation])
+    }
+
+    /// **Settings is the only route from this keyboard into the containing app,
+    /// so it may not be the thing an orientation drops.**
+    ///
+    /// It ships on the bottom row, which landscape keeps, and the first assertion
+    /// is that premise: if the gear ever moves back into the action row by
+    /// default, the second half of this is what carries it. A user may make that
+    /// move themselves today, and then the bar is the only surface left that can
+    /// draw it — `.settings` is deliberately in `landscapeBarActions` and
+    /// deliberately not in `barCatalogue`, which is the list of what a user may
+    /// *choose* to put there.
+    func testSettingsIsReachableInLandscapeWhereverTheUserPutsIt() {
+        let landscape = Theme.Metrics.landscapeLayout(basedOn: .default)
+        XCTAssertTrue(
+            landscape.bottomRow.map(\.action).contains(.settings),
+            "the gear left the bottom row, so landscape's only route into the app is the bar")
+
+        var moved = KeyboardCustomization.default
+        moved.bottomRow.removeAll { $0.action == .settings }
+        moved.cursorRow.append(SlotSpec(action: .settings, width: .units(1.0)))
+
+        XCTAssertFalse(
+            Theme.Metrics.landscapeLayout(basedOn: moved).bottomRow.map(\.action)
+                .contains(.settings))
+        XCTAssertTrue(
+            SuggestionBar.landscapeActions(for: moved).map(\.action).contains(.settings),
+            "the gear is in a row landscape sheds and on no other surface")
+    }
+
+    /// A key with no glyph draws `questionmark` through `slotButton`'s fallback,
+    /// so the comma and question mark the "Power" preset puts in its action row
+    /// would come out as two identical unexplained chips. They stay off the bar;
+    /// the script's own punctuation key is on the bottom row, which landscape
+    /// keeps. `.space` and `.shift` are the same refusal `barCatalogue` already
+    /// makes, checked here because this list is a superset of that one and a
+    /// superset is the easy place to let one back in.
+    func testTheLandscapeStripRefusesWhatTheBarCannotDraw() {
+        var layout = KeyboardCustomization.default
+        layout.cursorRow = [
+            SlotSpec(action: .fix, width: .fill),
+            SlotSpec(action: .text(","), width: .fill),
+            SlotSpec(action: .space, width: .fill),
+            SlotSpec(action: .shift, width: .fill),
+            SlotSpec(action: .backspace, width: .fill)
+        ]
+
+        XCTAssertEqual(SuggestionBar.landscapeActions(for: layout).map(\.action), [.fix])
+    }
+
+    /// **A panel opened in landscape has to keep the chip that closes it on
+    /// screen, and the strip alone is not enough to promise that.** Both panels
+    /// hide every letter key and landscape draws no search box, so
+    /// `landscapePanelControls(for:)` is the entire surface left; a build that
+    /// listed the strip alone would let a user who keeps Emoji on a bar edge open
+    /// the grid from a chip that then stops being drawn, because
+    /// `landscapeActions(for:)` deduplicates it out of the strip.
+    func testEverythingThatCanOpenAPanelInLandscapeIsStillDrawnWhileItIsOpen() {
+        XCTAssertTrue(
+            SuggestionBar.landscapePanelControls(for: .default).map(\.action)
+                .contains(.emoji),
+            "the shipped Emoji chip vanishes the moment its own grid opens")
+
+        var edgeOnly = KeyboardCustomization.default
+        edgeOnly.cursorRow = []
+        edgeOnly.barTrailing = [SlotSpec(action: .reply), SlotSpec(action: .emoji)]
+        XCTAssertTrue(SuggestionBar.landscapeActions(for: edgeOnly).isEmpty)
+        XCTAssertTrue(
+            SuggestionBar.landscapePanelControls(for: edgeOnly).map(\.action)
+                .contains(.emoji),
+            "a grid opened from a bar edge has nothing on screen that closes it")
+    }
+
+    /// Landscape has about three points of margin, so the one thing in this bar
+    /// that grows on its own must not be able to spend them. The words stop at
+    /// 70% of the row they are in — and reading that cap off the *portrait*
+    /// constant, which is what the single-argument spelling does, lets an
+    /// accessibility size draw 25.2 pt of text in a 30 pt row.
+    func testACandidateCannotGrowPastTheLandscapeRowAtAnyTextSize() {
+        let row = SuggestionBar.barHeight(for: .landscape)
+        for size in [DynamicTypeSize.large, .accessibility3, .accessibility5] {
+            XCTAssertLessThanOrEqual(
+                SuggestionBar.candidateFontSize(for: size, barHeight: row), row * 0.7)
+        }
+        XCTAssertGreaterThan(
+            SuggestionBar.candidateFontSize(for: .accessibility5),
+            SuggestionBar.candidateFontSize(for: .accessibility5, barHeight: row),
+            "the landscape cap is not below the portrait one, so it is not being read")
+    }
+
+    // MARK: The row landscape sheds is the way out of a panel
+
+    /// **The trap, stated as the two facts that make it one.** Landscape empties
+    /// `cursorRow`, and that row carries the only key that closes the emoji grid
+    /// or the CopyClip panel; both of those overlays hide every letter key. A
+    /// panel opened in portrait and rotated into therefore left a keyboard with
+    /// nothing to type on and nothing to close — the search box hands the letters
+    /// back but types into its own query, and its ✕ only returns to the panel.
+    ///
+    /// The first two assertions are the premise rather than the behaviour: if
+    /// landscape ever keeps the action row, this test should be deleted along
+    /// with the workaround it covers, not adjusted until it passes.
+    ///
+    /// **The trap now has two answers and this still covers the one it names.**
+    /// The suggestion bar carries the Emoji and CopyClip chips in landscape
+    /// (`SuggestionBar.landscapeActions(for:)`), and a chip whose panel is open
+    /// is lit and closes it, so a keyboard rotated into a panel is no longer
+    /// stranded even without this. It stays because it costs nothing and answers
+    /// a different question: a rotation is not a request to keep browsing emoji,
+    /// and handing the letters straight back is what somebody who has just turned
+    /// their phone to type is after. Note what the bar cannot do — the search box
+    /// is the one thing landscape gives up, because a query, an alphabet and the
+    /// results need three bands and landscape has two.
+    @MainActor
+    func testAPanelIsClosedInLandscapeBecauseNothingThereCouldCloseIt() {
+        XCTAssertTrue(
+            Theme.Metrics.landscapeLayout(basedOn: .default).cursorRow.isEmpty,
+            "landscape keeps the action row, so this workaround is obsolete")
+        XCTAssertFalse(
+            KeyboardOverlay.copyclip.showsLetterKeys,
+            "the CopyClip panel no longer hides the letters, so rotating into it is not a trap")
+
+        let before = SharedStore.shared.copyclipRecord
+        defer { SharedStore.shared.copyclipRecord = before }
+        let controller = KeyboardController(target: MockTextTarget())
+        controller.press(.copyclip)
+        XCTAssertEqual(controller.overlay, .copyclip)
+
+        controller.closeOverlayForLandscape()
+
+        XCTAssertEqual(
+            controller.overlay, .none,
+            "the panel survived a rotation into an orientation with no key that closes it")
+    }
+
+    /// The same rotation in portrait changes nothing: a panel there has its key
+    /// one row up. A build that closed on every orientation read would shut the
+    /// grid under the finger of anyone who opened it.
+    @MainActor
+    func testAPanelIsLeftAloneWhenNothingHasRotated() {
+        let before = SharedStore.shared.copyclipRecord
+        defer { SharedStore.shared.copyclipRecord = before }
+        let controller = KeyboardController(target: MockTextTarget())
+        controller.press(.copyclip)
+
+        XCTAssertEqual(
+            controller.overlay, .copyclip,
+            "opening CopyClip in portrait closed it, so the guard is reading the wrong thing")
+    }
+
+    /// **Closing a panel is not closing everything else.** `dismissOverlay` stops
+    /// dictation and clears the strip, and a rotation with no panel open must not
+    /// reach it: a recording runs with `overlay == .none`, so the guard is what
+    /// stands between turning the phone and losing a sentence somebody is still
+    /// speaking. `overlay` is `.none` either way here and proves nothing on its
+    /// own, so the assertion is on the refusal beside it — which
+    /// `clearBannerState()` wipes, and which a guarded build leaves standing.
+    @MainActor
+    func testRotatingWithNoPanelOpenLeavesTheRestOfTheKeyboardAlone() {
+        let controller = KeyboardController(target: MockTextTarget())
+        controller.block = BannerState.Block(
+            action: .fix, title: "Type something first",
+            detail: "Fix works on what you have written.", remedy: BannerState.Block.Remedy.none)
+        XCTAssertEqual(controller.overlay, .none)
+
+        controller.closeOverlayForLandscape()
+
+        XCTAssertNotNil(
+            controller.block,
+            "a rotation with nothing open ran the full panel teardown, which also stops dictation")
     }
 }

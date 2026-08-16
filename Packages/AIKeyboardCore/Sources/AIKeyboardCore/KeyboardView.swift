@@ -80,7 +80,13 @@ public struct KeyboardView: View {
                     .transition(.opacity)
             }
 
-            SuggestionBar(controller: controller)
+            // **The bar is told which orientation it is in, and that is what
+            // pays for the action row landscape sheds.** Its row is already in
+            // the published height, so the controls that row carried can stand
+            // in it for nothing — see `SuggestionBar.landscapeActionStrip`.
+            // Handed down rather than read again there, for the same reason the
+            // panel above is closed from here: one definition of landscape.
+            SuggestionBar(controller: controller, orientation: orientation)
 
             // **Nothing covers the whole key area any more.** This was a `ZStack`
             // with a `fullKeyAreaPanel` over it, and the three panels that used it —
@@ -103,6 +109,19 @@ public struct KeyboardView: View {
         .onAppear {
             Feedback.prepare()
             controller.refreshCopyClip()
+        }
+        // **The same `orientation` that sheds the action row below decides this**,
+        // rather than a second read in the extension, because the two disagreeing
+        // is the whole defect: landscape drops the row holding the only key that
+        // closes the emoji grid or the CopyClip panel, and those panels hide every
+        // letter — so a panel rotated into left a keyboard nothing could type on
+        // or close. `.task(id:)` and not `.onChange`, so a keyboard that *appears*
+        // in landscape with a panel still open from last time is caught too:
+        // `overlay` survives the extension being reused across fields.
+        // See `KeyboardController.closeOverlayForLandscape`.
+        .task(id: orientation) {
+            guard orientation == .landscape else { return }
+            controller.closeOverlayForLandscape()
         }
     }
 

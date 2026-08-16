@@ -133,7 +133,14 @@ extension KeyboardLayout {
             guard let cap = resolvedCap(slot.action, language: language, plane: plane) else {
                 return nil
             }
-            return KeySpec(cap, width: keyWidth(slot.width), id: identifier(for: cap, slot: slot))
+            // The label switch rides along rather than being resolved here: what
+            // it means depends on the row and the solved width, and neither is
+            // known until `KeyboardView+Keys` draws the key. The punctuation key
+            // above needs none of this — its cap is a mark, not a glyph with a
+            // name under it.
+            return KeySpec(
+                cap, width: keyWidth(slot.width), id: identifier(for: cap, slot: slot),
+                showsLabel: slot.showsLabel)
         }
         return KeyRow(id: id, keys: keys, sideInsetUnits: 0, heightBias: heightBias)
     }

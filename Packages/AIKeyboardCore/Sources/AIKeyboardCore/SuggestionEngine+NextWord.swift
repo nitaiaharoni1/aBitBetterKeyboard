@@ -107,12 +107,16 @@ extension SuggestionEngine {
         // going and the shift key has already decided the same thing.
         let atStart = context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         stampPersonalCounts(&out, personal: personal)
-        return rank(out, limit: 3).map { suggestion in
-            guard atStart else { return suggestion }
+        // Exactly what the bar draws, not one more: there is no typed word here
+        // for `SuggestionBar.centeredSlots` to filter out.
+        return rank(out, limit: barSlots).map { candidate in
+            guard atStart else {
+                return Suggestion(text: candidate.text, language: candidate.language)
+            }
             return Suggestion(
-                text: contextLanguage.uppercased(String(suggestion.text.prefix(1)))
-                    + suggestion.text.dropFirst(),
-                language: suggestion.language)
+                text: contextLanguage.uppercased(String(candidate.text.prefix(1)))
+                    + candidate.text.dropFirst(),
+                language: candidate.language)
         }
     }
 }

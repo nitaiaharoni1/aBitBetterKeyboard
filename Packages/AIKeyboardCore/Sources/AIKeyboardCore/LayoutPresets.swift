@@ -62,7 +62,11 @@ public struct LayoutPreset: Identifiable, Sendable {
                 layout.cursorRow = [
                     SlotSpec(action: .cursorLeft, width: .fill),
                     SlotSpec(action: .cursorRight, width: .fill),
-                    SlotSpec(action: .settings, width: .units(1.0)),
+                    // The narrow centre key, same as the shipped action row: the
+                    // gear rides the bottom row in every preset now, so putting it
+                    // here as well would be the same action in two rows —
+                    // `LayoutValidator` only sees duplicates *within* a row.
+                    SlotSpec(action: .emoji, width: .units(1.0)),
                     SlotSpec(action: .text(","), width: .fill),
                     SlotSpec(action: .text("?"), width: .fill),
                     SlotSpec(action: .hideKeyboard, width: .fill)
@@ -86,7 +90,7 @@ public struct LayoutPreset: Identifiable, Sendable {
                 layout.barTrailing = [SlotSpec(action: .quickTone)]
                 layout.bottomRow = [
                     SlotSpec(action: .numbersPlane, width: .units(1.3)),
-                    SlotSpec(action: .emoji, width: .units(1.0)),
+                    SlotSpec(action: .settings, width: .units(1.0)),
                     SlotSpec(action: .reply, width: .units(1.2)),
                     SlotSpec(action: .space, width: .fill),
                     SlotSpec(action: .dictation, width: .units(1.0)),

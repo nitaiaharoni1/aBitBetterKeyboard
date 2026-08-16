@@ -155,6 +155,37 @@ public struct KeySpec: Identifiable, Equatable, Sendable {
     /// cannot see because the row is right and the *cap* is reversed.
     public let groupedLetters: [String]?
 
+    /// Whether the user asked for this key's name to be drawn under its glyph,
+    /// or nil where they have not said. Only a key compiled from a `SlotSpec`
+    /// can carry an answer; see `SlotSpec.showsLabel`.
+    public let showsLabel: Bool?
+
+    /// Whether this key draws its name under its glyph, in the row it is drawn
+    /// in and at the width the solver gave it.
+    ///
+    /// **The stored answer wins over both halves of the shipped rule, the width
+    /// floor included.** `KeyView.captionMinimumWidth` is a default — "a key
+    /// wide enough to name itself should, and one that is not should not try" —
+    /// and a default cannot be a rail against the one person it would fire on,
+    /// who is standing in the layout editor watching this key while they throw
+    /// the switch. A name squeezed onto a one-unit cap is visible in the canvas
+    /// the moment it happens and is one tap from being undone. Same principle as
+    /// the deleted `costsScreenContext` warning: do not report a choice back to
+    /// the user as a problem a second after they made it on purpose.
+    ///
+    /// **The row is passed in rather than known**, because a `KeySpec` has no
+    /// row: it is handed to `KeyView` by `KeyboardView+Keys`, which is the one
+    /// place that has both.
+    public func showsActionCaption(inRow rowID: Int, width: CGFloat) -> Bool {
+        if let showsLabel { return showsLabel }
+        // The shipped action row keeps Emoji and Dictate as glyphs — two names
+        // people already know. CopyClip keeps its caption there, because the
+        // clipboard mark is not one.
+        let byPosition =
+            rowID != KeyboardLayout.RowID.cursor || (cap != .emoji && cap != .dictation)
+        return byPosition && width >= KeyView.captionMinimumWidth
+    }
+
     /// What a screen reader should call this key: the letters, spelled.
     public var spokenLabel: String? {
         guard let letters = groupedLetters, letters.count > 1 else { return nil }
@@ -171,12 +202,13 @@ public struct KeySpec: Identifiable, Equatable, Sendable {
 
     public init(
         _ cap: KeyCap, width: KeyWidth = .unit(1), id: String? = nil, alternates: [String] = [],
-        groupedLetters: [String]? = nil
+        groupedLetters: [String]? = nil, showsLabel: Bool? = nil
     ) {
         self.cap = cap
         self.width = width
         self.alternates = alternates
         self.groupedLetters = groupedLetters
+        self.showsLabel = showsLabel
         self.id = id ?? KeySpec.identifier(for: cap)
     }
 

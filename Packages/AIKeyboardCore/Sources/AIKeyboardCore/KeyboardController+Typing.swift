@@ -133,7 +133,7 @@ extension KeyboardController {
         // **Both of these end the undo window, and they are the only keys that do
         // so without changing a character.** A selection-scoped revert deletes a
         // count of units from where the caret is standing, so a caret that has
-        // moved since would take the wrong ones — see `revertAIEdit`, whose guard
+        // moved since would take the wrong ones — see `revertEdit`, whose guard
         // catches the case the host moves it and this catches the case we do.
         //
         // They end a hand repair for the same reason: it is a claim about the
@@ -510,8 +510,29 @@ extension KeyboardController {
         // extension is killed without warning and gets no `applicationWillTerminate`
         // of its own, so anything saved "on the way out" is saved never.
         store.recentEmoji = recentEmoji
+        // **`visibleRecentEmoji` is deliberately not touched here.** The grid the
+        // finger is on keeps the order it opened with; `settleRecentEmoji` is what
+        // picks the new one up, the next time that grid becomes visible.
         refreshSuggestions()
         reportInteraction(.emoji)
+    }
+
+    /// Adopts the recorded order as the order to draw.
+    ///
+    /// **Called when the emoji surface becomes visible after not being visible,
+    /// and nowhere else** — a re-sort while it is open is a picker that moves the
+    /// emoji out from under the thumb. That is two moments, not one: `show(_:)`
+    /// arriving at an emoji overlay from a different one, and the keyboard itself
+    /// coming back on screen (`KeyboardViewController.viewWillAppear`). Nothing
+    /// resets `overlay` when the keyboard goes away, so an extension instance iOS
+    /// keeps alive comes back with the grid still open, and without the second
+    /// call the emoji picked just before it was dismissed would be missing from
+    /// Recents until the user closed the panel and opened it again.
+    ///
+    /// See `KeyboardController.visibleRecentEmoji`.
+    public func settleRecentEmoji() {
+        guard visibleRecentEmoji != recentEmoji else { return }
+        visibleRecentEmoji = recentEmoji
     }
 
     /// Four full columns of the strip at ten columns across — enough that the tab
@@ -637,14 +658,85 @@ extension KeyboardController {
         if newOverlay == .copyclipSearch {
             setCopyclipQuery(copyclipQuery)
         }
+        // Arriving at the emoji surface from outside it, which is one of the two
+        // moments the Recent order may move (`viewWillAppear` is the other).
+        // `overlay.isEmoji` on the right is what makes the grid and its search box
+        // one visit — search is opened from the grid and backspaced out of it
+        // again, and re-sorting on either leg is the same emoji-under-the-thumb
+        // shuffle seen from a different key.
+        if newOverlay.isEmoji && !overlay.isEmoji {
+            settleRecentEmoji()
+        }
         withAnimation(Theme.Motion.panel) { overlay = newOverlay }
+    }
+
+    /// A search box starts on lower case and hands the document's shift back when
+    /// it closes.
+    ///
+    /// **The box inherited the document's shift, and that is not a capitalisation
+    /// the user asked for.** An empty field arms shift at focus, so opening emoji
+    /// search and typing `cat` produced `Cat`, and a shift press from that
+    /// inherited `.on` went straight to `.locked` — the query the user reads
+    /// carrying prose rules into something that is not prose. Search is
+    /// case-insensitive (`EmojiSearch.normalise`), so the results were right the
+    /// whole time and only the box looked wrong.
+    ///
+    /// **Restoring is the half that makes it safe.** Simply switching shift off on
+    /// entry loses the capital at the start of a sentence, which is a real bug
+    /// traded for a cosmetic one. The parked value is put back on the way out, and
+    /// only on a genuine crossing: `.emojiSearch` → `.copyclipSearch` is still one
+    /// box owning the keys, so the document's shift stays parked rather than being
+    /// restored and re-taken. Shift pressed *inside* the box belongs to the query
+    /// and is deliberately discarded with it.
+    func adoptSearchShift(from previous: KeyboardOverlay) {
+        guard previous.isSearch != overlay.isSearch else { return }
+        if overlay.isSearch {
+            shiftBeforeSearch = shift
+            shift = .off
+        } else {
+            if let parked = shiftBeforeSearch { shift = parked }
+            shiftBeforeSearch = nil
+        }
     }
 
     public func dismissOverlay() {
         stopDictation(insert: false)
+        // The same tidy-up `show(_:)` does, and for the same two reasons: a query
+        // left set reopens the box on yesterday's word, and `emojiResults` holds
+        // sixty strings alive for the rest of a session in a process with a
+        // memory cap. Both close paths, one answer.
+        emojiQuery = ""
+        emojiResults = []
+        copyclipQuery = ""
+        copyclipResults = []
         withAnimation(Theme.Motion.panel) {
             overlay = .none
             clearBannerState()
         }
+    }
+
+    /// Closes a panel that this orientation has no way out of.
+    ///
+    /// **Landscape sheds the action row, and that row holds the only key that
+    /// closes the emoji grid or the CopyClip panel.**
+    /// `Theme.Metrics.landscapeLayout(basedOn:)` sets `cursorRow = []`, so on a
+    /// rotated phone `KeyboardView+Keys` draws no action row at all — while
+    /// `KeyboardOverlay.copyclip` and `.emoji` still hide every letter key. A
+    /// panel opened in portrait and rotated into therefore left a keyboard with
+    /// no letters, no space bar, no return and nothing that could close it: the
+    /// search box hands the letters back but types into the query, and its ✕ only
+    /// ever returns to the panel. The way out was to rotate the phone back.
+    ///
+    /// Closing is the honest answer rather than keeping the row: landscape has
+    /// about 169pt for the whole keyboard and that row was shed on purpose (see
+    /// NIT-18). A panel that cannot be opened in this orientation should not be
+    /// standing in it either. A user who put CopyClip or Emoji on a bar edge can
+    /// reopen it there, because the bar is not shed.
+    ///
+    /// **Silent, because nobody pressed anything.** `show(_:)` speaks for a key
+    /// with `Feedback.modifierPress()`, and a rotation is not one.
+    public func closeOverlayForLandscape() {
+        guard overlay != .none else { return }
+        dismissOverlay()
     }
 }

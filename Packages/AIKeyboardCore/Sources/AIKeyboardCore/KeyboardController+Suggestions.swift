@@ -175,7 +175,10 @@ extension KeyboardController {
             words.map { Suggestion(text: $0, language: language) } + suggestions.dropFirst()
         var merged: [Suggestion] = []
         var seen = Set(held.values.map { SeedLanguageModel.fold($0.text) })
-        for slot in 0..<3 {
+        // The same shape the local tier returns: the typed echo plus one offer per
+        // drawn slot. Fixed at three here, this was the one path that could shrink
+        // the bar back to two candidates the moment the refiner answered.
+        for slot in 0..<(SuggestionEngine.barSlots + 1) {
             guard
                 let choice = held[slot]
                     ?? pool.first(where: { !seen.contains(SeedLanguageModel.fold($0.text)) })

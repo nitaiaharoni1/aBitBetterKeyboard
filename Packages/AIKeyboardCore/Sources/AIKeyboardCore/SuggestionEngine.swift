@@ -84,6 +84,23 @@ import UIKit
 // `score.py` grades it. Run it before and after any change here.
 public enum SuggestionEngine {
 
+    /// How many candidates the bar draws.
+    ///
+    /// **Mid-word the engine has to return one more than this, and for the whole
+    /// life of the bar it did not.** Slot zero is the literal keystrokes, pinned so
+    /// the refiner and the space bar can always find what was keyed;
+    /// `SuggestionBar.centeredSlots` then drops that echo, because it is already in
+    /// the field and a slot spent on it hides a completion. Asking `rank` for three
+    /// therefore left **two** offers for three slots — measured over 234
+    /// letter-by-letter keystroke moments across 30 Hebrew and 20 English words,
+    /// 229 of them drew two candidates and a blank, and the frozen corpus shows the
+    /// same thing on every mid-word entry. A third of the one row this keyboard has
+    /// for suggestions was empty on nearly every keystroke.
+    ///
+    /// The empty-prefix path returns exactly this many: nothing is filtered there,
+    /// because there is no typed word to echo.
+    static let barSlots = 3
+
     // MARK: Script detection
     //
     // Pure character arithmetic over `LanguageDetector`, not a mock in the first
@@ -219,7 +236,7 @@ public enum SuggestionEngine {
 
         let typedLanguage = script(of: trimmedPrefix, among: languages) ?? contextLanguage
         let preceding = previousWords(in: context)
-        let results = completions(
+        let ranked = completions(
             for: trimmedPrefix,
             previousWords: preceding,
             context: context,
@@ -235,11 +252,15 @@ public enum SuggestionEngine {
             // Hebrew rather than to "any non-Latin context", because the list was
             // measured against Hebrew and nothing else. See `codeSwitchVocabulary`.
             codeSwitching: contextLanguage.script == .hebrew && typedLanguage.script == .latin)
+        // The bar draws the words; the commit decision reads the provenance the
+        // same list still carries. Flattening before that question is asked is
+        // what let a two-clitic reading take the space bar — see
+        // `commitTrustsReading`.
         return markDefault(
-            results,
+            ranked.map { Suggestion(text: $0.text, language: $0.language) },
             at: shouldAutocorrect(
                 trimmedPrefix, previousWords: preceding, context: context,
-                typedLanguage: typedLanguage, results: results,
+                typedLanguage: typedLanguage, results: ranked,
                 supplementary: supplementary, personal: personal) ? 1 : 0)
     }
 

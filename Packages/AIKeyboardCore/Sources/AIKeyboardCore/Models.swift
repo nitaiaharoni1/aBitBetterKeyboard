@@ -85,6 +85,14 @@ public enum KeyboardOverlay: Equatable, Sendable {
 
     public var isCopyClip: Bool { self == .copyclip || self == .copyclipSearch }
 
+    /// A box on this keyboard owns the keystrokes instead of the document.
+    ///
+    /// The two search states are the only places a letter goes somewhere other
+    /// than the user's message, which is why they are also the only places the
+    /// document's shift must not follow it. See
+    /// `KeyboardController.adoptSearchShift(from:)`.
+    public var isSearch: Bool { self == .emojiSearch || self == .copyclipSearch }
+
     /// Letters (and the space row) are on screen. Hidden, not removed, while a
     /// panel covers them so the overlay keeps the same height.
     public var showsLetterKeys: Bool {

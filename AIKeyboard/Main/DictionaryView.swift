@@ -12,7 +12,19 @@ struct DictionaryView: View {
     @State private var learned: [LearnedWord] = []
     @State private var query = ""
     @State private var confirmForget = false
+    @State private var expandedLanguages: Set<String> = []
     @FocusState private var isAdding: Bool
+
+    /// Rows of one language's inferred list drawn before the "Show all" row.
+    ///
+    /// **Every language after the first was unreachable without this.** The
+    /// sections are ordered by `KeyboardLanguage.allCases`, so a bilingual user
+    /// with 267 English words had to scroll past all 267 of them to find out
+    /// whether the keyboard had learned a single Hebrew one — and the answer to
+    /// "does it remember Hebrew" is the whole reason this list is on screen. The
+    /// cap is per language, so the head of every section is visible at once and
+    /// the count in the header is still the true total.
+    private static let collapsedRowCount = 12
 
     var body: some View {
         ZStack {
@@ -126,20 +138,67 @@ struct DictionaryView: View {
                             ? "From typing · \(group.language.displayName)"
                             : "From typing",
                         count: group.words.count)
+                    let shown = visibleWords(of: group)
                     Card(padding: Theme.Space.xs) {
                         VStack(spacing: 0) {
-                            ForEach(Array(group.words.enumerated()), id: \.element.id) {
+                            ForEach(Array(shown.enumerated()), id: \.element.id) {
                                 index, word in
                                 if index > 0 {
                                     Divider.themed.padding(.leading, Theme.Space.xs)
                                 }
                                 wordRow(word.word, count: word.count) { forgetLearned(word) }
                             }
+                            if shown.count < group.words.count || isExpanded(group.language) {
+                                Divider.themed.padding(.leading, Theme.Space.xs)
+                                expandRow(for: group)
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    private func isExpanded(_ language: KeyboardLanguage) -> Bool {
+        expandedLanguages.contains(language.languageTag)
+    }
+
+    /// A search has already narrowed the list to something a person asked for, so
+    /// it is never capped; an unsearched section is.
+    private func visibleWords(
+        of group: (language: KeyboardLanguage, words: [LearnedWord])
+    ) -> [LearnedWord] {
+        guard needle.isEmpty, !isExpanded(group.language) else { return group.words }
+        return Array(group.words.prefix(Self.collapsedRowCount))
+    }
+
+    private func expandRow(
+        for group: (language: KeyboardLanguage, words: [LearnedWord])
+    ) -> some View {
+        let expanded = isExpanded(group.language)
+        return Button {
+            Feedback.modifierPress()
+            withAnimation(Theme.Motion.quick) {
+                if expanded {
+                    expandedLanguages.remove(group.language.languageTag)
+                } else {
+                    expandedLanguages.insert(group.language.languageTag)
+                }
+            }
+        } label: {
+            HStack(spacing: Theme.Space.xxs) {
+                Text(expanded ? "Show fewer" : "Show all \(group.words.count)")
+                    .font(Theme.Fonts.body)
+                Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Theme.Brand.action)
+            .padding(.vertical, Theme.Space.sm)
+            .padding(.horizontal, Theme.Space.xs)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func listHeader(_ title: String, count: Int) -> some View {

@@ -107,8 +107,10 @@ struct EmojiResultsStrip: View {
         Group {
             if controller.emojiQuery.isEmpty {
                 // Nothing typed yet: the recents are a better opening than an
-                // empty band, and they are what the user reaches for most.
-                strip(controller.recentEmoji)
+                // empty band, and they are what the user reaches for most. The
+                // settled order, so picking one does not shuffle the strip it was
+                // picked from — see `KeyboardController.visibleRecentEmoji`.
+                strip(controller.visibleRecentEmoji)
             } else if controller.emojiResults.isEmpty {
                 Text("No emoji for \u{201C}\(controller.emojiQuery)\u{201D}")
                     .font(.system(size: 14))

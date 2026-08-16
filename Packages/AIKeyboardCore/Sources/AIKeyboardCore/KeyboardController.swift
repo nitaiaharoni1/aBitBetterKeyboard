@@ -42,7 +42,27 @@ public final class KeyboardController: ObservableObject {
     @Published public private(set) var hostLanguage: KeyboardLanguage
     @Published public var plane: KeyboardPlane = .letters
     @Published public var shift: ShiftState = .on
-    @Published public var overlay: KeyboardOverlay = .none
+    /// **The observer is the fix, and the four writers are the reason.** A search
+    /// box has to start with shift off — it is a query, not prose — and it has to
+    /// give the document's shift back on the way out, or a sentence start loses
+    /// its capital. Doing that at the call sites means catching `show(_:)`,
+    /// `dismissOverlay()`, `KeyboardController+AI` and `KeyboardController+Dictation`,
+    /// all four of which write this property directly, and missing one leaves
+    /// shift stuck off in the core typing path — a real bug traded for a cosmetic
+    /// one. A `didSet` cannot be missed by a fifth writer that has not been written
+    /// yet. See `adoptSearchShift(from:)`.
+    @Published public var overlay: KeyboardOverlay = .none {
+        didSet { adoptSearchShift(from: oldValue) }
+    }
+
+    /// The document's shift, parked for as long as a search box owns the keys.
+    /// Nil whenever no box does.
+    ///
+    /// It is the document's answer while it is parked, not a frozen copy of one:
+    /// `adoptFieldAutocapitalization` writes here rather than to `shift` when a
+    /// box is open, so a keyboard that comes back on screen over a still-open box
+    /// reads the new field's trait without capitalising the query.
+    var shiftBeforeSearch: ShiftState?
     @Published public var suggestions: [Suggestion] = []
     @Published public var pressedKeyID: String?
     @Published public private(set) var lastInteraction: KeyboardInteraction?
@@ -107,20 +127,26 @@ public final class KeyboardController: ObservableObject {
     /// Which engine answered, so a best-effort answer can say so.
     @Published public var aiProvenance: AIProvenance?
 
-    /// The last Fix or Rewrite that was written straight into the field, and what
-    /// was there before it.
+    /// The last thing this keyboard wrote into the field by itself, and what was
+    /// there before it.
     ///
     /// **Fix and Rewrite no longer offer their answer, they make it**, so the user
     /// reads the corrected sentence in their own message rather than on a strip
     /// above the keys — which is where they were going to read it anyway before
     /// sending. An edit made without being asked has to be undoable, and this is
     /// the whole of that: the text that was replaced, the text that replaced it,
-    /// and which action did it. `SuggestionBar` draws a revert control while it is
+    /// and which key did it. `SuggestionBar` draws a revert control while it is
     /// set, and the next keystroke clears it — see `clearRevertibleEdit`.
+    ///
+    /// **One slot, and CopyClip shares it rather than growing a second.** Tapping
+    /// a clip is the same event as a Fix from the field's point of view — text the
+    /// user did not type, arriving whole, gone from reach the moment it lands —
+    /// and its undo expires on the same keystroke. See `RevertibleEdit`.
+    ///
     /// `internal(set)` for the reason `emojiQuery` is: it is written from
     /// `KeyboardController+AI`, which is a different file, and closed to the app and
     /// the extension — nothing outside this package may claim an edit is undoable.
-    @Published public internal(set) var revertibleEdit: AIEdit?
+    @Published public internal(set) var revertibleEdit: RevertibleEdit?
 
     /// Whether the field holds anything the text actions could work on.
     ///
@@ -220,7 +246,42 @@ public final class KeyboardController: ObservableObject {
     /// The emoji last inserted, most recent first. Seeded from `SharedStore` in
     /// `init` and written back by `insertEmoji`, so the Recent tab survives iOS
     /// tearing the extension down.
+    ///
+    /// **This is the record, not the picture.** Nothing on screen may read it —
+    /// the Recent tab and the search strip both draw `visibleRecentEmoji`. See
+    /// that property for why the two are separate.
     @Published public var recentEmoji: [String] = SharedStore.shippedRecentEmoji
+
+    /// The Recent order as it is currently drawn, frozen for as long as the emoji
+    /// surface stays open.
+    ///
+    /// **A grid that re-sorts under the finger is the picker losing its place.**
+    /// `insertEmoji` moves the emoji it just inserted to the front of
+    /// `recentEmoji`, and while that is the right thing to *remember*, doing it
+    /// live means every tap in the Recent tab shuffles the keys around the one
+    /// that was tapped: the second 😂 of a row of three is somewhere else by the
+    /// time the thumb comes back down, and the emoji beside it is a different
+    /// emoji. The picker is muscle memory — that is the whole reason a Recent tab
+    /// exists — so the order it shows is settled when the surface becomes visible
+    /// (`settleRecentEmoji`, which names its two call sites) and left alone until
+    /// it becomes visible again. An emoji picked this visit is still recorded and
+    /// still persisted; it simply takes its new place the next time the user comes
+    /// to look.
+    ///
+    /// Search is one surface with the grid here: opening the box and coming back
+    /// (`.emoji` ⟷ `.emojiSearch`) does not re-settle, or the strip and the grid
+    /// would reorder around a backspace.
+    ///
+    /// It also costs less. `EmojiPanel` rebuilds all 1,870 cells whenever this
+    /// changes, and that used to be once per emoji picked.
+    ///
+    /// `internal(set)` rather than `private(set)` for the reason `emojiQuery` is:
+    /// `settleRecentEmoji` lives in `KeyboardController+Typing`. The extension
+    /// reaches that method and not this property, which is the boundary that
+    /// matters — outside this package the order can be settled, never set, so
+    /// there is no way to put an arbitrary list under the finger.
+    @Published public internal(set) var visibleRecentEmoji: [String] = SharedStore
+        .shippedRecentEmoji
 
     /// Copied texts this keyboard has snapshotted, newest first. Seeded from
     /// `SharedStore` in `init` and written back on every mutation: the extension
@@ -531,6 +592,7 @@ public final class KeyboardController: ObservableObject {
         // reason `storedKeyboardLayout` is on the line above: this is a second
         // process, and `load()` filled that copy whenever *this* process launched.
         recentEmoji = store.storedRecentEmoji
+        visibleRecentEmoji = recentEmoji
         let record = store.storedCopyclipRecord
         clips = record.clips
         lastChangeCount = record.lastChangeCount
@@ -789,12 +851,31 @@ public final class KeyboardController: ObservableObject {
         guard force || reported != adoptedAutocapitalizationType else { return false }
         adoptedAutocapitalizationType = reported
         autocapitalizationMode = reported ?? .sentences
-        guard shift != .locked else { return true }
+        // **While a search box owns the keys, `shift` is the query's and the
+        // document's is parked, so this decision belongs to the parked value.**
+        // The box is reachable from here because nothing resets `overlay` when
+        // the keyboard goes away: an extension instance iOS keeps alive comes
+        // back through `viewWillAppear` with the box still open, and that path
+        // calls this. Writing `shift` there would put the capital straight back
+        // into a query that exists precisely so prose rules do not reach it, and
+        // then hand the *previous* field's shift to the field this call just
+        // read. The caps-lock guard moves with it for the same reason: a lock the
+        // user set inside the query is not the document saying so. See
+        // `adoptSearchShift(from:)`.
+        let ownedBySearch = overlay.isSearch
+        let current = ownedBySearch ? (shiftBeforeSearch ?? shift) : shift
+        guard current != .locked else { return true }
+        let decided: ShiftState
         switch autocapitalizationMode {
-        case .none: shift = .off
-        case .allCharacters: shift = .locked
-        case .words, .sentences: shift = store.storedAutocapitalise ? .on : .off
-        @unknown default: shift = store.storedAutocapitalise ? .on : .off
+        case .none: decided = .off
+        case .allCharacters: decided = .locked
+        case .words, .sentences: decided = store.storedAutocapitalise ? .on : .off
+        @unknown default: decided = store.storedAutocapitalise ? .on : .off
+        }
+        if ownedBySearch {
+            shiftBeforeSearch = decided
+        } else {
+            shift = decided
         }
         return true
     }

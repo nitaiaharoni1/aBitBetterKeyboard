@@ -16,16 +16,61 @@ public struct SuggestionBar: View {
     @ObservedObject private var store: SharedStore = .shared
     @Environment(\.dynamicTypeSize) var dynamicTypeSize
 
-    public init(controller: KeyboardController) {
+    /// Handed down from `KeyboardView` rather than read again here.
+    ///
+    /// `KeyboardView.orientation` is the one place that decides what landscape
+    /// is, from `verticalSizeClass`, and everything that sheds a row in landscape
+    /// already reads it: the banner, the key grid, and the panel that has to be
+    /// closed on the way in. A second read in this file would be a second thing
+    /// that can disagree with the height published to the host, which is exactly
+    /// the drift `Theme.Metrics.landscapeLayout(basedOn:)` exists to prevent
+    /// between the published height and the rows drawn.
+    let orientation: KeyboardGeometry.Orientation
+
+    public init(
+        controller: KeyboardController,
+        orientation: KeyboardGeometry.Orientation = .portrait
+    ) {
         self.controller = controller
+        self.orientation = orientation
     }
 
+    /// The row this bar draws in, for one orientation.
+    ///
+    /// **The two orientations budget different numbers and the view used to know
+    /// only one of them.** `Theme.Metrics.totalHeight(for:showsBanner:orientation:)`
+    /// pays 30 pt for the bar in landscape and 36 in portrait, and this file
+    /// drew the portrait figure in both — so the landscape keyboard drew 6 pt
+    /// more than the height it asked the host for, on a form whose whole margin
+    /// against the fingerprint cap is about 3 pt. Everything the bar hosts in
+    /// landscape is free only because this number is the one that was already
+    /// paid for; read it from here rather than spelling 36 again.
+    public static func barHeight(for orientation: KeyboardGeometry.Orientation) -> CGFloat {
+        orientation == .landscape
+            ? Theme.Metrics.Landscape.suggestionBarHeight : Theme.Metrics.suggestionBarHeight
+    }
+
+    var barHeight: CGFloat { Self.barHeight(for: orientation) }
+
     public var body: some View {
-        if controller.overlay.isCopyClip {
+        // **Landscape keeps the action strip while a panel is up, and gives up
+        // the search box to do it.** Both panels hide every letter key, and in
+        // landscape the row carrying the key that closes them is shed — so a bar
+        // that turned itself into a search box would be a grid with no way out,
+        // which is the trap `KeyboardController.closeOverlayForLandscape` exists
+        // for, arriving through the new door this strip opens. Search needs the
+        // query, an alphabet and the results on screen at once and landscape has
+        // room for two of the three; the way out is the half that cannot be
+        // dropped, so the lit Emoji or CopyClip chip is what stands here instead.
+        // The candidates go with the box for the reason they always do: nobody is
+        // typing a word while a grid is open.
+        if orientation == .landscape, controller.overlay.isEmoji || controller.overlay.isCopyClip {
+            landscapePanelBar
+        } else if controller.overlay.isCopyClip {
             // The bar becomes the CopyClip search box for as long as the list
             // is open. Same height trade as emoji: see `CopyClipBar`.
             CopyClipBar(controller: controller)
-                .frame(height: Theme.Metrics.suggestionBarHeight)
+                .frame(height: barHeight)
                 .padding(.horizontal, Theme.Space.xxs)
                 .environment(\.layoutDirection, .leftToRight)
         } else if controller.overlay.isEmoji {
@@ -33,7 +78,7 @@ public struct SuggestionBar: View {
             // open. Not an extra row: see `EmojiSearchField` for the height that
             // is not available to spend.
             EmojiSearchField(controller: controller)
-                .frame(height: Theme.Metrics.suggestionBarHeight)
+                .frame(height: barHeight)
                 .padding(.horizontal, Theme.Space.xxs)
                 .environment(\.layoutDirection, .leftToRight)
         } else {
@@ -41,8 +86,71 @@ public struct SuggestionBar: View {
         }
     }
 
-    private var candidates: some View {
+    /// The landscape bar with a panel open: every control the bar can draw, and
+    /// no words beside them.
+    ///
+    /// **All three groups, not just the strip, because any of them can be the way
+    /// out.** A user is free to clear their action row and keep Emoji on a bar
+    /// edge instead — `landscapeActions(for:)` then deduplicates it out of the
+    /// strip, and a version of this that drew the strip alone would open a panel
+    /// from a chip and then stop drawing that chip. The rule between the groups
+    /// is dropped: with no candidates between them there is nothing to separate.
+    private var landscapePanelBar: some View {
         HStack(spacing: 0) {
+            ForEach(Self.landscapePanelControls(for: controller.customization)) { slot in
+                slotButton(slot.action)
+            }
+            Spacer(minLength: 0)
+        }
+        .environment(\.layoutDirection, .leftToRight)
+        .frame(height: barHeight)
+        .padding(.horizontal, Theme.Space.xxs)
+    }
+
+    /// The action row's keys, drawn as chips, for as long as landscape is
+    /// shedding the row that held them.
+    ///
+    /// **Inline rather than folded behind one affordance, and the width is the
+    /// argument.** Landscape is short and wide: an iPhone 17 Pro rotated is 402
+    /// pt tall and 874 wide, and every point of the height is already spoken for
+    /// while the width is the axis nothing competes over. Five 44 pt chips and a
+    /// rule cost 229 of those 874 points, which still leaves each of the three
+    /// candidates about **194 pt against the 113** the same candidate gets in
+    /// portrait — so the actions arrive and the words read wider than they do on
+    /// the keyboard this is being compared against. On the narrowest phone this
+    /// ships to (a 667 pt landscape) it is about 125 pt a candidate against that
+    /// same phone's portrait 104. A drawer would have cost a tap, and worse, it
+    /// would have hidden *which* actions exist from the one person who does not
+    /// know yet: somebody who has just rotated and found the row gone.
+    ///
+    /// The chips are 44 pt wide, the full portrait target: width is what
+    /// landscape has. Only their height comes down, and `chipSize(for:)` is
+    /// where.
+    @ViewBuilder
+    var landscapeActionStrip: some View {
+        // Same order the action row had them in, drawn through the same
+        // `slotButton` every other configured control goes through, so a control
+        // cannot behave differently for having been rotated into.
+        ForEach(Self.landscapeActions(for: controller.customization)) { slot in
+            slotButton(slot.action)
+        }
+    }
+
+    private var candidates: some View {
+        let landscapeActions = Self.landscapeActions(for: controller.customization)
+        return HStack(spacing: 0) {
+            // **In landscape the action row's keys are here, before the user's
+            // own leading end.** That row is shed at 402 pt of screen height (see
+            // `Theme.Metrics.landscapeLayout(basedOn:)`) and every control on it
+            // went with it, so five things a user reached for in portrait simply
+            // stopped existing when they turned the phone. The bar's row is
+            // already paid for, which is why this costs the keyboard's total
+            // height nothing at all — the one currency landscape has none of.
+            if orientation == .landscape, !landscapeActions.isEmpty {
+                landscapeActionStrip
+                separator
+            }
+
             // Both ends are configured in the layout editor. The three controls
             // that shipped are still the default, and each keeps its own view
             // below: what moved is which ones are drawn and where, never how they
@@ -92,7 +200,7 @@ public struct SuggestionBar: View {
         // inside its own slot; that is the text engine's business and is
         // untouched by this.
         .environment(\.layoutDirection, .leftToRight)
-        .frame(height: Theme.Metrics.suggestionBarHeight)
+        .frame(height: barHeight)
         .padding(.horizontal, Theme.Space.xxs)
         // The revert control arrives with an answer already in the field, so it
         // fades in rather than appearing between two frames beside three candidate
@@ -116,13 +224,17 @@ public struct SuggestionBar: View {
         let slots = Self.centeredSlots(
             controller.suggestions, typed: controller.currentWordPrefix)
         return HStack(spacing: 0) {
-            ForEach(0..<3, id: \.self) { slot in
+            ForEach(0..<SuggestionEngine.barSlots, id: \.self) { slot in
                 if slot > 0 { candidateSeparator }
                 if let suggestion = slots[slot] {
                     candidate(suggestion)
                         .accessibilityIdentifier("suggestion-\(slot)")
                 } else {
-                    Color.clear.frame(maxWidth: .infinity, minHeight: 36)
+                    // `barHeight`, not a repeated 36: a floor taller than the row
+                    // it sits in is a bar that draws past the height the keyboard
+                    // published, which in landscape is the whole margin against
+                    // the fingerprint cap.
+                    Color.clear.frame(maxWidth: .infinity, minHeight: barHeight)
                 }
             }
         }
@@ -137,7 +249,7 @@ public struct SuggestionBar: View {
     /// tap that types nothing new. Completions and corrections stay. An empty
     /// prefix is next-word, so nothing is filtered.
     static func centeredSlots(_ items: [Suggestion], typed: String = "") -> [Suggestion?] {
-        var slots: [Suggestion?] = [nil, nil, nil]
+        var slots: [Suggestion?] = Array(repeating: nil, count: SuggestionEngine.barSlots)
         let offers: [Suggestion]
         if typed.isEmpty {
             offers = items
@@ -162,14 +274,23 @@ public struct SuggestionBar: View {
     }
 
     /// The three candidates are the bar's primary content, so they get real
-    /// room to grow — capped at 70% of `suggestionBarHeight`, which is fixed
-    /// at 36pt (see `.claude/rules/suggestion-bar.md`) and stays that way
-    /// regardless of Dynamic Type, so the growth has to go somewhere within
-    /// it rather than push the row taller. `.minimumScaleFactor(0.75)` below
-    /// already absorbs a long word at the larger size; it existed before this
-    /// for the same reason, on a long completion at the shipped size.
-    static func candidateFontSize(for dynamicTypeSize: DynamicTypeSize) -> CGFloat {
-        min(17 * Theme.DynamicType.scale(for: dynamicTypeSize), Theme.Metrics.suggestionBarHeight * 0.7)
+    /// room to grow — capped at 70% of the row they are drawn in, which is
+    /// fixed at 36pt in portrait (see `.claude/rules/suggestion-bar.md`) and
+    /// 30 in landscape, and stays that way regardless of Dynamic Type, so the
+    /// growth has to go somewhere within it rather than push the row taller.
+    /// `.minimumScaleFactor(0.75)` below already absorbs a long word at the
+    /// larger size; it existed before this for the same reason, on a long
+    /// completion at the shipped size.
+    ///
+    /// **The cap takes the row rather than naming it**, because landscape's row
+    /// is 6 pt shorter and a cap read off the portrait constant would let
+    /// accessibility text grow past the height the keyboard published. It
+    /// defaults to portrait so every existing caller keeps today's answer.
+    static func candidateFontSize(
+        for dynamicTypeSize: DynamicTypeSize,
+        barHeight: CGFloat = Theme.Metrics.suggestionBarHeight
+    ) -> CGFloat {
+        min(17 * Theme.DynamicType.scale(for: dynamicTypeSize), barHeight * 0.7)
     }
 
     private func candidate(_ suggestion: Suggestion) -> some View {
@@ -184,14 +305,15 @@ public struct SuggestionBar: View {
             Text(suggestion.text)
                 .font(
                     .system(
-                        size: Self.candidateFontSize(for: dynamicTypeSize),
+                        size: Self.candidateFontSize(
+                            for: dynamicTypeSize, barHeight: barHeight),
                         weight: suggestion.isDefault ? .bold : .light)
                 )
                 .foregroundStyle(Theme.Keys.label)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .padding(.horizontal, Theme.Space.xxs)
-                .frame(maxWidth: .infinity, minHeight: 36)
+                .frame(maxWidth: .infinity, minHeight: barHeight)
                 .contentShape(Rectangle())
         }
         .pressable(scale: 0.94)

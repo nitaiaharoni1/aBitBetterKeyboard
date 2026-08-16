@@ -12,11 +12,17 @@ import Foundation
 /// carries both readings.
 ///
 /// **What it scores, on `Bar/dictation/`'s 36 clips, 2026-08-09.** Word error
-/// rate 10.1% Hebrew, 8.0% English, 17.7% code-switched, 11.9% overall, with
-/// 41/60 named entities recovered and 27/36 of the English words inside Hebrew
+/// rate 10.7% Hebrew, 8.5% English, 23.5% code-switched, 14.2% overall, with
+/// 38/60 named entities recovered and 25/36 of the English words inside Hebrew
 /// sentences kept in Latin letters. That last number is the one to watch: an
 /// engine that writes `סינק` for `sync` has a respectable word error rate
 /// against a transliterating reference and is useless in this product.
+///
+/// **Those read 10.1 / 8.0 / 17.7 / 11.9, 41/60 and 27/36 until 2026-08-16, and
+/// no committed run produces them.** `harness/score.py` over every committed
+/// outputs file reproduces `Bar/dictation/README.md` exactly. That set and the
+/// scorer were committed together in `d023520f`, so it predates the scoring rule
+/// that ships. Score the corpus before quoting it; do not restore from git.
 ///
 /// Read those with the corpus's own warning attached: every clip is macOS `say`
 /// output, so they are an optimistic ceiling and not a prediction of what a
@@ -28,15 +34,21 @@ import Foundation
 /// **The prompt shape is measured, one variant at a time, all in one sitting,
 /// and both sides are committed under `Bar/dictation/ablation/`.** Baseline is
 /// `speech`/`languages`/`text` in that order with no language hint and no
-/// loanword rule: 16.8% overall, 30/60 entities, 17/36 Latin kept.
+/// loanword rule: 15.6% overall, 31/60 entities, 18/36 Latin kept.
 ///
-///   - **Naming the user's own keyboards** (`hint`) is worth 2.6 points of word
-///     error rate and five entities. The product knows this for free and the
-///     model cannot hear it, which makes it the cheapest thing in the request.
-///   - **A hard loanword rule with examples** (`loanwords`) is worth 3.5 points
-///     and nine entities, and 9 of the 36 Latin-script words on its own.
-///   - **Together** they are worth 4.9 points, eleven entities and ten Latin
-///     words — better than either alone, and no axis regresses.
+///   - **A hard loanword rule with examples** (`loanwords`) is the real win: 1.3
+///     points of word error rate, five entities and six of the 36 Latin-script
+///     words on its own, taking code-switched WER from 28.8% to 23.1%.
+///   - **Naming the user's own keyboards** (`hint`) is worth nothing on this
+///     corpus — 16.3% against the 15.6% baseline, which is slightly *worse* —
+///     and ships anyway, because it earns its place on `multilingual/`, where
+///     without it the Polish clip comes back as Portuguese.
+///   - **Together**: 14.2% overall, 38/60 entities, 25/36 Latin kept. Better
+///     than either alone on the overall and on both counts, and it does *not*
+///     improve every axis — against the baseline, Hebrew-only WER goes 10.0% to
+///     10.7% and English-only 8.0% to 8.5%, and loanwords alone is fractionally
+///     ahead on code-switched WER. The trade is taken on the axis this product
+///     is for.
 ///
 /// Unlike the text and screen-context bars, this one is deterministic: two full
 /// runs of the identical configuration came back byte for byte identical, so a

@@ -188,14 +188,20 @@ extension KeyboardView {
                     }
 
                     if controller.overlay == .copyclip {
-                        CopyClipPanel(controller: controller)
-                            .frame(width: gridWidth)
-                            .frame(
-                                maxWidth: .infinity,
-                                alignment: reachAlignment(layout.geometry.reach)
-                            )
-                            .environment(\.layoutDirection, .leftToRight)
-                            .transition(panelTransition)
+                        // `.bottom`, for the reason `EmojiPanel` is given the same
+                        // band: this panel covers the space row too, so its control
+                        // row is the row standing where the space bar was.
+                        CopyClipPanel(
+                            controller: controller,
+                            keyHeight: layout.geometry.height(.bottom)
+                        )
+                        .frame(width: gridWidth)
+                        .frame(
+                            maxWidth: .infinity,
+                            alignment: reachAlignment(layout.geometry.reach)
+                        )
+                        .environment(\.layoutDirection, .leftToRight)
+                        .transition(panelTransition)
                     }
                 }
                 .zIndex(KeyPopupLayer.letters)
@@ -283,9 +289,10 @@ extension KeyboardView {
             let key = row.keys[index]
             let hostsReplyPicker =
                 key.cap == .aiReply && controller.replyKeyBroadcastPrompt != nil
+            let keyWidth = widths.indices.contains(index) ? widths[index] : unit
             KeyView(
                 spec: key,
-                width: widths.indices.contains(index) ? widths[index] : unit,
+                width: keyWidth,
                 height: height,
                 language: controller.language,
                 shift: controller.shift,
@@ -311,11 +318,11 @@ extension KeyboardView {
                 // and only it is told. Same shape as `toneAlternates` above.
                 isEmojiOpen: key.cap == .emoji && controller.overlay.isEmoji,
                 isCopyClipOpen: key.cap == .copyclip && controller.overlay.isCopyClip,
-                // The shipped action row keeps emoji and dictation as glyphs.
-                // CopyClip keeps its caption: the clipboard mark is not a name
-                // people already know.
-                showsActionCaption: row.id != KeyboardLayout.RowID.cursor
-                    || (key.cap != .emoji && key.cap != .dictation),
+                // The user's own switch when they threw one, and the shipped rule
+                // — the row, then a width floor — when they did not. Asked of
+                // the key rather than answered here, because the same three-way
+                // question is what the editor's tray draws with.
+                showsActionCaption: key.showsActionCaption(inRow: row.id, width: keyWidth),
                 // Match the action row's labels to every other key. Custom
                 // placements keep their action-specific tint.
                 usesNeutralActionTint: row.id == KeyboardLayout.RowID.cursor,

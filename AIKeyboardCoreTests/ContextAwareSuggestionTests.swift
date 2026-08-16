@@ -327,6 +327,203 @@ final class ContextAwareSuggestionTests: XCTestCase {
             "got \(results.map(\.text)) — the old engine returned לעבוד and לעבור, two verbs")
     }
 
+    /// **The space bar may not act on a reading the ranking itself distrusts, and
+    /// `להתרופה` is what that cost.**
+    ///
+    /// Four letters into `להתראות` ("goodbye") the bar bolded `להתרופה` and space
+    /// committed it: `ל` + `ה` + `תרופה`, "to the medicine". The four-letter gate
+    /// fires because the word is over four letters and no checker calls it a word,
+    /// and `rank` had already flattened to `[Suggestion]` by then, so the commit
+    /// decision could not see that two of the four typed letters had been spent
+    /// assuming a reading.
+    ///
+    /// Three premises are asserted as well as the behaviour, because each one is a
+    /// cheaper fix that does not work. `תרופה` is in the seed list, so "the winner
+    /// must be seed-reachable" does not exclude it. The candidate is still
+    /// *offered*, so a build that fixed this by deleting the two-clitic reading
+    /// would fail here rather than pass. And the bold slot is the typed word,
+    /// which is the only thing that rejects the old build — `להתרופה` was in the
+    /// bar either way.
+    @MainActor
+    func testAStackedCliticReadingDoesNotTakeTheSpaceBar() {
+        XCTAssertTrue(
+            SeedLanguageModel.knows("תרופה", in: .hebrew),
+            "תרופה left the seed list — this defect is reached through it, so the test "
+                + "would now pass for the wrong reason")
+
+        let results = SuggestionEngine.suggestions(
+            prefix: "להתר", context: "", languages: [.hebrew, .english],
+            personal: emptyPersonal())
+        XCTAssertTrue(
+            results.contains { $0.text == "להתרופה" },
+            "got \(results.map(\.text)) — the reading is still offered; only the bold "
+                + "slot moves, and a build that stopped generating it proves nothing")
+        XCTAssertEqual(
+            results.first(where: \.isDefault)?.text, "להתר",
+            "space committed \(results.first(where: \.isDefault)?.text ?? "nothing") "
+                + "four letters into להתראות: \(results.map(\.text))")
+    }
+
+    /// The other half of the same defect, and it arrives through a different
+    /// source: `להתרא` bolded `להתראיין`, which is `UITextChecker` completing
+    /// `התרא` — a stem `HebrewMorphology.splits` invented — because the seed list
+    /// had nothing to say about that reading.
+    ///
+    /// **The offered word is deliberately not pinned.** Apple's Hebrew completion
+    /// list for a given stem moves between runs (see the `he-comp-04` /
+    /// `he-comp-05` note in `.claude/rules/suggestion-bar.md`), so the premise is
+    /// asserted as "something longer than the keystrokes is still offered" rather
+    /// than as `להתראיין`. The typed echo is excluded from that check, because
+    /// `SuggestionEngine` always returns it and `contains { $0.hasPrefix(typed) }`
+    /// is true of a completely dead engine.
+    @MainActor
+    func testACheckerCompletionOfASplitStemDoesNotTakeTheSpaceBar() {
+        let results = SuggestionEngine.suggestions(
+            prefix: "להתרא", context: "", languages: [.hebrew, .english],
+            personal: emptyPersonal())
+        XCTAssertTrue(
+            results.contains { $0.text != "להתרא" && $0.text.hasPrefix("להתרא") },
+            "got \(results.map(\.text)) — the split reading has to still reach the bar, "
+                + "or this test passes against an engine that offers nothing at all")
+        XCTAssertEqual(
+            results.first(where: \.isDefault)?.text, "להתרא",
+            "space committed \(results.first(where: \.isDefault)?.text ?? "nothing") "
+                + "five letters into להתראות: \(results.map(\.text))")
+    }
+
+    /// **The control half, and the case every cheap gate breaks.** A clitic
+    /// reading is how Hebrew completion works at all — one seed entry for `עבודה`
+    /// serves `בעבודה` and `מהעבודה`, and no dictionary lists either glued form —
+    /// so a fix that simply refused to commit anything reached through a split, or
+    /// that capped the letters a Hebrew correction may add, would take these two
+    /// with it. `מהעבודה` matters most: it stacks *two* clitics, exactly as
+    /// `להתרופה` does, so a rule that counts clitics alone fails here.
+    @MainActor
+    func testACliticReadingWithLettersBehindItStillCommits() {
+        for (typed, context, expected) in [
+            ("בעבו", "אני ", "בעבודה"), ("מהעבו", "חוזר ", "מהעבודה")
+        ] {
+            let results = SuggestionEngine.suggestions(
+                prefix: typed, context: context, languages: [.hebrew, .english],
+                personal: emptyPersonal())
+            XCTAssertEqual(
+                results.first(where: \.isDefault)?.text, expected,
+                "space kept \(results.first(where: \.isDefault)?.text ?? "nothing") "
+                    + "instead of committing \(expected): \(results.map(\.text))")
+        }
+    }
+
+    /// The commit gate on its own, away from Apple's list, so a checker whose
+    /// Hebrew answers moved cannot make this pass or fail for the wrong reason.
+    ///
+    /// Each row rejects a different cheaper rule: a gate that only refused stacked
+    /// clitics loses `מהעבודה`; one that only refused the split checker keeps
+    /// `להתרופה`; one that counted letters added has nothing to say about either.
+    /// The last row is the reason nothing outside Hebrew changed — `cliticDepth`
+    /// is zero everywhere else, so the whole rule is skipped.
+    func testTheCommitGateReadsTheReadingAndNotTheLength() {
+        func trusts(
+            _ text: String, _ source: SuggestionEngine.Source, depth: Int, typed: String
+        ) -> Bool {
+            SuggestionEngine.commitTrustsReading(
+                SuggestionEngine.Candidate(
+                    text: text, language: .hebrew, source: source, cliticDepth: depth),
+                typed: typed)
+        }
+
+        XCTAssertTrue(trusts("בעבודה", .seed, depth: 1, typed: "בעבו"))
+        XCTAssertTrue(
+            trusts("מהעבודה", .seed, depth: 2, typed: "מהעבו"),
+            "two clitics with three letters of stem behind them is how Hebrew is "
+                + "written; refusing it on depth alone is the regression")
+        XCTAssertFalse(
+            trusts("להתרופה", .seed, depth: 2, typed: "להתר"),
+            "two of the four typed letters were spent on the reading, so the noun "
+                + "rests on the other two")
+        XCTAssertFalse(
+            trusts("להתראיין", .checker, depth: 1, typed: "להתרא"),
+            "the checker is only asked about a split stem when the seed had nothing "
+                + "to say about that reading; it may be offered, never committed")
+        XCTAssertTrue(
+            SuggestionEngine.commitTrustsReading(
+                SuggestionEngine.Candidate(text: "hello", language: .english, source: .checker),
+                typed: "helo"),
+            "an unsplit completion carries no clitic depth and must be untouched")
+    }
+
+    /// **The Hebrew sentence override replaces a word; it must not finish one.**
+    ///
+    /// That rule is the one place in this engine where the sentence outvotes the
+    /// dictionary, and it carries no length floor on purpose — `בעוד רבה` is two
+    /// real words that never appear in that order. But it was also asked about a
+    /// *prefix*, and `אני` → `לא` is a seed row, so one letter into `לעבודה` or
+    /// `להתראות` the bold slot held `לא` and the space bar was armed with a
+    /// different word. The same row turned a lone `צ` into `צריך` and `מג` into
+    /// `מגיע`. Finishing a word still being typed is the four-letter gate's job,
+    /// and that gate has a floor for exactly this reason.
+    ///
+    /// The control half is the entry the rule exists for (corpus `typo-12`), and
+    /// it is what rejects a build that simply deleted the override: `רבע` does not
+    /// start with `רבה`, so the keys disagree and the sentence is worth hearing.
+    @MainActor
+    func testTheHebrewSentenceOverrideDoesNotFinishAWordItOnlyReplacesOne() {
+        XCTAssertTrue(
+            SeedLanguageModel.followers(after: ["אני"], in: .hebrew).contains("לא"),
+            "the seed row this is about has to exist, or the test proves nothing")
+
+        let progress = SuggestionEngine.suggestions(
+            prefix: "ל", context: "אני ", languages: [.hebrew, .english],
+            personal: emptyPersonal())
+        XCTAssertEqual(
+            progress.first(where: \.isDefault)?.text, "ל",
+            "space committed \(progress.first(where: \.isDefault)?.text ?? "nothing") "
+                + "one letter into a word: \(progress.map(\.text))")
+
+        let replacement = SuggestionEngine.suggestions(
+            prefix: "רבה", context: "אני מגיע בעוד ", languages: [.hebrew, .english],
+            personal: emptyPersonal())
+        XCTAssertEqual(
+            replacement.first(where: \.isDefault)?.text, "רבע",
+            "and the override still fires on a whole word the sentence disagrees with: "
+                + "\(replacement.map(\.text))")
+    }
+
+    /// **A final form may only take the bold slot when the typed letters are not
+    /// still going somewhere.**
+    ///
+    /// The gate on `hebrewFinalFormCorrection` asks whether the *corrected* word is
+    /// common, which is the wrong half of the question: `אף` ("nose") is one of the
+    /// commonest words in Hebrew, so two letters into `אפשר` — with `אפשר` and
+    /// `אפשרות` both sitting in the seed list — the bar bolded `אף` and space
+    /// committed it. `אפ` is also how Hebrew writes "app", which is the loanword
+    /// harm `testALoanwordEndingInAnOrdinaryFormIsLeftAlone` already names,
+    /// arriving through the mid-word door.
+    ///
+    /// The control is `שלומ`, which completes to nothing: a finished word spelled
+    /// with the wrong shape, and still corrected.
+    @MainActor
+    func testAFinalFormDoesNotOutrankTheWordTheLettersAreStillSpelling() {
+        XCTAssertEqual(HebrewMorphology.inFinalForm("אפ"), "אף")
+        XCTAssertTrue(
+            SeedLanguageModel.knows("אף", in: .hebrew),
+            "the old gate passed because אף is a common word; that is the premise")
+
+        let progress = SuggestionEngine.suggestions(
+            prefix: "אפ", context: "אני ", languages: [.hebrew, .english],
+            personal: emptyPersonal())
+        XCTAssertEqual(
+            progress.first(where: \.isDefault)?.text, "אפ",
+            "space committed \(progress.first(where: \.isDefault)?.text ?? "nothing") "
+                + "while אפשר was in the bar: \(progress.map(\.text))")
+
+        let finished = SuggestionEngine.suggestions(
+            prefix: "שלומ", context: "", languages: [.hebrew, .english],
+            personal: emptyPersonal())
+        XCTAssertEqual(
+            finished.first(where: \.isDefault)?.text, "שלום",
+            "and a word that completes to nothing is still fixed: \(finished.map(\.text))")
+    }
+
     /// The five letters, and nothing else. A rule generalised to right-to-left
     /// scripts would fire on correctly spelled Arabic, which changes letter shape
     /// in the font rather than in the code point.
@@ -778,8 +975,8 @@ final class ContextAwareSuggestionTests: XCTestCase {
         // bigrams say follows "See you" and which the broken code treats as
         // proof the user meant to type it instead of "sorrow".
         let results = [
-            Suggestion(text: "sorrow", language: .english),
-            Suggestion(text: "tomorrow", language: .english, isDefault: true)
+            SuggestionEngine.Candidate(text: "sorrow", language: .english, source: .typed),
+            SuggestionEngine.Candidate(text: "tomorrow", language: .english, source: .seed)
         ]
         let shouldReplace = SuggestionEngine.shouldAutocorrect(
             "sorrow", previousWords: ["See", "you"], typedLanguage: .english,

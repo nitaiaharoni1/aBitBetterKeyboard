@@ -177,7 +177,7 @@ final class CustomKeyActionTests: XCTestCase {
     func testAControllerDoesNotInventAnIOSGlobeBeforeItsHostAnswers() {
         let controller = KeyboardController(target: RecordingTextTarget(), language: .english)
         XCTAssertFalse(controller.customization.bottomRow.contains { $0.action == .globe })
-        XCTAssertTrue(controller.customization.cursorRow.contains { $0.action == .settings })
+        XCTAssertTrue(controller.customization.bottomRow.contains { $0.action == .settings })
     }
 
     /// The device decides whether the globe is drawn, and the stored layout does

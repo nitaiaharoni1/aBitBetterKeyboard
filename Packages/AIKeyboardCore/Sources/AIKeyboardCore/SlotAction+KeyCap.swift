@@ -40,6 +40,19 @@ public extension SlotAction {
         }
     }
 
+    /// Whether this key draws its name under its glyph, and so has a label the
+    /// editor can offer to hide.
+    ///
+    /// Exactly the six `KeyView+Label` draws through `actionLabel`. Every other
+    /// cap is a glyph or a character that *is* its own name — the return arrow,
+    /// the full stop, `123` — so hiding "the label" would leave a blank key.
+    var hasLabel: Bool {
+        switch self {
+        case .dictation, .emoji, .copyclip, .quickTone, .reply, .fix: return true
+        default: return false
+        }
+    }
+
     /// The SF Symbol the editor's drawer draws beside the name. A `.text` action
     /// and the two plane keys draw their own characters instead, which is why
     /// this is optional. Cursor and delete names follow `isRightToLeft`; the

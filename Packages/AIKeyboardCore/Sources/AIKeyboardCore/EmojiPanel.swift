@@ -105,8 +105,11 @@ public struct EmojiPanel: View {
         // `sections` is 1,870 cells with an interpolated id each; as a computed
         // property read from `body` it was rebuilt on every `onPreferenceChange`
         // the scroll fired, which is sixty times a second while a finger is moving.
-        .task { sections = Self.sections(recent: controller.recentEmoji) }
-        .onChange(of: controller.recentEmoji) { _, recent in
+        //
+        // `visibleRecentEmoji`, never `recentEmoji`: the latter moves on every
+        // pick, which would re-sort the Recent tab under the finger that picked.
+        .task { sections = Self.sections(recent: controller.visibleRecentEmoji) }
+        .onChange(of: controller.visibleRecentEmoji) { _, recent in
             sections = Self.sections(recent: recent)
         }
         // Same fill as the letters this grid replaced. `Keys.panel` is the
@@ -498,11 +501,12 @@ struct EmojiCategoryRow: View {
 /// drawn from `KeyView`'s own recipe (`capKind`), so the panel and the keys
 /// cannot drift.
 ///
-/// **Two callers, and they want opposite halves of it.** The panel's delete is a
-/// key and takes all of it, on the soft graphite cap the real delete key wears.
+/// **Three callers, and they want different halves of it.** The panel's delete is
+/// a key and takes all of it, on the soft graphite cap the real delete key wears.
 /// A category tab is a shortcut, not a key, and takes `drawsCap: false` — corners
 /// and press behaviour without the cap, because ten caps in that row read as one
-/// slab of chrome. See `EmojiCategoryRow`.
+/// slab of chrome. See `EmojiCategoryRow`. CopyClip's undo is a key that is off
+/// more often than it is on, and takes `isDisabled`.
 struct KeyStyleButton<Label: View>: View {
 
     /// Nil spreads the button across the space left over, which is how the tabs
@@ -532,6 +536,18 @@ struct KeyStyleButton<Label: View>: View {
     /// The glyph's colour at rest. Under a finger the fill goes to the pressed
     /// state and the glyph flips to `Theme.Keys.label`, exactly as `KeyView`'s do.
     var glyphColor: Color = Theme.Keys.label
+    /// Whether this control has anything to do right now.
+    ///
+    /// **The cap stays and only the label fades**, which is the answer
+    /// `KeyView.disabledLabelOpacity` already gives for Fix and Rewrite over an
+    /// empty field: fading the whole key punches a hole in a row whose evenness is
+    /// most of how it reads. And **the gesture guards itself** rather than
+    /// trusting `.disabled()`, for the reason `KeyView.acceptsTouches` exists —
+    /// this is a raw `DragGesture` on a `ZStack` and reads `\.isEnabled` nowhere,
+    /// so whether the framework stops it is a detail that has moved across
+    /// releases, and being wrong about it gives a dim key that answers anyway.
+    /// `.disabled()` is applied as well, because that is what VoiceOver reads.
+    var isDisabled = false
     let action: () -> Void
     @ViewBuilder let label: () -> Label
 
@@ -565,6 +581,7 @@ struct KeyStyleButton<Label: View>: View {
                 // selected tab does not go pale — it keeps its brand fill through
                 // the press — so flipping there would put graphite on orange.
                 .foregroundStyle(isPressed && !isSelected ? Theme.Keys.label : glyphColor)
+                .opacity(isDisabled ? KeyView.disabledLabelOpacity : 1)
         }
         .frame(width: width, height: height)
         .frame(maxWidth: width == nil ? .infinity : nil)
@@ -584,6 +601,7 @@ struct KeyStyleButton<Label: View>: View {
             feedback?()
             action()
         }
+        .disabled(isDisabled)
     }
 
     /// Fires on finger-down rather than on lift, which is what makes a key feel
@@ -592,7 +610,7 @@ struct KeyStyleButton<Label: View>: View {
         DragGesture(minimumDistance: 0)
             .updating($isTouching) { _, state, _ in state = true }
             .onChanged { _ in
-                guard !isPressed else { return }
+                guard !isDisabled, !isPressed else { return }
                 isPressed = true
                 feedback?()
                 action()

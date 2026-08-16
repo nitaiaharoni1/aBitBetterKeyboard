@@ -36,7 +36,13 @@ public struct KeyView: View {
     /// Whether the CopyClip panel is open. Passed separately from `isEmojiOpen`
     /// so the two keys cannot steal each other's letters-plane label.
     let isCopyClipOpen: Bool
-    /// Whether a wide action key should include its text caption.
+    /// Whether this key draws its name under its glyph.
+    ///
+    /// **Already resolved, floor included.** The caller answers it with
+    /// `KeySpec.showsActionCaption(inRow:width:)`, which folds the user's own
+    /// switch, the row the key stands in and the width below which a name will
+    /// not fit into one boolean. The view does not second-guess it: a key told
+    /// yes at one unit draws a squeezed word, because somebody asked for it.
     let showsActionCaption: Bool
     /// Whether action glyphs and captions should match the standard key label color.
     let usesNeutralActionTint: Bool
@@ -340,16 +346,20 @@ public struct KeyView: View {
     /// says *why*, which the flag alone never does.
     var traits: AccessibilityTraits { .isKeyboardKey }
 
-    /// Below this the caption comes off and the glyph stands alone.
+    /// Below this a key does not name itself unless it was told to.
     ///
-    /// **A key wide enough to name itself should, and one that is not must not
+    /// **A key wide enough to name itself should, and one that is not should not
     /// try.** The action row splits the width six ways, which is about 62pt on a
     /// 375pt screen — room for a word. The same action dragged into the bottom row
     /// beside the space bar is one unit, about 32pt, where a caption either
-    /// truncates to two letters or scales into a hairline. The key decides from
-    /// its own width rather than from which row it is in, because a `KeySpec` does
-    /// not know its row and `KeyboardLayout.widths` is what actually resolves
-    /// `.fill`.
+    /// truncates to two letters or scales into a hairline. The width is what
+    /// decides rather than the row, because `KeyboardLayout.widths` is what
+    /// actually resolves `.fill`.
+    ///
+    /// **It is a default rather than a rail**, and it is applied in
+    /// `KeySpec.showsActionCaption(inRow:width:)` rather than at the moment of
+    /// drawing, so a user who turns a narrow key's label on in the editor gets
+    /// the squeezed word they asked for instead of a switch that does nothing.
     ///
     /// 56 is the narrowest width at which `Rewrite` — the longest of the four
     /// captions — fits at 9pt with the 4pt insets, measured the way

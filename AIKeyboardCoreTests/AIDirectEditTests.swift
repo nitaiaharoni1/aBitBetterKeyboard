@@ -60,9 +60,9 @@ final class AIDirectEditTests: XCTestCase {
 
         controller.run(.fix)
         await settleToneController(controller)
-        XCTAssertEqual(controller.revertibleEdit?.action, .fix)
+        XCTAssertEqual(controller.revertibleEdit?.origin, .ai(.fix))
 
-        controller.revertAIEdit()
+        controller.revertEdit()
 
         XCTAssertEqual(controller.contextBefore, "i cant make the standup")
         XCTAssertNil(controller.revertibleEdit, "the way back is still on offer after it was taken")
@@ -116,7 +116,7 @@ final class AIDirectEditTests: XCTestCase {
         XCTAssertEqual(target.document, "hello there world friend")
         XCTAssertEqual(controller.revertibleEdit?.undo, .spanAtCursor)
 
-        controller.revertAIEdit()
+        controller.revertEdit()
 
         XCTAssertEqual(target.document, "hello there wrold friend")
     }
@@ -163,7 +163,7 @@ final class AIDirectEditTests: XCTestCase {
             controller.revertibleEdit?.undo, .spanAtCursor,
             "a reply replaced nothing, so its undo cannot be a whole-field one")
 
-        controller.revertAIEdit()
+        controller.revertEdit()
         XCTAssertEqual(controller.contextBefore, "see you ")
     }
 

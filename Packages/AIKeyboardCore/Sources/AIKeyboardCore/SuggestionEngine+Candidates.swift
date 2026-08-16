@@ -153,9 +153,18 @@ extension SuggestionEngine {
     /// commit exactly what they keyed is older than this ranking and does not
     /// depend on it: whatever the model believes, a person who typed `qwt` must be
     /// able to keep `qwt`.
-    static func rank(_ candidates: [Candidate], limit: Int) -> [Suggestion] {
+    ///
+    /// **Hands back candidates rather than suggestions, because the commit
+    /// decision needs the provenance this stage spent its whole life weighing.**
+    /// It used to flatten to `[Suggestion]` here, which keeps the words and throws
+    /// away where each came from — so `shouldAutocorrect`, one call further on,
+    /// could not tell a seed completion of a plain Hebrew stem from the same
+    /// dictionary read through two clitics, and committed `להתרופה` for `להתר`.
+    /// See `commitTrustsReading`. The bar still draws `Suggestion`s; the two
+    /// callers build them at the point they are drawn.
+    static func rank(_ candidates: [Candidate], limit: Int) -> [Candidate] {
         var seen = Set<String>()
-        var out: [Suggestion] = []
+        var out: [Candidate] = []
 
         let typed = candidates.filter { $0.source == .typed }
         let rest = candidates.filter { $0.source != .typed }
@@ -170,7 +179,7 @@ extension SuggestionEngine {
             let key = SeedLanguageModel.fold(candidate.text)
             guard !key.isEmpty, !seen.contains(key) else { continue }
             seen.insert(key)
-            out.append(Suggestion(text: candidate.text, language: candidate.language))
+            out.append(candidate)
             if out.count == limit { break }
         }
         return out

@@ -395,8 +395,15 @@ final class PersonalDictionaryTests: XCTestCase {
     // MARK: Ranking
 
     /// The user's own list leads `UILexicon`. Both are words the system dictionary
-    /// has never heard of, and only two of them fit in the bar; the one typed by
-    /// hand into Settings is the one that gets a slot.
+    /// has never heard of, so the order they arrive in is the only thing deciding
+    /// which of them the user sees, and the one typed by hand into Settings leads.
+    ///
+    /// **The array is four long because the bar draws three offers, not two.**
+    /// Slot zero is the literal keystrokes and `SuggestionBar` does not draw it —
+    /// see `SuggestionEngine.barSlots`. This used to end at `Zzbeta`, and both
+    /// halves of that were the old shape: the engine returned three candidates,
+    /// and the supplementary source was capped at two because two was all that
+    /// could ever be shown.
     func testThePersonalDictionaryOutranksTheSystemLexicon() {
         SharedStore.shared.personalDictionary = ["Zzalpha"]
 
@@ -404,8 +411,37 @@ final class PersonalDictionaryTests: XCTestCase {
         controller.updateSupplementaryLexicon(["Zzbeta", "Zzgamma"])
 
         XCTAssertEqual(
-            controller.suggestions.map(\.text), ["zz", "Zzalpha", "Zzbeta"],
+            controller.suggestions.map(\.text), ["zz", "Zzalpha", "Zzbeta", "Zzgamma"],
             "the personal dictionary has to lead the lexicon, and the literal keystrokes lead both")
+    }
+
+    /// Every slot the bar draws is filled when there is anything to fill it with.
+    ///
+    /// **Measured before this was written: 229 of 234 letter-by-letter keystroke
+    /// moments across 30 Hebrew and 20 English words drew two candidates and a
+    /// blank**, because `completions(for:)` asked `rank` for three and the first
+    /// of those three was the typed echo the bar throws away. A third of the one
+    /// row this keyboard has for suggestions was empty on nearly every keystroke.
+    /// Asserted through `SuggestionBar.centeredSlots`, which is the drawing order,
+    /// rather than through the engine array — the engine returning four proves
+    /// nothing about what reaches the screen.
+    @MainActor
+    func testTheBarDrawsThreeOffersAndNotTwo() {
+        SharedStore.shared.personalDictionary = []
+
+        for (typed, language) in [("tomo", KeyboardLanguage.english), ("פגי", .hebrew)] {
+            let controller = KeyboardController(
+                target: MockTextTarget(text: typed), language: language)
+            let drawn = SuggestionBar.centeredSlots(controller.suggestions, typed: typed)
+                .compactMap { $0 }
+            XCTAssertEqual(
+                drawn.count, SuggestionEngine.barSlots,
+                "\(typed) filled \(drawn.count) of \(SuggestionEngine.barSlots) slots: "
+                    + "\(controller.suggestions.map(\.text))")
+            XCTAssertFalse(
+                drawn.contains { SuggestionEngine.comparable($0.text) == typed },
+                "and the typed echo is still not one of them: \(drawn.map(\.text))")
+        }
     }
 
     /// And it protects only the words on it. A keyboard that stopped correcting

@@ -181,6 +181,59 @@ final class LayoutEditorTests: XCTestCase {
         XCTAssertEqual(model.draft.bottomRow.first { $0.id == key.id }?.action, .emoji)
     }
 
+    // MARK: Labels
+
+    /// The switch writes an explicit answer and is one undo step, like every
+    /// other edit.
+    func testTheLabelSwitchIsStoredAndUndoable() {
+        let model = editor()
+        model.draft.cursorRow = KeyboardCustomization.actionRow
+        let fix = model.draft.cursorRow.first { $0.action == .fix }!
+        XCTAssertNil(fix.showsLabel, "the shipped layout should carry no opinion")
+
+        model.setShowsLabel(false, for: fix)
+        XCTAssertEqual(model.draft.cursorRow.first { $0.id == fix.id }?.showsLabel, false)
+        model.undo()
+        XCTAssertNil(model.draft.cursorRow.first { $0.id == fix.id }?.showsLabel)
+    }
+
+    /// **Only the six keys that draw a name have one to hide.** The return key's
+    /// cap *is* its label, so a switch on it would produce a blank key — the
+    /// refusal is in the model rather than only in the menu that draws it,
+    /// because `perform` and the menu are two callers.
+    func testAKeyWithNoNameUnderItsGlyphRefusesTheSwitch() {
+        let model = editor()
+        let ret = model.draft.bottomRow.first { $0.action == .ret }!
+        model.setShowsLabel(false, for: ret)
+        XCTAssertNil(model.draft.bottomRow.first { $0.id == ret.id }?.showsLabel)
+        XCTAssertFalse(model.canUndo, "a refused edit must not leave an undo step")
+        // And it reads as off however wide it is. Without the guard this is the
+        // *position* rule's answer — true, on a key that draws an arrow and no
+        // word — which is a switch offering to hide a label that does not exist.
+        XCTAssertFalse(model.drawsLabel(ret, drawnWidth: KeyView.captionMinimumWidth + 20))
+    }
+
+    /// **What the switch shows is what the canvas is drawing**, which is why it
+    /// takes the measured width: the same key with the same stored value answers
+    /// differently at one unit and at three, and a switch reading "on" over a key
+    /// with no word on it is the defect this argument exists for.
+    func testTheLabelSwitchReportsWhatTheKeyIsActuallyDrawing() {
+        let model = editor()
+        model.draft.cursorRow = KeyboardCustomization.actionRow
+        let fix = model.draft.cursorRow.first { $0.action == .fix }!
+        let emoji = model.draft.cursorRow.first { $0.action == .emoji }!
+        let wide = KeyView.captionMinimumWidth + 20
+        let narrow = KeyView.captionMinimumWidth - 20
+
+        XCTAssertTrue(model.drawsLabel(fix, drawnWidth: wide))
+        XCTAssertFalse(model.drawsLabel(fix, drawnWidth: narrow), "too narrow to name itself")
+        XCTAssertFalse(model.drawsLabel(emoji, drawnWidth: wide), "a glyph in the action row")
+
+        model.setShowsLabel(true, for: emoji)
+        let asked = model.draft.cursorRow.first { $0.id == emoji.id }!
+        XCTAssertTrue(model.drawsLabel(asked, drawnWidth: narrow), "an explicit yes beats both")
+    }
+
     /// **The selection is a copy, and the inspector reads its width off that
     /// copy.** Without the re-resolve, moving the slider once left the inspector
     /// showing the old value and every later drag started from it.
@@ -579,7 +632,7 @@ final class LayoutEditorTests: XCTestCase {
     func testALateEndResizeFromAnotherKeyDoesNotCommit() throws {
         let model = editor()
         let key = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .punctuation })
-        let other = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .emoji })
+        let other = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .settings })
         let start = model.draft
         model.beginResize(key)
         model.updateResize(.units(2.5))
@@ -590,10 +643,13 @@ final class LayoutEditorTests: XCTestCase {
         XCTAssertEqual(model.displayed, start)
     }
 
-    func testALateEndDragFromAnotherKeyDoesNotCommit() {
+    func testALateEndDragFromAnotherKeyDoesNotCommit() throws {
         let model = editor()
-        let key = model.draft.bottomRow.first { $0.action == .punctuation }!
-        let other = model.draft.bottomRow.first { $0.action == .emoji }!
+        // `XCTUnwrap`, not `!`: a nil force-unwrap in a test kills the whole
+        // runner rather than failing one case, which is how the last change to
+        // the shipped bottom row took eleven tests down with it.
+        let key = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .punctuation })
+        let other = try XCTUnwrap(model.draft.bottomRow.first { $0.action == .settings })
         let start = model.draft
         model.beginDrag(key)
         model.updateDrag(at: CGPoint(x: 20, y: 120), in: boardGeometry(model))

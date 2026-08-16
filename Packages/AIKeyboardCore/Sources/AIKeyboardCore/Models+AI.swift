@@ -68,8 +68,8 @@ public enum AIAction: String, CaseIterable, Identifiable, Hashable, Sendable {
 
 // MARK: - An edit that can be taken back
 
-/// A Fix or Rewrite that was written straight into the field, and the text it
-/// replaced.
+/// Something this keyboard wrote into the field on the user's behalf, and the
+/// text it replaced.
 ///
 /// **Fix and Rewrite apply themselves now, so undo is not a nicety.** They used
 /// to put an answer in the banner behind a Use button, which made accepting the
@@ -79,17 +79,31 @@ public enum AIAction: String, CaseIterable, Identifiable, Hashable, Sendable {
 /// `UITextDocumentProxy` has no undo of any kind, so the only way back is to have
 /// kept what was there.
 ///
+/// **It was `AIEdit` until CopyClip started pasting whole paragraphs on one
+/// tap.** A clip insert is the same event seen from a different key: text the
+/// user did not type, arriving in one movement, with no way back once it is in.
+/// Its lifetime is identical too — until the next keystroke — so a second slot
+/// beside this one would be a second thing to clear from the seventeen places
+/// `clearRevertibleEdit()` is already called from, and the first one anybody
+/// forgot would delete characters the user typed. One slot, one step, one
+/// implementation of "delete exactly what was put in, from where it was put in".
+///
 /// `applied` is held as well as `previous` because the revert has to delete
 /// exactly what was inserted: the field may be a different length by then only if
 /// the user typed, and typing is what clears this.
-public struct AIEdit: Equatable, Sendable {
-    public let action: AIAction
-    /// What the span the action replaced held before it ran. Read at the moment
+public struct RevertibleEdit: Equatable, Sendable {
+    /// Which key wrote it, and therefore what the undo control calls itself. The
+    /// text actions carry their own `AIAction` rather than collapsing into one
+    /// case, because the button names the thing it undoes rather than saying
+    /// "Undo" — by the time it is read the field has already changed, and the
+    /// word is the only thing saying *what* changed it.
+    public let origin: Origin
+    /// What the span the edit replaced held before it ran. Read at the moment
     /// of the replacement rather than at the moment the call started, so it is
     /// what was *actually* taken out even if the field moved while the model was
     /// thinking.
     public let previous: String
-    /// What the action put there.
+    /// What the edit put there.
     public let applied: String
 
     /// **How to put it back, and this is not bookkeeping.** The two undo
@@ -97,8 +111,25 @@ public struct AIEdit: Equatable, Sendable {
     /// the selected word `wrold` in `hello there wrold friend` replaces five
     /// characters, and a revert that put `previous` back the way a whole-field
     /// edit does would leave the field holding the single word `wrold`. See
-    /// `KeyboardController.revertAIEdit`.
+    /// `KeyboardController.revertEdit`.
     public let undo: Undo
+
+    /// What made the edit.
+    public enum Origin: Equatable, Sendable {
+        case ai(AIAction)
+        /// A clip inserted from the CopyClip panel.
+        case clip
+
+        /// What the undo control is called out loud. It names the action rather
+        /// than saying "Undo", for the reason `SuggestionBar.revertButton` gives:
+        /// the field has already changed by the time anybody reads it.
+        public var undoLabel: String {
+            switch self {
+            case .ai(let action): return "Undo \(action.title)"
+            case .clip: return "Undo paste"
+            }
+        }
+    }
 
     /// Which shape of edit this was, from the undo's point of view — which is the
     /// only point of view that matters by the time it is read.
@@ -119,11 +150,29 @@ public struct AIEdit: Equatable, Sendable {
         case spanAtCursor
     }
 
-    public init(action: AIAction, previous: String, applied: String, undo: Undo = .wholeField) {
-        self.action = action
+    public init(origin: Origin, previous: String, applied: String, undo: Undo = .wholeField) {
+        self.origin = origin
         self.previous = previous
         self.applied = applied
         self.undo = undo
+    }
+
+    /// Whether what this edit put in is still standing at the cursor, which is
+    /// the claim `.spanAtCursor` deletes a count of units on.
+    ///
+    /// **Two tests, because `documentContextBeforeInput` is a window and not the
+    /// field.** iOS hands back what is near the cursor and no more, so a clip
+    /// several lines long — the ordinary thing to keep in a clipboard history —
+    /// is longer than anything the keyboard can see, and the exact test alone
+    /// answers false on an edit that is perfectly intact. The second test is the
+    /// same claim asked of a truncated window: everything visible behind the
+    /// cursor is the tail of what this edit wrote, so none of it belongs to the
+    /// user. An empty window is refused rather than accepted, because `""` is a
+    /// suffix of every string and deleting a count from a field the keyboard
+    /// cannot see is the one outcome worse than no undo at all.
+    public func standsAtEnd(of contextBefore: String) -> Bool {
+        if contextBefore.hasSuffix(applied) { return true }
+        return !contextBefore.isEmpty && applied.hasSuffix(contextBefore)
     }
 }
 

@@ -142,13 +142,31 @@ public struct SlotSpec: Codable, Identifiable, Equatable, Sendable {
     public var action: SlotAction
     public var width: SlotWidth
 
+    /// Whether this key draws its name under its glyph — the user's answer, on
+    /// the six keys that have a name to draw (`SlotAction.hasLabel`).
+    ///
+    /// **Nil is neither yes nor no: it is "whatever this key would do where it
+    /// stands".** The shipped rule is a position and a width — the action row
+    /// keeps Emoji and Dictate as bare glyphs, and no key narrower than
+    /// `KeyView.captionMinimumWidth` names itself — and a layout stored by any
+    /// earlier build has no opinion to record, because there was no switch to
+    /// throw. Optional is also what makes that a migration rather than a
+    /// decision: the synthesized `Codable` uses `decodeIfPresent`, so a missing
+    /// key reads back as nil and an untouched layout re-encodes byte for byte.
+    /// `KeySpec.showsActionCaption(inRow:width:)` is where the three answers meet.
+    public var showsLabel: Bool?
+
     /// A fresh `UUID` by default, and that is load-bearing: identity cannot come
     /// from the action, because a user is allowed to put two commas on one row
     /// and two keys with one id is a `ForEach` with duplicate identity.
-    public init(id: UUID = UUID(), action: SlotAction, width: SlotWidth = .units(1)) {
+    public init(
+        id: UUID = UUID(), action: SlotAction, width: SlotWidth = .units(1),
+        showsLabel: Bool? = nil
+    ) {
         self.id = id
         self.action = action
         self.width = width
+        self.showsLabel = showsLabel
     }
 }
 

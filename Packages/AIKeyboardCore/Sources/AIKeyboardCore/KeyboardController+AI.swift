@@ -322,9 +322,9 @@ extension KeyboardController {
         let inserts = previous.isEmpty
         guard inserts || aiTargetText == previous else { return }
         // Both asked before the replacement, because the replacement is what removes
-        // the selection. See `AIEdit.Undo`.
+        // the selection. See `RevertibleEdit.Undo`.
         let selected = selection
-        let undo: AIEdit.Undo = (inserts || selected != nil) ? .spanAtCursor : .wholeField
+        let undo: RevertibleEdit.Undo = (inserts || selected != nil) ? .spanAtCursor : .wholeField
         // **What the undo puts back, which is not always what was sent to the
         // model.** For Fix and Rewrite the two are the same string. For a reply
         // over a *selection* they are not: nothing was sent, so `previous` is
@@ -362,7 +362,8 @@ extension KeyboardController {
             (action == .reply ? replyContext?.language : nil)
                 ?? Self.language(of: answer, fallback: language))
         replaceTargetText(with: answer)
-        revertibleEdit = AIEdit(action: action, previous: undone, applied: answer, undo: undo)
+        revertibleEdit = RevertibleEdit(
+            origin: .ai(action), previous: undone, applied: answer, undo: undo)
         // **Emptied, because the next action must not inherit it.**
         // `selectTone(_:)` keeps whatever is already in `aiSourceText` — correct
         // when it is reached from an action that has just filled it, and wrong from
@@ -377,7 +378,7 @@ extension KeyboardController {
         clearBannerState()
     }
 
-    /// Puts back what the last Fix, Rewrite or Reply wrote.
+    /// Puts back what the last Fix, Rewrite, Reply or clip insert wrote.
     ///
     /// **Two paths, because the two kinds of edit undo differently and getting it
     /// wrong destroys the message.** A whole-field edit is undone by replacing the
@@ -395,12 +396,14 @@ extension KeyboardController {
     /// old ones back.
     ///
     /// The guard is what makes the second path safe rather than merely narrow:
-    /// `replaceTargetText` leaves the caret immediately after what it inserted, so
-    /// the field must still end there. If it does not — a caret the host moved,
-    /// which fires no callback this keyboard can see — the edit is dropped without
+    /// the insertion leaves the caret immediately after what it wrote, so the
+    /// field must still end there. If it does not — a caret the host moved, which
+    /// fires no callback this keyboard can see — the edit is dropped without
     /// touching the document, because deleting a count from the wrong place is the
-    /// one outcome worse than no undo at all.
-    public func revertAIEdit() {
+    /// one outcome worse than no undo at all. `RevertibleEdit.standsAtEnd(of:)`
+    /// is that guard, and it is asked of a *window* rather than of the field,
+    /// which is why a clip longer than iOS hands back still undoes.
+    public func revertEdit() {
         guard let edit = revertibleEdit else { return }
         Feedback.modifierPress()
         revertibleEdit = nil
@@ -415,10 +418,11 @@ extension KeyboardController {
             return
         }
 
-        guard contextBefore.hasSuffix(edit.applied) else { return }
+        guard edit.standsAtEnd(of: contextBefore) else { return }
         deleteBackward(utf16Units: edit.applied.utf16.count)
-        // Empty for a reply, which replaced nothing: `insertText("")` is harmless
-        // and the branch is here to say so rather than to guard against it.
+        // Empty for a reply and for a clip, neither of which replaced anything:
+        // `insertText("")` is harmless and the branch is here to say so rather
+        // than to guard against it.
         if !edit.previous.isEmpty { target?.insertText(edit.previous) }
         refreshSuggestions()
     }

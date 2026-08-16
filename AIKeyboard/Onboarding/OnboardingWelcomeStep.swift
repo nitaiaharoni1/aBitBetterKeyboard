@@ -38,10 +38,16 @@ struct WelcomeStep: View {
                 // switch language mid-sentence" — made when the mic key streamed a
                 // fixed script. Dictation is real now and could go back, but the
                 // claim would still be the unmeasured half: `Bar/dictation/` scores
-                // 17.7% word error rate on code-switched speech against 8-10% on
-                // either language alone, so mid-sentence switching is the thing it
-                // is *worst* at. The line stays out until that number says
-                // otherwise.
+                // 23.5% word error rate on code-switched speech against 8.5% English
+                // and 10.7% Hebrew, so mid-sentence switching is the thing it is
+                // *worst* at. The line stays out until that number says otherwise.
+                //
+                // **This said 17.7% until 2026-08-16, and no committed run produces
+                // that number.** `harness/score.py` over the committed outputs
+                // reproduces `Bar/dictation/README.md` exactly. The 17.7% set was
+                // written in `d023520f`, the same commit that first committed the
+                // scorer, so it predates the scoring rule that ships. Do not restore
+                // it from git history.
                 InfoRow(
                     icon: "globe",
                     title: "Sixty-four keyboards, one swipe apart",

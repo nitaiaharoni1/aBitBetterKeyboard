@@ -164,7 +164,8 @@ extension KeyView {
             actionLabel(
                 icon: SuggestionBar.toneButtonSymbol,
                 title: AIAction.rewrite.title,
-                tint: Theme.Brand.solid)
+                tint: Theme.Brand.solid,
+                showsCaption: showsActionCaption)
 
         case .cursorLeft:
             Image(systemName: KeyCap.cursorLeftSymbol(isRightToLeft: language.isRightToLeft))
@@ -183,11 +184,13 @@ extension KeyView {
 
         case .aiReply:
             actionLabel(
-                icon: AIAction.reply.icon, title: AIAction.reply.title, tint: Theme.Brand.solid)
+                icon: AIAction.reply.icon, title: AIAction.reply.title, tint: Theme.Brand.solid,
+                showsCaption: showsActionCaption)
 
         case .aiFix:
             actionLabel(
-                icon: AIAction.fix.icon, title: AIAction.fix.title, tint: Theme.Brand.solid)
+                icon: AIAction.fix.icon, title: AIAction.fix.title, tint: Theme.Brand.solid,
+                showsCaption: showsActionCaption)
         }
     }
 
@@ -250,9 +253,19 @@ extension KeyView {
     /// Emoji and Dictate deliberately use their familiar glyphs alone there, but
     /// regain captions when moved to another wide row.
     ///
+    /// **All six read `showsCaption` now, and three of them used to ignore it.**
+    /// Rewrite, Reply and Fix called this without the argument and leaned on the
+    /// width floor alone, which was invisible for as long as the only thing the
+    /// floor and the flag disagreed about was a row nobody could edit. The
+    /// layout editor's per-key label switch is a third answer
+    /// (`SlotSpec.showsLabel`), and a key that quietly ignored it would be a
+    /// switch that works on half the row. The floor itself moved out of here and
+    /// into `KeySpec.showsActionCaption(inRow:width:)`, which is what lets an
+    /// explicit yes reach a narrow cap.
+    ///
     /// The tint `actionLabel` resolves, against the cap the key is wearing.
     ///
-    /// On the dark caps — emoji at rest — the glyph is the warm-white
+    /// On the dark caps — CopyClip at rest — the glyph is the warm-white
     /// `labelOnFunction`, because a brand tint on soft graphite is neither
     /// readable nor the neutral control that key is. On the light AI caps,
     /// custom placements keep each action's own brand tint while the shipped
@@ -285,7 +298,7 @@ extension KeyView {
     ) -> some View {
         let resolvedTint = actionTint(tint)
 
-        if showsCaption, width >= Self.captionMinimumWidth {
+        if showsCaption {
             VStack(spacing: 1) {
                 actionIcon(
                     icon: icon, size: 15, tint: resolvedTint, waveform: waveform,

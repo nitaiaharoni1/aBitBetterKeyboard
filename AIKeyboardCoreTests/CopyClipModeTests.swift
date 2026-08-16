@@ -231,4 +231,101 @@ final class CopyClipModeTests: XCTestCase {
         XCTAssertEqual(controller.copyclipQuery, "")
         XCTAssertEqual(controller.copyclipResults, [])
     }
+
+    // MARK: Undo and delete inside the panel
+
+    /// **One tap can put a paragraph in somebody's message.** Asserting on the
+    /// document rather than on `revertibleEdit` being non-nil, because a build
+    /// that records a way back it cannot walk is the same keyboard as one that
+    /// records nothing: the old build leaves `hi there` standing here.
+    func testAPastedClipCanBeTakenBack() {
+        let before = SharedStore.shared.copyclipRecord
+        defer { SharedStore.shared.copyclipRecord = before }
+        let target = MockTextTarget(text: "hi ")
+        let controller = KeyboardController(target: target)
+        controller.press(.copyclip)
+        let clip = Clip(id: UUID(), text: ClipText(raw: "there")!, capturedAt: Date())
+        controller.clips = [clip]
+        controller.insertClip(clip)
+        XCTAssertEqual(target.text, "hi there")
+        XCTAssertEqual(
+            controller.revertibleEdit?.origin, .clip,
+            "the paste left no way back, so the panel's undo has nothing to draw")
+
+        controller.revertEdit()
+
+        XCTAssertEqual(target.text, "hi ", "the undo did not take the clip back out")
+        XCTAssertNil(controller.revertibleEdit)
+        XCTAssertEqual(
+            controller.overlay, .copyclip, "the undo closed the panel it was tapped in")
+    }
+
+    /// The way back lasts until the next keystroke, exactly as a Fix's does. A
+    /// build that let it stand would offer to delete five characters the user
+    /// typed after the paste.
+    func testTypingAfterAPasteEndsTheWayBack() {
+        let before = SharedStore.shared.copyclipRecord
+        defer { SharedStore.shared.copyclipRecord = before }
+        let target = MockTextTarget(text: "hi ")
+        let controller = KeyboardController(target: target)
+        let clip = Clip(id: UUID(), text: ClipText(raw: "there")!, capturedAt: Date())
+        controller.insertClip(clip)
+        XCTAssertNotNil(controller.revertibleEdit)
+
+        controller.press(.character("!"))
+
+        XCTAssertNil(controller.revertibleEdit, "the paste's undo outlived the keystroke after it")
+    }
+
+    /// **The panel covers the letters, so its own delete key is the only one on
+    /// screen.** The assertion is the document, because `.copyclip` is not
+    /// `.copyclipSearch`: a build that routed this key at the search box would
+    /// leave `hi` untouched and quietly edit a query nobody is typing.
+    func testDeleteInsideThePanelEditsTheDocument() {
+        let before = SharedStore.shared.copyclipRecord
+        defer { SharedStore.shared.copyclipRecord = before }
+        let target = MockTextTarget(text: "hi")
+        let controller = KeyboardController(target: target)
+        controller.press(.copyclip)
+
+        controller.press(.backspace)
+
+        XCTAssertEqual(target.text, "h", "the panel's delete never reached the message")
+        XCTAssertEqual(controller.copyclipQuery, "", "the delete was aimed at the search box")
+        XCTAssertEqual(controller.overlay, .copyclip, "the delete closed the panel")
+    }
+
+    /// A held delete removes a word, the same as the real key and as the emoji
+    /// panel's copy of it. One character per tick is what a delete drawn outside
+    /// `KeyView` gets for free, and it is what `SuggestionBar.barCatalogue`
+    /// refuses to ship.
+    func testHoldingDeleteInsideThePanelRemovesAWord() {
+        let before = SharedStore.shared.copyclipRecord
+        defer { SharedStore.shared.copyclipRecord = before }
+        let target = MockTextTarget(text: "hello there")
+        let controller = KeyboardController(target: target)
+        controller.press(.copyclip)
+
+        controller.deletePreviousWord()
+
+        XCTAssertEqual(target.text, "hello ", "a held delete inside the panel removed one character")
+    }
+
+    /// **A clip longer than the window iOS hands back still undoes.**
+    /// `documentContextBeforeInput` is truncated, and a clipboard history is
+    /// exactly where multi-line text lives, so the exact-suffix test alone
+    /// answers false on a paste that is perfectly intact. An empty window still
+    /// proves nothing: `""` is a suffix of every string.
+    func testTheUndoClaimSurvivesATruncatedContextWindow() {
+        let edit = RevertibleEdit(
+            origin: .clip, previous: "", applied: "line one\nline two", undo: .spanAtCursor)
+        XCTAssertTrue(edit.standsAtEnd(of: "before line one\nline two"))
+        XCTAssertTrue(
+            edit.standsAtEnd(of: "line two"),
+            "a window holding only the last line of the paste refused an intact undo")
+        XCTAssertFalse(
+            edit.standsAtEnd(of: ""),
+            "a field the keyboard cannot see was treated as one it had just written")
+        XCTAssertFalse(edit.standsAtEnd(of: "something else"))
+    }
 }

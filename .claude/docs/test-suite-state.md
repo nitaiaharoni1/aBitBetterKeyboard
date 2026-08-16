@@ -10,16 +10,30 @@ number here is a reading, not a property of the code.
 | | |
 |---|---|
 | Date | 2026-08-16 |
-| Commit | `aaca58d2`. The same reading was taken at `45fe74c8` and again after `aaca58d2`, unchanged. |
+| Commit | Working tree over `45fe74c8`, after the suggestion-bar and emoji-shift work below. |
 | Destination | iPhone 17 Pro, iOS 26.2 simulator, uncontended |
 | Command | `xcodebuild test -project AIKeyboard.xcodeproj -scheme AIKeyboard -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:AIKeyboardCoreTests` |
 
-**`AIKeyboardCoreTests`: 1271 executed, 1260 passed, 8 failed, 3 skipped.**
+**`AIKeyboardCoreTests`: 1302 executed, 1296 passed, 3 failed, 3 skipped.**
 
-All eight are the emoji failures described below, and all eight are older than
-any current work. The 3 skipped are what the earlier run's "1257 declared, 1252
-executed" gap actually was; `xcodebuild` reports them, so read the skip count
-rather than subtracting.
+All three are `EmojiModeTests` **ranking**, which is the one genuine product
+decision left; the section below now carries the measurement that says why it
+must not be tuned by hand. The 3 skipped are what the earlier run's "1257
+declared, 1252 executed" gap actually was; `xcodebuild` reports them, so read the
+skip count rather than subtracting.
+
+### The previous reading, and how the eight became three
+
+2026-08-16 at `aaca58d2`: **1271 executed, 1260 passed, 8 failed, 3 skipped**,
+the same reading taken at `45fe74c8`. Five of those eight were the emoji search
+box inheriting the document's shift and are now fixed (see below). A ninth
+failure appeared and went in between, `LayoutStoreTests
+.testAnEditedLayoutMigratesTheOldInternalGlobeToSettings`: the Emoji/gear seat
+swap (NIT-98) moved `.settings` from `cursorRow` to `bottomRow`, and the test
+built its "old" layout by rewriting `.settings` inside `cursorRow` alone — so it
+tripped **its own precondition** and had stopped exercising the migration at all.
+It rewrites all four collections now, the way `SharedStore.replacingInternalGlobe`
+already reads them.
 
 `xcodebuild build` does **not** compile these targets, so a compile check needs
 `build-for-testing`.
@@ -51,8 +65,8 @@ decisions somebody has to make.
 
 | Test | What it reports |
 |---|---|
-| `EmojiSearchTypingTests` (5 tests) | The emoji search box inherits the document's shift. See the section below, which names the exact line. |
-| `EmojiModeTests` (3 tests) | Search ranking. `לב` returns 💏 rather than ❤️, and `car` puts 🚗 at index 5 behind 🚕 and 🚙. |
+| ~~`EmojiSearchTypingTests` (5 tests)~~ | **Fixed.** The emoji search box inherited the document's shift. See the section below. |
+| `EmojiModeTests` (3 tests) | Search ranking. `heart` and `לב` return 🫀 rather than ❤️, and `car` puts 🚗 at index 5 behind 🚕 and 🚙. **Still open, deliberately.** |
 
 **The `לב` one is not a data gap, and a data fix was tried and reverted.**
 Giving 🫀 a distinct Hebrew name (`לב אנטומי` rather than the bare `לב` it shares
@@ -66,6 +80,35 @@ puts a kiss above a red heart for the word "heart". Do not repeat that fix.
 it either. Both want a ranking decision, and there is no measured harness for
 emoji search the way there is for typing, so a ranker change cannot currently be
 scored.
+
+**The mechanism is now known exactly, and knowing it did not make it fixable.**
+`EmojiSearch.score`'s exact-keyword branch scores `length` as `shortest(names)`,
+which is the shortest **across both locales**, so an English query is decided by
+a Hebrew name: `heart` reaches ❤️ and 🫀 identically (rung 1, coverage −1.0) and
+the tiebreak is ❤️'s `min("red heart", "לב אדום") = 7` against 🫀's
+`min("anatomical heart", "לב") = 2`. That is precisely what `Match.length`'s own
+comment forbids — the repair was applied to the two name branches and this branch
+was left behind.
+
+Both repairs for it were measured over 60 English and Hebrew queries and **both
+make the product worse**, which is the finding worth keeping:
+
+| Repair | Top-five moved | Effect on the cases in question |
+|---|---|---|
+| keyword scored by its own length | **51 / 60** | `heart` loses ❤️ from the top five entirely; `moon` answers 🥮; `car` loses 🚗 |
+| keyword scored by the shortest name in the **query's own script** | **30 / 60** | 💏 still above ❤️ for `heart`; 🌑 above 🌙 for `moon` |
+
+So `shortest(names)` is carrying a crude centrality prior — a short CLDR name
+tends to belong to the primary emoji for a concept — and losing it costs more
+than the locale bug does. What is missing is a frequency signal, the same gap
+`SeedLanguageModel` fills for words, and CLDR has none. **Do not tune this until
+`Bar/emoji/` exists.** Two notes for whoever builds it: the two `לב` assertions
+in `EmojiModeTests` contradict each other today (`testHebrewFindsWhatEnglishFinds`
+wants ❤️, `testRecentsWinACloseCallAndLoseToAName` pins 🫀 in a comment), so
+deciding which is right is part of the same job; and the ranker ports faithfully
+to ~40 lines of Python over `EmojiCatalog.json` — a port matched the shipping
+engine byte for byte on `car`, `heart` and `לב` — so that corpus needs no
+simulator and would be the cheapest harness in the repo.
 
 ### The emoji search shift question, with the line
 
@@ -91,6 +134,18 @@ has to catch **four** exit paths that write `overlay` directly:
 `show(_:)`, `dismissOverlay()`, `KeyboardController+AI.swift:213`, and
 `KeyboardController+Dictation.swift:416`. Miss one and shift is stuck `.off` in
 the core typing path.
+
+**Fixed, and the four paths are why it is a `didSet` rather than four edits.**
+`KeyboardController.overlay` observes itself into `adoptSearchShift(from:)`, so a
+fifth writer added later cannot miss it — which is the failure mode the paragraph
+above describes, written as a rule the compiler enforces instead of a note. It
+acts only on a genuine crossing of the new `KeyboardOverlay.isSearch`, so
+`.emojiSearch` → `.copyclipSearch` keeps the document's shift parked rather than
+restoring and re-taking it, and a shift pressed inside the box belongs to the
+query and is discarded with it. `testTheDocumentsShiftIsParkedForSearchAndGivenBack`
+asserts through `dismissOverlay()` as well as `show(_:)`, and
+`testAShiftPressedInsideTheQueryDoesNotLeakIntoTheDocument` is what fails a
+restore that puts the query's own shift into the user's message.
 
 ## Fixed in this pass
 

@@ -1,0 +1,1726 @@
+{
+  "schema": 1,
+  "generated": "2026-08-16",
+  "commit": "9909bd15",
+  "engine": "rank.py, checked against the shipping Swift by swift-check.sh",
+  "corpus": "94b02ff5ead39007",
+  "catalogue": "8a9748c8cbdea345",
+  "limit": 60,
+  "headline": {
+    "entries": 99,
+    "window": 5,
+    "first": {
+      "pass": 56,
+      "of": 76
+    },
+    "strip": {
+      "pass": 69,
+      "of": 76
+    },
+    "mrr": 0.8188,
+    "mrrOver": 76,
+    "open": {
+      "entries": 19,
+      "firstFromTheSample": 3,
+      "stripFromTheSample": 17
+    },
+    "negative": {
+      "pass": 4,
+      "of": 4
+    },
+    "clean": {
+      "pass": 6,
+      "of": 10
+    },
+    "knownGaps": 2
+  },
+  "entries": [
+    {
+      "id": "en-heart",
+      "script": "en",
+      "category": "name-vs-keyword",
+      "query": "heart",
+      "top": [
+        "🫀",
+        "🏠",
+        "💏",
+        "💗",
+        "🤎"
+      ],
+      "targetRank": 10,
+      "first": "fail",
+      "strip": "fail",
+      "judged": true,
+      "violations": [
+        "💏"
+      ],
+      "alsoFineInStrip": [
+        "💗"
+      ]
+    },
+    {
+      "id": "en-car",
+      "script": "en",
+      "category": "name-vs-keyword",
+      "query": "car",
+      "top": [
+        "🚕",
+        "🚙",
+        "🛻",
+        "🛞",
+        "🚚"
+      ],
+      "targetRank": 6,
+      "first": "fail",
+      "strip": "fail",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-pizza",
+      "script": "en",
+      "category": "single-concept",
+      "query": "pizza",
+      "top": [
+        "🍕"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-fire",
+      "script": "en",
+      "category": "single-concept",
+      "query": "fire",
+      "top": [
+        "🔥",
+        "🚒",
+        "🧯",
+        "👨‍🚒",
+        "👩‍🚒"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-dog",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "dog",
+      "top": [
+        "🐕",
+        "🦴",
+        "🐩",
+        "🐶",
+        "🌭"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-cat",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "cat",
+      "top": [
+        "🐈",
+        "🐆",
+        "🐅",
+        "🐱",
+        "😽"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-laugh",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "laugh",
+      "top": [
+        "😀",
+        "😹",
+        "😆",
+        "😄",
+        "🤣"
+      ],
+      "targetRank": 3,
+      "first": "unjudged",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "en-cry",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "cry",
+      "top": [
+        "😿",
+        "😢",
+        "🥹",
+        "😭",
+        "🔮"
+      ],
+      "targetRank": 2,
+      "first": "fail",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-smile",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "smile",
+      "top": [
+        "🙃",
+        "😺",
+        "🤩",
+        "☺️",
+        "😬"
+      ],
+      "targetRank": 6,
+      "first": "unjudged",
+      "strip": "unjudged",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "en-thumbs-up",
+      "script": "en",
+      "category": "multiword",
+      "query": "thumbs up",
+      "top": [
+        "👍"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-ok",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "ok",
+      "top": [
+        "👌",
+        "🆗",
+        "🫡",
+        "🙆‍♂️",
+        "🙆‍♀️"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "en-sun",
+      "script": "en",
+      "category": "single-concept",
+      "query": "sun",
+      "top": [
+        "☀️",
+        "🌻",
+        "🌅",
+        "🌇",
+        "⛱️"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-moon",
+      "script": "en",
+      "category": "name-vs-keyword",
+      "query": "moon",
+      "top": [
+        "🌙",
+        "🎑",
+        "🌑",
+        "🌕",
+        "🥮"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": [
+        "🥮"
+      ],
+      "alsoFineInStrip": [
+        "🌕",
+        "🌑"
+      ]
+    },
+    {
+      "id": "en-star",
+      "script": "en",
+      "category": "single-concept",
+      "query": "star",
+      "top": [
+        "⭐",
+        "👨‍🎤",
+        "👩‍🎤",
+        "💫",
+        "🧑‍🎤"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-beer",
+      "script": "en",
+      "category": "single-concept",
+      "query": "beer",
+      "top": [
+        "🍺",
+        "🫚",
+        "🍻"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": [],
+      "alsoFineInStrip": [
+        "🍻"
+      ]
+    },
+    {
+      "id": "en-coffee",
+      "script": "en",
+      "category": "name-vs-keyword",
+      "query": "coffee",
+      "top": [
+        "☕"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-cake",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "cake",
+      "top": [
+        "🥮",
+        "🍰",
+        "🎂",
+        "🍥"
+      ],
+      "targetRank": 2,
+      "first": "fail",
+      "strip": "pass",
+      "judged": true,
+      "violations": [
+        "🥮"
+      ]
+    },
+    {
+      "id": "en-party",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "party",
+      "top": [
+        "🪅",
+        "🪇",
+        "🪩",
+        "🎉",
+        "🎊"
+      ],
+      "targetRank": 4,
+      "first": "fail",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-phone",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "phone",
+      "top": [
+        "🤳",
+        "📳",
+        "☎️",
+        "📴",
+        "📱"
+      ],
+      "targetRank": 3,
+      "first": "fail",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-plane",
+      "script": "en",
+      "category": "name-vs-keyword",
+      "query": "plane",
+      "top": [
+        "👨‍✈️",
+        "✈️",
+        "🧑‍✈️",
+        "👩‍✈️",
+        "🛩️"
+      ],
+      "targetRank": 2,
+      "first": "fail",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-house",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "house",
+      "top": [
+        "🏠",
+        "🛖",
+        "🏘️",
+        "🪴",
+        "🏚️"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-money",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "money",
+      "top": [
+        "🪙",
+        "💎",
+        "💴",
+        "💵",
+        "💶"
+      ],
+      "targetRank": 4,
+      "first": "unjudged",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "en-book",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "book",
+      "top": [
+        "📚",
+        "📕",
+        "📖",
+        "📗",
+        "📘"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-music",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "music",
+      "top": [
+        "🥁",
+        "🪈",
+        "🎸",
+        "🎻",
+        "🪕"
+      ],
+      "targetRank": 10,
+      "first": "fail",
+      "strip": "fail",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-snow",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "snow",
+      "top": [
+        "🎿",
+        "🛷",
+        "⛷️",
+        "☃️",
+        "❄️"
+      ],
+      "targetRank": 5,
+      "first": "unjudged",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "en-rain",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "rain",
+      "top": [
+        "☂️",
+        "⛱️",
+        "🌧️",
+        "🌂",
+        "⛈️"
+      ],
+      "targetRank": 3,
+      "first": "unjudged",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "en-dance",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "dance",
+      "top": [
+        "💃",
+        "🪇",
+        "🕺",
+        "🩰",
+        "🪩"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-flower",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "flower",
+      "top": [
+        "🌹",
+        "🪷",
+        "🌻",
+        "🌼",
+        "🌷"
+      ],
+      "targetRank": 4,
+      "first": "unjudged",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "en-tree",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "tree",
+      "top": [
+        "🌴",
+        "🌳",
+        "🌲",
+        "🎄",
+        "🎋"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-baby",
+      "script": "en",
+      "category": "single-concept",
+      "query": "baby",
+      "top": [
+        "👶",
+        "🐤",
+        "🤱",
+        "👼",
+        "🐣"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-gift",
+      "script": "en",
+      "category": "name-vs-keyword",
+      "query": "gift",
+      "top": [
+        "🎁",
+        "🧧",
+        "🤓"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-angry",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "angry",
+      "top": [
+        "👺",
+        "💢",
+        "😡",
+        "😠",
+        "🗯️"
+      ],
+      "targetRank": 3,
+      "first": "unjudged",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "en-sad",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "sad",
+      "top": [
+        "💧",
+        "💔",
+        "😿",
+        "☹️",
+        "😢"
+      ],
+      "targetRank": 4,
+      "first": "unjudged",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "en-love",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "love",
+      "top": [
+        "🌹",
+        "💓",
+        "❤️",
+        "🩷",
+        "💛"
+      ],
+      "targetRank": 3,
+      "first": "unjudged",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "en-sleep",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "sleep",
+      "top": [
+        "💤",
+        "🛏️",
+        "😴",
+        "🥱",
+        "😪"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-run",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "run",
+      "top": [
+        "🏃‍♀️",
+        "🏃‍♂️",
+        "👟",
+        "🎽",
+        "🏃"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-train",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "train",
+      "top": [
+        "🚆",
+        "🚂",
+        "🚉",
+        "🚃",
+        "🚄"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "en-soccer",
+      "script": "en",
+      "category": "single-concept",
+      "query": "soccer",
+      "top": [
+        "⚽"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-check",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "check",
+      "top": [
+        "✅",
+        "✔️",
+        "☑️",
+        "🛄",
+        "🛫"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-100",
+      "script": "en",
+      "category": "single-concept",
+      "query": "100",
+      "top": [
+        "💯",
+        "💶"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-wave",
+      "script": "en",
+      "category": "name-vs-keyword",
+      "query": "wave",
+      "top": [
+        "🌊"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-birthday",
+      "script": "en",
+      "category": "ambiguous",
+      "query": "birthday",
+      "top": [
+        "🎈",
+        "🥳",
+        "💐",
+        "🎁",
+        "🎉"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "en-apple",
+      "script": "en",
+      "category": "single-concept",
+      "query": "apple",
+      "top": [
+        "🥧",
+        "🍎",
+        "🍏"
+      ],
+      "targetRank": 2,
+      "first": "fail",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-rainbow",
+      "script": "en",
+      "category": "single-concept",
+      "query": "rainbow",
+      "top": [
+        "🌈",
+        "🏳️‍🌈"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-israel",
+      "script": "en",
+      "category": "single-concept",
+      "query": "israel",
+      "top": [
+        "🇮🇱"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-france",
+      "script": "en",
+      "category": "single-concept",
+      "query": "france",
+      "top": [
+        "🇫🇷"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-piz",
+      "script": "en",
+      "category": "prefix",
+      "query": "piz",
+      "top": [
+        "🍕"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-choco",
+      "script": "en",
+      "category": "prefix",
+      "query": "choco",
+      "top": [
+        "🍫",
+        "🫕",
+        "🍪"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-strawb",
+      "script": "en",
+      "category": "prefix",
+      "query": "strawb",
+      "top": [
+        "🍓"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-case",
+      "script": "en",
+      "category": "normalisation",
+      "query": "Pizza",
+      "top": [
+        "🍕"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-padded",
+      "script": "en",
+      "category": "normalisation",
+      "query": "  fire  ",
+      "top": [
+        "🔥",
+        "🚒",
+        "🧯",
+        "👨‍🚒",
+        "👩‍🚒"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "en-emoji-name-only",
+      "script": "en",
+      "category": "multiword",
+      "query": "red heart",
+      "top": [
+        "❤️"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-lev",
+      "script": "he",
+      "category": "name-vs-keyword",
+      "query": "לב",
+      "top": [
+        "🫀",
+        "💏",
+        "💗",
+        "🤎",
+        "🤍"
+      ],
+      "targetRank": 9,
+      "first": "fail",
+      "strip": "fail",
+      "judged": true,
+      "violations": [
+        "💏"
+      ],
+      "alsoFineInStrip": [
+        "💗"
+      ]
+    },
+    {
+      "id": "he-esh",
+      "script": "he",
+      "category": "single-concept",
+      "query": "אש",
+      "top": [
+        "🔥",
+        "🚒",
+        "🧯",
+        "👨‍🚒",
+        "👩‍🚒"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-pizza",
+      "script": "he",
+      "category": "single-concept",
+      "query": "פיצה",
+      "top": [
+        "🍕"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-israel",
+      "script": "he",
+      "category": "single-concept",
+      "query": "ישראל",
+      "top": [
+        "🇮🇱"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-toda",
+      "script": "he",
+      "category": "name-vs-keyword",
+      "query": "תודה",
+      "top": [
+        "🙏",
+        "🫂"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-kelev",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "כלב",
+      "top": [
+        "🐕",
+        "🦴",
+        "🐩",
+        "🦦",
+        "🐶"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-hatul",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "חתול",
+      "top": [
+        "🐈",
+        "🐱",
+        "😽",
+        "🙀",
+        "😿"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-shemesh",
+      "script": "he",
+      "category": "single-concept",
+      "query": "שמש",
+      "top": [
+        "☀️",
+        "🌻",
+        "🌅",
+        "🌇",
+        "🌞"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-yareach",
+      "script": "he",
+      "category": "name-vs-keyword",
+      "query": "ירח",
+      "top": [
+        "🌙",
+        "🎑",
+        "🌑",
+        "🌕",
+        "🌚"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": [],
+      "alsoFineInStrip": [
+        "🌕",
+        "🌑"
+      ]
+    },
+    {
+      "id": "he-kochav",
+      "script": "he",
+      "category": "single-concept",
+      "query": "כוכב",
+      "top": [
+        "⭐",
+        "👨‍🎤",
+        "☄️",
+        "❇️",
+        "💫"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-bira",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "בירה",
+      "top": [
+        "🍺",
+        "🫚",
+        "🍻"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-kafe",
+      "script": "he",
+      "category": "name-vs-keyword",
+      "query": "קפה",
+      "top": [
+        "☕",
+        "🧋"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-uga",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "עוגה",
+      "top": [
+        "🧁",
+        "🍰",
+        "🎂"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-mesiba",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "מסיבה",
+      "top": [
+        "🎈",
+        "🥳",
+        "💃",
+        "🎀",
+        "🪅"
+      ],
+      "targetRank": 2,
+      "first": "fail",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-telefon",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "טלפון",
+      "top": [
+        "🤳",
+        "☎️",
+        "📱",
+        "📞",
+        "📶"
+      ],
+      "targetRank": 2,
+      "first": "fail",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-matos",
+      "script": "he",
+      "category": "single-concept",
+      "query": "מטוס",
+      "top": [
+        "✈️",
+        "👨‍✈️",
+        "🧑‍✈️",
+        "👩‍✈️",
+        "🛩️"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-bayit",
+      "script": "he",
+      "category": "single-concept",
+      "query": "בית",
+      "top": [
+        "🏠",
+        "👨‍⚖️",
+        "🏘️",
+        "🏭",
+        "🚽"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-kesef",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "כסף",
+      "top": [
+        "👛",
+        "🪙",
+        "💰",
+        "💴",
+        "💵"
+      ],
+      "targetRank": 3,
+      "first": "fail",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-sefer",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "ספר",
+      "top": [
+        "🎒",
+        "📚",
+        "💇",
+        "📕",
+        "📖"
+      ],
+      "targetRank": 2,
+      "first": "fail",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-muzika",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "מוזיקה",
+      "top": [
+        "🥁",
+        "📻",
+        "🪈",
+        "🎸",
+        "🎻"
+      ],
+      "targetRank": 12,
+      "first": "fail",
+      "strip": "fail",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-geshem",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "גשם",
+      "top": [
+        "☂️",
+        "🌈",
+        "🌧️",
+        "🌂",
+        "⛈️"
+      ],
+      "targetRank": 3,
+      "first": "unjudged",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "he-sheleg",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "שלג",
+      "top": [
+        "🎿",
+        "🛷",
+        "⛷️",
+        "☃️",
+        "❄️"
+      ],
+      "targetRank": 5,
+      "first": "unjudged",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "he-perach",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "פרח",
+      "top": [
+        "🌹",
+        "🪷",
+        "🌻",
+        "🌼",
+        "🌷"
+      ],
+      "targetRank": 4,
+      "first": "unjudged",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "he-etz",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "עץ",
+      "top": [
+        "🪓",
+        "🪵",
+        "🪈",
+        "🌴",
+        "🌳"
+      ],
+      "targetRank": 4,
+      "first": "fail",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-tinok",
+      "script": "he",
+      "category": "single-concept",
+      "query": "תינוק",
+      "top": [
+        "👶",
+        "🤱",
+        "👼",
+        "🍼",
+        "🚼"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-matana",
+      "script": "he",
+      "category": "name-vs-keyword",
+      "query": "מתנה",
+      "top": [
+        "🎀",
+        "🎁",
+        "🧧",
+        "💝"
+      ],
+      "targetRank": 2,
+      "first": "fail",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-koes",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "כועס",
+      "top": [
+        "😾",
+        "👊",
+        "😡",
+        "😠",
+        "🙍‍♂️"
+      ],
+      "targetRank": 3,
+      "first": "unjudged",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "he-atzuv",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "עצוב",
+      "top": [
+        "🥺",
+        "😿",
+        "☹️",
+        "😢",
+        "😩"
+      ],
+      "targetRank": 3,
+      "first": "unjudged",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "he-ahava",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "אהבה",
+      "top": [
+        "💏",
+        "💒",
+        "💗",
+        "♥️",
+        "💓"
+      ],
+      "targetRank": 10,
+      "first": "unjudged",
+      "strip": "unjudged",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "he-mechonit",
+      "script": "he",
+      "category": "single-concept",
+      "query": "מכונית",
+      "top": [
+        "🚗",
+        "🛻",
+        "🛞",
+        "🚃",
+        "🏎️"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-tzchok",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "צחוק",
+      "top": [
+        "😂",
+        "😆",
+        "🤣"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-bocha",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "בוכה",
+      "top": [
+        "😿",
+        "😢",
+        "😩",
+        "😪",
+        "😭"
+      ],
+      "targetRank": 2,
+      "first": "fail",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-bechi",
+      "script": "he",
+      "category": "morphology",
+      "query": "בכי",
+      "top": [
+        "🥹",
+        "🔃",
+        "🔁"
+      ],
+      "targetRank": null,
+      "first": "fail",
+      "strip": "fail",
+      "judged": true,
+      "violations": [],
+      "knownGap": true
+    },
+    {
+      "id": "he-shalom",
+      "script": "he",
+      "category": "ambiguous",
+      "query": "שלום",
+      "top": [
+        "🫒",
+        "🕊️",
+        "👋",
+        "☮️",
+        "🤚"
+      ],
+      "targetRank": 2,
+      "first": "unjudged",
+      "strip": "pass",
+      "judged": false,
+      "violations": []
+    },
+    {
+      "id": "he-keshet",
+      "script": "he",
+      "category": "name-vs-keyword",
+      "query": "קשת",
+      "top": [
+        "🌈",
+        "🏹",
+        "♐"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-pitz",
+      "script": "he",
+      "category": "prefix",
+      "query": "פיצ",
+      "top": [
+        "🍕",
+        "💥",
+        "💢",
+        "🥜",
+        "🏪"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "he-yom-huledet",
+      "script": "he",
+      "category": "multiword",
+      "query": "יום הולדת",
+      "top": [],
+      "targetRank": null,
+      "first": "fail",
+      "strip": "fail",
+      "judged": true,
+      "violations": [],
+      "knownGap": true
+    },
+    {
+      "id": "he-lev-adom",
+      "script": "he",
+      "category": "multiword",
+      "query": "לב אדום",
+      "top": [
+        "❤️"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "rec-lev",
+      "script": "he",
+      "category": "recents",
+      "query": "לב",
+      "top": [
+        "❤️",
+        "🫀",
+        "💏",
+        "💗",
+        "🤎"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "rec-cat",
+      "script": "en",
+      "category": "recents",
+      "query": "cat",
+      "top": [
+        "🐈",
+        "🐆",
+        "🐅",
+        "🐱",
+        "😽"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "rec-cat-face",
+      "script": "en",
+      "category": "recents",
+      "query": "cat",
+      "top": [
+        "🐱",
+        "🐈",
+        "🐆",
+        "🐅",
+        "😽"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "rec-pizza",
+      "script": "en",
+      "category": "recents",
+      "query": "pizza",
+      "top": [
+        "🍕"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "rec-he-pizza",
+      "script": "he",
+      "category": "recents",
+      "query": "פיצה",
+      "top": [
+        "🍕"
+      ],
+      "targetRank": 1,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": []
+    },
+    {
+      "id": "neg-empty",
+      "script": "en",
+      "category": "negative",
+      "query": "",
+      "top": [],
+      "targetRank": null,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": [],
+      "count": 0
+    },
+    {
+      "id": "neg-spaces",
+      "script": "en",
+      "category": "negative",
+      "query": "   ",
+      "top": [],
+      "targetRank": null,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": [],
+      "count": 0
+    },
+    {
+      "id": "neg-zzzzzz",
+      "script": "en",
+      "category": "negative",
+      "query": "zzzzzz",
+      "top": [],
+      "targetRank": null,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": [],
+      "count": 0
+    },
+    {
+      "id": "neg-hebrew",
+      "script": "he",
+      "category": "negative",
+      "query": "קקקקקק",
+      "top": [],
+      "targetRank": null,
+      "first": "pass",
+      "strip": "pass",
+      "judged": true,
+      "violations": [],
+      "count": 0
+    }
+  ]
+}

@@ -65,17 +65,36 @@ final class LayoutStoreTests: XCTestCase {
         XCTAssertEqual(SharedStore.decodeLayout(from: defaults), edited)
     }
 
+    /// **The gear is found wherever it sits, not in the row it used to sit in.**
+    /// This rewrote `.settings` inside `cursorRow` alone, which was the whole of
+    /// the truth while the action row carried the gear. Emoji and the gear then
+    /// traded seats (`KeyboardCustomization.actionRow`), so the map matched
+    /// nothing, the layout still held a `.settings` in `bottomRow`, and the setup
+    /// tripped its own precondition — the assertion below is the one that failed,
+    /// before `decodeLayout` was ever called. `replacingInternalGlobe` already
+    /// runs over all four collections, so building the "old" layout the same way
+    /// is what keeps this test about the migration rather than about the seating.
     func testAnEditedLayoutMigratesTheOldInternalGlobeToSettings() throws {
         var old = KeyboardCustomization.default
         old.preset = nil
-        old.cursorRow = old.cursorRow.map { slot in
-            guard slot.action == .settings else { return slot }
-            var migrated = slot
-            migrated.action = .globe
-            return migrated
+        let asInternalGlobe: ([SlotSpec]) -> [SlotSpec] = { slots in
+            slots.map { slot in
+                guard slot.action == .settings else { return slot }
+                var migrated = slot
+                migrated.action = .globe
+                return migrated
+            }
         }
+        old.barLeading = asInternalGlobe(old.barLeading)
+        old.barTrailing = asInternalGlobe(old.barTrailing)
+        old.bottomRow = asInternalGlobe(old.bottomRow)
+        old.cursorRow = asInternalGlobe(old.cursorRow)
         let encoded =
             old.barLeading + old.barTrailing + old.bottomRow + old.cursorRow
+        XCTAssertTrue(
+            encoded.contains { $0.action == .globe },
+            "the layout under test has to carry an internal globe, or the migration "
+                + "has nothing to migrate and the assertions below pass for free")
         XCTAssertFalse(encoded.contains { $0.action == .settings })
         defaults.set(try JSONEncoder().encode(old), forKey: SharedStore.layoutKey)
 

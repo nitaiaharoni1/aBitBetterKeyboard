@@ -42,7 +42,7 @@ final class DefaultToneTests: XCTestCase {
         // one are the document and the way back out of it.
         XCTAssertEqual(controller.overlay, .none, "the one-tap rewrite covered the keys")
         XCTAssertEqual(controller.contextBefore, "rewritten", "the answer never reached the field")
-        XCTAssertEqual(controller.revertibleEdit?.action, .rewrite)
+        XCTAssertEqual(controller.revertibleEdit?.origin, .ai(.rewrite))
         XCTAssertEqual(
             controller.revertibleEdit?.previous, "i cant make the standup",
             "there is no way back to what the user wrote")

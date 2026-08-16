@@ -271,9 +271,17 @@ out of the app, and should stay out of the store page too.** `WelcomeStep.swift`
 own comment explains why this line was removed from onboarding: code-switched speech
 is measurably the weakest case, "the thing it is *worst* at." README's own numbers on
 `Bar/dictation/`'s 36 clips put it at 23.5% word error rate, against 8.5% for English
-alone and 10.7% for Hebrew alone (the in-code comment cites an older 17.7% reading
-from an earlier run of the same corpus, itself a case of this repository's own rule
-that one corpus run is not evidence). Do not reintroduce this claim on the store page
+alone and 10.7% for Hebrew alone, and both in-code comments now say the same
+(`WelcomeStep.swift` and `CloudDictation.swift`, corrected 2026-08-16). Until that
+date they carried a set built around 17.7%, and the sentence here called it "an
+earlier run of the same corpus" — which was the charitable reading and the wrong one.
+`harness/score.py` over every committed outputs file reproduces
+`Bar/dictation/README.md` exactly and produces 17.7% nowhere, and that set was
+committed in `d023520f` alongside the scorer itself, so it predates the scoring rule
+that ships and came from code that never landed. The lesson is not the usual "one
+corpus run is not evidence" — it is that a number nobody can re-derive from the
+committed harness is not a reading at all, and the fix is to score the corpus rather
+than to quote a comment. Do not reintroduce this claim on the store page
 after the app's own code already decided against it. The safe claim is that
 dictation is real, live, and works in either language, which is true and already in
 the screenshot sequence above; the seamless-switching claim is not, and should wait

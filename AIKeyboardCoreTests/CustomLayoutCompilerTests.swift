@@ -217,17 +217,112 @@ final class CustomLayoutCompilerTests: XCTestCase {
         let row = try XCTUnwrap(rows.first { $0.id == KeyboardLayout.RowID.bottom })
         XCTAssertEqual(
             row.keys.map(\.addressableID),
-            // `.emoji` stands where the globe used to. Nothing compiles a globe
-            // into a custom row — `KeyboardController.apply(_:)` inserts one into
-            // the layout beforehand when the device needs it, which is why this row
-            // has none even at `showsGlobe: true`.
-            ["plane-123", "emoji", "space", KeyboardLayout.punctuationKeyID, "return"])
+            // `.settings` stands where the globe used to, and where Emoji stood
+            // between the two — Emoji has the narrow centre of the action row now.
+            // Nothing compiles a globe into a custom row —
+            // `KeyboardController.apply(_:)` inserts one into the layout beforehand
+            // when the device needs it, which is why this row has none even at
+            // `showsGlobe: true`.
+            ["plane-123", "settings", "space", KeyboardLayout.punctuationKeyID, "return"])
     }
 
     /// A key that was never compiled from a slot has no suffix to strip.
     func testAnOrdinaryKeysAddressableIDIsItsID() {
         XCTAssertEqual(KeySpec(.space).addressableID, "space")
         XCTAssertEqual(KeySpec(.character("a")).addressableID, "char-a")
+    }
+
+    // MARK: Labels
+
+    /// The shipped rule, unchanged by the switch that was added beside it: in the
+    /// action row Emoji and Dictate are glyphs and the other three name
+    /// themselves.
+    ///
+    /// **Asserted at a width that clears the floor**, because the floor moved out
+    /// of `KeyView.actionLabel` and into this answer — at 40pt every one of the
+    /// five would be false and the position rule could have been deleted without
+    /// a test noticing.
+    func testTheShippedActionRowStillCaptionsEverythingButEmojiAndDictate() throws {
+        var layout = KeyboardCustomization.default
+        layout.cursorRow = KeyboardCustomization.actionRow
+        let rows = KeyboardLayout.rows(
+            for: .english, plane: .letters, showsGlobe: true, customization: layout)
+        let row = try XCTUnwrap(rows.first { $0.id == KeyboardLayout.RowID.cursor })
+        let wide = KeyView.captionMinimumWidth + 20
+
+        for key in row.keys {
+            let named = key.showsActionCaption(inRow: row.id, width: wide)
+            let expected = key.cap != .emoji && key.cap != .dictation
+            XCTAssertEqual(named, expected, "\(key.addressableID) in the action row")
+        }
+    }
+
+    /// The same key names itself in any other row, which is the half of the rule
+    /// a row-blind implementation would get wrong.
+    func testTheSameKeyNamesItselfOutsideTheActionRow() {
+        let dictation = KeySpec(.dictation)
+        let wide = KeyView.captionMinimumWidth + 20
+        XCTAssertFalse(
+            dictation.showsActionCaption(inRow: KeyboardLayout.RowID.cursor, width: wide))
+        XCTAssertTrue(
+            dictation.showsActionCaption(inRow: KeyboardLayout.RowID.bottom, width: wide))
+    }
+
+    /// The user's switch reaches the drawn key, in both directions.
+    ///
+    /// Both halves matter: `false` on a wide key in a row that would caption it,
+    /// and `true` on a key the shipped rule silences. A build that compiled the
+    /// slot without carrying `showsLabel` answers the *opposite* of each.
+    func testTheLabelSwitchReachesTheCompiledKey() throws {
+        for shows in [true, false] {
+            var layout = KeyboardCustomization.default
+            layout.cursorRow = [
+                SlotSpec(action: .fix, width: .fill, showsLabel: shows),
+                SlotSpec(action: .dictation, width: .fill, showsLabel: shows)
+            ]
+            let rows = KeyboardLayout.rows(
+                for: .english, plane: .letters, showsGlobe: true, customization: layout)
+            let row = try XCTUnwrap(rows.first { $0.id == KeyboardLayout.RowID.cursor })
+            for key in row.keys {
+                XCTAssertEqual(
+                    key.showsActionCaption(
+                        inRow: row.id, width: KeyView.captionMinimumWidth + 20),
+                    shows,
+                    "\(key.addressableID) ignored a label switch set to \(shows)")
+            }
+        }
+    }
+
+    /// **The floor is a default, so an explicit yes clears it.** A user who turns
+    /// a one-unit key's label on in the editor is looking at that key while they
+    /// do it; a switch that silently did nothing there would read as broken. The
+    /// same key with no opinion stored still keeps the floor.
+    func testAnExplicitLabelIsDrawnOnAKeyTooNarrowToEarnOne() {
+        let narrow = KeyView.captionMinimumWidth - 20
+        let asked = KeySpec(.emoji, showsLabel: true)
+        let unasked = KeySpec(.emoji)
+        XCTAssertTrue(asked.showsActionCaption(inRow: KeyboardLayout.RowID.bottom, width: narrow))
+        XCTAssertFalse(
+            unasked.showsActionCaption(inRow: KeyboardLayout.RowID.bottom, width: narrow))
+    }
+
+    /// **A layout stored before the switch existed has no opinion, and says so.**
+    ///
+    /// Nil rather than a default, because "this key does what it would do where
+    /// it stands" is the only thing the old model could describe — the same
+    /// migration `LayoutGeometry`'s two row heights are decoded under. Asserted
+    /// on the encoded bytes as well: an untouched layout that started writing a
+    /// key it never used to write is how a stored preference silently changes
+    /// meaning between builds.
+    func testALayoutStoredBeforeTheLabelSwitchKeepsNoOpinion() throws {
+        let data = try JSONEncoder().encode(KeyboardCustomization.default)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertFalse(json.contains("showsLabel"), "an untouched layout writes the new key")
+
+        let decoded = try JSONDecoder().decode(KeyboardCustomization.self, from: data)
+        let slots = decoded.bottomRow + decoded.cursorRow + decoded.barTrailing
+        XCTAssertFalse(slots.isEmpty)
+        XCTAssertTrue(slots.allSatisfy { $0.showsLabel == nil })
     }
 
 }

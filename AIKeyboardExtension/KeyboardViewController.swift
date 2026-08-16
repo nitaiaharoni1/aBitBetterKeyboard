@@ -241,6 +241,13 @@ final class KeyboardViewController: UIInputViewController {
         // a WhatsApp reply. Field that already has Hebrew: keep telling the
         // host that — resetting here flipped an in-progress draft LTR.
         controller?.prepareForNewDocument()
+        // The Recent emoji order is frozen while the grid is open so it cannot
+        // re-sort under the thumb that is picking from it, and nothing resets
+        // `overlay` on the way out — so an instance iOS kept alive comes back
+        // with the grid still open and yesterday's order in it. Arriving on
+        // screen is a fresh visit, which is the moment that freeze is allowed to
+        // lift. See `KeyboardController.visibleRecentEmoji`.
+        controller?.settleRecentEmoji()
         publishInputLanguage()
         updateKeyboardHeight()
     }

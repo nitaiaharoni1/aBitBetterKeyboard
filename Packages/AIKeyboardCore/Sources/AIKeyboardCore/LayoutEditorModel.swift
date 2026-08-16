@@ -617,6 +617,44 @@ public final class LayoutEditorModel: ObservableObject {
         mutate(slot) { $0.action = action }
     }
 
+    /// Draws this key's name under its glyph, or takes it off.
+    ///
+    /// **Writes an explicit `true` rather than clearing back to nil**, on the six
+    /// keys that have a name at all. Nil means "whatever this key would do where
+    /// it stands", and once somebody has said, that is no longer what they meant:
+    /// a key put back where the shipped rule hides its label would silently lose
+    /// the word they asked for. Reset is the way back to nil.
+    public func setShowsLabel(_ shows: Bool, for slot: SlotSpec) {
+        guard slot.action.hasLabel else { return }
+        mutate(slot) { $0.showsLabel = shows }
+    }
+
+    /// Whether this key is drawing its name right now, exactly as the canvas
+    /// below the editor has it.
+    ///
+    /// **Takes the width the canvas measured rather than the stored one**, which
+    /// is the only honest answer: a slot's width is `.fill` or a multiple of a
+    /// letter key, and whether that clears `KeyView.captionMinimumWidth` depends
+    /// on the phone, the language's column count and what else is on the row. A
+    /// switch that says "on" over a key drawing no word is the defect this
+    /// argument exists to avoid. Zero — no frame measured yet — reads as off,
+    /// which is what the first layout pass shows before it settles.
+    public func drawsLabel(_ slot: SlotSpec, drawnWidth: CGFloat) -> Bool {
+        // A key with no name under its glyph draws none however wide it is, and
+        // `KeySpec.showsActionCaption` cannot say so: it answers for the *row*,
+        // and a return key in the bottom row clears every part of that rule while
+        // drawing an arrow and nothing else. The menu asks this before it draws a
+        // switch, so without the guard it is one caller away from offering to
+        // hide a label that does not exist.
+        guard slot.action.hasLabel else { return false }
+        if let showsLabel = slot.showsLabel { return showsLabel }
+        guard let key = KeyboardLayout.previewKey(for: slot.action) else { return false }
+        let rowID =
+            rowKind(of: slot) == .cursor
+            ? KeyboardLayout.RowID.cursor : KeyboardLayout.RowID.bottom
+        return key.showsActionCaption(inRow: rowID, width: drawnWidth)
+    }
+
     public func setNumberRow(enabled: Bool) {
         edit { $0.showsNumberRow = enabled }
     }
