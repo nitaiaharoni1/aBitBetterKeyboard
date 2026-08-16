@@ -37,9 +37,37 @@ struct SlotRecord: Encodable {
     /// What the space bar would commit, spelled out, because "index 1" is not
     /// something a reader can check against `mustNotCorrect` at a glance.
     let commits: String
+    /// Offered slots that **no source vouches for**: not Apple's spell checker,
+    /// not Apple's completion list for what was typed, not the seed list, not the
+    /// shipped personal dictionary. The typed echo is excluded.
+    ///
+    /// **The bold slot is not the only column a user can feel, and believing it
+    /// was is why a whole class of defect went unmeasured.** `judge.py` grades
+    /// what the space bar inserts, which is right and is what it says it does —
+    /// and the Hebrew clitic split spent months offering `מנכון`, `מנחמד`,
+    /// `מנפגש` in the other two slots without ever moving a commit, so both
+    /// committed instruments read clean while a fifth of Hebrew keystrokes drew
+    /// words that do not exist (NIT-129).
+    ///
+    /// **"`UITextChecker` calls it misspelled" was the first version of this test
+    /// and it was useless, which is worth keeping written down because it is the
+    /// obvious thing to reach for.** It reported **38 findings on a clean build
+    /// and zero real ones**: `Nitai`, `Handi`, `Wispr` and `סאפא` are the shipped
+    /// personal dictionary, `Adi`, `Roni` and `stam` are seed entries, `december`
+    /// and `september` fail only because the bar matched the lower case of what
+    /// was typed, and `סאפיינס` and `סאבלימינל` are words Apple's *completion*
+    /// list offers while its *spelling* half rejects them. An instrument that
+    /// cries wolf 38 times is worse than none, because the one real finding is
+    /// the line nobody reads.
+    ///
+    /// So the test is the engine's own sources as the whitelist, which is also
+    /// what makes it mean something: a string that every list this keyboard
+    /// consults has never heard of is not a word it declined to rank — it is a
+    /// word it made up.
+    let misspelled: [String]
 
     enum CodingKeys: String, CodingKey {
-        case id, category, slots, defaultIndex = "default", commits
+        case id, category, slots, defaultIndex = "default", commits, misspelled
     }
 }
 
@@ -86,6 +114,37 @@ let shippedPersonalDictionary = ["Nitai", "Handi", "Wispr", "KeyboardKit", "סא
 /// one entry that scans the whole seed list.
 var elapsed: [Double] = []
 
+/// Whether a string in a slot is one no list this keyboard consults has ever
+/// heard of. See `SlotRecord.misspelled` for the four sources and for what
+/// happened when this asked the spell checker alone.
+@MainActor
+func invented(_ text: String, in language: KeyboardLanguage, typed: String) -> Bool {
+    guard let locale = language.spellCheckerLocale else { return false }
+    if SuggestionEngine.isKnownWord(text, checkerLocale: locale) { return false }
+    // Apple wants a proper noun capitalised and `matchCase` gives the candidate
+    // the case of what was typed, so `de` offering `december` is Apple's own word
+    // in the user's own case rather than an invention.
+    let capitalised = text.prefix(1).uppercased() + text.dropFirst()
+    if capitalised != text, SuggestionEngine.isKnownWord(capitalised, checkerLocale: locale) {
+        return false
+    }
+    // Apple's two halves disagree: `סאפיינס` is in the completion list for `סא`
+    // and is reported misspelled by the same object. A word it offered is a word
+    // it vouches for, whichever half answered.
+    let nsTyped = typed as NSString
+    if nsTyped.length > 0,
+        let offered = SuggestionEngine.sharedChecker.completions(
+            forPartialWordRange: NSRange(location: 0, length: nsTyped.length), in: typed,
+            language: locale),
+        offered.contains(text)
+    {
+        return false
+    }
+    if SeedLanguageModel.knows(text, in: language) { return false }
+    let folded = SeedLanguageModel.fold(text)
+    return !shippedPersonalDictionary.contains { SeedLanguageModel.fold($0) == folded }
+}
+
 let records: [SlotRecord] = MainActor.assumeIsolated {
     // In-memory and empty. A scoring run must not inherit whatever the machine it
     // runs on has been typing, or two runs on two laptops disagree and neither is
@@ -111,7 +170,7 @@ let records: [SlotRecord] = MainActor.assumeIsolated {
         FileHandle.standardError.write(
             Data("first \(label) call: \(String(format: "%.1f", cold)) ms\n".utf8))
     }
-    return corpus.entries.map { entry in
+    let answered = corpus.entries.map { entry -> (CorpusEntry, [Suggestion]) in
         let started = DispatchTime.now().uptimeNanoseconds
         let results = SuggestionEngine.suggestions(
             prefix: entry.prefix,
@@ -120,13 +179,31 @@ let records: [SlotRecord] = MainActor.assumeIsolated {
             supplementary: shippedPersonalDictionary,
             personal: personal)
         elapsed.append(Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000)
+        return (entry, results)
+    }
+
+    // **Spelling is asked in a second pass, after every entry has been answered,
+    // and the order is load-bearing rather than tidy.** `UITextChecker`'s Hebrew
+    // answers depend on what that process has already asked it — the frozen
+    // corpus records the instability on `he-comp-03/04/05` and the sweep found
+    // one prefix answering differently in two places in a single run. Asking it
+    // about a slot in the middle of the measurement would put new calls into that
+    // sequence and change the thing being measured. This way the completion calls
+    // happen in exactly the order they did before this column existed.
+    return answered.map { entry, results in
         let defaultIndex = results.firstIndex(where: \.isDefault) ?? 0
         return SlotRecord(
             id: entry.id,
             category: entry.category,
             slots: results.map(\.text),
             defaultIndex: results.isEmpty ? -1 : defaultIndex,
-            commits: results.isEmpty ? entry.prefix : results[defaultIndex].text)
+            commits: results.isEmpty ? entry.prefix : results[defaultIndex].text,
+            // The echo is matched by text rather than by index, because a
+            // next-word entry has an empty prefix and no echo at all, and
+            // dropping index 0 there would hide a real offer.
+            misspelled: results.filter { $0.text != entry.prefix }
+                .filter { invented($0.text, in: $0.language, typed: entry.prefix) }
+                .map(\.text))
     }
 }
 

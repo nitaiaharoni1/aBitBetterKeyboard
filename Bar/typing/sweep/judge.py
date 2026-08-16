@@ -4,13 +4,34 @@
     Bar/typing/sweep/judge.py corpus.json run-1.json run-2.json
     Bar/typing/sweep/judge.py corpus.json run-*.json --trace=בעבודה,להתראות
 
-**It judges the bold slot and nothing else, because that is the only column a
-user can feel.** `SuggestionEngine` echoes the typed keystrokes as candidate zero
-on purpose, so "the right word is in the bar" is true of an engine that has
-stopped working; the scorer for the frozen 90 was wrong about exactly this and
+**The bold slot is the headline, because it is the only column that changes the
+document.** `SuggestionEngine` echoes the typed keystrokes as candidate zero on
+purpose, so "the right word is in the bar" is true of an engine that has stopped
+working; the scorer for the frozen 90 was wrong about exactly this and
 mislabelled 40 of 76 entries. `main.swift` writes `commits` as the text of the
-slot marked default, which is what `KeyboardController.insertSpace` inserts, so
-this file compares that string and nothing else.
+slot marked default, which is what `KeyboardController.insertSpace` inserts, and
+the three verdicts below compare that string and nothing else.
+
+**The other two slots get their own report, because judging only the bold one hid
+a defect for months.** The Hebrew clitic split was offering `מנכון`, `מנחמד` and
+`מנפגש` — three words that do not exist, in all three drawn slots — and it never
+moved a commit, so this tool and the frozen 90 both read perfectly clean while a
+fifth of Hebrew keystrokes drew invented words (NIT-129). That is not a bold-slot
+question and no amount of care about `commits` would have found it. Two counts
+are printed under the headline, and neither is folded into it:
+
+  non-words   An offered slot `UITextChecker` says is not a word, in that
+              candidate's own language. `main.swift` asks, in a second pass after
+              every entry is answered, and writes `misspelled`. Always a defect:
+              a keyboard may decline to help, and may not offer gibberish.
+  no-target   The word being typed is in no slot at all. **Not** a defect on its
+              own — two letters into a word, half the language is still a
+              plausible completion and the bar has three slots — so this is a
+              trend to watch across runs rather than a list of accusations.
+
+An older run has no `misspelled` key. Those files are reported as `n/a` rather
+than as zero, because a scorer that silently reads a missing measurement as a
+passing one is the failure this whole section exists to describe.
 
 Every moment gets one of three verdicts, and only the third is a finding:
 
@@ -79,6 +100,7 @@ def judge(corpus, outputs):
         commits = score.norm(record["commits"])
         target = score.norm(entry["intended"])
         kind, shape = verdict(typed, commits, target)
+        offered = [s for s in record["slots"] if score.norm(s) != typed]
         rows[record["id"]] = {
             "id": record["id"],
             "word": entry["word"],
@@ -90,6 +112,10 @@ def judge(corpus, outputs):
             "of": len(entry["word"]),
             "verdict": kind,
             "shape": shape,
+            # None rather than [] when the run predates the column, so a missing
+            # measurement cannot be read as a clean one.
+            "misspelled": record.get("misspelled"),
+            "hasTarget": any(score.norm(s) == target for s in offered),
         }
     return rows
 
@@ -103,6 +129,17 @@ def headline(rows, label):
         f"  {label:24s} {total:4d} moments   "
         f"{counts[HELD]:4d} held  {counts[ONTRACK]:4d} on track  "
         f"{counts[DIVERGED]:4d} DIVERGED"
+    )
+    graded = [row for row in rows.values() if row["misspelled"] is not None]
+    if not graded:
+        print(f"  {'':24s}      offered slots: n/a (run predates the misspelled column)")
+        return
+    bad = sum(1 for row in graded if row["misspelled"])
+    slots = sum(len(row["misspelled"]) for row in graded)
+    missing = sum(1 for row in rows.values() if not row["hasTarget"])
+    print(
+        f"  {'':24s}      offered slots: {bad:4d} moments hold a NON-WORD ({slots} slots)"
+        f"   {missing:4d} without the target word"
     )
 
 
@@ -184,6 +221,29 @@ def main():
         for key in ordered_words:
             if key in hit:
                 trail(runs, key[0] + (f"  (after {key[1]!r})" if key[1] else ""), per_word[key])
+
+    # Same discipline as the divergences: a slot only counts as an accusation
+    # when every run agrees it was there. The intersection rather than the union,
+    # so a word Apple offered in one run and not the next is not reported as a
+    # defect in the engine.
+    invented = []
+    for rid in ids:
+        seen = [rows[rid] for rows in runs if rid in rows]
+        if len(seen) != len(runs) or any(row["misspelled"] is None for row in seen):
+            continue
+        shared = set(seen[0]["misspelled"])
+        for row in seen[1:]:
+            shared &= set(row["misspelled"])
+        if shared:
+            invented.append((seen[0], sorted(shared)))
+
+    print(f"\n  confirmed non-words in an offered slot (every run): {len(invented)}")
+    for row, words in invented:
+        print(
+            f"    {row['id']:12s} {row['letters']}/{row['of']} of {row['word']!r}"
+            f"   typed {row['typed']!r} -> {', '.join(repr(w) for w in words)}"
+            f"   slots {row['slots']}"
+        )
 
     if traced:
         print("\n  traced words:")
