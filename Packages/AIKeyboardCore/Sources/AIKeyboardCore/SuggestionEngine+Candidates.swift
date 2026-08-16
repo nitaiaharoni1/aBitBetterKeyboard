@@ -49,6 +49,19 @@ extension SuggestionEngine {
     /// climb over a stronger one. A word the user typed into Settings by hand
     /// outranks anything Apple's dictionary has to say about it, always.
     enum Source: Int, Comparable {
+        /// Another ending on a Hebrew word that is already finished — `רוצה` →
+        /// `רוצים`. See `SuggestionEngine.hebrewInflections`.
+        ///
+        /// **Below everything, on purpose, and the negative tier is the point.**
+        /// Hebrew replaces its endings rather than appending them, so a prefix
+        /// search cannot reach these and something has to build them; a rule that
+        /// *builds* words has no business outranking one that looked a word up.
+        /// Ranked here it can only ever fill a slot no other source wanted, which
+        /// is exactly the measured need — 7 of 20 common finished Hebrew words
+        /// drew a bar with empty slots because `UITextChecker` had nothing — and
+        /// it makes the change safe to measure, since no moment where the bar was
+        /// already full can move.
+        case inflection = -1
         /// `UITextChecker.guesses` — a correction, i.e. a claim the user mis-typed.
         case correction = 0
         /// `UITextChecker.completions` — a longer word starting with what was typed.

@@ -251,6 +251,19 @@ extension SuggestionEngine {
             for: core, typedLanguage: typedLanguage, personal: personal,
             spelledOut: directCompletions)
 
+        // The endings Hebrew swaps rather than appends, for a word that is
+        // already a word.
+        if typedLanguage.script == .hebrew, let locale = checkerLocale {
+            out +=
+                hebrewInflections(of: core, locale: locale)
+                .enumerated()
+                .map {
+                    Candidate(
+                        text: $0.element, language: typedLanguage, source: .inflection,
+                        ordinal: $0.offset)
+                }
+        }
+
         // Latin letters inside a Hebrew sentence, ranked before the dictionary.
         // Only here: in an English sentence Apple's ranking is the better judge and
         // this list would only crowd it.
@@ -409,6 +422,104 @@ extension SuggestionEngine {
         guard !completions.isEmpty else { return true }
         let folded = SeedLanguageModel.fold(word)
         return completions.contains { SeedLanguageModel.fold($0) == folded }
+    }
+
+    /// The number and gender endings this rule may put on a stem.
+    ///
+    /// The same five `hebrewLexemeStem` takes off, used in the other direction.
+    /// `יות` is deliberately absent: it is there so that ending is not read as a
+    /// `ת` with two letters in front of it, which is a question about taking a
+    /// word apart and not about building one.
+    private static let hebrewInflectionEndings = ["ות", "ים", "ה", "ת", "י"]
+
+    /// The other inflections of a Hebrew word that is already finished.
+    ///
+    /// **English gets this for free and Hebrew cannot, and the difference is the
+    /// whole reason this exists.** English inflects by *appending*, so a prefix
+    /// search over a dictionary finishes a finished word without being asked:
+    /// measured over 15 common English verbs, 15 of 15 drew a full bar — `walk` →
+    /// `walking`, `walked`, `walks`. Hebrew *replaces* the ending, so `רוצה` →
+    /// `רוצים` is not a prefix extension of anything and **no** prefix-based
+    /// completion can ever reach it. That is the same asymmetry
+    /// `hasDistinctHebrewLexemes` is built on, seen from the other side.
+    ///
+    /// Measured over 20 common finished Hebrew words: **7 drew a thin bar, and in
+    /// every one `UITextChecker` itself returned nothing.** `הולך`, `רוצה`,
+    /// `הודעה` and `פגישה` all come back with an empty completion list and `מכסה`
+    /// comes back with exactly one — which is why the bar in the report that
+    /// started NIT-129 had three slots and nothing honest to fill them with. The
+    /// verbs Apple does have it has well (13 of 20 full), so this is a floor under
+    /// a gap rather than a replacement for its dictionary.
+    ///
+    /// Four things hold it down, and each is what stops a generative rule doing
+    /// harm.
+    ///
+    /// **It only runs on a word that is already a word.** A prefix is not an
+    /// unfinished inflection of anything, and the gate also puts the result out of
+    /// the space bar's reach for free: `shouldAutocorrect` returns false at
+    /// `SeedLanguageModel.knows`, and failing that at `!known` in the four-letter
+    /// gate, for every word this can fire on. So these can be tapped and never
+    /// committed.
+    ///
+    /// **Every candidate has to appear in Apple's completion list for the stem**,
+    /// which is `readingIsSpelledOut` applied to the one other place this engine
+    /// builds a word rather than looking one up. The endings say what *shape* an
+    /// inflection has; the dictionary says whether that one exists. Neither half
+    /// works alone: taking Apple's completions of `רוצ` wholesale would offer
+    /// `רוצפה`, and taking the endings wholesale offers `בעבודים`.
+    ///
+    /// **Asking `isKnownWord` per candidate instead was measured and was not
+    /// enough**, which is worth keeping because it is the cheaper thing to reach
+    /// for. Apple's spelling half accepts plenty it would never *offer*: over the
+    /// sweep it passed `בעבודים`, `לעבודים`, `משפחים`, `מסעדים` and `בבקשים` —
+    /// the masculine plural on a feminine noun — plus `מכוניה`, `כספה`, and
+    /// `להתחילה` and `להזמינה`, which hang a gender ending on an infinitive.
+    /// The completion list rejects all of them. It also settles the hyphenated
+    /// personal-dictionary entry (`בלי-פרופ` was producing `בלי-פרופות`,
+    /// `בלי-פות`, `בלי-פרות`) without a rule about hyphens, because Apple has no
+    /// completions for any of those stems.
+    ///
+    /// **An empty list refuses here, where `readingIsSpelledOut` allows.** The
+    /// difference is what happens next: there, silence means falling back to the
+    /// morphology that is the only thing that can reach a glued Hebrew word, so
+    /// reading it as refusal would switch the feature off where it is needed
+    /// most. Here the fallback is the empty slot this rule exists to fill, and a
+    /// word built out of a dictionary that has said nothing is exactly the
+    /// invention NIT-129 was about.
+    ///
+    /// **The stem has to keep three letters**, where `hebrewLexemeStem` itself
+    /// stops at two. That function is asked whether two completions of the *same
+    /// keystrokes* are one word, so both sides already share a long prefix; this
+    /// one invents from a stem and needs the stricter floor. `בית` is the case:
+    /// its `ת` looks like a feminine construct ending, stripping it leaves `בי`,
+    /// and `ביים` is a real word with nothing to do with a house. Its actual
+    /// plural is `בתים`, which no ending table reaches, and that is the honest
+    /// limit of this — it is a table of endings, not a morphological analyser.
+    ///
+    /// **The last letter goes back to its ordinary shape first.** `הולך` ends in a
+    /// final kaf, and `הולך` + `ות` is not a word in any sense; `הולכ` + `ות` is
+    /// `הולכות`. `hebrewShapeFolded` already inverts `HebrewMorphology.finalForms`
+    /// for the comparison next door.
+    ///
+    /// Ranked below every other source (`Source.inflection`), so it can only ever
+    /// fill a slot nothing else wanted. That is deliberate and it is what makes
+    /// the change safe to measure: on any moment where the bar was already full,
+    /// nothing moves at all.
+    @MainActor
+    static func hebrewInflections(of word: String, locale: String) -> [String] {
+        guard word.count >= 3,
+            SeedLanguageModel.knows(word, in: .hebrew) || isKnownWord(word, checkerLocale: locale)
+        else { return [] }
+        let stem = hebrewShapeFolded(hebrewLexemeStem(word))
+        guard stem.count >= 3 else { return [] }
+        // The stem alone, with no sentence around it: it is a fragment this rule
+        // made up rather than a span of the document, which is the same reason
+        // `checkerQuery` keeps the isolated shape for a split Hebrew stem.
+        let offered = Set(checkerCompletions(of: stem, locale: locale).map(SeedLanguageModel.fold))
+        guard !offered.isEmpty else { return [] }
+        let folded = SeedLanguageModel.fold(word)
+        return hebrewInflectionEndings.map { stem + $0 }
+            .filter { SeedLanguageModel.fold($0) != folded && offered.contains(SeedLanguageModel.fold($0)) }
     }
 
     /// Seed-list completions, including the ones only reachable by taking a Hebrew

@@ -411,6 +411,63 @@ final class ContextAwareSuggestionTests: XCTestCase {
                 + "holding have to come back to the words the dictionary does list")
     }
 
+    /// **English finishes a finished word for free and Hebrew cannot.** English
+    /// inflects by appending, so a prefix search reaches `walked` from `walk`;
+    /// Hebrew *replaces* the ending, so `רוצה` → `רוצים` is not a prefix extension
+    /// of anything and no completion source can see it. Measured over 20 common
+    /// finished Hebrew words, 7 drew a bar with empty slots and in every one
+    /// `UITextChecker` returned nothing at all — `מכסה`, the word in the report
+    /// that opened NIT-129, being one.
+    ///
+    /// Four assertions, and the last three are each a cheaper version of this rule
+    /// that does harm.
+    ///
+    /// The ending has to be **corroborated by Apple's completion list for the
+    /// stem**, which is `readingIsSpelledOut` applied to the other place this
+    /// engine builds a word instead of looking one up. Asking `isKnownWord` per
+    /// candidate is the obvious cheaper test and it passed `בעבודים` — a masculine
+    /// plural on a feminine noun — along with `להתחילה`, which hangs a gender
+    /// ending on an infinitive.
+    ///
+    /// It may **not fire on a word still being typed**, or it invents an ending
+    /// for a fragment; and it must **never reach the space bar**, which the "the
+    /// word is already a word" gate gives for free, since `shouldAutocorrect`
+    /// returns false for every word this can fire on.
+    @MainActor
+    func testAFinishedHebrewWordIsOfferedTheEndingsItSwapsRatherThanAppends() {
+        for (typed, wanted) in [("פגישה", "פגישות"), ("מכסה", "מכסים"), ("הודעה", "הודעות")] {
+            let results = SuggestionEngine.suggestions(
+                prefix: typed, context: "", languages: [.hebrew, .english],
+                personal: emptyPersonal())
+            XCTAssertTrue(
+                results.contains { $0.text == wanted },
+                "\(typed) did not offer \(wanted): \(results.map(\.text)) — Apple has no "
+                    + "completions for this word at all, so the bar is empty without this rule")
+            XCTAssertEqual(
+                results.first(where: \.isDefault)?.text, typed,
+                "space replaced a finished word with an inflection of it: "
+                    + "\(results.map(\.text))")
+        }
+
+        for (typed, invented) in [("בעבודה", "בעבודים"), ("להתחיל", "להתחילה")] {
+            let results = SuggestionEngine.suggestions(
+                prefix: typed, context: "", languages: [.hebrew, .english],
+                personal: emptyPersonal())
+            XCTAssertFalse(
+                results.contains { $0.text == invented },
+                "\(typed) offered \(invented): \(results.map(\.text)) — the checker's "
+                    + "spelling half accepts it and its completion list does not")
+        }
+
+        // `בעבו` rather than a partial that happens to be a word: `מכס` is on the
+        // way to `מכסה` and is also customs duty, so it would pass the gate
+        // legitimately and prove nothing about the fragment case.
+        XCTAssertTrue(
+            SuggestionEngine.hebrewInflections(of: "בעבו", locale: "he_IL").isEmpty,
+            "an unfinished word is not an inflection of anything, and `בעבו` is four "
+                + "letters on the way to `בעבודה`")
+    }
+
     /// **Two real Hebrew words sharing a prefix, and space picked one of them.**
     /// `להתראות` ("goodbye") and `להתראיין` ("to be interviewed") agree for five
     /// letters, so five letters into either one the space bar inserted the other
