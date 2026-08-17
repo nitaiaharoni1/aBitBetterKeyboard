@@ -18,9 +18,9 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
     /// What Reset goes back to. Survives editing, which `preset` does not.
     public var basedOn: String
     public var geometry: LayoutGeometry
-    /// The leading end of the suggestion bar.
+    /// The leading end of the suggestion bar. Reply by default.
     public var barLeading: [SlotSpec]
-    /// The trailing end. Two controls by default: one-tap tone, then the sparkle.
+    /// The trailing end. The minimise key by default.
     public var barTrailing: [SlotSpec]
     public var showsNumberRow: Bool
     public var bottomRow: [SlotSpec]
@@ -61,10 +61,15 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
     ///
     /// Three consequences, all deliberate:
     ///
-    /// - **`barLeading` is empty. `barTrailing` is Reply.** The three candidates
-    ///   stay the bar's job. Reply is the one AI action that does not sit in the
-    ///   action row, so it can keep that row two-and-two around a narrow centre
-    ///   key. A user who wants the trailing end empty can clear it in the editor.
+    /// - **`barLeading` is Reply. `barTrailing` is Hide keyboard.** The three
+    ///   candidates stay the bar's job. Reply is the one AI action that does not
+    ///   sit in the action row, so it can keep that row two-and-two around a
+    ///   narrow centre key. The trailing end is the minimise key, which is the
+    ///   one control on this keyboard that puts it away — iOS gives a third-party
+    ///   keyboard no system dismiss, so without a key of our own a user in a
+    ///   field with no Return has nothing to tap. **Neither end is editable any
+    ///   more**: the layout editor's Suggestion bar section is gone, so these two
+    ///   are what every user gets unless they pick a preset that writes its own.
     /// - **Dictation leaves the bottom row.** It would otherwise be on the
     ///   keyboard twice, and `LayoutValidator` would not say so: it warns about a
     ///   duplicate action *within* a row, and these would be in two. The unit it
@@ -82,8 +87,8 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
         preset: "default",
         basedOn: "default",
         geometry: .default,
-        barLeading: [],
-        barTrailing: [SlotSpec(action: .reply)],
+        barLeading: [SlotSpec(action: .reply)],
+        barTrailing: [SlotSpec(action: .hideKeyboard)],
         showsNumberRow: false,
         bottomRow: [
             SlotSpec(action: .numbersPlane, width: .units(1.3)),

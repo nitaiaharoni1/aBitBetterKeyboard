@@ -72,9 +72,11 @@ struct LayoutView: View {
     /// the rendered view rather than recomputed.
     @State private var shelfHeight: CGFloat = 0
 
-    /// The shelf's middle band. Fixed, because the hint, a live drag and the
+    /// The shelf's middle band. Fixed, because a live drag and the
     /// selected-key inspector take turns in it and a band that resized would
-    /// shunt the spare keys under the thumb that was reaching for them.
+    /// shunt the spare keys under the thumb that was reaching for them. It is
+    /// dropped entirely while neither is happening: the resting hint is
+    /// `canvasHint` now, under the keyboard.
     ///
     /// 60 is the floor rather than a taste: the inspector's controls are 44 pt
     /// targets inside `Theme.Space.xs` of padding, and anything less clips them.
@@ -112,7 +114,12 @@ struct LayoutView: View {
     /// left, exactly as it did before this existed.
     private static let workbenchMinHeight: CGFloat = 138
 
-    /// What the canvas actually asks the host for right now, computed rather
+    /// `canvasHint`'s whole band: a 1 pt rule and a 20 pt line of 10 pt text.
+    /// Small on purpose — it is a caption under the keyboard, not a row of it.
+    private static let canvasHintHeight: CGFloat = 21
+
+    /// What `canvasSection` claims from the bottom of the screen right now —
+    /// the keyboard's own height plus `canvasHint` — computed rather
     /// than measured: `Theme.Metrics.totalHeight(for:showsBanner:)` is the
     /// same formula `KeyboardViewController` uses, so this can never disagree
     /// with what `canvasSection` renders, and it is available before the
@@ -122,6 +129,7 @@ struct LayoutView: View {
     /// what `canvasSection` is actually drawing.
     private var canvasHeight: CGFloat {
         Theme.Metrics.totalHeight(for: model.displayed, showsBanner: false)
+            + Self.canvasHintHeight
     }
 
     /// Whether `workbenchMinHeight` fits without pushing the outer stack past
@@ -232,7 +240,6 @@ struct LayoutView: View {
                 }
                 LayoutPresetSection(model: model)
                 LayoutGeometrySection(model: model)
-                LayoutBarEndsSection(model: model)
             }
             .padding(.horizontal, Theme.Space.md)
             .padding(.top, Theme.Space.md)
@@ -262,7 +269,13 @@ struct LayoutView: View {
                 LayoutProblemsSection(model: model)
                     .padding(.horizontal, Theme.Space.md)
             }
-            contextBand
+            // Dropped from the stack rather than drawn empty when neither a
+            // drag nor a selection has anything to say: the resting hint moved
+            // under the keyboard (`canvasHint`), and a 60 pt hole above SPARE
+            // KEYS is the workbench's room being spent on nothing.
+            if model.session != nil || model.selection != nil {
+                contextBand
+            }
             traySection
         }
         .padding(.top, Theme.Space.sm)
@@ -285,7 +298,8 @@ struct LayoutView: View {
         .onPreferenceChange(ShelfHeightKey.self) { shelfHeight = $0 }
     }
 
-    /// One band, three states. The drag state is the only place the editor can
+    /// One band, two states — the resting hint left it for `canvasHint`, and
+    /// the band leaves the shelf with it. The drag state is the only place the editor can
     /// teach the gesture that changed: a key leaves the keyboard by being lifted
     /// *up* into the tray, not dropped off the bottom.
     @ViewBuilder private var contextBand: some View {
@@ -310,14 +324,6 @@ struct LayoutView: View {
                 // drawing rather than what a unit count suggests.
                 LayoutKeyInspectorSection(
                     model: model, slot: slot, drawnWidth: keyFrames[slot.id]?.width ?? 0)
-            } else {
-                // Short, because `editableRowOutlines` is already answering
-                // "which rows" on the keyboard itself. Two grey instruction
-                // lines stacked — this one and the tray's — is one too many, so
-                // each says only what its own zone needs.
-                shelfHint(
-                    "Tap a key to change it, drag it to move it. The letters stay put.",
-                    icon: "hand.tap")
             }
         }
         .frame(height: Self.contextBandHeight)
@@ -335,7 +341,10 @@ struct LayoutView: View {
         }
         .foregroundStyle(Theme.Keys.secondaryLabel)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityIdentifier("layout-hint")
+        // Not `layout-hint`: that identifier belongs to the resting legend
+        // under the keyboard now, and two elements answering to one name is
+        // an ambiguous query rather than a found one.
+        .accessibilityIdentifier("layout-drag-hint")
     }
 
     /// **`Keys.secondaryLabel`, not `Text.tertiary`.** This header sits on the
@@ -378,24 +387,57 @@ struct LayoutView: View {
     /// each side is a picture of it. It also makes the tray's key width the same
     /// arithmetic the keys themselves use, since both divide `keyboardGlobal`.
     private var canvasSection: some View {
-        KeyboardView(controller: canvas, isEditingLayout: true)
-            .allowsHitTesting(false)
-            .background {
-                GeometryReader { geo in
-                    Color.clear.preference(
-                        key: LayoutChromeFrameKey.self,
-                        value: geo.frame(in: .global))
+        VStack(spacing: 0) {
+            KeyboardView(controller: canvas, isEditingLayout: true)
+                .allowsHitTesting(false)
+                .background {
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: LayoutChromeFrameKey.self,
+                            value: geo.frame(in: .global))
+                    }
                 }
-            }
-            .onPreferenceChange(KeyFramesKey.self) { frames in
-                keyFrames = LayoutEditorModel.mapFrames(frames, to: editableSlots)
-                frozenBands = LayoutEditorModel.frozenBands(from: frames)
-            }
-            .onPreferenceChange(LayoutChromeFrameKey.self) { frame in
-                keyboardGlobal = frame
-            }
-            .overlay { selectionOverlay }
-            .background(Theme.Keys.background.ignoresSafeArea(edges: .bottom))
+                .onPreferenceChange(KeyFramesKey.self) { frames in
+                    keyFrames = LayoutEditorModel.mapFrames(frames, to: editableSlots)
+                    frozenBands = LayoutEditorModel.frozenBands(from: frames)
+                }
+                .onPreferenceChange(LayoutChromeFrameKey.self) { frame in
+                    keyboardGlobal = frame
+                }
+                .overlay { selectionOverlay }
+            canvasHint
+        }
+        .background(Theme.Keys.background.ignoresSafeArea(edges: .bottom))
+    }
+
+    /// The one instruction that is true for the whole screen, under the space
+    /// row rather than in the shelf's context band.
+    ///
+    /// **It is a caption on the keyboard, not a row of the keyboard**, so it is
+    /// deliberately smaller than anything the shelf draws: it sits below the
+    /// last key, where the home indicator's own margin already is, and a line at
+    /// shelf size there reads as a sixth key row. The rule above it is the same
+    /// hairline the shelf uses, and it is doing the same job — `Keys.background`
+    /// runs from the keys straight down past the bottom of the screen, so
+    /// without it the sentence floats inside the keyboard rather than under it.
+    ///
+    /// It stays put through a drag and through a selection: the band above
+    /// answers *those* moments, and this is the legend for the screen.
+    private var canvasHint: some View {
+        VStack(spacing: 0) {
+            Theme.Surface.separator.frame(height: 1)
+            Text("Tap a key to change it, drag it to move it. The letters stay put.")
+                .font(.system(size: 10))
+                .foregroundStyle(Theme.Keys.secondaryLabel)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, Theme.Space.md)
+                .accessibilityIdentifier("layout-hint")
+        }
+        // Exact rather than intrinsic, so `canvasHeight` can add it without
+        // guessing at a line height.
+        .frame(height: Self.canvasHintHeight)
     }
 
     private var editableSlots: [SlotSpec] {
@@ -715,6 +757,17 @@ private struct LayoutTray: View {
             .padding(.vertical, Theme.Space.xs)
         }
         .frame(height: keyHeight + Theme.Space.xs * 2)
+        // **Off only while a key is in the air**, which is the other half of
+        // making this row scroll at all. The catalogue is 23 keys and the row
+        // holds about ten, so everything past the screen's right edge was
+        // unreachable: each chip's lift gesture was an ordinary `.gesture`, and
+        // a SwiftUI gesture on the content beats the scroll view's own pan, so
+        // a swipe across the row was swallowed by a long press that then failed.
+        // `trayChip` makes that lift simultaneous instead, which leaves exactly
+        // one moment where both could act — the press has succeeded and the
+        // finger is now carrying a key towards the keyboard — and this is what
+        // stops the row sliding out from under that drag.
+        .scrollDisabled(model.session != nil)
         .background {
             GeometryReader { geo in
                 Color.clear
@@ -777,7 +830,10 @@ private struct LayoutTray: View {
             else { return }
             model.add(item.action, to: .bottom)
         }
-        .gesture(trayDrag(item.action))
+        // Simultaneous, not exclusive: see `scrollDisabled` above. A swipe that
+        // moves before the 0.2s press has landed fails the press and is left to
+        // the scroll view; one that waits takes the key out of the row.
+        .simultaneousGesture(trayDrag(item.action))
         .accessibilityElement()
         .accessibilityLabel("Add \(item.action.title)")
         .accessibilityAddTraits(.isButton)
@@ -825,143 +881,6 @@ private struct LayoutTray: View {
                 dragLocation = .zero
                 if model.draft != before { Feedback.success() }
             }
-    }
-}
-
-// MARK: - Suggestion bar ends
-
-/// The two ends of the suggestion bar, which are rows the canvas cannot be
-/// dragged onto: they are drawn by `SuggestionBar`, not by the key grid.
-///
-/// **The catalogue is filtered by what is already on that end.** It used to
-/// offer all nine every time, so the obvious way to use it — tap the key you
-/// want — added a second copy and raised the duplicate-action warning that the
-/// same screen was showing underneath.
-private struct LayoutBarEndsSection: View {
-    @ObservedObject var model: LayoutEditorModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            SectionHeader(title: "Suggestion bar")
-            Card {
-                VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                    barGroup("Left end", kind: .barLeading)
-                    Divider.themed
-                    barGroup("Right end", kind: .barTrailing)
-                }
-            }
-        }
-    }
-
-    private func barGroup(_ title: String, kind: LayoutEditorModel.RowKind) -> some View {
-        let placed = model.row(kind)
-        let available = SuggestionBar.barCatalogue.filter { action in
-            !placed.contains { $0.action == action }
-        }
-        return VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            Text(title)
-                .font(Theme.Fonts.caption)
-                .foregroundStyle(Theme.Text.secondary)
-
-            if placed.isEmpty {
-                Text("Nothing here yet.")
-                    .font(Theme.Fonts.caption)
-                    .foregroundStyle(Theme.Text.secondary)
-                    .frame(minHeight: Theme.Metrics.minTouchTarget, alignment: .leading)
-            } else {
-                FlowRow(spacing: Theme.Space.xs) {
-                    ForEach(placed) { slot in
-                        placedChip(slot, end: title)
-                    }
-                }
-            }
-
-            if !available.isEmpty {
-                FlowRow(spacing: Theme.Space.xs) {
-                    ForEach(available, id: \.self) { action in
-                        addChip(action, kind: kind, end: title)
-                    }
-                }
-            }
-        }
-    }
-
-    /// **A brand *border* and the canvas's own remove badge, not a brand fill.**
-    ///
-    /// `Brand.action` under `Text.onBrand` is 3.64:1 in the shipped orange, which
-    /// clears WCAG's large-text floor and not the 4.5:1 a 12 pt chip label needs,
-    /// so the fill is out. The 2 pt brand stroke is what the selected preset card
-    /// one section up and the selected key on the canvas both already use, and
-    /// the badge is `xmark.circle.fill` in `Semantic.record` because that is
-    /// exactly the badge the canvas puts on a key you are about to remove. A
-    /// chip whose whole tap target deletes has to look like the other thing on
-    /// this screen that deletes.
-    private func placedChip(_ slot: SlotSpec, end: String) -> some View {
-        let removable = model.canRemove(slot).isAllowed
-        return HStack(spacing: Theme.Space.xxs) {
-            SlotGlyphView(action: slot.action)
-            Text(slot.action.title)
-                .font(Theme.Fonts.micro)
-                .foregroundStyle(Theme.Text.primary)
-            if removable {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 12))
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(Theme.Text.onBrand, Theme.Semantic.record)
-            }
-        }
-        .padding(.horizontal, Theme.Space.sm)
-        .padding(.vertical, Theme.Space.xs)
-        .background(Capsule().fill(Theme.Surface.background))
-        .overlay(Capsule().strokeBorder(Theme.Brand.solid, lineWidth: 2))
-        // The capsule stays chip-sized; the target around it is Apple's floor.
-        .frame(minHeight: Theme.Metrics.minTouchTarget)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard removable else { return }
-            model.perform(.remove, on: slot)
-        }
-        .accessibilityElement()
-        .accessibilityAddTraits(.isButton)
-        // **The end is in the identifier for the same reason it is in `add-bar-…`
-        // below.** The catalogue filter is per-end, so one action can legally sit
-        // on both ends at once, and without this two live elements answer to
-        // `remove-bar-Emoji` — the `firstMatch` ambiguity that comment was
-        // written about, in the sibling this one was copied from.
-        .accessibilityIdentifier("remove-bar-\(end.lowercased())-\(slot.action.title)")
-        .accessibilityLabel(
-            removable
-                ? "Remove \(slot.action.title) from the \(end.lowercased())"
-                : "\(slot.action.title), on the \(end.lowercased())")
-    }
-
-    /// **`add-bar-…`, not `add-…`.** The spare-key tray is on screen at the same
-    /// time as this section now — it was behind an Options sheet before — and it
-    /// already owns `add-<title>`. Two live elements under one identifier is a
-    /// `firstMatch` that picks whichever it finds first, and two VoiceOver
-    /// buttons both saying "Add Emoji" while doing different things.
-    private func addChip(
-        _ action: SlotAction, kind: LayoutEditorModel.RowKind, end: String
-    ) -> some View {
-        Button {
-            model.add(action, to: kind)
-        } label: {
-            HStack(spacing: Theme.Space.xxs) {
-                SlotGlyphView(action: action)
-                Text(action.title)
-                    .font(Theme.Fonts.micro)
-                    .foregroundStyle(Theme.Text.primary)
-            }
-            .padding(.horizontal, Theme.Space.sm)
-            .padding(.vertical, Theme.Space.xs)
-            .background(Capsule().fill(Theme.Surface.background))
-            .overlay(Capsule().strokeBorder(Theme.Surface.separator, lineWidth: 1))
-            .frame(minHeight: Theme.Metrics.minTouchTarget)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("add-bar-\(kind.rawValue)-\(action.title)")
-        .accessibilityLabel("Add \(action.title) to the \(end.lowercased())")
     }
 }
 

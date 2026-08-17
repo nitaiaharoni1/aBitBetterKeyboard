@@ -44,18 +44,19 @@ public struct LayoutPreset: Identifiable, Sendable {
             customization: {
                 var layout = base("power", geometry: .default)
                 layout.showsNumberRow = true
-                // **Two real keys instead of one key that opened a list.** The
-                // shipped default carries Reply, Fix and Rewrite in the action row
-                // and nothing in the bar; this preset spends that row on arrows, so
-                // without these a user picking "Power" loses every route to the AI
-                // actions at once and has no way to tell that is what happened. It
-                // used to be a single sparkle opening `AIMenuPanel`; that panel is
-                // deleted, because a list drawn over the keys is the thing this
-                // keyboard stopped doing. `ai-first` keeps its own way in.
-                layout.barTrailing = [
-                    SlotSpec(action: .reply),
-                    SlotSpec(action: .quickTone)
-                ]
+                // **A real key instead of one key that opened a list.** This preset
+                // spends the action row on arrows, so without this a user picking
+                // "Power" loses every route to the text actions at once and has no
+                // way to tell that is what happened. It used to be a single sparkle
+                // opening `AIMenuPanel`; that panel is deleted, because a list drawn
+                // over the keys is the thing this keyboard stopped doing.
+                //
+                // **Reply is not repeated here**: it rides the leading end inherited
+                // from the default, and the trailing end's minimise key is dropped
+                // because `cursorRow` below carries one of its own. Naming either
+                // again would put one action in two rows, which `LayoutValidator`
+                // cannot see — it only looks for a repeat inside a single row.
+                layout.barTrailing = [SlotSpec(action: .quickTone)]
                 // No full stop here: the bottom row already carries the script's
                 // own punctuation key, with the other four marks behind a long
                 // press. A second one would be a duplicate that is also worse.
@@ -88,6 +89,13 @@ public struct LayoutPreset: Identifiable, Sendable {
                 // `sparkles`. This slot was that sparkle until the menu behind it
                 // was deleted.
                 layout.barTrailing = [SlotSpec(action: .quickTone)]
+                // **And the leading end is cleared, because Reply is what was on
+                // it.** The default seats Reply there; this preset's whole idea is
+                // Reply in the grid, so inheriting the bar copy would be the same
+                // action in two rows with `LayoutValidator` silent about it. The
+                // minimise key goes with the trailing end it was on, which is the
+                // one thing this preset gives up for putting Reply under a thumb.
+                layout.barLeading = []
                 // **And it comes out of the action row, because putting it in the
                 // bar is the whole of what this preset is.** `base` inherits the
                 // shipped `cursorRow`, which has carried Rewrite since the three

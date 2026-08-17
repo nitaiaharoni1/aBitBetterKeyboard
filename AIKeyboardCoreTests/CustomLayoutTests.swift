@@ -380,15 +380,23 @@ final class CustomLayoutTests: XCTestCase {
 
     // MARK: The bar
 
-    /// **`barLeading` ships empty. Reply sits on the trailing end.** The three
-    /// candidates stay the bar's job. Both ends stay editable.
-    func testTheDefaultBarIsEmptyAndBothEndsStayEditable() {
-        XCTAssertTrue(KeyboardCustomization.default.barLeading.isEmpty)
+    /// **Reply on the leading end, the minimise key on the trailing one.** The
+    /// three candidates stay the bar's job and keep everything between.
+    ///
+    /// **Neither end is editable any more**, so this pair is what nearly every
+    /// user has: the layout editor's Suggestion bar section is deleted, and the
+    /// only other way to move these is picking a preset that writes its own.
+    /// That is what makes the trailing end load-bearing — iOS gives a
+    /// third-party keyboard no system dismiss, so the minimise key is the whole
+    /// of how somebody in a field with no Return puts the keyboard away.
+    func testTheDefaultBarIsReplyThenTheMinimiseKey() {
+        XCTAssertEqual(KeyboardCustomization.default.barLeading.map(\.action), [.reply])
         XCTAssertEqual(
             KeyboardCustomization.default.barTrailing.map(\.action),
-            [.reply])
+            [.hideKeyboard])
         XCTAssertFalse(SuggestionBar.barCatalogue.isEmpty)
         XCTAssertTrue(SuggestionBar.barCatalogue.contains(.reply))
+        XCTAssertTrue(SuggestionBar.barCatalogue.contains(.hideKeyboard))
     }
 
     /// A space bar or a shift key 46 points tall above the letters is not a layout

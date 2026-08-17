@@ -32,22 +32,3 @@ struct LayoutSlider: View {
         }
     }
 }
-
-// MARK: - SlotGlyphView
-
-/// The icon or abbreviated label shown in key rows and the add-key drawer.
-struct SlotGlyphView: View {
-    let action: SlotAction
-
-    var body: some View {
-        if let glyph = action.glyph() {
-            Image(systemName: glyph)
-                .font(.system(size: 15))
-                .foregroundStyle(Theme.Text.secondary)
-        } else {
-            Text(action.title.prefix(3))
-                .font(Theme.Fonts.micro)
-                .foregroundStyle(Theme.Text.secondary)
-        }
-    }
-}
