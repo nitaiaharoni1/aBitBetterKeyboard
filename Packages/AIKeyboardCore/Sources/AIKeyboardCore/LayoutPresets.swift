@@ -88,6 +88,15 @@ public struct LayoutPreset: Identifiable, Sendable {
                 // `sparkles`. This slot was that sparkle until the menu behind it
                 // was deleted.
                 layout.barTrailing = [SlotSpec(action: .quickTone)]
+                // **And it comes out of the action row, because putting it in the
+                // bar is the whole of what this preset is.** `base` inherits the
+                // shipped `cursorRow`, which has carried Rewrite since the three
+                // panels were deleted (`ad5356e4`), so anybody who picked "AI
+                // first" got the same control twice a thumb's width apart, with
+                // `LayoutValidator` silent because it only looks for a repeat
+                // *inside* one row. Filtered rather than rewritten, so the rest of
+                // that row still follows the default's seating.
+                layout.cursorRow = layout.cursorRow.filter { $0.action != .quickTone }
                 // **This row is written out rather than amended, so a change to
                 // the default's seating does not reach it** — the `base` note
                 // below is only true of the presets that leave `bottomRow` alone.
@@ -102,7 +111,14 @@ public struct LayoutPreset: Identifiable, Sendable {
                     SlotSpec(action: .emoji, width: .units(1.0)),
                     SlotSpec(action: .reply, width: .units(1.2)),
                     SlotSpec(action: .space, width: .fill),
-                    SlotSpec(action: .dictation, width: .units(1.0)),
+                    // **No microphone here, and that is the same staleness as the
+                    // Rewrite above.** This row was written out when dictation was
+                    // a 1-unit glyph between space and the full stop; it moved into
+                    // the action row with the panels, and `base` brings that row
+                    // along, so keeping it here was the second of the two
+                    // duplicates. The unit it gives up goes to the space bar, which
+                    // is `.fill` — exactly the trade `KeyboardCustomization.default`
+                    // already records making.
                     SlotSpec(action: .punctuation, width: .units(1.0)),
                     SlotSpec(action: .ret, width: .units(KeyboardLayout.functionKeyUnits))
                 ]

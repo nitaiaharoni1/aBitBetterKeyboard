@@ -9,20 +9,50 @@ number here is a reading, not a property of the code.
 
 | | |
 |---|---|
-| Date | 2026-08-16 |
-| Commit | Working tree over `45fe74c8`, after the suggestion-bar and emoji-shift work below. |
+| Date | 2026-08-17 |
+| Commit | Working tree over `50c8bf87`, after the row-height transfer and the two stale assertions below. |
 | Destination | iPhone 17 Pro, iOS 26.2 simulator, uncontended |
 | Command | `xcodebuild test -project AIKeyboard.xcodeproj -scheme AIKeyboard -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:AIKeyboardCoreTests` |
 
-**`AIKeyboardCoreTests`: 1302 executed, 1296 passed, 3 failed, 3 skipped.**
+**`AIKeyboardCoreTests`: 1386 executed, 2 failed, 3 skipped.**
 
-All three are `EmojiModeTests` **ranking**, which is the one genuine product
-decision left; the section below now carries the measurement that says why it
-must not be tuned by hand. The 3 skipped are what the earlier run's "1257
-declared, 1252 executed" gap actually was; `xcodebuild` reports them, so read the
-skip count rather than subtracting.
+Both are `EmojiModeTests` **ranking**, which is the one genuine product decision
+left; the section below carries the measurement that says why it must not be
+tuned by hand. The 3 skipped are what the earlier run's "1257 declared, 1252
+executed" gap actually was; `xcodebuild` reports them, so read the skip count
+rather than subtracting.
 
-### The previous reading, and how the eight became three
+### The previous reading, and the two that were red for a reason nobody had checked
+
+2026-08-16 at `45fe74c8`: **1302 executed, 1296 passed, 3 failed, 3 skipped**,
+recorded above as "all three are `EmojiModeTests` ranking". That was true of that
+run and had stopped being true by `6a7dbd31`: two *different* tests were red and
+one of the three emoji ones had gone green, so the count matched while the
+contents did not. Both were confirmed on a pristine `git archive 6a7dbd31`
+export before anything was touched — the method this file already recommends, and
+the reason it is worth the ten minutes — and both turned out to be **stale
+assertions rather than product questions**, the same category the four below fell
+into.
+
+`CustomLayoutTests.testNoActionAppearsInTwoRowsOfAnyPreset` was reporting a real
+defect in the shipped presets: `ad5356e4` moved Rewrite and dictation into the
+default `cursorRow`, and "AI first" writes its own `barTrailing` and `bottomRow`
+carrying copies of both, so anybody who picked that preset got two Rewrites and
+two microphones with `LayoutValidator` silent — it only looks for a repeat
+*inside* one row. `LayoutPresets` filters Rewrite out of the row it inherits and
+no longer seats the microphone in the bottom row. This is the third time that
+file's own note about presets not inheriting the default's seating has been
+proved right.
+
+`CustomKeyActionTests.testAControllerDoesNotInventAnIOSGlobeBeforeItsHostAnswers`
+was the reverse: no product defect at all, a control assertion left behind. It
+asked that the default bottom row contain `.settings`, which NIT-98 traded into
+the action row's narrow centre, so the test had been red since that trade and had
+stopped saying anything about globes. It asks for `.emoji` now, which is the seat
+the gear gave up and is what makes "no globe in this row" mean something other
+than "this row is empty".
+
+### The reading before that, and how the eight became three
 
 2026-08-16 at `aaca58d2`: **1271 executed, 1260 passed, 8 failed, 3 skipped**,
 the same reading taken at `45fe74c8`. Five of those eight were the emoji search
@@ -66,7 +96,7 @@ decisions somebody has to make.
 | Test | What it reports |
 |---|---|
 | ~~`EmojiSearchTypingTests` (5 tests)~~ | **Fixed.** The emoji search box inherited the document's shift. See the section below. |
-| `EmojiModeTests` (3 tests) | Search ranking. `heart` and `לב` return 🫀 rather than ❤️, and `car` puts 🚗 at index 5 behind 🚕 and 🚙. **Still open, deliberately.** |
+| `EmojiModeTests` (2 tests) | Search ranking. `לב` returns 🫀 rather than ❤️, and `car` puts 🚗 at index 5 behind 🚕 and 🚙. **Still open, deliberately.** It was 3 at `45fe74c8`; the English `heart` half now passes on its own, which is worth knowing before reading a count as a verdict. |
 
 **The `לב` one is not a data gap, and a data fix was tried and reverted.**
 Giving 🫀 a distinct Hebrew name (`לב אנטומי` rather than the bare `לב` it shares

@@ -174,10 +174,22 @@ final class CustomKeyActionTests: XCTestCase {
 
     // MARK: Applying a layout
 
+    /// **The second assertion is a control, and it named the wrong key for as
+    /// long as the gear has been in the action row.** Without it, "no globe in
+    /// the bottom row" also passes against a controller that built no bottom row
+    /// at all, which is the more alarming failure of the two. It asked for
+    /// `.settings` because the gear used to sit in this row; NIT-98 traded it into
+    /// the action row's narrow centre and put Emoji here instead, and the control
+    /// was never moved with it, so this test has been red since that trade rather
+    /// than reporting anything about globes. Emoji is the right key to ask for
+    /// now: it is the seat the gear gave up, and the bottom row is the one row a
+    /// panel may not cover precisely because Emoji is in it.
     func testAControllerDoesNotInventAnIOSGlobeBeforeItsHostAnswers() {
         let controller = KeyboardController(target: RecordingTextTarget(), language: .english)
         XCTAssertFalse(controller.customization.bottomRow.contains { $0.action == .globe })
-        XCTAssertTrue(controller.customization.bottomRow.contains { $0.action == .settings })
+        XCTAssertTrue(
+            controller.customization.bottomRow.contains { $0.action == .emoji },
+            "the bottom row is empty, so the globe's absence proves nothing")
     }
 
     /// The device decides whether the globe is drawn, and the stored layout does
