@@ -118,6 +118,30 @@ let outURL = URL(fileURLWithPath: arguments[2])
 
 let corpus = try JSONDecoder().decode(CorpusFile.self, from: Data(contentsOf: corpusURL))
 
+/// **Refuses to score an engine that is missing a source, rather than scoring
+/// it.** `TypoLexicon` reads `GroupedLexicon-{en,he}.txt`, and under `-DHARNESS`
+/// it finds them through `GROUPED_LEXICON_DIR` because `Bundle.module` does not
+/// exist in a loose compile. A missing or misspelled variable does not fail: the
+/// lexicon simply loads nothing, `frequencyCorrections` returns nothing, and the
+/// run produces a full set of plausible numbers for an engine with its whole
+/// frequency-correction source switched off. That is the failure mode this repo
+/// keeps writing down — a control that answers nothing cannot be told from one
+/// that works — so the check is a hard exit and not a warning.
+MainActor.assumeIsolated {
+    for (language, control) in [(KeyboardLanguage.english, "the"), (.hebrew, "של")]
+    where !TypoLexicon.isWord(control, in: language) {
+        FileHandle.standardError.write(
+            Data(
+                """
+                GroupedLexicon-\(language.languageTag).txt did not load: \
+                TypoLexicon does not know '\(control)'. Set GROUPED_LEXICON_DIR \
+                (and SIMCTL_CHILD_GROUPED_LEXICON_DIR) to the Resources directory.
+
+                """.utf8))
+        exit(3)
+    }
+}
+
 /// What a stock install actually has in its personal dictionary.
 ///
 /// Copied from `SharedStore.shippedPersonalDictionary` rather than read from it:

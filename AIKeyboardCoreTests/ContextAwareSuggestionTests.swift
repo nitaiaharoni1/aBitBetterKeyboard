@@ -1182,6 +1182,140 @@ final class ContextAwareSuggestionTests: XCTestCase {
             "an emoji after a word did not finish it")
     }
 
+    // MARK: The frequency corrector
+
+    /// The report this whole source exists for. `דוגמאות` ("examples") typed with
+    /// the hand one key over: `א` came out `ט` and `ו` came out `ן`, both pairs
+    /// side by side on the Hebrew top row.
+    ///
+    /// **What the old engine did, which is what these assertions have to
+    /// reject.** Every correction source was one edit deep — `SeedLanguageModel
+    /// .neighbours` over 353 words, and `UITextChecker.guesses` — so nothing
+    /// could reach a word two slips away. Apple's guess `דוגמטית` *is* one edit
+    /// out and took the only offered slot, leaving a bar holding a single word
+    /// that appears nowhere in 50,000 words of real Hebrew. So asserting that
+    /// `דוגמאות` is merely *present* would be too weak in one direction and
+    /// asserting the bar is non-empty would pass against the broken build
+    /// outright; the test is that it holds the bold slot, which is what the space
+    /// bar inserts.
+    func testTwoAdjacentKeySlipsReachTheWordTheFrequencyListRanks() {
+        XCTAssertTrue(
+            KeyProximity.areAdjacent("א", "ט", in: .hebrew),
+            "the premise: the two slipped pairs have to be adjacent keys")
+        XCTAssertTrue(KeyProximity.areAdjacent("ו", "ן", in: .hebrew))
+        XCTAssertNotNil(TypoLexicon.rank(of: "דוגמאות", in: .hebrew))
+        XCTAssertFalse(
+            TypoLexicon.isWord("דוגמטית", in: .hebrew),
+            "the word the old bar offered is absent from 50,000 forms of real Hebrew; "
+                + "if this ever becomes true the test is measuring something else")
+
+        let bar = SuggestionEngine.suggestions(
+            prefix: "דוגמטןת", context: "תסביר את זה בפשטות עם ", languages: [.hebrew],
+            personal: emptyPersonal())
+        XCTAssertEqual(
+            bar.first(where: \.isDefault)?.text, "דוגמאות",
+            "space has to insert the word the keys nearly spell: \(bar.map(\.text))")
+    }
+
+    /// The other half, and the one that keeps this source honest: a word the
+    /// corpus *has* seen is never rewritten, however close a commoner word sits.
+    ///
+    /// `cat` is the case the repo already records as killing every "absent from
+    /// the dictionary means typo" rule it has tried — it is not among the seed
+    /// list's 353 words, `car` is one edit away and is, and the first neighbour
+    /// rule quietly turned one into the other. Both halves are asserted, so this
+    /// cannot pass because the seed list quietly grew a `cat`.
+    func testARealWordIsNeverCorrectedEvenWhenTheSeedListHasNeverHeardOfIt() {
+        XCTAssertFalse(
+            SeedLanguageModel.knows("cat", in: .english),
+            "the premise: the seed list is what could not answer this question")
+        XCTAssertTrue(TypoLexicon.isWord("cat", in: .english))
+
+        for (typed, context, language) in [
+            ("cat", "I saw a ", KeyboardLanguage.english), ("bus", "the ", .english),
+            ("קליפ", "ראיתי ", .hebrew)
+        ] {
+            let bar = SuggestionEngine.suggestions(
+                prefix: typed, context: context, languages: [language],
+                personal: emptyPersonal())
+            XCTAssertEqual(
+                bar.first(where: \.isDefault)?.text, typed,
+                "space rewrote a real word: \(typed) -> \(bar.map(\.text))")
+        }
+    }
+
+    /// **Apple's spelling verdict is overruled here and nowhere else**, and the
+    /// frozen corpus's `typo-10` is the case. `UITextChecker` reports `תדוה` as
+    /// perfectly good Hebrew, so every rule in `shouldAutocorrect` that rests on
+    /// `isKnownWord` declined to commit `תודה` and the corpus recorded that as a
+    /// deliberate, accepted cost of having only one dictionary worth the name.
+    ///
+    /// The `isKnownWord` assertion is the important one: without it this passes
+    /// on a build where Apple simply changed its mind, which would make the test
+    /// green for a reason that has nothing to do with the code it is guarding.
+    func testTheFrequencyListOverrulesApplesHebrewSpellingVerdict() {
+        XCTAssertTrue(
+            SuggestionEngine.isKnownWord("תדוה", checkerLocale: "he_IL"),
+            "the premise: Apple calls this typo a word, which is why one dictionary "
+                + "was never enough")
+        XCTAssertFalse(TypoLexicon.isWord("תדוה", in: .hebrew))
+        XCTAssertNotNil(TypoLexicon.rank(of: "תודה", in: .hebrew))
+
+        let bar = SuggestionEngine.suggestions(
+            prefix: "תדוה", context: "", languages: [.hebrew], personal: emptyPersonal())
+        XCTAssertEqual(
+            bar.first(where: \.isDefault)?.text, "תודה",
+            "space kept a typo Apple vouched for: \(bar.map(\.text))")
+    }
+
+    /// A finished Hebrew word with one key slipped in it is corrected; the same
+    /// shape of word still being typed is not. Both halves in one test, because
+    /// the rule is the *difference* between them and either one alone is passed
+    /// by a build that answers the same way to everything.
+    ///
+    /// **This is the largest class the typo corpus measures and it used to fail
+    /// entirely**: 13 of 13 Hebrew single-key slips put the right word in slot 1
+    /// and the space bar refused every one, because the same-length-substitution
+    /// exclusion written for `מכונ` → `נכון` was asked about finished words too.
+    /// `TypoLexicon.hasContinuation` is what separates them.
+    func testAFinishedHebrewWordIsCorrectedAndAWordStillBeingTypedIsNot() {
+        XCTAssertTrue(
+            TypoLexicon.hasContinuation(of: "מכונ", in: .hebrew),
+            "the premise: these keys are still going somewhere")
+        XCTAssertFalse(TypoLexicon.hasContinuation(of: "פכישה", in: .hebrew))
+
+        let finished = SuggestionEngine.suggestions(
+            prefix: "פכישה", context: "קבענו ", languages: [.hebrew], personal: emptyPersonal())
+        XCTAssertEqual(
+            finished.first(where: \.isDefault)?.text, "פגישה",
+            "a finished word with one key slipped has to correct: \(finished.map(\.text))")
+
+        let inProgress = SuggestionEngine.suggestions(
+            prefix: "מכונ", context: "קניתי ", languages: [.hebrew], personal: emptyPersonal())
+        XCTAssertEqual(
+            inProgress.first(where: \.isDefault)?.text, "מכונ",
+            "space replaced a word still being typed: \(inProgress.map(\.text))")
+    }
+
+    /// A longer word that starts with the keystrokes is a word in progress, not a
+    /// slip, and the frequency corrector may not finish one.
+    ///
+    /// `קליפ` is how Hebrew writes "clip" and `אפ` is how it writes "app"; the
+    /// repo already records both as words an earlier over-eager rule destroyed.
+    /// `helot` is the English shape of the same thing — a real, rare word whose
+    /// only cheap neighbour is its own plural.
+    func testTheFrequencyCorrectorDoesNotFinishAWordItOnlyRepairsOne() {
+        for (typed, language) in [
+            ("קליפ", KeyboardLanguage.hebrew), ("אפ", .hebrew), ("helot", .english)
+        ] {
+            let bar = SuggestionEngine.suggestions(
+                prefix: typed, context: "", languages: [language], personal: emptyPersonal())
+            XCTAssertEqual(
+                bar.first(where: \.isDefault)?.text, typed,
+                "space finished a word instead of repairing it: \(typed) -> \(bar.map(\.text))")
+        }
+    }
+
     // MARK: Ranking
 
     /// The rule that predates the ranking and does not depend on it: whatever the

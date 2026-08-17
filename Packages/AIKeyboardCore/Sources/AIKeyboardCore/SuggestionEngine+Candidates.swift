@@ -73,6 +73,27 @@ extension SuggestionEngine {
         case inflection = -10
         /// `UITextChecker.guesses` — a correction, i.e. a claim the user mis-typed.
         case correction = 0
+        /// The same claim, made by a frequency-ranked list instead of by Apple.
+        /// See `SuggestionEngine.frequencyCorrections` and `TypoLexicon`.
+        ///
+        /// **Above `.correction` and below `.checker`, and both halves of that
+        /// were forced by the report this source exists for.** Somebody typed
+        /// `דוגמטןת` for `דוגמאות` ("examples") — two adjacent-key slips, `א` for
+        /// `ט` and `ו` for `ן`, which sit side by side on the Hebrew top row. No
+        /// source in this engine generates a candidate two edits out, so the bar
+        /// held exactly one offer: `דוגמטית`, which Apple's `guesses` reached in
+        /// one edit and which appears nowhere in 50,000 words of real Hebrew,
+        /// while `דוגמאות` is rank 3,643. So it has to beat `.correction`: an
+        /// unranked guess is the weakest evidence in the bar and this is the same
+        /// claim with a frequency prior behind it.
+        ///
+        /// It must lose to `.checker` for the opposite reason. This is a
+        /// *correction*, so it disagrees with a key the user pressed, and a
+        /// completion agrees with all of them — the rule `.neighbour` is already
+        /// written under. Below the lowest completion tier there is, it can only
+        /// ever win a slot on a word nothing is still completing, which is what
+        /// keeps it away from a word that is merely half typed.
+        case frequency = 5
         /// `UITextChecker.completions` — a longer word starting with what was typed.
         case checker = 10
         /// A word list this repo wrote for Latin words inside Hebrew sentences.

@@ -47,7 +47,7 @@ trap 'rm -rf "$build"' EXIT
 cp "$core"/SuggestionEngine*.swift "$build/"
 for source in Models.swift LanguageDetector.swift SeedLanguageModel.swift \
     HebrewMorphology.swift LayoutTransposition.swift PersonalLanguageModel.swift \
-    KeyProximity.swift; do
+    KeyProximity.swift TypoChannel.swift TypoLexicon.swift GroupedLexiconResource.swift; do
     cp "$core/$source" "$build/"
 done
 # Both targets have a `LanguageDetector.swift`, one half each, and they land in
@@ -70,8 +70,16 @@ xcrun -sdk iphonesimulator swiftc -O -DHARNESS \
 device="${SIMULATOR_DEVICE:-booted}"
 # The corpus and the output path have to be readable from inside the simulator's
 # sandbox; simctl spawn shares the host filesystem, so absolute paths work.
+# Two resources reach the loose compile through the environment rather than
+# through `Bundle.module`, which SwiftPM synthesises and this does not have:
+# `LanguageModel.json` for `SeedLanguageModel` and the directory holding
+# `GroupedLexicon-{en,he}.txt` for `TypoLexicon`. Scoring without the second one
+# would silently measure an engine with its whole frequency-correction source
+# switched off, which looks like a clean run rather than like a broken one.
 LANGUAGE_MODEL_JSON="$core/Resources/LanguageModel.json" \
     SIMCTL_CHILD_LANGUAGE_MODEL_JSON="$core/Resources/LanguageModel.json" \
+    GROUPED_LEXICON_DIR="$core/Resources" \
+    SIMCTL_CHILD_GROUPED_LEXICON_DIR="$core/Resources" \
     xcrun simctl spawn "$device" "$build/harness" "$corpus" "$out"
 
 echo "engine outputs: $out"

@@ -39,15 +39,40 @@ declining to complete is conservative, not wrong. An entry with an empty prefix 
 not asked at all, because `insertSpace` commits nothing where no word is in
 progress.
 
-The score at the time of writing is **73/76 judged**, from 47/76 before the engine
-was made context-aware. It read 73/76 under the scorer that did not measure the
+The score at the time of writing is **75/76 judged**, from 47/76 before the engine
+was made context-aware and 73/76 before `TypoLexicon` gave the commit decision a
+second dictionary. It read 73/76 under the scorer that did not measure the
 commit column; the same engine scored 71/76 the first time it was measured
 honestly, and the entry that closed the gap is `he-comp-07`. Two identical-code
-simulator runs hold 73/76 with zero slot flips. `en-comp-03` commits `response`
+simulator runs hold 75/76 with zero slot flips. `en-comp-03` commits `response`
 after `the quick`. `cs-05` commits `screenshot` (`screenshot` / `screenshots`
-are in `codeSwitchVocabulary`). `apos-09`, `typo-10` and `typo-11` stay red on
-the local run on purpose. That 73/76 is the local engine only. The async corpus
-is a different number.
+are in `codeSwitchVocabulary`). `typo-10` and `typo-11` were red on purpose for a
+long time — Apple's Hebrew checker calls `תדוה` and `שלמו` real words, so the
+right word was offered in slot 1 and space declined it — and both commit now that
+a 50,000-form frequency list can disagree with Apple about whether a string is a
+word. `apos-09` alone stays red: `were` → `we're` needs the sentence and is the
+async tier's job. That 75/76 is the local engine only. The async corpus is a
+different number.
+
+`typos/` is **the third instrument**, and it exists because neither of the other
+two can fail on a misspelling. The frozen 90 grades plausibility against an
+authored list and the sweep grades a word being typed letter by letter; a corpus
+of 128 hand-written `(typed, intended)` pairs across fourteen classes of mistake
+grades the question a user actually asks, which is whether the bar offers the
+word they meant and whether space takes it. It carries its own controls: 21 rows
+where the typed string is already correct, so a build that simply corrects
+everything scores badly instead of perfectly.
+
+```bash
+Bar/typing/typos/run.sh              # expand, run twice, judge
+Bar/typing/typos/run.sh --verbose    # every stable row, not only the findings
+```
+
+At the time of writing: **90 of 107 corrections committed, 95 offered, 10 wrong,
+and all 21 controls intact**, from 61 committed and the same 10 wrong before the
+frequency corrector. Read the *wrong* column first — it is the one that says the
+keyboard replaced a word with something nobody typed or meant, which is what
+people switch autocorrect off over.
 
 Key proximity re-ranks neighbour *offers* by +50 when the differing letters sit
 on adjacent keys. It does not change what space commits.

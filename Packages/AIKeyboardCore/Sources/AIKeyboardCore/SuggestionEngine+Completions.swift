@@ -299,6 +299,11 @@ extension SuggestionEngine {
             for: core, typedLanguage: typedLanguage, personal: personal,
             completions: directCompletions, query: directQuery, locale: checkerLocale)
 
+        // Common words the keys nearly spell, over a list long enough to have an
+        // opinion about which one. Every correction source above this is limited
+        // to a single edit; this is the only one that can see two.
+        out += frequencyCorrections(of: core, in: typedLanguage, limit: barSlots - 1)
+
         // The field gets its say last, over everything already collected, so a
         // word any earlier pair is known to be followed by climbs whichever
         // source it happened to arrive from. The last two tokens still lead;
@@ -331,6 +336,48 @@ extension SuggestionEngine {
             candidates[index].personalCount = personal.count(
                 of: candidates[index].text, in: candidates[index].language)
         }
+    }
+
+    /// Common words the typed keystrokes are a plausible slip of.
+    ///
+    /// **The class of mistake nothing in this engine could reach.**
+    /// `SeedLanguageModel.neighbours` is one edit over 353 hand-authored words
+    /// and `UITextChecker.guesses` is Apple's own unranked list; between them
+    /// they cover a single slip in a common word, and nothing else. Two slips in
+    /// one word is what a hand landing a key off does, and it is what was
+    /// reported: `דוגמטןת` for `דוגמאות`, `א` typed as `ט` and `ו` as `ן`, both
+    /// pairs adjacent on the Hebrew top row. `TypoLexicon` searches a
+    /// frequency-ranked list under `TypoChannel`, which prices a slip by what
+    /// kind of slip it is rather than counting edits — an adjacent key, a
+    /// transposition, a Hebrew final form, a dropped mater lectionis — so two
+    /// *explainable* mistakes stay in reach while two unrelated ones do not.
+    ///
+    /// **Gated on the list disowning what was typed, which is a gate the seed
+    /// list could never be.** The standing rule is that a keyboard does not
+    /// correct words, and `SeedLanguageModel.knows` cannot enforce it: the seed
+    /// is a few hundred words, so it answers no about most of the language, and
+    /// the first version of the neighbour rule turned `cat` into `car` on
+    /// exactly that mistake. `cat` is rank 5,234 of these 50,000 and `bus` is
+    /// 1,715, while `תדוה`, `שלמו`, `teh`, `recieve` and `seperate` are absent
+    /// from all of them. `TypoLexicon.isWord` reads the whole list rather than
+    /// the `depth` this source may *offer* from, because a word at rank 30,000
+    /// is still a word.
+    ///
+    /// Two offers at most, so this can never take the whole bar: `barSlots - 1`
+    /// leaves a slot for whatever else had something to say.
+    @MainActor
+    static func frequencyCorrections(
+        of word: String, in language: KeyboardLanguage, limit: Int
+    ) -> [Candidate] {
+        guard !TypoLexicon.isWord(word, in: language) else { return [] }
+        return
+            TypoLexicon.corrections(of: word, in: language, limit: limit)
+            .enumerated()
+            .map {
+                Candidate(
+                    text: matchCase(of: word, applyingTo: $0.element.word, in: language),
+                    language: language, source: .frequency, ordinal: $0.offset)
+            }
     }
 
     /// Seed neighbours first, then words this person has actually used.
@@ -1073,6 +1120,31 @@ extension SuggestionEngine {
         let sameLengthSubstitution =
             neighbourMatch && typedFolded.count == winner.count
             && !SeedLanguageModel.isTransposition(winner, of: word)
+        // **A same-length Hebrew substitution is a word in progress only while
+        // the keystrokes are still going somewhere, and asking that costs 13
+        // corrections a corpus of 128 real misspellings.** The exclusion below
+        // was written for `מכונ` → `נכון`: four letters on the way to `מכונית`,
+        // one substitution from a word the seed list knows, measured firing at 2
+        // of 35 keystroke moments. It is right about that and it was asked about
+        // every same-length Hebrew pair, so it also refused every *finished*
+        // Hebrew word with one key slipped in it — `בסגר` for `בסדר`, `עכדיו`
+        // for `עכשיו`, `פכישה` for `פגישה`, `כתובץ` for `כתובת`, `משםחה` for
+        // `משפחה`, `טלפום` for `טלפון` — with the right word sitting unbolded in
+        // slot 1 every time. That is the single largest class in the corpus and
+        // the one the report that started this work is about.
+        //
+        // The question that separates them is the one
+        // `hebrewFinalFormCorrection` already asks about a different rule: do
+        // these letters still complete to anything? `מכונ` continues to `מכונה`,
+        // `מכוניות` and `מכונות`, so it is unfinished and must be left alone;
+        // every word in that list of slips continues to nothing at all, so it is
+        // a finished word spelled wrong. That rule asks `SeedLanguageModel`,
+        // which is 353 words and would answer "nothing continues this" about
+        // most of the language; this asks `TypoLexicon`, which is the list long
+        // enough for the absence to mean something.
+        let hebrewStillBeingTyped =
+            typedLanguage.script == .hebrew
+            && TypoLexicon.hasContinuation(of: word, in: typedLanguage)
         // Seed completions of the typed letters, most common first. Asked
         // before the neighbour return because `respond` is one insertion from
         // `respon` and used to skip the unfinished-stem check entirely.
@@ -1091,10 +1163,64 @@ extension SuggestionEngine {
             // English. `definately` → `definitely` is English and must still
             // commit. An ambiguous prefix completion (`respon` → `respond`)
             // is not a slip in any language.
-            let hebrewUnfinished = sameLengthSubstitution && typedLanguage.script == .hebrew
+            let hebrewUnfinished = sameLengthSubstitution && hebrewStillBeingTyped
             if !hebrewUnfinished, !(prefixCompletion && ambiguousStem) {
                 return true
             }
+        }
+
+        // **A word 50,000 forms of real text have never seen, beside one they
+        // have, two explainable slips apart — and the one place Apple's own
+        // spelling verdict is overruled.** Every other correction rule here rests
+        // on `known`, and this deliberately does not, because `known` is wrong in
+        // Hebrew often enough to be the documented cost of the two-dictionary
+        // rule: Apple's Hebrew checker calls `תדוה` and `שלמו` perfectly good
+        // words, so the right word is offered in slot 1 and the space bar refuses
+        // it. That was the correct trade while the only second opinion was a
+        // 353-word hand-authored list, where absence proves nothing — `cat` is
+        // missing from it and `car` is one edit away and present, which is how
+        // the first neighbour rule turned one into the other. It is not the
+        // correct trade against a frequency list where `cat` is rank 5,234,
+        // `bus` 1,715, and `תדוה`, `שלמו`, `teh`, `recieve` and `seperate` are
+        // absent from all 50,000.
+        //
+        // **Asked about the evidence rather than about which source won, and
+        // that is not the same rule.** Scoping this to `Source.frequency`
+        // candidates was the first shape and it could never fire on the two
+        // entries it was written for: `.neighbour` is 2000 against `.frequency`'s
+        // 500, so where the seed list also knows the word — which is exactly the
+        // common core `תודה` and `שלום` sit in — `rank` keeps the neighbour copy
+        // and this branch never sees it. What matters is not the tier the winner
+        // arrived on but whether the corpus vouches for the winner and disowns
+        // the keystrokes.
+        //
+        // Five conditions, each a defect if it goes the other way. **The winner
+        // may not continue the keystrokes**, or this finishes words instead of
+        // repairing them: `helot` would commit `helots`, and `קליפ` — how Hebrew
+        // writes "clip" — would commit `קליפה`, the same loanword harm
+        // `hebrewFinalFormCorrection` already carries a gate for. **The winner
+        // has to be common**, which also proves a list is loaded at all, so a
+        // language this repo bundles nothing for cannot reach the body; it is
+        // what refuses Apple's own unranked guess `דוגמטית`, which appears
+        // nowhere in the list. **The corpus has to disown what was typed**, which
+        // is the whole second-dictionary claim. **The slips have to be
+        // explainable** under `TypoChannel` rather than merely few, so a word
+        // that happens to be two wild substitutions away is out of reach. And **a
+        // same-length Hebrew substitution is still a word in progress** — `מכונ`
+        // → `נכון`, measured at 2 of 35 keystroke moments and excluded from the
+        // neighbour rule immediately above for the same reason — while a
+        // transposition is a genuine slip and still commits.
+        if !winner.hasPrefix(typedFolded),
+            TypoLexicon.rank(of: first.text, in: typedLanguage) != nil,
+            !TypoLexicon.isWord(word, in: typedLanguage),
+            let budget = TypoChannel.budget(forTypedLength: word.count),
+            TypoChannel.cost(
+                typed: Array(word), candidate: Array(first.text), language: typedLanguage,
+                budget: budget) != nil,
+            !(hebrewStillBeingTyped && typedFolded.count == winner.count
+                && !SeedLanguageModel.isTransposition(winner, of: word))
+        {
+            return true
         }
 
         // **An unfinished word with two different endings is not a typo.**
