@@ -138,11 +138,18 @@ enum KeyProximity {
     /// wider phone and grows a few percent on a narrower one. iPhone 17 Pro:
     /// a 402pt-wide screen gives a 34.2pt reference key width, which is the
     /// same arithmetic `KeyboardLayout.pinnedWidth`'s own doc comment works
-    /// out to 51.3pt at 1.5 units. None of the verdicts below are close to
-    /// the 1-key-width threshold — the nearest surviving pair clears it by
-    /// 0.16 of a key width and the nearest dropped pair misses it by 0.51 —
-    /// so this ratio moving within the range of real iPhone widths does not
-    /// flip anything reported in the file-level doc comment.
+    /// out to 51.3pt at 1.5 units.
+    ///
+    /// **That it does not matter was computed rather than argued.** The
+    /// tempting justification is that no verdict sits near the threshold — the
+    /// nearest surviving pair clears one key width by 0.16 and the nearest
+    /// dropped pair misses it by 0.51 — which is true and is still only a
+    /// margin argument. The whole adjacency sweep was instead re-run at grid
+    /// widths 360, 375, 390, 393, 402, 415, 430 and 440, covering the range of
+    /// real iPhones: **the dropped list is the same fifteen pairs at every one
+    /// of them, nothing is ever added, and `scale` stays exactly 1 throughout**,
+    /// checked per row rather than assumed, so no row is ever squeezed out of
+    /// the reference width this ratio is derived from.
     private static let gapRatio: Double = 6.0 / 34.2
 
     /// Shift and delete, in key widths. Matches `KeyboardLayout.functionKeyUnits`.
