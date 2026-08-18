@@ -169,9 +169,15 @@ extension SuggestionEngine {
     ///
     /// Three terms, and they are deliberately readable rather than tuned:
     ///
-    /// - **the source**, worth 1000 a tier, so tiers never interleave. `Source` is
-    ///   numbered in tens against a multiplier of 100, which is what leaves room
-    ///   for a half-step like `.irregular`;
+    /// - **the source**, worth 1000 a tier, so no *single* other term can climb
+    ///   one. `Source` is numbered in tens against a multiplier of 100, which is
+    ///   what leaves room for a half-step like `.irregular`. This line read "so
+    ///   tiers never interleave", which the two lines under it contradict and
+    ///   the arithmetic does not support: context (400), the seed prior (300)
+    ///   and the personal count (300) sum to exactly a tier, and `keyAdjacent`
+    ///   puts them over it. A word carrying all of that evidence *should* pass a
+    ///   bare candidate one tier up, which is the design — the guarantee is that
+    ///   it takes the whole set to do it, not that it cannot happen;
     /// - **the sentence**, worth 400 — enough to move a candidate a full tier,
     ///   because "the word before it was `בעוד`" is stronger evidence than which
     ///   dictionary a word came out of. This is the term that puts `תור` after

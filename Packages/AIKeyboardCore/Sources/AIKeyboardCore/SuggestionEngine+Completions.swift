@@ -244,7 +244,13 @@ extension SuggestionEngine {
         // Words already in this field. A name two sentences back is not in the
         // seed list and is not in `previousWords` once a full stop has landed;
         // the field itself is the only list that still has it.
-        out += documentCandidates(for: core, in: context, typedLanguage: typedLanguage)
+        //
+        // Tokenised once and handed to both readers. This function and the
+        // follower pass below each used to split the whole field for themselves,
+        // and `documentFollowers` made it a third — three walks of the same
+        // string, per keystroke, for one answer.
+        let fieldWords = documentWords(in: context)
+        out += documentCandidates(for: core, among: fieldWords, typedLanguage: typedLanguage)
 
         // The bundled seed list, read through every Hebrew reading of the prefix.
         out += seedCandidates(
@@ -311,7 +317,7 @@ extension SuggestionEngine {
         // two more words have landed.
         let followers = Set(
             contextFollowers(
-                last: previousWords, field: documentWords(in: context), context: context,
+                last: previousWords, field: fieldWords,
                 language: typedLanguage, personal: personal
             ).map(SeedLanguageModel.fold))
         if !followers.isEmpty {
@@ -410,13 +416,13 @@ extension SuggestionEngine {
     /// recased to the prefix — `Zorblin` stays `Zorblin` even if the user has
     /// only typed `zor`.
     private static func documentCandidates(
-        for prefix: String, in context: String, typedLanguage: KeyboardLanguage
+        for prefix: String, among fieldWords: [String], typedLanguage: KeyboardLanguage
     ) -> [Candidate] {
         let typed = comparable(prefix)
         guard !typed.isEmpty else { return [] }
         var seen = Set<String>()
         var out: [Candidate] = []
-        for word in documentWords(in: context).reversed() {
+        for word in fieldWords.reversed() {
             guard let offered = documentOffer(word, matching: typed, language: typedLanguage)
             else { continue }
             let key = comparable(offered)
@@ -1124,9 +1130,17 @@ extension SuggestionEngine {
         // `helo` → `hello` is longer, so it still returns true below. Asking
         // "does the typed word have completions" does not draw this line:
         // `helo` has them and should still correct.
-        let sameLengthSubstitution =
-            neighbourMatch && typedFolded.count == winner.count
-            && !SeedLanguageModel.isTransposition(winner, of: word)
+        //
+        // **The shape below is named once because three separate rules are each
+        // a different narrowing of it, and each used to re-derive it.** Spelled
+        // out in three places they drifted apart invisibly: the neighbour rule
+        // asked it with `neighbourMatch`, the frequency guard without, and the
+        // four-letter gate without the continuation test. Naming the core is
+        // what makes those three differences readable instead of buried in
+        // three copies of the same arithmetic.
+        let transposed = SeedLanguageModel.isTransposition(winner, of: word)
+        let sameLengthSlip = typedFolded.count == winner.count && !transposed
+        let sameLengthSubstitution = neighbourMatch && sameLengthSlip
         // **A same-length Hebrew substitution is a word in progress only while
         // the keystrokes are still going somewhere, and asking that costs 13
         // corrections a corpus of 128 real misspellings.** The exclusion below
@@ -1149,9 +1163,45 @@ extension SuggestionEngine {
         // which is 353 words and would answer "nothing continues this" about
         // most of the language; this asks `TypoLexicon`, which is the list long
         // enough for the absence to mean something.
-        let hebrewStillBeingTyped =
-            typedLanguage.script == .hebrew
-            && TypoLexicon.hasContinuation(of: word, in: typedLanguage)
+        //
+        // **Asked lazily and behind `sameLengthSlip`, which is the whole cost of
+        // it.** This was a plain `let`, so every Hebrew word reaching this line
+        // paid a linear pass over `TypoLexicon`'s 30,000 forms — including the
+        // majority whose winner is a longer completion, where `sameLengthSlip`
+        // is already false and the answer can never be read.
+        // `TypoLexicon.hasContinuation`'s own doc comment claimed it ran "only
+        // on the Hebrew same-length case"; it did not, and now it does.
+        //
+        // The two callers below asked for this in two different spellings —
+        // `sameLengthSubstitution && hebrewStillBeingTyped` inside the
+        // neighbour branch, and the three conditions written out again in the
+        // frequency guard — and they were the same predicate both times.
+        var hebrewContinuation: Bool?
+        func hebrewWordInProgress() -> Bool {
+            guard typedLanguage.script == .hebrew, sameLengthSlip else { return false }
+            if let hebrewContinuation { return hebrewContinuation }
+            let answer = TypoLexicon.hasContinuation(of: word, in: typedLanguage)
+            hebrewContinuation = answer
+            return answer
+        }
+        // **Whether the sentence so far expects this word, asked once for the
+        // three rules that ask it.** Those rules are genuinely different — an
+        // ambiguous English stem, two Hebrew readings off an unranked checker
+        // list, a Latin stem inside a Hebrew sentence — but the question they
+        // put to the sentence is identical, and it was written out three times
+        // verbatim below. Each copy re-walked the whole field, and two of them
+        // can run in one pass, so the memo is not only tidiness.
+        var expected: Set<String>?
+        func sentenceExpects(_ candidate: String) -> Bool {
+            if let expected { return expected.contains(candidate) }
+            let followers = Set(
+                contextFollowers(
+                    last: previousWords, field: documentWords(in: context),
+                    language: typedLanguage, personal: personal
+                ).map(SeedLanguageModel.fold))
+            expected = followers
+            return followers.contains(candidate)
+        }
         // Seed completions of the typed letters, most common first. Asked
         // before the neighbour return because `respond` is one insertion from
         // `respon` and used to skip the unfinished-stem check entirely.
@@ -1170,14 +1220,12 @@ extension SuggestionEngine {
             // English. `definately` → `definitely` is English and must still
             // commit. An ambiguous prefix completion (`respon` → `respond`)
             // is not a slip in any language.
-            let hebrewUnfinished = sameLengthSubstitution && hebrewStillBeingTyped
-            if !hebrewUnfinished, !(prefixCompletion && ambiguousStem) {
+            if !hebrewWordInProgress(), !(prefixCompletion && ambiguousStem) {
                 // Priced by kind rather than as one rule. In a transposition every
                 // letter is right and only the order is not, which is a stronger
                 // claim than "one of these keys was the wrong key" — and the two are
-                // already told apart three lines up, for `sameLengthSubstitution`.
-                return SeedLanguageModel.isTransposition(winner, of: word)
-                    ? .transposition : .singleEdit
+                // already told apart above, for `sameLengthSlip`.
+                return transposed ? .transposition : .singleEdit
             }
         }
 
@@ -1229,14 +1277,12 @@ extension SuggestionEngine {
             let cost = TypoChannel.cost(
                 typed: Array(word), candidate: Array(first.text), language: typedLanguage,
                 budget: budget),
-            !(hebrewStillBeingTyped && typedFolded.count == winner.count
-                && !SeedLanguageModel.isTransposition(winner, of: word))
+            !hebrewWordInProgress()
         {
             // The cost is carried out of the guard rather than recomputed: this is
             // the cheapest path the banded DP actually found, and asking a second
             // time outside it would be a second answer to the same question.
-            return .frequency(
-                cost: cost, transposition: SeedLanguageModel.isTransposition(winner, of: word))
+            return .frequency(cost: cost, transposition: transposed)
         }
 
         // **An unfinished word with two different endings is not a typo.**
@@ -1250,12 +1296,7 @@ extension SuggestionEngine {
         // same sentence signal the Hebrew path already uses, applied only to
         // this unfinished-stem case rather than to valid English words.
         if ambiguousStem {
-            let contextual = Set(
-                contextFollowers(
-                    last: previousWords, field: documentWords(in: context), context: context,
-                    language: typedLanguage, personal: personal
-                ).map(SeedLanguageModel.fold))
-            if !contextual.contains(winner) { return nil }
+            if !sentenceExpects(winner) { return nil }
         }
 
         // **Two real Hebrew words sharing a prefix, and Apple's list is not a
@@ -1289,12 +1330,7 @@ extension SuggestionEngine {
                 return other != typedFolded && other.hasPrefix(typedFolded)
             }
             if hasDistinctHebrewLexemes(readings) {
-                let contextual = Set(
-                    contextFollowers(
-                        last: previousWords, field: documentWords(in: context), context: context,
-                        language: typedLanguage, personal: personal
-                    ).map(SeedLanguageModel.fold))
-                if !contextual.contains(winner) { return nil }
+                if !sentenceExpects(winner) { return nil }
             }
         }
 
@@ -1312,12 +1348,7 @@ extension SuggestionEngine {
         {
             let offered = Array(results.dropFirst().map(\.text))
             if hasDistinctLexemes(offered) {
-                let contextual = Set(
-                    contextFollowers(
-                        last: previousWords, field: documentWords(in: context), context: context,
-                        language: typedLanguage, personal: personal
-                    ).map(SeedLanguageModel.fold))
-                if !contextual.contains(winner) { return nil }
+                if !sentenceExpects(winner) { return nil }
             }
         }
 

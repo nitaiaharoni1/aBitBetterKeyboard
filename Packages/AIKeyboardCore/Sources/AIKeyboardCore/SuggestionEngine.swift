@@ -342,9 +342,22 @@ public enum SuggestionEngine {
     /// yesterday. I booked ` predicts `Zorblin` rather than falling through to
     /// the openers.
     static func documentFollowers(after word: String, in context: String, limit: Int) -> [String] {
+        documentFollowers(after: word, among: documentWords(in: context), limit: limit)
+    }
+
+    /// The same list, read off a tokenisation the caller already has.
+    ///
+    /// **Split in two because the field was being walked twice for one answer.**
+    /// `contextFollowers` is handed `field` — which is `documentWords(in:)` at
+    /// every one of its call sites — and then passed the raw context back down
+    /// here so this could split it again. One walk serves both now, and the
+    /// entry point above keeps the shape `nextWordSuggestions` and the tests
+    /// call.
+    static func documentFollowers(
+        after word: String, among tokens: [String], limit: Int
+    ) -> [String] {
         let folded = comparable(word)
         guard !folded.isEmpty else { return [] }
-        let tokens = documentWords(in: context)
         guard tokens.count >= 2 else { return [] }
         var seen = Set<String>()
         var out: [String] = []
@@ -369,9 +382,15 @@ public enum SuggestionEngine {
     /// being typed. The field is walked for every two-word seed key, for what
     /// this person writes after any of its words, and for what followed the
     /// last token earlier in the same field.
+    ///
+    /// **`context` was a second parameter and is gone.** Every call site passed
+    /// `documentWords(in: context)` as `field` and the same `context` beside it,
+    /// so the two could not disagree and the only thing the second one bought was
+    /// a second walk of the field inside `documentFollowers`. One argument that
+    /// cannot contradict itself.
     @MainActor
     static func contextFollowers(
-        last: [String], field: [String], context: String,
+        last: [String], field: [String],
         language: KeyboardLanguage, personal: PersonalLanguageModel
     ) -> [String] {
         var seen = Set<String>()
@@ -380,7 +399,7 @@ public enum SuggestionEngine {
             SeedLanguageModel.followers(after: last, in: language),
             SeedLanguageModel.followers(mentionedIn: field, in: language),
             personal.followers(mentionedIn: field, in: language, limit: 4),
-            documentFollowers(after: last.last ?? "", in: context, limit: 4)
+            documentFollowers(after: last.last ?? "", among: field, limit: 4)
         ]
         for word in sources.joined() {
             let key = SeedLanguageModel.fold(word)

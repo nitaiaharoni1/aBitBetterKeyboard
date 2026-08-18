@@ -251,6 +251,15 @@ enum TypoLexicon {
     /// once per keystroke and only on the Hebrew same-length case, which is a
     /// small fraction of them; building a trie to serve that would cost memory
     /// on every keystroke to save time on a few.
+    ///
+    /// **That sentence was a description of the intent and not of the code, for
+    /// as long as it stood.** `commitReason` held the answer in a plain `let`
+    /// gated only on the script, so every Hebrew word reaching that line paid
+    /// the scan whether or not the same-length case was ever asked about — and
+    /// the worst case is a full pass, since a prefix that continues exits early
+    /// and one that does not is exactly the misspelling this is asked about. It
+    /// is now called through a memoised local that checks the length first, so
+    /// the sentence above describes what happens.
     static func hasContinuation(of prefix: String, in language: KeyboardLanguage) -> Bool {
         let folded = Array(SeedLanguageModel.fold(prefix).utf16)
         guard !folded.isEmpty else { return false }
