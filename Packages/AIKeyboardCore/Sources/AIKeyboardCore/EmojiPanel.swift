@@ -317,9 +317,7 @@ public struct EmojiPanel: View {
         }
     }
 
-    private func cell(_ cell: Cell, width: CGFloat, height: CGFloat, surface: CGSize)
-        -> some View
-    {
+    private func cell(_ cell: Cell, width: CGFloat, height: CGFloat, surface: CGSize) -> some View {
         Group {
             if let emoji = cell.emoji {
                 // The cell stores the untoned spelling and `EmojiPickCell` paints

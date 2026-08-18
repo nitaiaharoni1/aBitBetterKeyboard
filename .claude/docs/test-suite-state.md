@@ -22,6 +22,34 @@ tuned by hand. The 3 skipped are what the earlier run's "1257 declared, 1252
 executed" gap actually was; `xcodebuild` reports them, so read the skip count
 rather than subtracting.
 
+### Since that run: the emoji tone strip, checked without a simulator
+
+`EmojiModeTests` gained 10 tests with the skin-tone picker and **the suite has not
+been re-run on a simulator since**, so the count above is still the count above.
+What *was* done instead is worth recording, because it costs nothing and answers
+most of the question:
+
+- A Linux Swift toolchain compiles `EmojiCatalog.swift`, `EmojiSkinTone.swift`
+  and `EmojiSearch.swift` — the three the fidelity check already treats as
+  Foundation-only — against the shipping `EmojiCatalog.json`. Every assertion in
+  the four catalogue tone tests and in the two pre-existing catalogue tests was
+  run that way and passes. So did `Bar/emoji/harness/swift-check.sh`'s own
+  comparison, ported to that toolchain: **147/147 result lists identical** to
+  `rank.py`.
+- `EmojiTonePicker`'s geometry is pure arithmetic over `CGRect`, which Linux
+  Foundation has, so the placement sweep runs there too: 55 configurations, all
+  green.
+- **The two known ranking failures were re-confirmed, and confirmed unchanged.**
+  Running the four ranking tests' bodies against the *new* catalogue and against
+  `main`'s gives the identical pair — `לב` → 🫀 and `car` at index 5 — which is
+  what says the catalogue regeneration (see `pack()` in the generator) moved no
+  ranking at all.
+
+What none of this covers is SwiftUI: `EmojiTonePicker.swift`'s view and gesture,
+and `EmojiPanel`'s wiring to them, parse and format clean and have not been
+compiled. **Re-run the suite on a simulator before trusting the number at the top
+of this file again.**
+
 ### The previous reading, and the two that were red for a reason nobody had checked
 
 2026-08-16 at `45fe74c8`: **1302 executed, 1296 passed, 3 failed, 3 skipped**,

@@ -55,9 +55,7 @@ struct EmojiTonePicker: Equatable {
     /// last tone unreachable — a picker with a tone in it that no finger can
     /// land on. Dividing the room that is actually there keeps all six
     /// reachable at whatever size that costs.
-    static func item(cellWidth: CGFloat, cellHeight: CGFloat, count: Int, surface: CGSize)
-        -> CGSize
-    {
+    static func item(cellWidth: CGFloat, cellHeight: CGFloat, count: Int, surface: CGSize) -> CGSize {
         let room = max(0, surface.width - gap * 2)
         var width = max(cellWidth, 34)
         if count > 0, width * CGFloat(count) > room {
@@ -73,15 +71,39 @@ struct EmojiTonePicker: Equatable {
     /// suggestion bar because the keyboard is what draws both. This one is inside
     /// the emoji panel, and the row a thumb reaches for first is the top row —
     /// where "above" is off the panel entirely. Flipping under the cell keeps
-    /// every tone on screen and keeps the finger, which is on the cell, off the
-    /// thing it is choosing from.
+    /// every tone on screen and the finger off the thing it is choosing from.
     ///
-    /// The final clamp is not redundant with the flip: a landscape panel is
-    /// about 60 points of grid, so a 34 pt strip flipped below the second of two
-    /// rows would still run past the category tabs.
+    /// **The third branch is the one that had to be written twice, and the
+    /// landscape bottom row is why.** Flipping below and then clamping into the
+    /// panel looks like it covers every case and does not: the last row has
+    /// nothing below it, so the clamp drags the strip straight back up *onto the
+    /// cell the finger is holding*. A 60 pt landscape grid two rows tall has 30
+    /// points above that row and 26 below, and a 34 pt strip fits in neither, so
+    /// there is no placement that misses the cell — only a choice about which
+    /// edge of it to cross. Crossing the top puts the strip above the fingertip,
+    /// where it can be read; crossing the bottom puts it under the finger, which
+    /// is the one outcome worth ruling out. So the fallback takes the roomier
+    /// side rather than always the lower one.
+    ///
+    /// Measured over every geometry `LayoutGeometry` can describe: in portrait
+    /// the strip clears the cell completely at every row of every row count, and
+    /// landscape's bottom row is the only case that overlaps at all — by 4.5
+    /// points of the cell's top edge, well clear of its centre.
+    ///
+    /// The fit test against 0 rather than `gap`: a strip flush with the top of
+    /// the panel is fine, and insisting on six points of air there is six points
+    /// of the room this is short of.
     static func origin(anchor: CGRect, size: CGSize, surface: CGSize) -> CGPoint {
-        var y = anchor.minY - gap - size.height
-        if y < gap { y = anchor.maxY + gap }
+        let above = anchor.minY - gap - size.height
+        let below = anchor.maxY + gap
+        var y: CGFloat
+        if above >= 0 {
+            y = above
+        } else if below + size.height <= surface.height {
+            y = below
+        } else {
+            y = anchor.minY >= surface.height - anchor.maxY ? 0 : surface.height - size.height
+        }
         y = min(max(0, y), max(0, surface.height - size.height))
         var x = anchor.midX - size.width / 2
         x = min(max(gap, x), max(gap, surface.width - gap - size.width))
@@ -175,7 +197,9 @@ struct EmojiTonePickerView: View {
 /// not know that — the tap that halts a scrolling strip would put an emoji in
 /// somebody's message. So the tap keeps the control that already gets this
 /// right, and the hold rides alongside it as a `simultaneousGesture` so the
-/// strip still scrolls under a finger that is dragging rather than dwelling.
+/// strip still scrolls under a finger that is dragging rather than dwelling —
+/// and only on the 304 cells that have a tone to offer, which is what `body`
+/// branches on.
 ///
 /// **Which leaves one touch that both of them want**: hold, then lift without
 /// moving. The button fires on that lift and so does the strip, and both would
@@ -228,30 +252,53 @@ struct EmojiPickCell: View {
     private var hasTones: Bool { EmojiCatalog.hasTones(emoji) }
     private var isShowing: Bool { picker?.owner == identity }
 
+    /// **The 1,566 that have no tone strip get none of this.** A `GeometryReader`
+    /// per cell to anchor a strip, a `DragGesture` to wait on and a
+    /// `@GestureState` to clean up after are all cost paid on every scroll frame,
+    /// and five sixths of the grid could never open a picker with them. `hasTones`
+    /// is two dictionary reads and never changes for a given cell, so the branch
+    /// is stable: 😂 draws exactly the button it drew before this feature
+    /// existed, and only 👋 pays.
     var body: some View {
+        if hasTones {
+            holdable
+        } else {
+            button
+        }
+    }
+
+    /// The tap, which is the whole of an emoji cell for most of the grid.
+    ///
+    /// **A `Button`, deliberately** — see the note on the type: a scroll view in
+    /// flight swallows the first tap to stop itself, and this is the control that
+    /// already knows that.
+    private var button: some View {
+        Button {
+            guard !pickerTookTouch else { return }
+            onInsert(shown)
+        } label: {
+            Text(shown)
+                // Against the shorter side, so the glyph stays inside its cell
+                // on a Compact layout where the rows are 28pt tall.
+                .font(.system(size: min(width, height) * glyphScale))
+                .frame(width: width, height: height)
+                .contentShape(Rectangle())
+        }
+        .pressable(scale: 0.85)
+        // On the button rather than on any container around it: the button is
+        // the accessibility element, and a label hung on a plain container
+        // reaches nothing.
+        .accessibilityLabel(EmojiCatalog.names(for: emoji).first ?? emoji)
+    }
+
+    private var holdable: some View {
         GeometryReader { geo in
-            Button {
-                guard !pickerTookTouch else { return }
-                onInsert(shown)
-            } label: {
-                Text(shown)
-                    // Against the shorter side, so the glyph stays inside its cell
-                    // on a Compact layout where the rows are 28pt tall.
-                    .font(.system(size: min(width, height) * glyphScale))
-                    .frame(width: width, height: height)
-                    .contentShape(Rectangle())
-            }
-            .pressable(scale: 0.85)
-            .simultaneousGesture(hold(in: geo), including: hasTones ? GestureMask.all : .subviews)
-            // On the button rather than on the reader around it: the button is
-            // the accessibility element, and a label hung on a plain container
-            // reaches nothing.
-            .accessibilityLabel(EmojiCatalog.names(for: emoji).first ?? emoji)
-            // A hold is invisible to VoiceOver, so every tone is restated as an
-            // action. Same rule the layout editor and the accents strip are
-            // built on: every gesture has a non-gesture route.
-            .accessibilityActions {
-                if hasTones {
+            button
+                .simultaneousGesture(hold(in: geo))
+                // A hold is invisible to VoiceOver, so every tone is restated as
+                // an action. Same rule the layout editor and the accents strip
+                // are built on: every gesture has a non-gesture route.
+                .accessibilityActions {
                     ForEach(EmojiSkinTone.allCases, id: \.rawValue) { choice in
                         Button(choice.accessibilityName) {
                             onTone(choice)
@@ -259,7 +306,6 @@ struct EmojiPickCell: View {
                         }
                     }
                 }
-            }
         }
         .frame(width: width, height: height)
         .onChange(of: isTouching) { _, touching in
@@ -340,8 +386,8 @@ struct EmojiPickCell: View {
 
     /// **`@MainActor`, because `Feedback` is.** Reached only from inside the
     /// hold's own `Task { @MainActor in }`, the same shape `KeyView` opens its
-    /// accents strip with — a nonisolated helper calling a main-actor haptic is
-    /// the one way this refuses to compile.
+    /// accents strip with. A nonisolated helper calling a main-actor haptic does
+    /// not compile, which is why the annotation is here and not on `startHold`.
     @MainActor
     private func open() {
         let variants = EmojiCatalog.variants(for: emoji)

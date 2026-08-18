@@ -668,40 +668,108 @@ final class EmojiModeTests: XCTestCase {
         }
     }
 
-    /// **The strip has to stay inside the emoji panel, and the row a thumb
-    /// reaches for first is the one where "above the cell" is off the panel
-    /// entirely.** A letter's accent strip may hang over the suggestion bar
-    /// because the keyboard draws both; this one is drawn by the panel and would
-    /// simply be cut off.
+    /// **The strip has to stay inside the emoji panel, it has to be reachable,
+    /// and it must not sit under the finger holding the cell.**
     ///
-    /// Asserted over every row of every row count the panel builds, in portrait
-    /// and in landscape, because the landscape grid is 60 points tall and is
-    /// where "flip below" is not enough on its own either.
-    func testTheToneStripStaysInsideThePanelWhicheverCellOpenedIt() {
-        let panels = [CGSize(width: 402, height: 156), CGSize(width: 736, height: 86)]
-        for surface in panels {
-            for rowCount in EmojiPanel.rowCountRange {
-                let cellHeight = (surface.height - 32) / CGFloat(rowCount)
-                let item = EmojiTonePicker.item(
-                    cellWidth: 38, cellHeight: cellHeight, count: 6, surface: surface)
-                let size = CGSize(width: item.width * 6, height: item.height)
-                let columns: [CGFloat] = [0, surface.width / 2, surface.width - 38]
-                for row in 0..<rowCount {
-                    for cellX in columns {
-                        let anchor = CGRect(
-                            x: cellX, y: CGFloat(row) * cellHeight, width: 38, height: cellHeight)
-                        let origin = EmojiTonePicker.origin(
-                            anchor: anchor, size: size, surface: surface)
-                        let context = "\(surface) row \(row) of \(rowCount) at x \(cellX)"
-                        XCTAssertGreaterThanOrEqual(origin.x, 0, context)
-                        XCTAssertGreaterThanOrEqual(origin.y, 0, context)
-                        XCTAssertLessThanOrEqual(origin.x + size.width, surface.width + 0.001, context)
-                        XCTAssertLessThanOrEqual(
-                            origin.y + size.height, surface.height + 0.001, context)
-                    }
+    /// Three failures this rejects, and the third is the one that shipped in the
+    /// first draft. A letter's accent strip may hang over the suggestion bar
+    /// because the keyboard draws both; this one is drawn by the panel and is
+    /// simply cut off, so the top row — where "above the cell" is off the panel
+    /// entirely — has to flip below. **Flipping below and clamping is not enough
+    /// on its own**: the *bottom* row has nothing under it, so the clamp drags
+    /// the strip back up onto the cell the finger is on, and the picker is
+    /// hidden by the thumb that opened it. `EmojiTonePicker.origin` takes the
+    /// roomier side when neither fits, which puts that case above the fingertip.
+    ///
+    /// Swept over every geometry `LayoutGeometry` can describe rather than over
+    /// one panel, because the counterexample is a *landscape* one: 30 points of
+    /// room above the bottom row, 26 below, and a 34 pt strip that fits in
+    /// neither. `Bar` cannot help here — there is no corpus for a popup — so the
+    /// sweep is the measurement.
+    func testTheToneStripStaysInsideThePanelAndOffTheFingerHoldingIt() {
+        // Landscape first: it is the case the other two branches get wrong.
+        var configs: [(name: String, key: CGFloat, spacing: CGFloat, width: CGFloat)] = [
+            ("landscape", Theme.Metrics.Landscape.keyHeight, 4, 736)
+        ]
+        for key in stride(
+            from: LayoutGeometry.keyHeightRange.lowerBound,
+            through: LayoutGeometry.keyHeightRange.upperBound, by: 4)
+        {
+            for spacing in stride(
+                from: LayoutGeometry.rowSpacingRange.lowerBound,
+                through: LayoutGeometry.rowSpacingRange.upperBound, by: 4)
+            {
+                for width in [320, 402, 430] as [CGFloat] {
+                    configs.append(("portrait", key, spacing, width))
                 }
             }
         }
+
+        var overlapping = 0
+        for config in configs {
+            // The panel is three letter rows and two gaps; see
+            // `KeyboardView.panelCovers(rowID:)`.
+            let panelHeight = config.key * 3 + config.spacing * 2
+            let gridHeight = panelHeight - EmojiPanel.categoryRowHeight(forKeyHeight: config.key)
+            let rows = EmojiPanel.rowCount(forGridHeight: gridHeight)
+            let cellHeight = gridHeight / CGFloat(rows)
+            let columns = max(1, (config.width / EmojiPanel.targetCellWidth).rounded())
+            let cellWidth = config.width / columns
+            let surface = CGSize(width: config.width, height: panelHeight)
+            let item = EmojiTonePicker.item(
+                cellWidth: cellWidth, cellHeight: cellHeight, count: 6, surface: surface)
+            let size = CGSize(width: item.width * 6, height: item.height)
+
+            for row in 0..<rows {
+                for column in [0, Int(columns) / 2, Int(columns) - 1] {
+                    let anchor = CGRect(
+                        x: CGFloat(column) * cellWidth, y: CGFloat(row) * cellHeight,
+                        width: cellWidth, height: cellHeight)
+                    let origin = EmojiTonePicker.origin(
+                        anchor: anchor, size: size, surface: surface)
+                    let context =
+                        "\(config.name) key \(config.key) gap \(config.spacing) "
+                        + "width \(config.width) row \(row)/\(rows) column \(column)"
+
+                    XCTAssertGreaterThanOrEqual(origin.x, 0, context)
+                    XCTAssertGreaterThanOrEqual(origin.y, 0, context)
+                    XCTAssertLessThanOrEqual(
+                        origin.x + size.width, surface.width + 0.001, context)
+                    XCTAssertLessThanOrEqual(
+                        origin.y + size.height, surface.height + 0.001, context)
+
+                    // **The one a clamped strip fails.** The finger is on the
+                    // middle of the cell it held, so that point is the one the
+                    // strip may never cover.
+                    let fingertip = anchor.midY
+                    XCTAssertFalse(
+                        origin.y <= fingertip && fingertip <= origin.y + size.height,
+                        "the strip is under the finger that opened it: \(context)")
+
+                    // And every one of the six can be landed on: the hit test at
+                    // an item's own centre names that item, wherever the strip
+                    // was pushed to.
+                    for index in 0..<6 {
+                        let centre = CGPoint(
+                            x: origin.x + (CGFloat(index) + 0.5) * item.width, y: origin.y + 1)
+                        XCTAssertEqual(
+                            EmojiTonePicker.index(
+                                at: centre, origin: origin, itemWidth: item.width, count: 6),
+                            index, "item \(index) is not reachable: \(context)")
+                    }
+
+                    let overlap =
+                        min(origin.y + size.height, anchor.maxY) - max(origin.y, anchor.minY)
+                    if overlap > 0.001 { overlapping += 1 }
+                }
+            }
+        }
+
+        // Portrait clears the cell outright at every row of every row count; the
+        // only overlap in the whole sweep is landscape's bottom row, where
+        // nothing fits either side. Asserted as a number so a change that starts
+        // covering cells in portrait is a failure rather than a shrug.
+        XCTAssertEqual(overlapping, 3, "the strip started landing on cells it should clear")
     }
 
     /// **Six items wider than the panel would put the darkest tone off the edge,

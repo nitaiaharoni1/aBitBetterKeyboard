@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "generated": "2026-08-18",
-  "commit": "e50e572",
+  "commit": "50932b5",
   "engine": "rank.py, checked against the shipping Swift by swift-check.sh",
   "corpus": "94b02ff5ead39007",
   "catalogue": "cb651bcd3984de0d",
