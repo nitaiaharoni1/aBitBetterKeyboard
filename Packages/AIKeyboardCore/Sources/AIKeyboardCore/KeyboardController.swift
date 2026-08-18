@@ -466,6 +466,39 @@ public final class KeyboardController: ObservableObject {
     /// no host to ask.
     var supplementaryWords: [String] = []
 
+    /// The last question `refreshSuggestions` put to `SuggestionEngine`, and the
+    /// answer it came back with.
+    ///
+    /// **One keystroke asks that question two or three times, and nothing in the
+    /// engine can tell.** `insertCharacter` refreshes as soon as the text is in
+    /// the document, and then the host tells us the same news again through
+    /// `textDidChange` and once more through `selectionDidChange`, both of which
+    /// `KeyboardViewController` forwards straight back into `refreshSuggestions`.
+    /// Each is a full run of the local tier over identical inputs, and each
+    /// publishes `suggestions` again, which is a rebuild of every key on the
+    /// board. Measured warm on the iOS 26.2 Simulator at `-O`, iPhone 17 Pro:
+    /// 0.79 ms a call in English and **7.3 ms in Hebrew**, 6.2 ms of which is
+    /// `TypoLexicon.corrections` scanning 30,000 forms. Three of those is 22 ms
+    /// against a 16.7 ms frame, which is the "heavy" a Hebrew typist can feel.
+    ///
+    /// `SuggestionEngine.suggestions` is a pure function of its arguments and the
+    /// dictionaries behind them, so a repeated question is the one case where the
+    /// previous answer is not merely as good but identical. On the Hebrew path it
+    /// is *better*: `.claude/rules/suggestion-bar.md` records `UITextChecker`
+    /// answering the same Hebrew prefix differently in two places in one process,
+    /// so re-asking is what introduces a flip, not what avoids one.
+    ///
+    /// `vocabularyVersion` is the one input that is not an argument. `personal`
+    /// learns words as they are committed, which is the only thing that can
+    /// change an answer without changing the question — the shipped personal
+    /// dictionary and `UILexicon` both arrive through `supplementary`, which is
+    /// compared. See `SuggestionQuery`.
+    var lastSuggestionQuery: SuggestionQuery?
+    var lastSuggestionResults: [Suggestion] = []
+
+    /// Bumped whenever `personal` takes a word. See `lastSuggestionQuery`.
+    var vocabularyVersion = 0
+
     /// The async half of the suggestion bar.
     ///
     /// Optional because most callers do not want one: `AIKeyboardCoreTests` and
@@ -936,6 +969,15 @@ public final class KeyboardController: ObservableObject {
         // a character from the last app into this one. See
         // `discardPendingCharacter`.
         discardPendingCharacter()
+        // **The memo's other invalidator, and it is not the field.**
+        // `KeyboardViewController.viewWillAppear` calls
+        // `PersonalLanguageModel.shared.reload()` a few lines before this — Forget
+        // lives in the app, this process stays alive, and the words behind an
+        // answer can therefore be wiped between two identical questions. Dropping
+        // it here is free: an appearance is not a keystroke, and the new field
+        // almost always changes the question anyway. See `lastSuggestionQuery`.
+        lastSuggestionQuery = nil
+        lastSuggestionResults = []
         // First, because the two answers are independent and this one feeds the
         // other: which keys are drawn is the field's declared trait, which way the
         // host lays the text out is what is already sitting in it. Switching to a
