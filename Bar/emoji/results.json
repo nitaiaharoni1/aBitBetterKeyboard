@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "generated": "2026-08-16",
-  "commit": "9ec51c2c",
+  "generated": "2026-08-18",
+  "commit": "e50e572",
   "engine": "rank.py, checked against the shipping Swift by swift-check.sh",
   "corpus": "94b02ff5ead39007",
-  "catalogue": "8a9748c8cbdea345",
+  "catalogue": "cb651bcd3984de0d",
   "limit": 60,
   "headline": {
     "entries": 99,

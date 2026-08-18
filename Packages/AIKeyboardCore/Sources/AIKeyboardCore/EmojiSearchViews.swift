@@ -125,14 +125,26 @@ struct EmojiResultsStrip: View {
         .environment(\.layoutDirection, .leftToRight)
     }
 
+    /// **The tone the grid is wearing, and no way to change it from here.**
+    /// Results are stored and scored untoned, exactly as the grid is, so
+    /// `EmojiCatalog.toned` is what makes a search for "wave" hand back the
+    /// user's own wave rather than the plain one.
+    ///
+    /// Holding one does *not* open the tone strip, and that is a room problem
+    /// rather than a decision about where the gesture belongs. This band is one
+    /// key tall with the search box directly above it and the letters directly
+    /// below; a strip has nowhere to stand that is not on top of the row it came
+    /// from. The grid is where a tone is picked — see `EmojiTonePicker` — and
+    /// this band follows whatever was picked there.
     private func strip(_ emoji: [String]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 0) {
                 ForEach(emoji, id: \.self) { character in
+                    let shown = EmojiCatalog.toned(character, controller.emojiSkinTone)
                     Button {
-                        controller.insertEmoji(character)
+                        controller.insertEmoji(shown)
                     } label: {
-                        Text(character)
+                        Text(shown)
                             .font(.system(size: height * 0.62))
                             .frame(width: height, height: height)
                             .contentShape(Rectangle())

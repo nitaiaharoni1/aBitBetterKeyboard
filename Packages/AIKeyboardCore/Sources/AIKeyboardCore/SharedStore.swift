@@ -99,6 +99,7 @@ public final class SharedStore: ObservableObject {
         static let dictationSessionMinutes = "dictationSessionMinutes"
         static let keyboardLayout = "keyboardLayout"
         static let recentEmoji = "recentEmoji"
+        static let emojiSkinTone = "emojiSkinTone"
         static let copyclipHistory = "copyclipHistory"
         static let hasAcknowledgedKeyboardSwitch = "hasAcknowledgedKeyboardSwitch"
         static let brandPalette = "brandPalette"
@@ -560,6 +561,23 @@ public final class SharedStore: ObservableObject {
     /// their recents meant it.
     public var storedRecentEmoji: [String] {
         defaults.array(forKey: Key.recentEmoji) as? [String] ?? recentEmoji
+    }
+
+    /// The skin tone the emoji grid draws itself in, picked by holding a cell.
+    ///
+    /// Written by the keyboard, the same direction as `recentEmoji` and for the
+    /// same reason: the picker that sets it only exists there. Stored as the raw
+    /// number so an older build reading a newer one sees an `Int` it can fall
+    /// back from rather than a decode failure — see `EmojiSkinTone.stored(_:)`.
+    @Published public var emojiSkinTone: EmojiSkinTone = .generic {
+        didSet { defaults.set(emojiSkinTone.rawValue, forKey: Key.emojiSkinTone) }
+    }
+
+    /// Read at the moment it is needed, because the process that wrote it is not
+    /// the process reading it. `0` is both "never set" and "plain", which are the
+    /// same picture, so an absent key needs no separate answer.
+    public var storedEmojiSkinTone: EmojiSkinTone {
+        EmojiSkinTone.stored(defaults.integer(forKey: Key.emojiSkinTone))
     }
 
     // MARK: CopyClip

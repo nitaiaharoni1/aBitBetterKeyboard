@@ -687,8 +687,15 @@ extension KeyboardController {
         closeGroupedIfCurrentWord()
         if !consumeGroupedSkipLearn() { learnWordJustCommitted() }
         target?.insertText(emoji)
-        recentEmoji.removeAll { $0 == emoji }
-        recentEmoji.insert(emoji, at: 0)
+        // **Recorded untoned, inserted toned.** The document gets exactly what
+        // the cell showed; Recents gets the spelling the grid is keyed by, so
+        // holding 👋 and picking three tones in a row leaves one wave in the tab
+        // rather than three, and switching back to plain does not strand a row
+        // of somebody else's tone there. `EmojiCatalog.toned` puts the modifier
+        // back on when the tab is drawn.
+        let remembered = EmojiCatalog.untoned(emoji)
+        recentEmoji.removeAll { $0 == remembered }
+        recentEmoji.insert(remembered, at: 0)
         recentEmoji = Array(recentEmoji.prefix(Self.recentEmojiLimit))
         // Written through on every pick rather than on teardown. A keyboard
         // extension is killed without warning and gets no `applicationWillTerminate`
@@ -722,6 +729,22 @@ extension KeyboardController {
     /// Four full columns of the strip at ten columns across — enough that the tab
     /// is worth opening, few enough that it stays a list of what you actually use.
     static let recentEmojiLimit = 20
+
+    /// Adopts the tone a held cell was released on, for the whole grid.
+    ///
+    /// **Written through immediately**, for the reason `insertEmoji` writes
+    /// recents through: a keyboard extension is killed without warning, so a
+    /// tone saved on the way out is saved never.
+    ///
+    /// The emoji the finger lifted on is inserted by `insertEmoji` on the same
+    /// lift; this only decides what the *next* 304 cells look like. Silent when
+    /// the tone has not changed, so lifting on the item the popup opened resting
+    /// on writes nothing.
+    public func setEmojiSkinTone(_ tone: EmojiSkinTone) {
+        guard tone != emojiSkinTone else { return }
+        emojiSkinTone = tone
+        store.emojiSkinTone = tone
+    }
 
     // MARK: Emoji search
 

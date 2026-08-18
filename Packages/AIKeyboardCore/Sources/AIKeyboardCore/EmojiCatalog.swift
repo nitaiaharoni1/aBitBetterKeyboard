@@ -25,6 +25,13 @@ public struct EmojiCategory: Identifiable, Sendable, Equatable {
 /// this grid has no tofu in it.** iOS 17.0 is `Package.swift`'s floor and shipped
 /// Emoji 15.0; anything newer draws as a dotted box on a phone that has not been
 /// updated, which is a key that looks broken rather than a key that is missing.
+///
+/// **Skin tones are beside the strip rather than in it.** The 1,870 in
+/// `categories` carry no tone modifier at all; the five toned spellings of the
+/// 304 that have any live in `tones`, which nothing scrolls past and only a held
+/// cell reaches. Putting them in the strip would make the People tab six times
+/// longer and would mean scrolling past five copies of every hand to reach the
+/// next gesture. See `variants(for:)`.
 public enum EmojiCatalog {
 
     /// The Recent tab. Not a category in the data: its contents are the user's,
@@ -62,6 +69,64 @@ public enum EmojiCatalog {
         loaded.entries[emoji]?.category
     }
 
+    // MARK: Skin tones
+
+    /// What a held cell offers: the emoji as Unicode draws it with no modifier,
+    /// then its five tones light to dark. Empty for an emoji that has none,
+    /// which is 1,566 of the 1,870.
+    ///
+    /// **Six entries or none, never a short row.** The generator only records a
+    /// strip when all five toned spellings are fully qualified inside the version
+    /// cap (`tone_variants`), so there is no emoji here whose picker would have a
+    /// hole in it — and no phone on iOS 17 that draws one of these as tofu.
+    ///
+    /// Takes a toned spelling as happily as an untoned one, because the thing
+    /// being held is whatever the grid drew, which is already wearing the user's
+    /// tone. `untoned(_:)` is what makes that work.
+    public static func variants(for emoji: String) -> [String] {
+        let base = untoned(emoji)
+        guard let toned = loaded.tones[base] else { return [] }
+        return [base] + toned
+    }
+
+    /// Whether holding this cell offers anything, without building the row to
+    /// find out. Asked once per visible cell per layout pass, which is why it is
+    /// two dictionary reads rather than `!variants(for:).isEmpty`.
+    public static func hasTones(_ emoji: String) -> Bool {
+        loaded.tones[untoned(emoji)] != nil
+    }
+
+    /// The same emoji with no tone modifier on it — the spelling the grid, the
+    /// recents and the search index are all keyed by. Anything this catalogue has
+    /// never heard of comes back unchanged.
+    public static func untoned(_ emoji: String) -> String {
+        loaded.untoned[emoji] ?? emoji
+    }
+
+    /// The same emoji wearing `tone`, or unchanged if it has no strip.
+    ///
+    /// **The one place display and insertion agree.** The strip is stored
+    /// untoned and the user's tone is applied at the moment a cell is drawn and
+    /// again at the moment it is inserted; nothing in between stores a toned
+    /// string, so changing the tone re-paints 304 cells without touching a
+    /// single stored list.
+    public static func toned(_ emoji: String, _ tone: EmojiSkinTone) -> String {
+        let base = untoned(emoji)
+        guard tone != .generic, let toned = loaded.tones[base] else { return base }
+        let index = tone.rawValue - 1
+        guard index >= 0, index < toned.count else { return base }
+        return toned[index]
+    }
+
+    /// Which tone this spelling is wearing. `.generic` for everything untoned,
+    /// which includes every emoji that has no strip at all.
+    public static func tone(of emoji: String) -> EmojiSkinTone {
+        guard let base = loaded.untoned[emoji], base != emoji,
+            let index = loaded.tones[base]?.firstIndex(of: emoji)
+        else { return .generic }
+        return EmojiSkinTone(rawValue: index + 1) ?? .generic
+    }
+
     /// Why the catalogue is empty, or nil when it loaded. Read by
     /// `EmojiCatalogTests`, which is the only thing standing between a resource
     /// that failed to copy and a keyboard that silently shows an empty grid.
@@ -80,11 +145,18 @@ public enum EmojiCatalog {
         var categories: [EmojiCategory] = []
         var all: [String] = []
         var entries: [String: Entry] = [:]
+        /// Untoned emoji -> its five toned spellings, light to dark. Only the
+        /// 304 that have them.
+        var tones: [String: [String]] = [:]
+        /// Every toned spelling -> the untoned one, built here rather than
+        /// shipped: it is `tones` read backwards, and 1,520 more strings in the
+        /// resource would be 1,520 more strings to keep in step with it.
+        var untoned: [String: String] = [:]
         var failure: String?
     }
 
     /// Read once, on the first emoji tap of the process rather than at launch.
-    /// 233 KB of JSON is a few milliseconds, and it is wasted on every session
+    /// 261 KB of JSON is a few milliseconds, and it is wasted on every session
     /// where the user never opens the grid.
     static let loaded: Loaded = load()
 
@@ -96,6 +168,9 @@ public enum EmojiCatalog {
         }
         let categories: [Category]
         let keywords: [String: String]
+        /// Absent in version 1 of the file, so this decodes as empty rather
+        /// than throwing — a keyboard with no tone strips still types.
+        let tones: [String: [String]]?
     }
 
     static func load() -> Loaded {
@@ -127,6 +202,10 @@ public enum EmojiCatalog {
                     )
                     order += 1
                 }
+            }
+            result.tones = payload.tones ?? [:]
+            for (base, toned) in result.tones {
+                for variant in toned { result.untoned[variant] = base }
             }
             return result
         } catch {

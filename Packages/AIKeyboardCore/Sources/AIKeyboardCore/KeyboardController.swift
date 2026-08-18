@@ -283,6 +283,27 @@ public final class KeyboardController: ObservableObject {
     @Published public internal(set) var visibleRecentEmoji: [String] = SharedStore
         .shippedRecentEmoji
 
+    /// The skin tone every tonable cell in the emoji grid is drawn in, and the
+    /// one every emoji picked from it is inserted with.
+    ///
+    /// **The grid stores nothing toned; this is applied at the last moment.**
+    /// `EmojiCatalog.all`, `recentEmoji` and the search index are all untoned
+    /// spellings, and `EmojiCatalog.toned(_:_:)` is what puts the modifier on as
+    /// a cell is drawn and again as it is inserted. So changing this repaints
+    /// 304 cells and rewrites no stored list — and a user who goes back to
+    /// plain gets their recents back as they were rather than as five different
+    /// spellings of the same wave.
+    ///
+    /// Seeded from `SharedStore` in `init` and written back by
+    /// `setEmojiSkinTone`, because the extension is killed without teardown.
+    ///
+    /// `internal(set)` rather than `private(set)`, for the reason
+    /// `visibleRecentEmoji` is: the setter lives in `KeyboardController+Typing`,
+    /// which is a different file. Still closed to the app and the extension,
+    /// which is the boundary that matters — outside this package a tone can be
+    /// read and never assigned without being written through to the store.
+    @Published public internal(set) var emojiSkinTone: EmojiSkinTone = .generic
+
     /// Copied texts this keyboard has snapshotted, newest first. Seeded from
     /// `SharedStore` in `init` and written back on every mutation: the extension
     /// dies without teardown.
@@ -604,6 +625,7 @@ public final class KeyboardController: ObservableObject {
         // process, and `load()` filled that copy whenever *this* process launched.
         recentEmoji = store.storedRecentEmoji
         visibleRecentEmoji = recentEmoji
+        emojiSkinTone = store.storedEmojiSkinTone
         let record = store.storedCopyclipRecord
         clips = record.clips
         lastChangeCount = record.lastChangeCount

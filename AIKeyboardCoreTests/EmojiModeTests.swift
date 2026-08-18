@@ -61,8 +61,12 @@ final class EmojiModeTests: XCTestCase {
         }
     }
 
-    /// Skin-tone variants are excluded deliberately: the panel offers no tone
-    /// picker, so they are unreachable, and they would be five sixths of the grid.
+    /// **Skin-tone variants are beside the strip, never in it.** Five toned
+    /// copies of every person would be five sixths of the grid, and reaching the
+    /// next gesture would mean scrolling past five spellings of the last one. A
+    /// held cell is what reaches a tone (`EmojiTonePicker`), and this is the
+    /// assertion that stops the strip growing back to 9,000 cells the next time
+    /// the generator is touched.
     func testSkinTonedVariantsAreNotInTheGrid() {
         let toned = EmojiCatalog.all.filter { emoji in
             emoji.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) }
@@ -514,5 +518,286 @@ final class EmojiModeTests: XCTestCase {
         XCTAssertFalse(
             KeyboardOverlay.emoji.showsLetterKeys,
             "the letter rows are still the ones a panel replaces")
+    }
+
+    // MARK: Skin tones
+
+    /// **Every strip is six spellings of the same emoji, and none of them is
+    /// constructed here.** The generator looks each toned sequence up in
+    /// `emoji-test.txt` rather than building it from a rule, because the rule is
+    /// only how the candidate is *spelled*, not proof that Unicode fully
+    /// qualifies it: 👋 takes all five tones and 👨‍👩‍👦 — which has three modifier
+    /// bases in it — takes none at all below Emoji 16. A build that derived the
+    /// strips instead would put tofu boxes under half the People tab, and the
+    /// grid itself would look perfectly fine.
+    ///
+    /// Asserted by stripping the tone back off and demanding the base returns,
+    /// which is what rejects a strip that quietly points at a *different* emoji.
+    /// `variants.count == 6` alone is true of that build.
+    func testEveryToneStripIsSixSpellingsOfTheSameEmoji() {
+        let tonable = EmojiCatalog.all.filter(EmojiCatalog.hasTones)
+        XCTAssertGreaterThan(tonable.count, 250, "the strips did not load at all")
+
+        for base in tonable {
+            let variants = EmojiCatalog.variants(for: base)
+            XCTAssertEqual(variants.count, 6, "\(base) has \(variants.count) variants")
+            XCTAssertEqual(variants.first, base, "\(base) does not lead its own strip")
+            XCTAssertEqual(Set(variants).count, 6, "\(base) repeats a spelling")
+
+            for variant in variants.dropFirst() {
+                XCTAssertTrue(
+                    variant.unicodeScalars.contains { Self.toneScalars.contains($0.value) },
+                    "\(variant) is in \(base)'s strip wearing no tone")
+                // The same emoji underneath: tone modifiers off, and U+FE0F off
+                // both sides because applying a tone consumes it — Unicode
+                // spells ☝️ toned as ☝🏻, with no variation selector left.
+                XCTAssertEqual(
+                    Self.skeleton(variant), Self.skeleton(base),
+                    "\(variant) is a different emoji from \(base)")
+                XCTAssertEqual(
+                    EmojiCatalog.untoned(variant), base,
+                    "\(variant) does not lead back to \(base)")
+            }
+        }
+    }
+
+    /// The fifteen hundred with no toned form, and the three hundred with one,
+    /// asserted by name — so a generator that starts inventing strips is caught
+    /// by the picture rather than by a count that could drift either way.
+    func testOnlyTheEmojiUnicodeTonesHaveAStrip() {
+        for toned in ["👋", "👍", "✌️", "🤝", "🙏", "👩‍💻", "☝️"] {
+            XCTAssertTrue(EmojiCatalog.hasTones(toned), "\(toned) lost its tones")
+        }
+        // A face, an animal, an object and a heart have no skin. The two family
+        // sequences are the ones a derived-by-rule build gets wrong: they are
+        // built out of people and still have no toned form under Emoji 16.
+        for plain in ["😂", "🐶", "🎉", "❤️", "🧑‍🤝‍🧑", "👨‍👩‍👦"] {
+            XCTAssertFalse(EmojiCatalog.hasTones(plain), "\(plain) grew a tone strip")
+            XCTAssertEqual(EmojiCatalog.variants(for: plain), [])
+            // And asking for a tone it does not have hands the emoji back
+            // unchanged rather than an empty string or a modifier on its own.
+            XCTAssertEqual(EmojiCatalog.toned(plain, .dark), plain)
+        }
+    }
+
+    /// `toned` and `tone(of:)` are the two halves of one mapping, and the panel
+    /// leans on both: one to draw a cell, the other to know which item of a strip
+    /// the finger is resting on. A build where they disagree opens every picker
+    /// on the plain emoji however the grid is painted.
+    func testATonedSpellingRemembersWhichToneItIs() {
+        for base in ["👋", "✌️", "👩‍💻"] {
+            XCTAssertEqual(EmojiCatalog.tone(of: base), .generic)
+            for tone in EmojiSkinTone.allCases {
+                let spelled = EmojiCatalog.toned(base, tone)
+                XCTAssertEqual(EmojiCatalog.tone(of: spelled), tone, "\(spelled)")
+                XCTAssertEqual(EmojiCatalog.untoned(spelled), base, "\(spelled)")
+                // Idempotent: the grid hands `toned` whatever it drew last time.
+                XCTAssertEqual(EmojiCatalog.toned(spelled, tone), spelled)
+            }
+        }
+        // Nothing this catalogue has never heard of is mangled on the way past.
+        XCTAssertEqual(EmojiCatalog.untoned("hello"), "hello")
+        XCTAssertEqual(EmojiCatalog.tone(of: "hello"), .generic)
+    }
+
+    /// **The raw values are positions in a strip and are persisted**, so a
+    /// renumbering would silently repaint every keyboard that had a tone saved.
+    func testTheToneRawValuesIndexTheStripTheyAreDrawnFrom() {
+        let variants = EmojiCatalog.variants(for: "👋")
+        for tone in EmojiSkinTone.allCases {
+            XCTAssertEqual(
+                variants[tone.rawValue], EmojiCatalog.toned("👋", tone),
+                "\(tone) is not item \(tone.rawValue) of the strip")
+        }
+        XCTAssertEqual(EmojiSkinTone.generic.rawValue, 0)
+        XCTAssertEqual(EmojiSkinTone.dark.rawValue, 5)
+        // A number from a newer build is a plain emoji, not a crash and not a
+        // tone nobody picked.
+        XCTAssertEqual(EmojiSkinTone.stored(6), .generic)
+        XCTAssertEqual(EmojiSkinTone.stored(-1), .generic)
+    }
+
+    /// **A finger that opened the strip and lifted without moving must change
+    /// nothing**, and the naive build gets this wrong in a way that is invisible
+    /// until it repaints the whole grid: the strip is centred on the *cell*, so a
+    /// thumb that has not moved is sitting over the middle of it — item 3 of 6,
+    /// medium skin tone, which nobody aimed at.
+    ///
+    /// Asserted at a location that really is over another item, because
+    /// `indexOnLift` at the rest item's own coordinates passes against the bug.
+    func testLiftingWithoutSlidingKeepsTheToneTheGridAlreadyHad() {
+        let origin = CGPoint(x: 100, y: 40)
+        let middle = CGPoint(x: origin.x + 38 * 3.5, y: 50)
+        XCTAssertEqual(
+            EmojiTonePicker.index(at: middle, origin: origin, itemWidth: 38, count: 6), 3,
+            "the middle of a six-item strip is where a standing finger is")
+
+        for rest in 0..<6 {
+            XCTAssertEqual(
+                EmojiTonePicker.indexOnLift(
+                    translation: CGSize(width: 2, height: -1), location: middle, origin: origin,
+                    itemWidth: 38, count: 6, restIndex: rest),
+                rest,
+                "a 2pt wobble picked item 3 over the resting item \(rest)")
+        }
+
+        // And a real slide does choose: the same point, reached by moving.
+        XCTAssertEqual(
+            EmojiTonePicker.indexOnLift(
+                translation: CGSize(width: 60, height: 0), location: middle, origin: origin,
+                itemWidth: 38, count: 6, restIndex: 0),
+            3)
+    }
+
+    /// A finger that runs off the end of the strip picks the end of it, not an
+    /// index that is off the array. `variants[picked]` is a real subscript on the
+    /// lift.
+    func testSlidingPastEitherEndOfTheStripStaysOnIt() {
+        let origin = CGPoint(x: 100, y: 40)
+        for x: CGFloat in [-4000, 0, 99] {
+            XCTAssertEqual(
+                EmojiTonePicker.index(
+                    at: CGPoint(x: x, y: 50), origin: origin, itemWidth: 38, count: 6),
+                0, "x \(x)")
+        }
+        for x: CGFloat in [329, 4000] {
+            XCTAssertEqual(
+                EmojiTonePicker.index(
+                    at: CGPoint(x: x, y: 50), origin: origin, itemWidth: 38, count: 6),
+                5, "x \(x)")
+        }
+    }
+
+    /// **The strip has to stay inside the emoji panel, and the row a thumb
+    /// reaches for first is the one where "above the cell" is off the panel
+    /// entirely.** A letter's accent strip may hang over the suggestion bar
+    /// because the keyboard draws both; this one is drawn by the panel and would
+    /// simply be cut off.
+    ///
+    /// Asserted over every row of every row count the panel builds, in portrait
+    /// and in landscape, because the landscape grid is 60 points tall and is
+    /// where "flip below" is not enough on its own either.
+    func testTheToneStripStaysInsideThePanelWhicheverCellOpenedIt() {
+        let panels = [CGSize(width: 402, height: 156), CGSize(width: 736, height: 86)]
+        for surface in panels {
+            for rowCount in EmojiPanel.rowCountRange {
+                let cellHeight = (surface.height - 32) / CGFloat(rowCount)
+                let item = EmojiTonePicker.item(
+                    cellWidth: 38, cellHeight: cellHeight, count: 6, surface: surface)
+                let size = CGSize(width: item.width * 6, height: item.height)
+                let columns: [CGFloat] = [0, surface.width / 2, surface.width - 38]
+                for row in 0..<rowCount {
+                    for cellX in columns {
+                        let anchor = CGRect(
+                            x: cellX, y: CGFloat(row) * cellHeight, width: 38, height: cellHeight)
+                        let origin = EmojiTonePicker.origin(
+                            anchor: anchor, size: size, surface: surface)
+                        let context = "\(surface) row \(row) of \(rowCount) at x \(cellX)"
+                        XCTAssertGreaterThanOrEqual(origin.x, 0, context)
+                        XCTAssertGreaterThanOrEqual(origin.y, 0, context)
+                        XCTAssertLessThanOrEqual(origin.x + size.width, surface.width + 0.001, context)
+                        XCTAssertLessThanOrEqual(
+                            origin.y + size.height, surface.height + 0.001, context)
+                    }
+                }
+            }
+        }
+    }
+
+    /// **Six items wider than the panel would put the darkest tone off the edge,
+    /// where no finger can land on it** — a picker with a choice in it that
+    /// cannot be chosen. The narrow case is not hypothetical: the layout editor
+    /// builds keyboards this panel has to fit inside.
+    func testTheToneStripShrinksRatherThanRunningOffANarrowPanel() {
+        let narrow = CGSize(width: 180, height: 150)
+        let item = EmojiTonePicker.item(
+            cellWidth: 38, cellHeight: 30, count: 6, surface: narrow)
+        XCTAssertLessThanOrEqual(item.width * 6, narrow.width)
+        XCTAssertGreaterThan(item.width, 0)
+
+        // A roomy panel keeps the readable size, and the item is never smaller
+        // than a category tab in the axis the finger is not sliding along.
+        let roomy = EmojiTonePicker.item(
+            cellWidth: 38, cellHeight: 29.5, count: 6, surface: CGSize(width: 402, height: 156))
+        XCTAssertEqual(roomy.width, 38)
+        XCTAssertGreaterThanOrEqual(roomy.height, 34)
+    }
+
+    /// **The picked tone is the whole grid's, and it survives the extension being
+    /// killed** — which iOS does whenever the host app changes field. A tone held
+    /// in memory alone is a tone the user picks again every few minutes.
+    @MainActor
+    func testAPickedToneIsRememberedForTheWholeGrid() {
+        let store = SharedStore.shared
+        let tone = store.emojiSkinTone
+        let recents = store.recentEmoji
+        defer {
+            store.emojiSkinTone = tone
+            store.recentEmoji = recents
+        }
+
+        store.emojiSkinTone = .generic
+        let controller = KeyboardController(target: RecordingTextTarget())
+        XCTAssertEqual(controller.emojiSkinTone, .generic)
+
+        controller.setEmojiSkinTone(.mediumDark)
+        XCTAssertEqual(controller.emojiSkinTone, .mediumDark)
+        // Through the store, not just the published copy: this is the assertion
+        // a build that only set the property passes nothing of.
+        XCTAssertEqual(store.storedEmojiSkinTone, .mediumDark)
+
+        // A fresh controller is what the next launch of the extension is.
+        let relaunched = KeyboardController(target: RecordingTextTarget())
+        XCTAssertEqual(relaunched.emojiSkinTone, .mediumDark)
+        XCTAssertEqual(EmojiCatalog.toned("👋", relaunched.emojiSkinTone), "👋🏾")
+    }
+
+    /// **Recents record the untoned spelling, and the document gets the toned
+    /// one.** Storing what was inserted would leave the Recent tab holding five
+    /// spellings of the same wave after five holds, and would strand somebody
+    /// else's tone there the moment the user went back to plain — a tab whose
+    /// whole job is muscle memory, showing emoji the grid no longer draws.
+    ///
+    /// Asserted on the tab having *one* entry, because "Recents contains a wave"
+    /// is true of the broken build too.
+    @MainActor
+    func testRecentsRecordOneWaveHoweverManyTonesArePickedFromIt() {
+        let store = SharedStore.shared
+        let tone = store.emojiSkinTone
+        let recents = store.recentEmoji
+        defer {
+            store.emojiSkinTone = tone
+            store.recentEmoji = recents
+        }
+        store.recentEmoji = []
+
+        let target = RecordingTextTarget()
+        let controller = KeyboardController(target: target)
+        for picked in EmojiSkinTone.allCases {
+            controller.insertEmoji(EmojiCatalog.toned("👋", picked))
+        }
+
+        XCTAssertEqual(
+            controller.recentEmoji.filter { EmojiCatalog.untoned($0) == "👋" }.count, 1,
+            "recents: \(controller.recentEmoji)")
+        XCTAssertEqual(controller.recentEmoji.first, "👋")
+        XCTAssertFalse(
+            controller.recentEmoji.contains { EmojiCatalog.tone(of: $0) != .generic },
+            "a tone modifier reached the Recent tab: \(controller.recentEmoji)")
+        // The document, though, got exactly what each cell was showing.
+        XCTAssertEqual(
+            target.inserted, EmojiSkinTone.allCases.map { EmojiCatalog.toned("👋", $0) })
+    }
+
+    // MARK: Helpers
+
+    static let toneScalars: Set<UInt32> = [0x1F3FB, 0x1F3FC, 0x1F3FD, 0x1F3FE, 0x1F3FF]
+
+    /// The emoji with every tone modifier and every variation selector taken
+    /// off — what two spellings of the same picture have in common.
+    static func skeleton(_ emoji: String) -> [UInt32] {
+        emoji.unicodeScalars.map(\.value).filter {
+            !toneScalars.contains($0) && $0 != 0xFE0F
+        }
     }
 }

@@ -24,6 +24,15 @@ import SwiftUI
 /// place, and `sectionGap` of air sits on the trailing column of the section
 /// before it, so two categories do not touch. The gap is padding, not a column
 /// of its own: a tab still scrolls to the first emoji, not to empty space.
+///
+/// **The cells are untoned and the panel is not.** None of the 1,870 in the
+/// strip carries a skin-tone modifier — five toned copies of every person would
+/// be five sixths of the grid — so a tone is a hold rather than a scroll, and
+/// the one the user lifts on is worn by every tonable cell from then on. What
+/// makes that cost nothing here is that it is applied at the moment a cell is
+/// *drawn*: `sections`, the ids, the column counts and the seams are all
+/// computed from the plain spellings, so changing the tone repaints 304 cells
+/// and rebuilds nothing. See `EmojiTonePicker`.
 public struct EmojiPanel: View {
 
     @ObservedObject var controller: KeyboardController
@@ -153,6 +162,15 @@ public struct EmojiPanel: View {
 
     private let scrollSpace = "emoji-strip"
 
+    /// The panel itself, which is where the tone strip is drawn and hit-tested.
+    /// Not `scrollSpace`: a strip anchored in the grid's own space would slide
+    /// with the grid, and the grid is what it has to sit still on top of.
+    private let panelSpace = "emoji-panel"
+
+    /// The tone strip a held cell has open, or nil. One for the whole panel —
+    /// see `EmojiTonePicker.owner` for what stops two cells claiming it.
+    @State private var tonePicker: EmojiTonePicker?
+
     public init(controller: KeyboardController, keyHeight: CGFloat = Theme.Metrics.keyHeight) {
         self.controller = controller
         self.keyHeight = keyHeight
@@ -171,7 +189,7 @@ public struct EmojiPanel: View {
             let cellHeight = gridHeight / CGFloat(max(1, sectionRowCount))
 
             VStack(spacing: 0) {
-                grid(cellWidth: cellWidth, cellHeight: cellHeight)
+                grid(cellWidth: cellWidth, cellHeight: cellHeight, surface: geo.size)
                     .frame(height: gridHeight)
                     // `initial: true` because the first layout pass *is* the
                     // change: `rows` starts at zero, which builds nothing, and
@@ -197,6 +215,17 @@ public struct EmojiPanel: View {
                     onDelete: { controller.press(.backspace) },
                     onDeleteRepeat: { controller.deletePreviousWord() }
                 )
+            }
+            .coordinateSpace(name: panelSpace)
+            // **On the panel rather than on the cell, because the grid is a
+            // `ScrollView` and a scroll view clips what it holds.** A strip drawn
+            // from inside a cell would be cut off at the row it came from, which
+            // for the top row is entirely. Anchored to the panel, it can stand
+            // over the rows either side of the cell that opened it.
+            .overlay(alignment: .topLeading) {
+                if let tonePicker {
+                    EmojiTonePickerView(picker: tonePicker, surface: geo.size)
+                }
             }
         }
         // **Built once per change of the recents, not once per scroll frame.**
@@ -241,7 +270,7 @@ public struct EmojiPanel: View {
 
     // MARK: Grid
 
-    private func grid(cellWidth: CGFloat, cellHeight: CGFloat) -> some View {
+    private func grid(cellWidth: CGFloat, cellHeight: CGFloat, surface: CGSize) -> some View {
         let drawnRows = max(1, sectionRowCount)
         let columns = sections.reduce(0) { $0 + $1.cells.count / drawnRows }
         let gaps = sections.reduce(0) { $0 + ($1.cells.contains(where: \.trailsSection) ? 1 : 0) }
@@ -256,13 +285,22 @@ public struct EmojiPanel: View {
                 ) {
                     ForEach(sections, id: \.id) { section in
                         ForEach(section.cells) { cell in
-                            self.cell(cell, width: cellWidth, height: cellHeight)
-                                .id(cell.id)
+                            self.cell(
+                                cell, width: cellWidth, height: cellHeight, surface: surface
+                            )
+                            .id(cell.id)
                         }
                     }
                 }
                 .frame(width: contentWidth, alignment: .leading)
             }
+            // **Off while a tone strip is open, or the same finger does both.**
+            // The strip is steered by sliding sideways, which is exactly the
+            // gesture that scrolls this grid — without this the cells would run
+            // out from under the picker while the picker was being read. Set
+            // only once the strip is up, which is a moment the finger has by
+            // definition not moved, so there is no pan in flight to cut short.
+            .scrollDisabled(tonePicker != nil)
             .coordinateSpace(name: scrollSpace)
             .onPreferenceChange(LeadingEmojiCategoryKey.self) { lead in
                 guard let lead else { return }
@@ -279,21 +317,28 @@ public struct EmojiPanel: View {
         }
     }
 
-    private func cell(_ cell: Cell, width: CGFloat, height: CGFloat) -> some View {
+    private func cell(_ cell: Cell, width: CGFloat, height: CGFloat, surface: CGSize)
+        -> some View
+    {
         Group {
             if let emoji = cell.emoji {
-                Button {
-                    controller.insertEmoji(emoji)
-                } label: {
-                    Text(emoji)
-                        // Against the shorter side, so the glyph stays inside its cell
-                        // on a Compact layout where the rows are 28pt tall.
-                        .font(.system(size: min(width, height) * 0.78))
-                        .frame(width: width, height: height)
-                        .contentShape(Rectangle())
-                }
-                .pressable(scale: 0.85)
-                .accessibilityLabel(EmojiCatalog.names(for: emoji).first ?? emoji)
+                // The cell stores the untoned spelling and `EmojiPickCell` paints
+                // it in the user's tone; nothing here is re-laid-out when that
+                // tone changes, because the strip's ids and columns never
+                // depended on it. See `KeyboardController.emojiSkinTone`.
+                EmojiPickCell(
+                    identity: cell.id,
+                    emoji: emoji,
+                    tone: controller.emojiSkinTone,
+                    width: width,
+                    height: height,
+                    glyphScale: 0.78,
+                    space: panelSpace,
+                    surface: surface,
+                    picker: $tonePicker,
+                    onInsert: { controller.insertEmoji($0) },
+                    onTone: { controller.setEmojiSkinTone($0) }
+                )
             } else {
                 // The tail of a section, keeping the next one on a fresh column.
                 Color.clear.frame(width: width, height: height)

@@ -5,7 +5,7 @@
 // reads `Bundle.module`, which SwiftPM generates for a target with resources
 // and `swiftc` does not, so without this the two files do not compile at all.
 // It points at a bundle `swift-check.sh` assembles from the *shipping*
-// `Resources/EmojiCatalog.json` — the same 233 KB the keyboard loads, not a
+// `Resources/EmojiCatalog.json` — the same 261 KB the keyboard loads, not a
 // fixture — because a fidelity check against a made-up catalogue proves the
 // two implementations agree about data neither one ships.
 import Foundation

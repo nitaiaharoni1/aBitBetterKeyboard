@@ -16,9 +16,10 @@ Two filters, and both are load-bearing:
     oldest iOS this package supports renders as a tofu box, which is worse than
     being absent — it is a key that looks broken. iOS 17.0 shipped Emoji 15.0,
     and iOS 17.0 is `Package.swift`'s floor.
-  * **Skin-tone and hair components are dropped.** The panel offers no tone
-    picker, so a tone modifier applied to nothing is not reachable, and the
-    five toned copies of every person would be five sixths of the catalogue.
+  * **Skin-tone and hair components are dropped from the grid**, and kept to
+    one side in `tones`. Five toned copies of every person would be five
+    sixths of the catalogue, so the strip stays untoned and a long press on a
+    cell is what reaches a tone — see `EmojiCatalog.variants(for:)`.
 
 Run: python3 Scripts/generate-emoji-catalog.py
 """
@@ -52,7 +53,10 @@ GROUPS = [
     ("Flags", "Flags", "flag"),
 ]
 
-SKIN_TONES = {0x1F3FB, 0x1F3FC, 0x1F3FD, 0x1F3FE, 0x1F3FF}
+# Light to dark, Fitzpatrick 1-2 through 6, which is the order every other
+# keyboard draws the row in.
+SKIN_TONE_ORDER = (0x1F3FB, 0x1F3FC, 0x1F3FD, 0x1F3FE, 0x1F3FF)
+SKIN_TONES = set(SKIN_TONE_ORDER)
 VARIATION_SELECTOR = "️"
 
 # Keeps the file honest about its size. Nobody scrolls past the eighth word of
@@ -72,12 +76,22 @@ def pack(names: "list[str]", keywords: "list[str]") -> str:
 
     Lowercased here rather than in the keyboard, so no search lowercases 1,900
     strings on its first keystroke.
+
+    **The names are positional and are therefore never deduplicated against each
+    other**, even when two locales say the same word. `EmojiCatalog.names(for:)`
+    hands back this list in `LOCALES` order and `EmojiModeTests` reads slot 1 as
+    the Hebrew one, so collapsing a pair would not shorten a list — it would
+    move Hebrew into slot 0 and leave the emoji looking as though it had no
+    Hebrew name at all. CLDR does produce them: 📀's Hebrew `tts` is now the
+    Latin string "dvd", the same as English's. Only keywords are deduplicated,
+    and only against the names, where the list is a bag of words and position
+    means nothing.
     """
     seen: "set[str]" = set()
     unique_names: "list[str]" = []
     for name in names:
         folded = name.lower().strip()
-        if folded and folded not in seen:
+        if folded:
             seen.add(folded)
             unique_names.append(folded)
 
@@ -99,9 +113,26 @@ def fetch(url: str) -> str:
         return response.read().decode("utf-8")
 
 
-def parse_emoji_test(text: str) -> "dict[str, list[str]]":
-    """Unicode group name -> emoji, in file order, filtered."""
-    by_group: "dict[str, list[str]]" = {}
+class EmojiTest:
+    """What `emoji-test.txt` says, split into the two things this script needs.
+
+    `by_group` is the grid: untoned, capped, in file order. `qualified` is every
+    fully-qualified sequence in the file that is inside the cap, toned ones
+    included, keyed by its codepoints — which is what `tone_variants` looks a
+    candidate up in rather than trusting a rule.
+    """
+
+    def __init__(self) -> None:
+        self.by_group: "dict[str, list[str]]" = {}
+        self.qualified: "dict[tuple, str]" = {}
+        # Every codepoint some sequence in the file puts a tone modifier
+        # directly after — Unicode's `Emoji_Modifier_Base`, read off the data
+        # rather than fetched as a second file.
+        self.modifier_bases: "set[int]" = set()
+
+
+def parse_emoji_test(text: str) -> EmojiTest:
+    result = EmojiTest()
     group = ""
     line_pattern = re.compile(
         r"^([0-9A-F ]+?)\s*;\s*(\S+)\s*#\s*(\S+)\s+E(\d+\.\d+)\s"
@@ -116,6 +147,10 @@ def parse_emoji_test(text: str) -> "dict[str, list[str]]":
         if not match:
             continue
         codepoints, status, emoji, version = match.groups()
+        points = tuple(int(p, 16) for p in codepoints.split())
+        for index, point in enumerate(points):
+            if point in SKIN_TONES and index > 0:
+                result.modifier_bases.add(points[index - 1])
         # Only `fully-qualified`. The other statuses are the same emoji spelled
         # without its variation selector; keeping them would double the grid
         # with characters that render identically.
@@ -123,11 +158,53 @@ def parse_emoji_test(text: str) -> "dict[str, list[str]]":
             continue
         if float(version) > MAX_EMOJI_VERSION:
             continue
-        points = {int(p, 16) for p in codepoints.split()}
-        if points & SKIN_TONES:
+        result.qualified[points] = emoji
+        if set(points) & SKIN_TONES:
             continue
-        by_group.setdefault(group, []).append(emoji)
-    return by_group
+        result.by_group.setdefault(group, []).append(emoji)
+    return result
+
+
+def tone_variants(emoji: str, test: EmojiTest) -> "list[str]":
+    """The five toned spellings of one untoned emoji, or `[]` if it has none.
+
+    **Every one is looked up, none is constructed.** The rule — insert the
+    modifier after each `Emoji_Modifier_Base` codepoint, swallowing a U+FE0F
+    that followed it — is only how the *candidate* is spelled; what ships is
+    the string `emoji-test.txt` gives for it, and a candidate the file does not
+    fully-qualify inside the cap is dropped. That is the difference between a
+    tone strip and five tofu boxes, and it is not theoretical: 👨‍👩‍👦 has three
+    modifier bases in it and no toned form at all below Emoji 16.
+
+    **All five or none.** A partial row would be a picker with holes in it, and
+    the reader would have to guess whether a gap meant "not yet" or "never".
+    Across the 1,870 in the grid there is in fact no partial case today — 304
+    take all five and the rest take none — so this rejects a future upstream
+    change rather than trimming today's data.
+    """
+    points = tuple(ord(character) for character in emoji)
+    if not set(points) & test.modifier_bases:
+        return []
+    variants: "list[str]" = []
+    for tone in SKIN_TONE_ORDER:
+        candidate: "list[int]" = []
+        index = 0
+        while index < len(points):
+            point = points[index]
+            candidate.append(point)
+            if point in test.modifier_bases:
+                candidate.append(tone)
+                # U+FE0F asks for the emoji presentation, and a tone modifier
+                # already says it. Unicode spells ☝🏻 without one, so keeping it
+                # would build a sequence the file has never heard of.
+                if index + 1 < len(points) and points[index + 1] == 0xFE0F:
+                    index += 1
+            index += 1
+        found = test.qualified.get(tuple(candidate))
+        if found is None:
+            return []
+        variants.append(found)
+    return variants
 
 
 def parse_annotations(text: str, into: "dict[str, dict]", locale: str) -> None:
@@ -157,7 +234,8 @@ def parse_annotations(text: str, into: "dict[str, dict]", locale: str) -> None:
 
 def main() -> int:
     print(f"fetching {EMOJI_TEST}")
-    by_group = parse_emoji_test(fetch(EMOJI_TEST))
+    test = parse_emoji_test(fetch(EMOJI_TEST))
+    by_group = test.by_group
 
     annotations: "dict[str, dict]" = {}
     for locale in LOCALES:
@@ -168,6 +246,7 @@ def main() -> int:
 
     categories = []
     blobs: "dict[str, str]" = {}
+    tones: "dict[str, list[str]]" = {}
     missing_hebrew = 0
     total = 0
 
@@ -190,13 +269,19 @@ def main() -> int:
             if not entry.get("name-he") and not entry.get("keywords-he"):
                 missing_hebrew += 1
             blobs[character] = pack(names, keywords)
+            variants = tone_variants(character, test)
+            if variants:
+                tones[character] = variants
 
     payload = {
-        "version": 1,
+        # 2 added `tones`. `EmojiCatalog` does not read this field — it is here
+        # so a file found in a diff says what shape it is.
+        "version": 2,
         "generator": "Scripts/generate-emoji-catalog.py",
         "maxEmojiVersion": MAX_EMOJI_VERSION,
         "categories": categories,
         "keywords": blobs,
+        "tones": tones,
     }
 
     out = (
@@ -212,8 +297,15 @@ def main() -> int:
     print(f"\nwrote {out.relative_to(out.parents[5])}")
     print(f"  {total} emoji across {len(categories)} categories, {size / 1024:.0f} KB")
     print(f"  {missing_hebrew} with no Hebrew words ({missing_hebrew / total:.1%})")
+    print(f"  {len(tones)} with a skin tone strip")
     if missing_hebrew / total > 0.1:
         print("error: Hebrew coverage too thin to ship", file=sys.stderr)
+        return 1
+    # The People group alone is nearly 300 of them. A handful means the
+    # modifier-base set came back empty and every strip was silently dropped,
+    # which reads downstream as "no emoji has tones" rather than as a failure.
+    if len(tones) < 200:
+        print(f"error: only {len(tones)} emoji have tone strips", file=sys.stderr)
         return 1
     return 0
 

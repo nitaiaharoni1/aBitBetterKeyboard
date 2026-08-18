@@ -70,7 +70,9 @@ xcrun swift-format --in-place --recursive \
   space, and the next space bar does not second-guess the word you picked
 - Code-switching predictions: Latin words typed inside a Hebrew sentence get
   offered from a loanword list and tagged with the language they came from
-- Emoji panel, nine categories, plain Unicode with no bundled images
+- Emoji panel, nine categories, plain Unicode with no bundled images. Hold a
+  hand or a face and a strip of the six skin tones opens over the grid; the
+  one you lift on is the one the whole panel is drawn in from then on
 - AI actions: Reply, Fix, Rewrite, Tone. Each writes its answer straight into the
   field, with a progress line above the suggestion bar while the model is
   thinking and an undo button beside the candidates until the next keystroke
