@@ -39,9 +39,16 @@ declining to complete is conservative, not wrong. An entry with an empty prefix 
 not asked at all, because `insertSpace` commits nothing where no word is in
 progress.
 
-The score at the time of writing is **75/76 judged**, from 47/76 before the engine
-was made context-aware and 73/76 before `TypoLexicon` gave the commit decision a
-second dictionary. It read 73/76 under the scorer that did not measure the
+The score at the time of writing is **75/76 judged with every rule allowed to
+fire** (`AUTOCORRECT_LEVEL=full`), from 47/76 before the engine was made
+context-aware and 73/76 before `TypoLexicon` gave the commit decision a second
+dictionary. **What ships reads 73/76**, because `AutocorrectLevel.shippedDefault`
+is a floor on `CommitReason.confidence` and two entries fall under it: `typo-07`,
+`restaraunt` → `restaurant`, a rotation costing more than a ten-letter budget
+allows, and `typo-12`, `בעוד רבה` → `בעוד רבע`, the sentence-follower override
+that is priced below the floor on purpose. Both are still offered in the bar. A
+bare `run.sh` measures the shipping setting; pass `AUTOCORRECT_LEVEL=full` to
+reproduce the numbers below. It read 73/76 under the scorer that did not measure the
 commit column; the same engine scored 71/76 the first time it was measured
 honestly, and the entry that closed the gap is `he-comp-07`. Two identical-code
 simulator runs hold 75/76 with zero slot flips. `en-comp-03` commits `response`

@@ -14,7 +14,7 @@ final class SpaceBarLanguageSwitchTests: XCTestCase {
         saved = TypingSettings.snapshot()
         let store = SharedStore.shared
         store.enabledLanguages = [.english, .hebrew]
-        store.autocorrect = true
+        store.autocorrectLevel = .full
         store.predictions = true
     }
 

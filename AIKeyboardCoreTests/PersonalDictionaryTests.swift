@@ -21,24 +21,24 @@ final class PersonalDictionaryTests: XCTestCase {
 
     private var savedDictionary: [String] = []
     private var savedLanguages: [KeyboardLanguage] = []
-    private var savedAutocorrect = true
+    private var savedAutocorrect = AutocorrectLevel.full
     private var savedPredictions = true
 
     override func setUp() {
         super.setUp()
         savedDictionary = SharedStore.shared.personalDictionary
         savedLanguages = SharedStore.shared.enabledLanguages
-        savedAutocorrect = SharedStore.shared.autocorrect
+        savedAutocorrect = SharedStore.shared.autocorrectLevel
         savedPredictions = SharedStore.shared.predictions
         SharedStore.shared.enabledLanguages = [.english, .hebrew]
-        SharedStore.shared.autocorrect = true
+        SharedStore.shared.autocorrectLevel = .full
         SharedStore.shared.predictions = true
     }
 
     override func tearDown() {
         SharedStore.shared.personalDictionary = savedDictionary
         SharedStore.shared.enabledLanguages = savedLanguages
-        SharedStore.shared.autocorrect = savedAutocorrect
+        SharedStore.shared.autocorrectLevel = savedAutocorrect
         SharedStore.shared.predictions = savedPredictions
         super.tearDown()
     }

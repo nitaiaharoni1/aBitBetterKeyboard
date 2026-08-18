@@ -33,7 +33,7 @@ extension SuggestionEngine {
     /// progress ends in whatever letter was typed last, and 20% of the mid-word
     /// keystrokes in the 353-word seed list end in one of those five. This lands
     /// as `.orthography`, which outranks every completion source, and
-    /// `shouldAutocorrect` returns true on it above the seed check, so it took
+    /// `commitReason` names a reason for it above the seed check, so it took
     /// the bold slot: typing `פגישה` bolded `ף` at the first letter, `מכונית`
     /// bolded `מך`, `נכון` bolded `נך`, and `לפגישה` bolded `לף` while `לפגישה`
     /// itself never reached the bar. 17 of 35 measured keystroke moments bolded
@@ -84,7 +84,7 @@ extension SuggestionEngine {
     ///
     /// Ranked `Candidate`s rather than `Suggestion`s, because the caller has two
     /// questions to ask of this list and only one of them is about the words: the
-    /// bar draws the text, and `shouldAutocorrect` asks where the winner came
+    /// bar draws the text, and `commitReason` asks where the winner came
     /// from. See `SuggestionEngine.rank`.
     ///
     /// - Parameters:
@@ -578,7 +578,7 @@ extension SuggestionEngine {
     ///
     /// **It only runs on a word that is already a word.** A prefix is not an
     /// unfinished inflection of anything, and the gate also puts the result out of
-    /// the space bar's reach for free: `shouldAutocorrect` returns false at
+    /// the space bar's reach for free: `commitReason` answers nil at
     /// `SeedLanguageModel.knows`, and failing that at `!known` in the four-letter
     /// gate, for every word this can fire on. So these can be tapped and never
     /// committed.
@@ -899,12 +899,13 @@ extension SuggestionEngine {
             .filter { $0.lowercased() != lower }
     }
 
-    /// Whether pressing space should replace what was typed.
+    /// Why pressing space may replace what was typed, or nil to keep the
+    /// keystrokes.
     ///
     /// **Defaulting to "yes" is how autocorrect earns its reputation**, so this
     /// reads as a list of reasons to override the user rather than a list of
-    /// reasons not to. Every `return true` below is a case where the typed
-    /// characters are known to be wrong; everything else keeps what they keyed.
+    /// reasons not to. Every reason returned below is a case where the typed
+    /// characters are known to be wrong; nil keeps what they keyed.
     ///
     /// **Takes ranked candidates, not suggestions, and that is what fixed the
     /// Hebrew commits.** A `Suggestion` is a word and a language; a `Candidate`
@@ -912,13 +913,19 @@ extension SuggestionEngine {
     /// reach it, which is the whole basis on which `rank` decided it was the
     /// winner. Asking the question here with that thrown away is why the space bar
     /// committed `להתרופה`. See `commitTrustsReading`.
+    /// **The reason is named rather than reduced to a yes, and that is what
+    /// `AutocorrectLevel.confident` reads.** Every rule below rests on different
+    /// evidence — a closed table, an orthographic law, a bigram over 353 words,
+    /// an absence from a dictionary — and answering `true` to all of them threw
+    /// that away at the last step. `CommitReason` prices each one, so a user who
+    /// wants repairs without guesses gets a floor rather than a switch.
     @MainActor
-    static func shouldAutocorrect(
+    static func commitReason(
         _ prefix: String, previousWords: [String], context: String = "",
         typedLanguage: KeyboardLanguage,
         results: [Candidate], supplementary: [String], personal: PersonalLanguageModel
-    ) -> Bool {
-        guard results.count > 1 else { return false }
+    ) -> CommitReason? {
+        guard results.count > 1 else { return nil }
         // The word, not the keystrokes, for every question below — the same string
         // `completions(for:)` asks its sources about. A mark at either edge is the
         // sentence's, and both the contraction table and the final-form rule used
@@ -929,14 +936,14 @@ extension SuggestionEngine {
 
         // The user's own list is absolute, and it is asked first rather than as a
         // clause on `isKnownWord` at the bottom: the contraction table and the
-        // Hebrew final-form rule both return true above that line, and the
+        // Hebrew final-form rule both commit above that line, and the
         // final-form rule is what used to eat `בלי־פרופ`.
         let typed = comparable(prefix)
-        if !typed.isEmpty, supplementary.contains(where: { comparable($0) == typed }) { return false }
+        if !typed.isEmpty, supplementary.contains(where: { comparable($0) == typed }) { return nil }
         // And so is a word this person has typed for themselves often enough to
         // mean it. Inferred rather than declared, so it takes repetition — see
         // `PersonalLanguageModel.protectThreshold`.
-        if personal.isProtected(word, in: typedLanguage) { return false }
+        if personal.isProtected(word, in: typedLanguage) { return nil }
 
         // **An entry that merely *extends* a word does not own it, and the guard
         // above only ever protected an exact match.** `.personal` is the second
@@ -964,7 +971,7 @@ extension SuggestionEngine {
             if entry != typed, entry.hasPrefix(typed), contested,
                 supplementary.contains(where: { comparable($0) == entry })
             {
-                return false
+                return nil
             }
         }
 
@@ -1004,7 +1011,7 @@ extension SuggestionEngine {
             // Refused rather than fallen through: the questions below are all about
             // a candidate in the typed word's own alphabet, and the four-letter
             // gate at the bottom would happily commit this one on its way past.
-            return !(switching && stillSpellingSomething)
+            return (switching && stillSpellingSomething) ? nil : .wrongLayout
         }
 
         // **Asked before the seed list, not after, and the order is the rule.**
@@ -1014,7 +1021,7 @@ extension SuggestionEngine {
         // firing on exactly the words it was written for. Which reading is meant is
         // decided once, by whether the word is in the table at all — see
         // `contractions` — and never again at runtime.
-        if typedLanguage == .english, contractions[lower] != nil { return true }
+        if typedLanguage == .english, contractions[lower] != nil { return .contraction }
 
         // **And only when the typed letters are not still going somewhere.** The
         // rule is right about orthography — a *finished* Hebrew word may not end in
@@ -1037,19 +1044,19 @@ extension SuggestionEngine {
         if typedLanguage.script == .hebrew, hebrewFinalFormCorrection(of: word) != nil,
             SeedLanguageModel.words(startingWith: word, in: typedLanguage, limit: 1).isEmpty
         {
-            return true
+            return .hebrewFinalForm
         }
 
         // A word the seed list knows is a word, and a keyboard does not correct
         // words. This is what stops `Tzachi` becoming `Teach` and `Bit` becoming
         // `Bitten`.
-        if SeedLanguageModel.knows(word, in: typedLanguage) { return false }
+        if SeedLanguageModel.knows(word, in: typedLanguage) { return nil }
 
-        guard let first = results.dropFirst().first else { return false }
+        guard let first = results.dropFirst().first else { return nil }
         // The reading has to be one the ranking trusts before any of the questions
         // below are worth asking. Everything above this line is about the typed
         // letters themselves; everything below is about the candidate.
-        guard commitTrustsReading(first, typed: word) else { return false }
+        guard commitTrustsReading(first, typed: word) else { return nil }
         let winner = SeedLanguageModel.fold(first.text)
         let typedFolded = SeedLanguageModel.fold(word)
 
@@ -1081,10 +1088,10 @@ extension SuggestionEngine {
             SeedLanguageModel.followers(after: previousWords, in: typedLanguage)
                 .contains(where: { SeedLanguageModel.fold($0) == winner })
         {
-            return true
+            return .sentenceFollower
         }
 
-        guard let checkerLocale = typedLanguage.spellCheckerLocale else { return false }
+        guard let checkerLocale = typedLanguage.spellCheckerLocale else { return nil }
         let known = isKnownWord(word, checkerLocale: checkerLocale)
 
         // **The keys were nearly right.** A *common* word one keystroke away from
@@ -1165,7 +1172,12 @@ extension SuggestionEngine {
             // is not a slip in any language.
             let hebrewUnfinished = sameLengthSubstitution && hebrewStillBeingTyped
             if !hebrewUnfinished, !(prefixCompletion && ambiguousStem) {
-                return true
+                // Priced by kind rather than as one rule. In a transposition every
+                // letter is right and only the order is not, which is a stronger
+                // claim than "one of these keys was the wrong key" — and the two are
+                // already told apart three lines up, for `sameLengthSubstitution`.
+                return SeedLanguageModel.isTransposition(winner, of: word)
+                    ? .transposition : .singleEdit
             }
         }
 
@@ -1214,13 +1226,17 @@ extension SuggestionEngine {
             TypoLexicon.rank(of: first.text, in: typedLanguage) != nil,
             !TypoLexicon.isWord(word, in: typedLanguage),
             let budget = TypoChannel.budget(forTypedLength: word.count),
-            TypoChannel.cost(
+            let cost = TypoChannel.cost(
                 typed: Array(word), candidate: Array(first.text), language: typedLanguage,
-                budget: budget) != nil,
+                budget: budget),
             !(hebrewStillBeingTyped && typedFolded.count == winner.count
                 && !SeedLanguageModel.isTransposition(winner, of: word))
         {
-            return true
+            // The cost is carried out of the guard rather than recomputed: this is
+            // the cheapest path the banded DP actually found, and asking a second
+            // time outside it would be a second answer to the same question.
+            return .frequency(
+                cost: cost, transposition: SeedLanguageModel.isTransposition(winner, of: word))
         }
 
         // **An unfinished word with two different endings is not a typo.**
@@ -1239,7 +1255,7 @@ extension SuggestionEngine {
                     last: previousWords, field: documentWords(in: context), context: context,
                     language: typedLanguage, personal: personal
                 ).map(SeedLanguageModel.fold))
-            if !contextual.contains(winner) { return false }
+            if !contextual.contains(winner) { return nil }
         }
 
         // **Two real Hebrew words sharing a prefix, and Apple's list is not a
@@ -1278,7 +1294,7 @@ extension SuggestionEngine {
                         last: previousWords, field: documentWords(in: context), context: context,
                         language: typedLanguage, personal: personal
                     ).map(SeedLanguageModel.fold))
-                if !contextual.contains(winner) { return false }
+                if !contextual.contains(winner) { return nil }
             }
         }
 
@@ -1301,7 +1317,7 @@ extension SuggestionEngine {
                         last: previousWords, field: documentWords(in: context), context: context,
                         language: typedLanguage, personal: personal
                     ).map(SeedLanguageModel.fold))
-                if !contextual.contains(winner) { return false }
+                if !contextual.contains(winner) { return nil }
             }
         }
 
@@ -1316,8 +1332,26 @@ extension SuggestionEngine {
         // four. The same-length *substitution* half is Hebrew-only, or the
         // four-letter gate would commit `נכון` for `מכונ` the moment the neighbour
         // clause stopped doing it.
-        return word.count >= 4 && !known
-            && !(sameLengthSubstitution && typedLanguage.script == .hebrew)
+        guard word.count >= 4, !known,
+            !(sameLengthSubstitution && typedLanguage.script == .hebrew)
+        else { return nil }
+        // **How far the winner is from the keystrokes, which is the one question
+        // this gate never asked.** It fires on an absence — no dictionary knows
+        // these letters — and then trusts the ranker, so `yjis` reaches `egos` on
+        // three substitutions with exactly the standing `צריכ` has for reaching
+        // `צריך` on a final form. `TypoChannel` prices that difference for the
+        // frequency rule one block up and costs one banded DP against a single
+        // candidate, on a path that has already decided the word is unusual.
+        //
+        // It changes nothing about what commits: both answers are a reason, and
+        // only `AutocorrectLevel.confident` reads them apart.
+        let explainable =
+            TypoChannel.budget(forTypedLength: word.count).map { budget in
+                TypoChannel.cost(
+                    typed: Array(word), candidate: Array(first.text),
+                    language: typedLanguage, budget: budget) != nil
+            } ?? false
+        return .unknownWord(explainable: explainable)
     }
 
     /// Whether the space bar may act on the reading this candidate was reached

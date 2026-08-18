@@ -221,7 +221,7 @@ extension SuggestionEngineTests {
     /// a Hebrew word, and 20% of the mid-word keystrokes across the seed
     /// vocabulary land on one of them, so an ungated rule fired on a fifth of all
     /// Hebrew typing: it took the bold slot, because `.orthography` outranks every
-    /// completion source and `shouldAutocorrect` answered on it above the seed
+    /// completion source and `commitReason` answered on it above the seed
     /// check, and it pushed the word being typed out of the bar.
     ///
     /// Measured on the build before the gate: `פ` bolded `ף` while `פגישה` sat

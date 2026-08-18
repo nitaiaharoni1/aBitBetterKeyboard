@@ -210,6 +210,12 @@ public enum SuggestionEngine {
     ///     to the shared store; tests and `Bar/typing/harness` pass an empty
     ///     in-memory one, so a score can never quietly inherit whatever the
     ///     developer has been typing.
+    ///   - autocorrect: how much evidence the space bar needs before the bold
+    ///     slot is allowed to be anything other than the typed word. Defaults to
+    ///     `.full`, which is what shipped before the setting existed and what
+    ///     every number in `Bar/typing/` was measured at, so a caller that does
+    ///     not care — a test, a harness run with no `--level` — measures the same
+    ///     engine it always did. `KeyboardController` passes the user's setting.
     @MainActor
     public static func suggestions(
         prefix: String,
@@ -219,7 +225,8 @@ public enum SuggestionEngine {
         // Optional rather than defaulted to `.shared`, because a default argument
         // is evaluated in the *caller's* isolation and `.shared` is main-actor
         // isolated — which is a warning today and an error under Swift 6.
-        personal personalOrNil: PersonalLanguageModel? = nil
+        personal personalOrNil: PersonalLanguageModel? = nil,
+        autocorrect: AutocorrectLevel = .full
     ) -> [Suggestion] {
         let personal = personalOrNil ?? .shared
         let trimmedPrefix = prefix.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -258,12 +265,17 @@ public enum SuggestionEngine {
         // same list still carries. Flattening before that question is asked is
         // what let a two-clitic reading take the space bar — see
         // `commitTrustsReading`.
+        let reason = commitReason(
+            trimmedPrefix, previousWords: preceding, context: context,
+            typedLanguage: typedLanguage, results: ranked,
+            supplementary: supplementary, personal: personal)
+        // **Nil is not zero confidence, and writing it as one is a live bug.**
+        // `.full` floors at 0, so folding "no reason at all" into a number and
+        // comparing would commit every word the cascade explicitly refused.
+        let commits = reason.map { $0.confidence >= autocorrect.confidenceFloor } ?? false
         return markDefault(
             ranked.map { Suggestion(text: $0.text, language: $0.language) },
-            at: shouldAutocorrect(
-                trimmedPrefix, previousWords: preceding, context: context,
-                typedLanguage: typedLanguage, results: ranked,
-                supplementary: supplementary, personal: personal) ? 1 : 0)
+            at: commits ? 1 : 0)
     }
 
     /// The committed words directly before the cursor, in order, at most `limit`

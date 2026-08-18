@@ -116,6 +116,33 @@ guard arguments.count == 3 else {
 let corpusURL = URL(fileURLWithPath: arguments[1])
 let outURL = URL(fileURLWithPath: arguments[2])
 
+/// Which `AutocorrectLevel` the bold slot is decided at.
+///
+/// **Defaults to what ships, not to what the engine defaults to.** This file
+/// claims to measure the shipping keyboard, so an unset variable has to mean the
+/// setting a fresh install gets — `AutocorrectLevel.shippedDefault` — and not
+/// `SuggestionEngine.suggestions`'s own `.full`, which means "ask every rule".
+/// That is also what makes `Bar/drift/` track the product rather than the
+/// cascade: it runs this with no variable set.
+///
+/// **An unknown name exits rather than falling back**, for the reason the
+/// lexicon check below exits: a typo in the variable would score the default
+/// under a filename that says `confident`, and a wrong number that looks right is
+/// the one failure mode this harness exists to prevent.
+let autocorrectLevel: AutocorrectLevel = {
+    guard let name = ProcessInfo.processInfo.environment["AUTOCORRECT_LEVEL"], !name.isEmpty
+    else { return .shippedDefault }
+    switch name {
+    case "off": return .off
+    case "confident": return .confident
+    case "full": return .full
+    default:
+        FileHandle.standardError.write(
+            Data("AUTOCORRECT_LEVEL must be off, confident or full — got \(name)\n".utf8))
+        exit(2)
+    }
+}()
+
 let corpus = try JSONDecoder().decode(CorpusFile.self, from: Data(contentsOf: corpusURL))
 
 /// **Refuses to score an engine that is missing a source, rather than scoring
@@ -245,7 +272,8 @@ let records: [SlotRecord] = MainActor.assumeIsolated {
         let started = DispatchTime.now().uptimeNanoseconds
         _ = SuggestionEngine.suggestions(
             prefix: prefix, context: context, languages: languages(forKeyboard: keyboard),
-            supplementary: shippedPersonalDictionary, personal: personal)
+            supplementary: shippedPersonalDictionary, personal: personal,
+            autocorrect: autocorrectLevel)
         let cold = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
         FileHandle.standardError.write(
             Data("first \(label) call: \(String(format: "%.1f", cold)) ms\n".utf8))
@@ -257,7 +285,8 @@ let records: [SlotRecord] = MainActor.assumeIsolated {
             context: entry.context,
             languages: languages(forKeyboard: entry.keyboard),
             supplementary: shippedPersonalDictionary,
-            personal: personal)
+            personal: personal,
+            autocorrect: autocorrectLevel)
         elapsed.append(Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000)
         return (entry, results)
     }

@@ -8,7 +8,26 @@ Bar/typing/typos/run.sh --runs=3
 Bar/typing/typos/run.sh --verbose       # every stable row, not just the findings
 TYPOS_OUT=/tmp/typos Bar/typing/typos/run.sh
 SIMULATOR_DEVICE=<udid> Bar/typing/typos/run.sh
+AUTOCORRECT_LEVEL=full Bar/typing/typos/run.sh   # every rule allowed to fire
 ```
+
+**A bare run measures the shipping keyboard, which is not the same as measuring
+the cascade.** `AutocorrectLevel.shippedDefault` is a floor on
+`CommitReason.confidence`, so some rules generate a candidate and are not allowed
+to commit it; `AUTOCORRECT_LEVEL=full` lifts the floor and asks every rule. Both
+are worth reading and they answer different questions. As of 2026-08-18, two runs
+per side, zero rows moving on either:
+
+| | committed | held | WRONG | controls |
+|---|---|---|---|---|
+| `confident` (ships) | 85 | 19 | **3** | 21/21 intact |
+| `full` | 90 | 7 | **10** | 21/21 intact |
+
+Seven corrections buy seven fewer wrong words. The three that survive the floor
+are `wich` → `with` (NIT-154 calls it defensible and it is), `לכשוב` → `לכתוב`
+for `לחשוב`, and `מהעבדה` → `מהעובדה` for `מהעבודה`; the last two are genuinely
+ambiguous, one explainable edit in either direction. `Bar/typing/` charges two
+more entries for the same floor, which is recorded there.
 
 It is the same invigilator as the frozen exam and the sweep next door: `expand.py`
 turns `typos.json` into `Bar/typing/corpus.json`'s own shape, `harness/run.sh`
@@ -41,6 +60,42 @@ keyboard that replaces `נזעדה` with `נועדה` has put a word in the mess
 nobody was reaching for, and that is what makes people switch autocorrect off.
 Every one of them is printed individually, always, and none is ever summarised
 into a total.
+
+## `reasons.sh` — which rule decided it
+
+```bash
+Bar/typing/typos/reasons.sh                          # the 128 pairs
+Bar/typing/typos/reasons.sh Bar/typing/corpus.json   # the frozen 90
+```
+
+**The judge grades the word; this grades the rule that chose it, and the
+difference is not academic.** `SuggestionEngine.commitReason` is a dozen rules
+resting on wildly different evidence, and `AutocorrectLevel` cuts them at a
+confidence floor — so "is this correction right" and "is *this rule* right" are
+separate questions, and only the second one can price a rule. It prints a row per
+entry (`id, typed, intended, winner, reason, confidence`) and joins them into a
+per-rule table.
+
+The prices in `AutocorrectConfidence.swift` came from this, and it earned its
+place immediately: reasoning about the shape of each rule had put the frequency
+corrector above 60 *over* the floor and the four-letter fallback *under* it, and
+the measurement is the other way round. Reading at 2026-08-18:
+
+| rule | price | right | WRONG |
+|---|---|---|---|
+| `contraction` | 98 | 7 | 0 |
+| `hebrewFinalForm` | 96 | 5 | 0 |
+| `frequency` (≤60 or a transposition) | 92 | 31 | 1 |
+| `transposition` | 92 | 9 | 0 |
+| `singleEdit` | 87 | 28 | 2 |
+| `unknownWord` (channel can price it) | 87 | 5 | 0 |
+| `frequency` (>60) | 72 | 5 | 6 |
+| `unknownWord` (it cannot) | 68 | 0 | 1 |
+
+Everything above the floor of 86 is 93% right or better and everything below it
+45% or worse, which is what makes 86 a line rather than a guess. **Re-run this
+before moving any of those constants**, and note that it calls `commitReason`
+directly, so it reports what every rule claims regardless of the level in force.
 
 `offered` is the split between two different bugs with two different fixes: **the
 ranker put it second** and **no source ever generated it**. The judge prints both

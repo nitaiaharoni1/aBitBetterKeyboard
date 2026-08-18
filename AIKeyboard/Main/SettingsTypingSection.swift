@@ -6,13 +6,55 @@ import SwiftUI
 ///
 /// **Every switch here is affected by Full Access, not some of them.** Each
 /// one is a `SharedStore.stored*` accessor the keyboard reads across the App
-/// Group at the keystroke — `storedAutocorrect`, `storedAutocapitalise`,
+/// Group at the keystroke — `storedAutocorrectLevel`, `storedAutocapitalise`,
 /// `storedPredictions`, `storedCompleteOnIdle`, `storedSpaceOnIdle`,
 /// `storedIdleDelayMs` — so there is no row here to carve out as a survivor,
 /// unlike `accountSection` on the same screen. See `FullAccessNeededBanner`.
 struct SettingsTypingSection: View {
     @EnvironmentObject private var store: SharedStore
     let setup: SetupState
+
+    /// How much evidence the space bar needs before it replaces a word.
+    ///
+    /// **The subtitle follows the selection instead of describing the control.**
+    /// "High confidence" is a label, not an explanation, and the difference
+    /// between the three positions is the entire reason this stopped being a
+    /// switch: off keeps every keystroke, the middle keeps the repairs and drops
+    /// the guesses, full is what the keyboard shipped with. A row that says the
+    /// same sentence under all three tells the user nothing about the one they
+    /// are on.
+    @ViewBuilder private var autocorrectRow: some View {
+        HStack(spacing: Theme.Space.sm) {
+            IconBadge(systemName: "text.badge.checkmark")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Autocorrect")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Theme.Text.primary)
+                Text(Self.autocorrectSubtitle(store.autocorrectLevel))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Text.secondary)
+            }
+            Spacer(minLength: 0)
+            Picker("Autocorrect", selection: $store.autocorrectLevel) {
+                ForEach(AutocorrectLevel.allCases, id: \.self) { level in
+                    Text(level.title).tag(level)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+        }
+    }
+
+    private static func autocorrectSubtitle(_ level: AutocorrectLevel) -> String {
+        switch level {
+        case .off:
+            return "Space keeps exactly what you typed"
+        case .confident:
+            return "Space fixes a clear slip. Everything else waits in the bar for a tap."
+        case .full:
+            return "Space inserts the bold word"
+        }
+    }
 
     /// How long to wait after the last key. Only drawn when a pause action is
     /// on, so the card does not ask about a wait nobody will feel.
@@ -53,13 +95,8 @@ struct SettingsTypingSection: View {
             SectionHeader(title: "Typing")
             Card {
                 VStack(spacing: Theme.Space.sm) {
-                    ToggleRow(
-                        title: "Autocorrect",
-                        subtitle: "Space inserts the bold word. Turn off to keep what you typed.",
-                        icon: "text.badge.checkmark",
-                        isOn: $store.autocorrect
-                    )
-                    .searchTarget(.autocorrect)
+                    autocorrectRow
+                        .searchTarget(.autocorrect)
                     Divider.themed
                     ToggleRow(
                         title: "Auto-capitalise",

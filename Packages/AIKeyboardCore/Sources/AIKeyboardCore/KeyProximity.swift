@@ -3,7 +3,7 @@ import Foundation
 /// Whether two letters sit next to each other on the letter plane.
 ///
 /// **Offers only.** A fat-finger substitution may climb inside the neighbour
-/// tier; `shouldAutocorrect` still commits a same-length neighbour only when
+/// tier; `commitReason` still commits a same-length neighbour only when
 /// `SeedLanguageModel.isTransposition` says so. The rows are written out
 /// rather than read from `KeyboardLayout`, because the typing harness copies
 /// this file and does not compile that one.

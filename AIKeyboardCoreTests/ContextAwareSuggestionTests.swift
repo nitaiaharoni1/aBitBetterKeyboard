@@ -431,7 +431,7 @@ final class ContextAwareSuggestionTests: XCTestCase {
     ///
     /// It may **not fire on a word still being typed**, or it invents an ending
     /// for a fragment; and it must **never reach the space bar**, which the "the
-    /// word is already a word" gate gives for free, since `shouldAutocorrect`
+    /// word is already a word" gate gives for free, since `commitReason`
     /// returns false for every word this can fire on.
     @MainActor
     func testAFinishedHebrewWordIsOfferedTheEndingsItSwapsRatherThanAppends() {
@@ -667,7 +667,7 @@ final class ContextAwareSuggestionTests: XCTestCase {
     /// **The wrong-layout rule was beating the rule this product is for.**
     /// Three letters into `screenshot` after `אני מצרף `, `scr` committed `דבר`:
     /// `LayoutTransposition` fires at exactly three letters, arrives `.layout` at
-    /// 9045, and `shouldAutocorrect` answered on the different-script branch above
+    /// 9045, and `commitReason` answered on the different-script branch above
     /// every other question — outranking `codeSwitchVocabulary`, where `screenshot`
     /// was already sitting in slot 2 and which exists for this exact sentence
     /// (corpus `cs-05`). It self-heals at four letters, which is why nothing in the
@@ -1087,9 +1087,9 @@ final class ContextAwareSuggestionTests: XCTestCase {
     /// reach the store; Return, a full stop, and going away with the word still
     /// under the cursor are how a chat message actually ends.
     func testATypedWordIsLearnedWhenItIsFinishedNotOnlyWhenACandidateIsTapped() {
-        let saved = SharedStore.shared.autocorrect
-        SharedStore.shared.autocorrect = false
-        defer { SharedStore.shared.autocorrect = saved }
+        let saved = SharedStore.shared.autocorrectLevel
+        SharedStore.shared.autocorrectLevel = .off
+        defer { SharedStore.shared.autocorrectLevel = saved }
 
         func typeHello(_ controller: KeyboardController) {
             controller.shift = .off
@@ -1246,7 +1246,7 @@ final class ContextAwareSuggestionTests: XCTestCase {
 
     /// **Apple's spelling verdict is overruled here and nowhere else**, and the
     /// frozen corpus's `typo-10` is the case. `UITextChecker` reports `תדוה` as
-    /// perfectly good Hebrew, so every rule in `shouldAutocorrect` that rests on
+    /// perfectly good Hebrew, so every rule in `commitReason` that rests on
     /// `isKnownWord` declined to commit `תודה` and the corpus recorded that as a
     /// deliberate, accepted cost of having only one dictionary worth the name.
     ///
@@ -1421,7 +1421,7 @@ final class ContextAwareSuggestionTests: XCTestCase {
     /// "sorrow" with "tomorrow". With the Hebrew-only scope it is skipped, the
     /// `isKnownWord` guard at the bottom protects it, and space keeps "sorrow".
     ///
-    /// This test calls `shouldAutocorrect` directly so the synthetic results
+    /// This test calls `commitReason` directly so the synthetic results
     /// array controls which candidate is `winner`, isolating the one code path
     /// being examined.
     func testContextDoesNotReplaceAValidEnglishWordOutsideSeed() {
@@ -1437,12 +1437,12 @@ final class ContextAwareSuggestionTests: XCTestCase {
             SuggestionEngine.Candidate(text: "sorrow", language: .english, source: .typed),
             SuggestionEngine.Candidate(text: "tomorrow", language: .english, source: .seed)
         ]
-        let shouldReplace = SuggestionEngine.shouldAutocorrect(
+        let reason = SuggestionEngine.commitReason(
             "sorrow", previousWords: ["See", "you"], typedLanguage: .english,
             results: results, supplementary: [], personal: personal)
 
-        XCTAssertFalse(
-            shouldReplace,
+        XCTAssertNil(
+            reason,
             "context replaced a valid English word outside the seed; "
                 + "the followers override must be scoped to Hebrew only")
     }
@@ -1603,11 +1603,11 @@ final class ContextAwareSuggestionTests: XCTestCase {
     /// model word after refine. The word still lands in the bar for a tap.
     func testRefinementKeepsTheTypedWordBoldWhenAutocorrectIsOff() {
         let store = SharedStore.shared
-        let (autocorrect, predictions) = (store.autocorrect, store.predictions)
-        store.autocorrect = false
+        let (autocorrectLevel, predictions) = (store.autocorrectLevel, store.predictions)
+        store.autocorrectLevel = .off
         store.predictions = true
         defer {
-            store.autocorrect = autocorrect
+            store.autocorrectLevel = autocorrectLevel
             store.predictions = predictions
         }
         let target = MockTextTarget(text: "hel")
@@ -1656,11 +1656,11 @@ final class ContextAwareSuggestionTests: XCTestCase {
     /// reason that has nothing to do with the async tier.
     private func withBarSettingsOn(_ body: () -> Void) {
         let store = SharedStore.shared
-        let (autocorrect, predictions) = (store.autocorrect, store.predictions)
-        store.autocorrect = true
+        let (autocorrectLevel, predictions) = (store.autocorrectLevel, store.predictions)
+        store.autocorrectLevel = .full
         store.predictions = true
         defer {
-            store.autocorrect = autocorrect
+            store.autocorrectLevel = autocorrectLevel
             store.predictions = predictions
         }
         body()

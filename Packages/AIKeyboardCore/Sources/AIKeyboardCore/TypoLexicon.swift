@@ -234,7 +234,7 @@ enum TypoLexicon {
     /// Whether any word in the list continues these keystrokes.
     ///
     /// **The question that separates a Hebrew word spelled wrong from one that
-    /// is merely half typed**, which is a distinction `shouldAutocorrect` has to
+    /// is merely half typed**, which is a distinction `commitReason` has to
     /// draw before it may replace a same-length Hebrew substitution. `מכונ`
     /// continues to `מכונה`, `מכוניות` and `מכונות`, so it is on its way
     /// somewhere and the space bar must leave it alone — that is the measured

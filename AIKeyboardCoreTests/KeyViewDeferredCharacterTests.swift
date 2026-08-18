@@ -33,7 +33,7 @@ final class KeyViewDeferredCharacterTests: XCTestCase {
         haptics = SharedStore.shared.haptics
         // Off, so every assertion below is about *when* a character lands rather
         // than about what the space bar decided to replace it with.
-        SharedStore.shared.autocorrect = false
+        SharedStore.shared.autocorrectLevel = .off
         SharedStore.shared.enabledLanguages = [.english, .hebrew]
     }
 

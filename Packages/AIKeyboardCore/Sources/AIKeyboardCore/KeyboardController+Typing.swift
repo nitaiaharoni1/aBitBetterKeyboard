@@ -466,13 +466,13 @@ extension KeyboardController {
         // And never over a word the user is repairing by hand — see
         // `isCorrectingWordByHand`. `refreshSuggestions` has already put the bold
         // slot back on the literal keystrokes for that case, so this clause is the
-        // second lock on the same door, exactly as `storedAutocorrect` is checked
+        // second lock on the same door, exactly as `storedAutocorrectLevel` is checked
         // both here and there: slot zero being the literal is a fact about
         // `SuggestionEngine`, and the space bar should not be the thing that breaks
         // if it ever stops being one.
         let original = currentWordPrefix
         var swapped: (original: String, replacement: String)?
-        if store.storedAutocorrect,
+        if store.storedAutocorrectLevel != .off,
             !isCorrectingWordByHand,
             selection == nil,
             let candidate = suggestions.first(where: \.isDefault),
@@ -612,7 +612,7 @@ extension KeyboardController {
     ///
     /// **A word somebody is deleting from is a word they are correcting on
     /// purpose, and the space bar must not overrule them.** Deleting the `ן` off
-    /// `מאמין` leaves `מאמי`, which no dictionary knows, so `shouldAutocorrect`
+    /// `מאמין` leaves `מאמי`, which no dictionary knows, so `commitReason`
     /// takes it as a typo and space put a different word in the field — the user
     /// pressed delete to *change* the word and the keyboard changed it back, which
     /// is the single most infuriating thing an autocorrect does. Every candidate is

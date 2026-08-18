@@ -54,7 +54,7 @@ Bar/typing/harness/score.py before.json after.json
 - Two identical-code runs of the *same* side still 72/76. A slot-2 flip on
   `he-comp-04` / `he-comp-05` is `UITextChecker` noise, not a regression.
 
-If the headline drops, stop. Do not “fix” it by loosening `shouldAutocorrect`.
+If the headline drops, stop. Do not “fix” it by loosening `commitReason`.
 Read the per-entry diff.
 
 If task 1 is green, this slice is done. The rest is new work on a new branch.
@@ -115,7 +115,7 @@ keyboard-extension API. Run the harness twice. Headline must not drop.
 - Do not put `were` in the contraction table. `apos-09` is the async tier.
 - Do not commit `תדוה` / `שלמו` just to close `typo-10` / `typo-11`. Apple's
   Hebrew checker accepts those typos; being conservative is the product.
-- Do not let the Hebrew space-bar override (`shouldAutocorrect` followers
+- Do not let the Hebrew space-bar override (`commitReason` followers
   check) read the whole field. Ranking already does. Replacing a real Hebrew
   word because `בעוד` appeared earlier is the defect that rule exists to stop.
 - Do not add timestamps or a ring buffer to `PersonalLanguageModel`. Two

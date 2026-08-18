@@ -8,7 +8,11 @@ extension SharedStore {
     /// run never depends on what the previous run left behind.
     public func resetToDefaults() {
         for key in [
-            Key.hasCompletedOnboarding, Key.enabledLanguages, Key.lastLanguage, Key.autocorrect,
+            Key.hasCompletedOnboarding, Key.enabledLanguages, Key.lastLanguage,
+            // Both, and the legacy one is not optional here: `storedAutocorrectLevel`
+            // reads it when the new key is absent, so a reset that cleared only the
+            // new key would hand the next read the migrated value back.
+            Key.autocorrect, Key.autocorrectLevel,
             Key.completeOnIdle, Key.spaceOnIdle, Key.idleDelayMs,
             Key.autocapitalise, Key.predictions, Key.haptics, Key.hapticStrength, Key.keySounds,
             Key.defaultTone, Key.customToneInstruction, Key.dictationSessionMinutes,
@@ -36,7 +40,7 @@ extension SharedStore {
         hasAcknowledgedKeyboardSwitch = false
         brandPalette = .orange
         enabledLanguages = Self.shippedDefaultLanguages
-        autocorrect = true
+        autocorrectLevel = .shippedDefault
         completeOnIdle = false
         spaceOnIdle = false
         idleDelayMs = 300
@@ -82,9 +86,9 @@ extension SharedStore {
             let parsed = raw.compactMap(KeyboardLanguage.init(rawValue:))
             if !parsed.isEmpty { enabledLanguages = parsed }
         }
-        if defaults.object(forKey: Key.autocorrect) != nil {
-            autocorrect = defaults.bool(forKey: Key.autocorrect)
-        }
+        // Through the accessor rather than off the key, so the upgrade from the
+        // old boolean happens in exactly one place. See `storedAutocorrectLevel`.
+        autocorrectLevel = storedAutocorrectLevel
         if defaults.object(forKey: Key.completeOnIdle) != nil {
             completeOnIdle = defaults.bool(forKey: Key.completeOnIdle)
         }

@@ -10,7 +10,7 @@ final class IdleTypingTests: XCTestCase {
     private var completeOnIdle = false
     private var spaceOnIdle = false
     private var idleDelayMs = 300
-    private var autocorrect = true
+    private var autocorrectLevel = AutocorrectLevel.full
     private var predictions = true
 
     override func setUp() {
@@ -19,12 +19,12 @@ final class IdleTypingTests: XCTestCase {
         completeOnIdle = store.completeOnIdle
         spaceOnIdle = store.spaceOnIdle
         idleDelayMs = store.idleDelayMs
-        autocorrect = store.autocorrect
+        autocorrectLevel = store.autocorrectLevel
         predictions = store.predictions
         store.completeOnIdle = false
         store.spaceOnIdle = false
         store.idleDelayMs = 300
-        store.autocorrect = true
+        store.autocorrectLevel = .full
         store.predictions = true
     }
 
@@ -33,7 +33,7 @@ final class IdleTypingTests: XCTestCase {
         store.completeOnIdle = completeOnIdle
         store.spaceOnIdle = spaceOnIdle
         store.idleDelayMs = idleDelayMs
-        store.autocorrect = autocorrect
+        store.autocorrectLevel = autocorrectLevel
         store.predictions = predictions
         super.tearDown()
     }
@@ -63,7 +63,7 @@ final class IdleTypingTests: XCTestCase {
     /// the word.
     func testCompleteOnIdleWorksWhenAutocorrectIsOff() {
         SharedStore.shared.completeOnIdle = true
-        SharedStore.shared.autocorrect = false
+        SharedStore.shared.autocorrectLevel = .off
         let target = MockTextTarget(text: "hel")
         let controller = KeyboardController(target: target, language: .english)
         controller.suggestions = [
@@ -80,7 +80,7 @@ final class IdleTypingTests: XCTestCase {
     /// the bold word is inserted with it.
     func testSpaceOnIdleInsertsASpace() {
         SharedStore.shared.spaceOnIdle = true
-        SharedStore.shared.autocorrect = false
+        SharedStore.shared.autocorrectLevel = .off
         let target = MockTextTarget(text: "hel")
         let controller = KeyboardController(target: target, language: .english)
         controller.suggestions = [
@@ -130,7 +130,7 @@ final class IdleTypingTests: XCTestCase {
     /// switch is the one the user asked to keep in their hands.
     func testSpaceOnIdleRespectsAutocorrectOff() {
         SharedStore.shared.spaceOnIdle = true
-        SharedStore.shared.autocorrect = false
+        SharedStore.shared.autocorrectLevel = .off
         let target = MockTextTarget(text: "hel")
         let controller = KeyboardController(target: target, language: .english)
         controller.suggestions = [
@@ -210,7 +210,7 @@ final class IdleTypingTests: XCTestCase {
     func testIdleSpaceDoesNotFireFromARefreshAlone() async {
         SharedStore.shared.spaceOnIdle = true
         SharedStore.shared.idleDelayMs = 200
-        SharedStore.shared.autocorrect = false
+        SharedStore.shared.autocorrectLevel = .off
         let target = MockTextTarget(text: "hel")
         let controller = KeyboardController(target: target, language: .english)
 
@@ -227,7 +227,7 @@ final class IdleTypingTests: XCTestCase {
     func testIdleSpaceDebouncesFromTheLastKeystroke() async {
         SharedStore.shared.spaceOnIdle = true
         SharedStore.shared.idleDelayMs = 200
-        SharedStore.shared.autocorrect = false
+        SharedStore.shared.autocorrectLevel = .off
         let target = MockTextTarget(text: "")
         let controller = KeyboardController(target: target, language: .english)
 
@@ -251,7 +251,7 @@ final class IdleTypingTests: XCTestCase {
     func testIdleSpaceDoesNotFireAfterTheCaretMovesToAnotherWord() async {
         SharedStore.shared.spaceOnIdle = true
         SharedStore.shared.idleDelayMs = 200
-        SharedStore.shared.autocorrect = false
+        SharedStore.shared.autocorrectLevel = .off
         let target = MockTextTarget(text: "")
         let controller = KeyboardController(target: target, language: .english)
 
@@ -271,7 +271,7 @@ final class IdleTypingTests: XCTestCase {
     func testIdleSpaceFiresAfterBackspace() async {
         SharedStore.shared.spaceOnIdle = true
         SharedStore.shared.idleDelayMs = 200
-        SharedStore.shared.autocorrect = false
+        SharedStore.shared.autocorrectLevel = .off
         let target = MockTextTarget(text: "hel")
         let controller = KeyboardController(target: target, language: .english)
 
@@ -289,7 +289,7 @@ final class IdleTypingTests: XCTestCase {
     func testIdleSpaceDoesNotFireWhenBackspaceClearsTheWord() async {
         SharedStore.shared.spaceOnIdle = true
         SharedStore.shared.idleDelayMs = 200
-        SharedStore.shared.autocorrect = false
+        SharedStore.shared.autocorrectLevel = .off
         let target = MockTextTarget(text: "h")
         let controller = KeyboardController(target: target, language: .english)
 

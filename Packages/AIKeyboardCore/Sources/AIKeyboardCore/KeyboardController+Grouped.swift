@@ -245,7 +245,7 @@ extension KeyboardController {
     /// The level in force for the language on screen, or `.off`.
     ///
     /// Read through `SharedStore` at the keystroke rather than from a cached
-    /// copy — the same rule `storedAutocorrect` and `storedPersonalDictionary`
+    /// copy — the same rule `storedAutocorrectLevel` and `storedPersonalDictionary`
     /// follow, and for the same reason: the switch is in the containing app and
     /// every press it governs happens in the extension, so an instance iOS kept
     /// alive would otherwise go on grouping after the user turned it off.

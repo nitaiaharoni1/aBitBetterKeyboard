@@ -14,22 +14,22 @@ import XCTest
 @MainActor
 final class CandidateCommitTests: XCTestCase {
 
-    private var autocorrect = true
+    private var autocorrectLevel = AutocorrectLevel.full
     private var predictions = true
     private var autocapitalise = true
 
     override func setUp() {
         super.setUp()
-        autocorrect = SharedStore.shared.autocorrect
+        autocorrectLevel = SharedStore.shared.autocorrectLevel
         predictions = SharedStore.shared.predictions
         autocapitalise = SharedStore.shared.autocapitalise
-        SharedStore.shared.autocorrect = true
+        SharedStore.shared.autocorrectLevel = .full
         SharedStore.shared.predictions = true
         SharedStore.shared.autocapitalise = true
     }
 
     override func tearDown() {
-        SharedStore.shared.autocorrect = autocorrect
+        SharedStore.shared.autocorrectLevel = autocorrectLevel
         SharedStore.shared.predictions = predictions
         SharedStore.shared.autocapitalise = autocapitalise
         super.tearDown()
@@ -123,16 +123,17 @@ final class CandidateCommitTests: XCTestCase {
     /// exactly what the toggle is for.
     ///
     /// **Writes only into the suite, behind the published copy's back.** Setting
-    /// `autocorrect = false` updates both readers, so a revert to
-    /// `store.autocorrect` would still pass. The app's process looks like this to
-    /// a keyboard already on screen: defaults say off, `@Published` is still on.
-    /// See `SharedStore.storedAutocorrect`.
+    /// `autocorrectLevel = .off` updates both readers, so a revert to
+    /// `store.autocorrectLevel` would still pass. The app's process looks like this
+    /// to a keyboard already on screen: defaults say off, `@Published` is still on.
+    /// See `SharedStore.storedAutocorrectLevel`.
     func testSpaceDoesNotAutocorrectWhenTheSettingIsOff() {
-        SharedStore.shared.userDefaults.set(false, forKey: SharedStore.Key.autocorrect)
-        XCTAssertTrue(
-            SharedStore.shared.autocorrect,
+        SharedStore.shared.userDefaults.set(
+            AutocorrectLevel.off.rawValue, forKey: SharedStore.Key.autocorrectLevel)
+        XCTAssertEqual(
+            SharedStore.shared.autocorrectLevel, .full,
             "the published copy must stay stale, or this proves nothing")
-        XCTAssertFalse(SharedStore.shared.storedAutocorrect)
+        XCTAssertEqual(SharedStore.shared.storedAutocorrectLevel, .off)
 
         let target = CursorTextTarget(before: "schedul")
         let controller = KeyboardController(target: target)
@@ -154,7 +155,7 @@ final class CandidateCommitTests: XCTestCase {
     /// Proving the engine would have bolded `schedule` first is what makes the
     /// second half reject a build that dropped the remapping.
     func testTheBoldSlotIsTheTypedWordWhenAutocorrectIsOff() {
-        SharedStore.shared.autocorrect = true
+        SharedStore.shared.autocorrectLevel = .full
 
         let controller = KeyboardController(
             target: CursorTextTarget(before: "sched"), language: .english)
@@ -163,8 +164,9 @@ final class CandidateCommitTests: XCTestCase {
             controller.suggestions.first(where: \.isDefault)?.text.lowercased(), "schedule",
             "the word has to be genuinely at risk, or turning the setting off proves nothing")
 
-        SharedStore.shared.userDefaults.set(false, forKey: SharedStore.Key.autocorrect)
-        XCTAssertTrue(SharedStore.shared.autocorrect)
+        SharedStore.shared.userDefaults.set(
+            AutocorrectLevel.off.rawValue, forKey: SharedStore.Key.autocorrectLevel)
+        XCTAssertEqual(SharedStore.shared.autocorrectLevel, .full)
         controller.refreshSuggestions()
 
         XCTAssertEqual(
@@ -271,7 +273,7 @@ final class CandidateCommitTests: XCTestCase {
     }
 
     /// Return capitalises the next word from UserDefaults, not from the copy
-    /// `load()` filled at launch. Same trap as `storedAutocorrect`.
+    /// `load()` filled at launch. Same trap as `storedAutocorrectLevel`.
     func testReturnSeesAutocapitaliseTurnedOffInTheOtherProcess() {
         SharedStore.shared.userDefaults.set(false, forKey: SharedStore.Key.autocapitalise)
         XCTAssertTrue(
@@ -359,9 +361,10 @@ final class CandidateCommitTests: XCTestCase {
 
     /// Autocorrect-off never swapped, so delete is an ordinary backspace.
     func testAutocorrectOffHasNoUndoPath() {
-        SharedStore.shared.userDefaults.set(false, forKey: SharedStore.Key.autocorrect)
-        XCTAssertTrue(SharedStore.shared.autocorrect)
-        XCTAssertFalse(SharedStore.shared.storedAutocorrect)
+        SharedStore.shared.userDefaults.set(
+            AutocorrectLevel.off.rawValue, forKey: SharedStore.Key.autocorrectLevel)
+        XCTAssertEqual(SharedStore.shared.autocorrectLevel, .full)
+        XCTAssertEqual(SharedStore.shared.storedAutocorrectLevel, .off)
 
         let target = CursorTextTarget(before: "helo")
         let controller = KeyboardController(target: target, language: .english)

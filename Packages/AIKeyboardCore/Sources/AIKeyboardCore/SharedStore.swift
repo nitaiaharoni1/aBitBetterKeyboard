@@ -74,7 +74,11 @@ public final class SharedStore: ObservableObject {
         /// keyboard on themselves, and the one the next launch opens on. See
         /// `storedOpeningLanguage`.
         static let lastLanguage = "lastLanguage"
+        /// The pre-three-way boolean. Read only to migrate an existing install
+        /// onto `autocorrectLevel`; nothing writes it any more. See
+        /// `storedAutocorrectLevel`.
         static let autocorrect = "autocorrect"
+        static let autocorrectLevel = "autocorrectLevel"
         static let completeOnIdle = "completeOnIdle"
         static let spaceOnIdle = "spaceOnIdle"
         static let idleDelayMs = "idleDelayMs"
@@ -185,7 +189,7 @@ public final class SharedStore: ObservableObject {
 
     /// The same choice, read out of the store at the moment it is needed.
     ///
-    /// **The keyboard has to use this one, for the reason `storedAutocorrect`
+    /// **The keyboard has to use this one, for the reason `storedAutocorrectLevel`
     /// exists.** The picker is in the app and every key it recolours is drawn in
     /// the keyboard extension; those are two processes, and `load()` fills the
     /// `@Published` copy above once, when whichever process asked was launched.
@@ -213,7 +217,7 @@ public final class SharedStore: ObservableObject {
 
     /// The language list as the keyboard must read it: from UserDefaults at the
     /// moment of use, not from the `@Published` copy `load()` filled at launch.
-    /// Same trap as `storedAutocorrect`. The space bar prints these codes, so a
+    /// Same trap as `storedAutocorrectLevel`. The space bar prints these codes, so a
     /// stale copy is a swipe that names a language the user turned off.
     public var storedEnabledLanguages: [KeyboardLanguage] {
         if let raw = defaults.array(forKey: Key.enabledLanguages) as? [String] {
@@ -290,22 +294,45 @@ public final class SharedStore: ObservableObject {
 
     // MARK: Typing
 
-    @Published public var autocorrect = true { didSet { defaults.set(autocorrect, forKey: Key.autocorrect) } }
+    /// How much evidence the space bar needs before it replaces what was typed.
+    /// `AutocorrectLevel.shippedDefault` carries the default and the measurement
+    /// behind it.
+    @Published public var autocorrectLevel: AutocorrectLevel = .shippedDefault {
+        didSet { defaults.set(autocorrectLevel.rawValue, forKey: Key.autocorrectLevel) }
+    }
 
-    /// Whether space may replace the typed word with the default suggestion.
+    /// Whether space may replace the typed word with the default suggestion, and
+    /// on how much evidence.
     ///
     /// **The keyboard has to use this one, for the reason `storedPersonalDictionary`
-    /// exists.** The toggle lives in the app and the space bar lives in the
+    /// exists.** The setting lives in the app and the space bar lives in the
     /// keyboard extension; those are two processes, and `load()` fills the
     /// `@Published` copy above once, when whichever process asked was launched. A
     /// keyboard already on screen when the user turned autocorrect off would
     /// otherwise keep committing the correction — which looks exactly like the
     /// setting not working.
-    public var storedAutocorrect: Bool {
-        if defaults.object(forKey: Key.autocorrect) != nil {
-            return defaults.bool(forKey: Key.autocorrect)
+    ///
+    /// **The old boolean is migrated through a separate key, and the reason is
+    /// that reusing the old one would have looked like it worked.**
+    /// `Key.autocorrect` held a `Bool`, and `UserDefaults` reads a stored `Bool`
+    /// back as the integer 1 — which happens to be `.confident`. Landing on the
+    /// right answer by coercion is not the same as deciding it, and it would have
+    /// read `.full` back as an unset key on any build that still wrote a boolean.
+    ///
+    /// An upgrade lands where a fresh install lands: an install that had
+    /// Autocorrect **on** gets `shippedDefault`, because "on" is one answer to a
+    /// question that now has two, and the product's answer to it is the same for
+    /// everybody. **Off stays off** — that one is not ambiguous, and somebody who
+    /// switched autocorrect off does not want it back.
+    public var storedAutocorrectLevel: AutocorrectLevel {
+        if defaults.object(forKey: Key.autocorrectLevel) != nil {
+            return AutocorrectLevel(rawValue: defaults.integer(forKey: Key.autocorrectLevel))
+                ?? .shippedDefault
         }
-        return autocorrect
+        if defaults.object(forKey: Key.autocorrect) != nil {
+            return defaults.bool(forKey: Key.autocorrect) ? .shippedDefault : .off
+        }
+        return autocorrectLevel
     }
 
     /// Finish the word after a pause. Off on a fresh install: it rewrites the
@@ -321,7 +348,7 @@ public final class SharedStore: ObservableObject {
         didSet { defaults.set(spaceOnIdle, forKey: Key.spaceOnIdle) }
     }
 
-    /// Same cross-process rule as `storedAutocorrect`: the toggle is in the app
+    /// Same cross-process rule as `storedAutocorrectLevel`: the toggle is in the app
     /// and the pause lives in the keyboard extension.
     public var storedCompleteOnIdle: Bool {
         if defaults.object(forKey: Key.completeOnIdle) != nil {
@@ -347,7 +374,7 @@ public final class SharedStore: ObservableObject {
 
     public static let idleDelayChoices = Array(stride(from: 200, through: 600, by: 100))
 
-    /// Same cross-process rule as `storedAutocorrect`. An unknown stored value
+    /// Same cross-process rule as `storedAutocorrectLevel`. An unknown stored value
     /// falls back to 300 rather than firing on the next keystroke.
     public var storedIdleDelayMs: Int {
         let stored: Int
@@ -363,7 +390,7 @@ public final class SharedStore: ObservableObject {
         didSet { defaults.set(autocapitalise, forKey: Key.autocapitalise) }
     }
 
-    /// Same cross-process rule as `storedAutocorrect`: the toggle is in the app
+    /// Same cross-process rule as `storedAutocorrectLevel`: the toggle is in the app
     /// and Return / double-space capitalise in the keyboard extension.
     public var storedAutocapitalise: Bool {
         if defaults.object(forKey: Key.autocapitalise) != nil {
@@ -382,7 +409,7 @@ public final class SharedStore: ObservableObject {
     }
 
     /// **Read at the keystroke, never from the `@Published` copy.** Exactly the
-    /// `storedAutocorrect` trap: the switch lives in the containing app and every
+    /// `storedAutocorrectLevel` trap: the switch lives in the containing app and every
     /// press it governs happens in the extension, so an instance iOS kept alive
     /// would go on grouping keys after the user turned the feature off — and with
     /// grouping the mismatch is not a wrong suggestion, it is every keystroke
@@ -394,7 +421,7 @@ public final class SharedStore: ObservableObject {
 
     /// Whether the suggestion bar is shown at all.
     ///
-    /// Same cross-process rule as `storedAutocorrect`: the toggle is in the app
+    /// Same cross-process rule as `storedAutocorrectLevel`: the toggle is in the app
     /// and the bar is drawn by the keyboard, so a read of the `@Published` copy
     /// alone keeps offering candidates after the user turned them off.
     public var storedPredictions: Bool {
@@ -409,7 +436,7 @@ public final class SharedStore: ObservableObject {
 
     /// The two feedback switches, as `Feedback` reads them at the press.
     ///
-    /// **Same rule as `storedAutocorrect`, and this pair was the worse instance
+    /// **Same rule as `storedAutocorrectLevel`, and this pair was the worse instance
     /// of it.** Both switches are in the app; every press they gate happens in
     /// the keyboard extension. `Feedback` used to hold plain `Bool`s filled once
     /// from `KeyboardViewController.viewDidLoad`, and the `didSet`s here used to
@@ -545,7 +572,7 @@ public final class SharedStore: ObservableObject {
     ///
     /// **Read through `defaults` at the moment of use, on purpose, with no
     /// `@Published` copy to reach for instead.** This is the
-    /// `storedPersonalDictionary` / `storedAutocorrect` trap in the direction
+    /// `storedPersonalDictionary` / `storedAutocorrectLevel` trap in the direction
     /// that setting has never run in: the keyboard extension writes it and
     /// `DictationService`, in the containing app, is a different process that
     /// may have been running since long before the write happened. A

@@ -4,7 +4,7 @@ import XCTest
 
 /// The Haptics and Key sounds switches, read at the press.
 ///
-/// **Both switches shipped with the bug `storedAutocorrect` was written to fix.**
+/// **Both switches shipped with the bug `storedAutocorrectLevel` was written to fix.**
 /// `Feedback` held two plain `Bool`s that `KeyboardViewController.viewDidLoad`
 /// filled once, and `SharedStore`'s `didSet`s pushed new values into them — which
 /// is the app's own process talking to itself. Nothing reached a keyboard

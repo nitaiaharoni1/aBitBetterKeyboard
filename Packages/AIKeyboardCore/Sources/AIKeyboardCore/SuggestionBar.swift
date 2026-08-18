@@ -263,7 +263,7 @@ public struct SuggestionBar: View {
     ///
     /// **Being the default is not enough on its own, and a Hebrew typo is why.**
     /// `תדוה` and `טןב` are misspellings Apple's Hebrew checker calls real words,
-    /// so `shouldAutocorrect` deliberately declines to commit `תודה` and `טוב`
+    /// so `commitReason` deliberately declines to commit `תודה` and `טוב`
     /// and leaves the default on the keystrokes — at which point boldening the
     /// echo is a keyboard endorsing a typo it is holding the fix for, and
     /// pushing that fix out of the middle to do it. The second question is

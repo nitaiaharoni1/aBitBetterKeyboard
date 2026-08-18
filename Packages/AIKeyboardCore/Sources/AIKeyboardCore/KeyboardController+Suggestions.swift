@@ -2,6 +2,22 @@ extension KeyboardController {
 
     // MARK: Suggestions
 
+    /// Everything an answer from `SuggestionEngine.suggestions` depends on.
+    ///
+    /// Every argument that call takes except `personal`, which is a reference
+    /// rather than a value and is stood in for by `vocabulary` — see
+    /// `KeyboardController.lastSuggestionQuery` for why this exists at all and
+    /// what bumps that counter. A field added to the engine's signature belongs
+    /// here too, or the memo starts answering a question it was never asked.
+    struct SuggestionQuery: Equatable {
+        let prefix: String
+        let context: String
+        let languages: [KeyboardLanguage]
+        let supplementary: [String]
+        let autocorrect: AutocorrectLevel
+        let vocabulary: Int
+    }
+
     public func refreshSuggestions() {
         // **Above the Predictions guard, because it is not about predictions.**
         // Fix and Rewrite are drawn disabled on an empty field, and this is what
@@ -52,14 +68,37 @@ extension KeyboardController {
         // the before-context at all, and `selectedWord` refuses one with a word
         // joined to its leading end, so this drops nothing in that case.
         let context = String(before.dropLast(typed.count))
-        let results = SuggestionEngine.suggestions(
-            prefix: prefix,
-            context: context,
-            languages: [language] + store.storedEnabledLanguages.filter { $0 != language },
-            supplementary: store.storedPersonalDictionary + supplementaryWords,
-            personal: personal
-        )
-        suggestions = pinningDefaultToTypedIfNeeded(results, prefix: prefix)
+        let languages = [language] + store.storedEnabledLanguages.filter { $0 != language }
+        let supplementary = store.storedPersonalDictionary + supplementaryWords
+        let level = store.storedAutocorrectLevel
+        let query = SuggestionQuery(
+            prefix: prefix, context: context, languages: languages,
+            supplementary: supplementary, autocorrect: level, vocabulary: vocabularyVersion)
+        let results: [Suggestion]
+        if query == lastSuggestionQuery {
+            results = lastSuggestionResults
+        } else {
+            results = SuggestionEngine.suggestions(
+                prefix: prefix,
+                context: context,
+                languages: languages,
+                supplementary: supplementary,
+                personal: personal,
+                autocorrect: level
+            )
+            lastSuggestionQuery = query
+            lastSuggestionResults = results
+        }
+        // **Compared before it is assigned, and that is a separate saving from the
+        // memo above.** `@Published` emits on assignment and never on change, so
+        // the second and third refresh of a keystroke each republished the same
+        // three words and each rebuilt every key. `Suggestion`'s equality is
+        // deliberately text, language and the bold flag rather than its `id` —
+        // see `.claude/rules/suggestion-bar.md`, where that is what stops the bar
+        // fading on every letter — so this asks exactly the question the bar
+        // draws from.
+        let bar = pinningDefaultToTypedIfNeeded(results, prefix: prefix)
+        if bar != suggestions { suggestions = bar }
         // **Not for a selection.** The async tier predicts what somebody typing
         // is about to type, and nobody is typing; `applyRefinement` would drop
         // the answer anyway, because the prefix it hands back is not
@@ -73,6 +112,14 @@ extension KeyboardController {
     /// is not allowed: Autocorrect is off, or the user is backspacing through
     /// this word. Next-word suggestions (empty prefix) are never auto-committed
     /// anyway; leave their middle bold alone.
+    ///
+    /// **A correction the level refused is not one of the two, and must not be
+    /// handled here.** `AutocorrectLevel.confident` is a floor on
+    /// `CommitReason.confidence`, and the reason only exists inside
+    /// `SuggestionEngine.suggestions`, which has already pinned slot 0 before
+    /// this sees the array. Re-deriving that decision from `store` would be a
+    /// second, worse copy of a rule that reads evidence this function cannot
+    /// see.
     ///
     /// **A selection has no default at all, which is a third answer rather than
     /// a harder version of the second.** Over a range the space bar types a
@@ -92,7 +139,7 @@ extension KeyboardController {
         if selection != nil {
             return results.map { Suggestion(text: $0.text, language: $0.language) }
         }
-        if !store.storedAutocorrect || isCorrectingWordByHand {
+        if store.storedAutocorrectLevel == .off || isCorrectingWordByHand {
             return SuggestionEngine.markDefault(results, at: 0)
         }
         return results
@@ -120,7 +167,14 @@ extension KeyboardController {
     /// returns, so this can never delete the edit that is being made.
     public func refreshDocumentState() {
         let hadText = documentHasText
-        documentHasText = hasTextToWorkWith
+        // Assigned only when it moved, for the reason `revertibleEdit` on the next
+        // line already is: `@Published` emits on assignment and never on change,
+        // and this runs two or three times per keystroke while answering the same
+        // `true` every time after the first character. Every one of those emissions
+        // was a rebuild of the whole keyboard. The value is identical either way,
+        // so the `hadText` comparison below reads exactly what it always did.
+        let hasText = hasTextToWorkWith
+        if hasText != documentHasText { documentHasText = hasText }
         if revertibleEdit != nil, !documentHasText { revertibleEdit = nil }
         // Send, or switching to an empty chat, with the keyboard still up.
         // Appear is not guaranteed. Only the *transition* onto empty, because
@@ -510,6 +564,9 @@ extension KeyboardController {
         if wrote {
             lastLearnedFolded = folded
             openWord = ""
+            // The one thing that changes an answer without changing the question.
+            // See `lastSuggestionQuery`.
+            vocabularyVersion &+= 1
         }
     }
 }

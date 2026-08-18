@@ -293,7 +293,8 @@ struct AppSearchItem: Identifiable {
     private static var rows: [AppSearchItem] {
         [
             item(
-                "Autocorrect", "Space inserts the bold word", icon: "text.badge.checkmark",
+                "Autocorrect", "Off, high confidence, or full", icon: "text.badge.checkmark",
+                keywords: ["confidence", "correction", "spelling"],
                 .row(.autocorrect)),
             item(
                 "Complete on pause", "Finishes the word after you stop typing",

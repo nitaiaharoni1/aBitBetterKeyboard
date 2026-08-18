@@ -21,19 +21,19 @@ import XCTest
 @MainActor
 final class SelectedWordSuggestionTests: XCTestCase {
 
-    private var autocorrect = true
+    private var autocorrectLevel = AutocorrectLevel.full
     private var predictions = true
 
     override func setUp() {
         super.setUp()
-        autocorrect = SharedStore.shared.autocorrect
+        autocorrectLevel = SharedStore.shared.autocorrectLevel
         predictions = SharedStore.shared.predictions
-        SharedStore.shared.autocorrect = true
+        SharedStore.shared.autocorrectLevel = .full
         SharedStore.shared.predictions = true
     }
 
     override func tearDown() {
-        SharedStore.shared.autocorrect = autocorrect
+        SharedStore.shared.autocorrectLevel = autocorrectLevel
         SharedStore.shared.predictions = predictions
         super.tearDown()
     }
@@ -171,7 +171,7 @@ final class SelectedWordSuggestionTests: XCTestCase {
 
     /// **A word picked over a selection is hand-placed, and the next space must
     /// not overrule it.** The tap leaves the caret inside the sentence with no
-    /// space after it, so the very next key can be one — and `shouldAutocorrect`
+    /// space after it, so the very next key can be one — and `commitReason`
     /// knows nothing about how the word got there. `teh` is the case the
     /// neighbour rule commits on purpose (`teh` → `the`), so a build without the
     /// protection replaces a word the user chose by hand one keystroke later.

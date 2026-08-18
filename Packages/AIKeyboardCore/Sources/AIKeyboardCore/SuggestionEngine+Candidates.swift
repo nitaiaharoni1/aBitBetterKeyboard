@@ -33,7 +33,7 @@ extension SuggestionEngine {
         /// knows nothing it should keep what it was given.
         var ordinal: Int = 0
         /// The typed word and this neighbour differ by one key that sits next
-        /// to the one that was pressed. Ranking only; `shouldAutocorrect`
+        /// to the one that was pressed. Ranking only; `commitReason`
         /// still refuses a same-length substitution that is not a transposition.
         var keyAdjacent: Bool = false
         /// How often this person has committed this word. Stamped before
@@ -136,7 +136,7 @@ extension SuggestionEngine {
         /// one clitic lands on exactly 2500, which is why this is 26 and not 25.
         ///
         /// Nothing here can be committed by the space bar. Every word in the table
-        /// is a word, and `shouldAutocorrect` refuses at `SeedLanguageModel.knows`
+        /// is a word, and `commitReason` refuses at `SeedLanguageModel.knows`
         /// or at `!known` in the four-letter gate for all of them — measured as
         /// zero commits moved across the sweep.
         case irregular = 26
@@ -226,7 +226,7 @@ extension SuggestionEngine {
     /// **Hands back candidates rather than suggestions, because the commit
     /// decision needs the provenance this stage spent its whole life weighing.**
     /// It used to flatten to `[Suggestion]` here, which keeps the words and throws
-    /// away where each came from — so `shouldAutocorrect`, one call further on,
+    /// away where each came from — so `commitReason`, one call further on,
     /// could not tell a seed completion of a plain Hebrew stem from the same
     /// dictionary read through two clitics, and committed `להתרופה` for `להתר`.
     /// See `commitTrustsReading`. The bar still draws `Suggestion`s; the two

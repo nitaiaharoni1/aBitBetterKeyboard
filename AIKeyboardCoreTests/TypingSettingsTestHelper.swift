@@ -11,7 +11,7 @@ import XCTest
 /// `LanguageMemoryTests`.
 struct TypingSettings {
     let languages: [KeyboardLanguage]
-    let autocorrect: Bool
+    let autocorrectLevel: AutocorrectLevel
     let predictions: Bool
     /// The remembered language as it is actually stored, so a run that had none
     /// gets none back. Restoring `storedOpeningLanguage` instead would write the
@@ -22,7 +22,7 @@ struct TypingSettings {
         let store = SharedStore.shared
         return TypingSettings(
             languages: store.enabledLanguages,
-            autocorrect: store.autocorrect,
+            autocorrectLevel: store.autocorrectLevel,
             predictions: store.predictions,
             lastLanguage: store.userDefaults.string(forKey: SharedStore.Key.lastLanguage))
     }
@@ -30,7 +30,7 @@ struct TypingSettings {
     func restore() {
         let store = SharedStore.shared
         store.enabledLanguages = languages
-        store.autocorrect = autocorrect
+        store.autocorrectLevel = autocorrectLevel
         store.predictions = predictions
         if let lastLanguage {
             store.userDefaults.set(lastLanguage, forKey: SharedStore.Key.lastLanguage)
