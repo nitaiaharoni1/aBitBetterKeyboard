@@ -12,6 +12,39 @@ extension KeyboardController {
         store.storedEnabledLanguages
     }
 
+    /// The BCP-47 tag the host is told this keyboard is, which is not always the
+    /// language the keys are on.
+    ///
+    /// **`primaryLanguage` is the only sentence this process ever says to iOS
+    /// about what keyboard it is, and a slide along the space bar is the only
+    /// thing that changes it mid-session.** iOS is free to re-decide whether a
+    /// third-party keyboard may serve the field it is standing over, and the
+    /// moment its identity changes is the moment that decision can be taken
+    /// again. So a field that declared it cannot hold another script keeps
+    /// hearing a Latin tag even after the user slides the keys to Hebrew.
+    ///
+    /// `latinFieldTypes` is the same set `adoptFieldKeyboardType` already moves
+    /// the *keys* for, so this is that decision carried through to the host
+    /// rather than a second rule with its own list. The user may still type
+    /// Hebrew into an address bar — nothing here touches the keys — and the
+    /// address bar goes on laying text out the way an address bar does, which is
+    /// what it would have done for Apple's own Hebrew keyboard anyway.
+    ///
+    /// **A Hebrew-only user is clamped too, and that is deliberate.**
+    /// `adoptFieldKeyboardType` leaves their keys on Hebrew, because a keyboard
+    /// they cannot get off is worse than the wrong keys, so the fallback here has
+    /// no enabled Latin language to name and says `en-US` anyway. The field
+    /// declared it holds an address or a URL; those read left to right whoever is
+    /// typing them, and it is the one answer that does not put the risky write on
+    /// the user who has the least room to recover from it.
+    public func announcedInputModeTag(for language: KeyboardLanguage) -> String {
+        guard language.script != .latin,
+            let field = adoptedKeyboardType,
+            Self.latinFieldTypes.contains(field)
+        else { return language.inputModeTag }
+        return (enabledLanguages.first { $0.script == .latin } ?? .english).inputModeTag
+    }
+
     /// The globe key. One step per tap — the same step a slide makes, so the two
     /// ways of changing language walk the enabled list in the same order — and it
     /// still hands the keyboard over to iOS when the user has only enabled one of

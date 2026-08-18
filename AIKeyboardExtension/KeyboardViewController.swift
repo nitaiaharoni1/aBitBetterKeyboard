@@ -10,6 +10,13 @@ final class KeyboardViewController: UIInputViewController {
 
     private let handoffLogger = Logger(subsystem: "com.nitai.aikeyboard", category: "handoff")
 
+    /// Every change of `primaryLanguage`, which is the only thing this process
+    /// tells iOS about its own identity. A keyboard that is replaced by the stock
+    /// one leaves nothing behind — no crash log, no callback — so the trace of
+    /// what we said to iOS just before it happened is the only evidence available
+    /// on the next report. See `publishInputLanguage(_:)`.
+    private let inputModeLogger = Logger(subsystem: "com.nitai.aikeyboard", category: "inputmode")
+
     private var controller: KeyboardController!
     /// Held here as well as by the controller. Belt and braces on the bug that
     /// made this keyboard type nothing on a real device for its whole life: the
@@ -264,12 +271,21 @@ final class KeyboardViewController: UIInputViewController {
         recordMemory()
     }
 
-    /// The one warning iOS sends before it starts killing, and the only reason
-    /// this override exists. A keyboard extension that has received one has been
-    /// close; see `KeyboardMemoryPeak`.
+    /// The one warning iOS sends before it starts killing.
+    ///
+    /// **It is now acted on as well as recorded, and for its whole life it was
+    /// only recorded.** iOS sends this so a process can give memory back; a
+    /// keyboard that answers it by writing one number into a file has spent the
+    /// only notice it gets. `dropRebuildableCaches()` hands back the word lists,
+    /// which are the largest thing this process holds and the only large thing it
+    /// can build again from its own bundle.
+    ///
+    /// The reading is taken first, so the record describes the moment iOS was
+    /// worried rather than the calmer one after the caches went.
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         recordMemory(warning: true)
+        KeyboardController.dropRebuildableCaches()
     }
 
     /// Folds this process's high-water mark into the record the app reads.
@@ -440,9 +456,27 @@ final class KeyboardViewController: UIInputViewController {
     /// Pass the language when you have it. `$hostLanguage` fires from `willSet`,
     /// so the sink must use the emitted value. Appear calls
     /// `prepareForNewDocument` first, then publishes `hostLanguage`.
+    ///
+    /// **Written only when the tag actually moves, because this property is not
+    /// ours.** Everything else in this file writes state this process owns, where
+    /// a redundant assignment costs a comparison. This one hands iOS a new
+    /// identity for a keyboard that is already on screen, and iOS answers it
+    /// however it likes — including by deciding the field is better served by its
+    /// own keyboard. Before this guard the same tag was re-announced on every
+    /// appearance and on every republish of `hostLanguage`, so a bilingual user
+    /// spent that risk dozens of times a session for no change at all.
+    /// `KeyboardController.announcedInputModeTag(for:)` decides *what* is said;
+    /// this decides whether it is worth saying.
     private func publishInputLanguage(_ language: KeyboardLanguage? = nil) {
-        guard let language = language ?? controller?.hostLanguage else { return }
-        primaryLanguage = language.inputModeTag
+        guard let controller else { return }
+        let tag = controller.announcedInputModeTag(for: language ?? controller.hostLanguage)
+        guard primaryLanguage != tag else { return }
+        inputModeLogger.info(
+            """
+            primaryLanguage \(self.primaryLanguage ?? "unset", privacy: .public) -> \
+            \(tag, privacy: .public)
+            """)
+        primaryLanguage = tag
     }
 
     /// The host app decides how tall the keyboard is only if we tell it. The

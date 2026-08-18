@@ -339,6 +339,12 @@ enum TypoLexicon {
             allForms: [])
     }
 
+    /// Drops the built blocks. See `KeyboardController.dropRebuildableCaches()`,
+    /// which is the only caller and carries the reasoning.
+    static func purge() {
+        cache.withLock { $0.removeAll() }
+    }
+
     private static let cache = OSAllocatedUnfairLock(initialState: [String: Block]())
 
     private static func block(for language: KeyboardLanguage) -> Block {

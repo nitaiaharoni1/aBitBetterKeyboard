@@ -191,14 +191,28 @@ enum MissingSpaces {
         return nil
     }
 
+    /// Drops the built indexes. See `KeyboardController.dropRebuildableCaches()`,
+    /// which is the only caller and carries the reasoning.
+    static func purge() {
+        ranks.withLock { $0.removeAll() }
+    }
+
     private static let ranks = OSAllocatedUnfairLock(initialState: [String: [String: Int]]())
 
+    /// **`uncachedWords` rather than `words(for:)`, which is the same call
+    /// `TypoLexicon.load` makes and for the same reason.** This reads each string
+    /// exactly once, to key a dictionary, and never wants the array again — where
+    /// `words(for:)` keeps all 50,000 boxed strings alive for the life of the
+    /// process to serve `GroupedDecoder`, which indexes them on every grouped
+    /// keystroke. Borrowing that cache made one press of Fix cost a keyboard
+    /// extension two permanent 50,000-entry structures instead of one, in a
+    /// process with roughly 50 MB to live in.
     private static func index(for language: KeyboardLanguage) -> [String: Int] {
         ranks.withLock { store in
             if let known = store[language.languageTag] { return known }
             var map: [String: Int] = [:]
             map.reserveCapacity(50_000)
-            for (rank, word) in GroupedLexiconResource.words(for: language).enumerated() {
+            for (rank, word) in GroupedLexiconResource.uncachedWords(for: language).enumerated() {
                 let key = language == .english ? word.lowercased() : word
                 if map[key] == nil { map[key] = rank }
             }

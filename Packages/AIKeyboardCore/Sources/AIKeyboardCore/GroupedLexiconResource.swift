@@ -54,9 +54,17 @@ enum GroupedLexiconResource {
     /// hands back 50,000 boxed strings and keeps them for the life of the
     /// process, which is the right trade for grouped keys, which index them on
     /// every keystroke, and the wrong one for a caller that reads the list once
-    /// at load and wants a `Set` out of it.
+    /// at load and wants a `Set` or a dictionary out of it. `TypoLexicon.load`
+    /// and `MissingSpaces.index` are both that reader; `GroupedDecoder` is the
+    /// only caller `cache` is for.
     static func uncachedWords(for language: KeyboardLanguage) -> [String] {
         load(language)
+    }
+
+    /// Drops the held lists. See `KeyboardController.dropRebuildableCaches()`,
+    /// which is the only caller and carries the reasoning.
+    static func purge() {
+        cache.withLock { $0.removeAll() }
     }
 
     private static let cache = OSAllocatedUnfairLock(initialState: [String: [String]]())

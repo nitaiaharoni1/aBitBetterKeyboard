@@ -347,6 +347,96 @@ final class FieldKeyboardTypeTests: XCTestCase {
             "the silence counted as an adoption, so the same field read as a new one")
     }
 
+    // MARK: NIT-126 — what the host is told
+
+    /// **The keys and the host are allowed to disagree, and an ASCII field is
+    /// where they must.** `KeyboardViewController` writes
+    /// `UIInputViewController.primaryLanguage` from this, which is the only
+    /// sentence the extension ever says to iOS about which keyboard it is, and a
+    /// slide along the space bar is the only thing that changes it while the
+    /// keyboard is on screen. Announcing `he-IL` for a box that declared it can
+    /// only hold ASCII invites iOS to decide the box is better served by the
+    /// stock keyboard, which is the reported defect.
+    ///
+    /// The build before this returns `he-IL` here, because it published
+    /// `hostLanguage.inputModeTag` and never looked at the field.
+    func testAnAsciiFieldIsToldEnglishEvenAfterTheUserSlidesToHebrew() {
+        let (controller, target) = keyboard(language: .hebrew)
+        target.keyboardType = .asciiCapable
+        controller.prepareForNewDocument()
+
+        controller.stepLanguage(by: 1)
+        XCTAssertEqual(controller.language, .hebrew, "the slide is the user's and stands")
+
+        XCTAssertEqual(
+            controller.announcedInputModeTag(for: controller.hostLanguage), "en-US",
+            "an ASCII field was told the keyboard had become Hebrew")
+    }
+
+    /// The same for the other two field types in the set, so a fix that named
+    /// only the one in the bug report is caught.
+    func testEveryLatinWantingFieldTypeIsToldEnglish() {
+        for type in [UIKeyboardType.asciiCapable, .emailAddress, .URL] {
+            let (controller, target) = keyboard(language: .hebrew)
+            target.keyboardType = type
+            controller.prepareForNewDocument()
+            controller.stepLanguage(by: 1)
+
+            XCTAssertEqual(
+                controller.announcedInputModeTag(for: controller.hostLanguage), "en-US",
+                "\(type) was told the keyboard had become Hebrew")
+        }
+    }
+
+    /// **The control that matters more than the fix.** Hebrew in an ordinary
+    /// field is exactly why `primaryLanguage` is written at all: WhatsApp reads
+    /// it to decide the message sits on the right. A clamp that reached past the
+    /// ASCII fields would put every Hebrew draft back on the left, which is the
+    /// defect `bbd3c6b7` fixed.
+    func testAnOrdinaryFieldIsToldHebrewTheMomentTheKeysMove() {
+        let (controller, target) = keyboard(language: .english)
+        target.keyboardType = .default
+        controller.prepareForNewDocument()
+
+        controller.stepLanguage(by: 1)
+
+        XCTAssertEqual(
+            controller.announcedInputModeTag(for: controller.hostLanguage), "he-IL",
+            "a chat field was not told the keyboard had moved to Hebrew")
+    }
+
+    /// The keys of a Hebrew-only user stay Hebrew in an ASCII field, because
+    /// there is no Latin language to move them to. The host is still told
+    /// `en-US`: an address reads left to right whoever types it, and this is the
+    /// user with the least room to recover if iOS takes the field away.
+    func testAHebrewOnlyKeyboardStillTellsAnAsciiFieldEnglish() {
+        SharedStore.shared.enabledLanguages = [.hebrew]
+        let (controller, target) = keyboard(language: .hebrew)
+        target.keyboardType = .emailAddress
+
+        controller.prepareForNewDocument()
+
+        XCTAssertEqual(controller.language, .hebrew, "the only enabled language was taken away")
+        XCTAssertEqual(
+            controller.announcedInputModeTag(for: controller.hostLanguage), "en-US",
+            "an email box was told the keyboard had become Hebrew")
+    }
+
+    /// `.webSearch` is deliberately outside `latinFieldTypes` — searching in
+    /// Hebrew is an ordinary thing to do — so it hears Hebrew like any other
+    /// field.
+    func testASearchFieldIsToldHebrew() {
+        let (controller, target) = keyboard(language: .english)
+        target.keyboardType = .webSearch
+        controller.prepareForNewDocument()
+
+        controller.stepLanguage(by: 1)
+
+        XCTAssertEqual(
+            controller.announcedInputModeTag(for: controller.hostLanguage), "he-IL",
+            "a search box lost its right-to-left layout")
+    }
+
     // MARK: Controls
     //
     // Both pass against the unfixed build on purpose. What they reject is a fix

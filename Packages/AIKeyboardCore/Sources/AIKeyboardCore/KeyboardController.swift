@@ -975,6 +975,35 @@ public final class KeyboardController: ObservableObject {
     func reportInteraction(_ kind: KeyboardInteraction.Kind) {
         lastInteraction = KeyboardInteraction(kind)
     }
+
+    /// Everything this process is holding that it can read out of its own bundle
+    /// again, given back to the system.
+    ///
+    /// **The word lists are the largest thing a keyboard extension here holds and
+    /// they are held for the life of the process.** Three caches, all of them
+    /// per-language, all of them filled the first time somebody types or presses
+    /// Fix in a language and never emptied, so a bilingual session pays for each
+    /// of them twice. That is the right trade while there is room, because
+    /// rebuilding the typo block cost a measured 161 ms on the first English
+    /// keystroke of a session, and the wrong one the moment iOS says it is
+    /// short — a keyboard killed for memory is replaced by the stock
+    /// one with no crash log, no signal and no callback, and the user is left
+    /// holding a keyboard they did not choose. See `KeyboardMemoryPeak` and
+    /// `.claude/rules/keyboard-wiring.md`.
+    ///
+    /// Static rather than an instance method because the caches are static: the
+    /// process holds them, not this controller, and a keyboard that has been torn
+    /// down and rebuilt is standing on the same ones.
+    ///
+    /// Safe at any moment. Every one of these is a pure function of a bundled
+    /// file, so the worst a purge can do is make the next lookup slow.
+    /// `EmojiCatalog` is deliberately absent: it is a `static let`, so there is
+    /// nothing to release, and it is a fraction of the size of one word list.
+    public static func dropRebuildableCaches() {
+        GroupedLexiconResource.purge()
+        TypoLexicon.purge()
+        MissingSpaces.purge()
+    }
 }
 
 // MARK: - Previews
