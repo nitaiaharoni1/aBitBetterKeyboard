@@ -54,15 +54,22 @@ final class KeyboardViewController: UIInputViewController {
         controller = KeyboardController(
             target: textTarget,
             store: store,
-            language: store.enabledLanguages.first ?? .english,
-            // **The one caller that says this is the real keyboard**, and the two
-            // things it turns on are both things only a real keyboard should do:
-            // ask a model for a better suggestion on a typing pause, and remember
-            // the words the person typed. The app's playground and all 57 test
-            // constructions leave it off, so neither spends a model call on a
-            // screenshot run nor writes scripted demo words into somebody's
-            // vocabulary — which the test suite did, teaching the store `Handi` ten
-            // times before `KeyboardController.personal` existed.
+            // Where the user left it, not the head of the list. iOS rebuilds this
+            // controller whenever it feels like it, so `enabledLanguages.first`
+            // meant a Hebrew speaker re-sliding the space bar several times a day.
+            // See `SharedStore.storedOpeningLanguage`, which is also the stored
+            // read rather than the `@Published` copy `load()` filled a moment ago.
+            language: store.storedOpeningLanguage,
+            // **The one caller that says this is the real keyboard**, and the
+            // things it turns on are all things only a real keyboard should do:
+            // ask a model for a better suggestion on a typing pause, remember the
+            // words the person typed, and remember which language the person
+            // chose. The app's playground and all 57 test constructions leave it
+            // off, so none of them spends a model call on a screenshot run, writes
+            // scripted demo words into somebody's vocabulary — which the test
+            // suite did, teaching the store `Handi` ten times before
+            // `KeyboardController.personal` existed — or decides what tomorrow's
+            // keyboard opens on.
             isSystemKeyboard: true
         )
         controller.showsGlobeKey = needsInputModeSwitchKey

@@ -8,7 +8,7 @@ extension SharedStore {
     /// run never depends on what the previous run left behind.
     public func resetToDefaults() {
         for key in [
-            Key.hasCompletedOnboarding, Key.enabledLanguages, Key.autocorrect,
+            Key.hasCompletedOnboarding, Key.enabledLanguages, Key.lastLanguage, Key.autocorrect,
             Key.completeOnIdle, Key.spaceOnIdle, Key.idleDelayMs,
             Key.autocapitalise, Key.predictions, Key.haptics, Key.keySounds,
             Key.defaultTone, Key.customToneInstruction, Key.dictationSessionMinutes,

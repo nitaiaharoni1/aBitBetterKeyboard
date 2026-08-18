@@ -502,6 +502,15 @@ public final class KeyboardController: ObservableObject {
     /// inert otherwise. See `KeyboardController+Grouped.swift`.
     let grouped = GroupedInput()
 
+    /// Whether this controller is the keyboard iOS put on screen, rather than the
+    /// app's playground, the layout editor's canvas or a test.
+    ///
+    /// Held as well as read in `init` because two decisions need it after
+    /// construction: `stepLanguage` remembers the language the user chose, and a
+    /// scripted demo choosing what the real keyboard opens on tomorrow is the
+    /// same defect `personal` records above, one setting over.
+    let isSystemKeyboard: Bool
+
     public init(
         target: TextTarget?,
         store: SharedStore = .shared,
@@ -515,6 +524,7 @@ public final class KeyboardController: ObservableObject {
         self.language = language
         self.hostLanguage = language
         self.dictation = dictation
+        self.isSystemKeyboard = isSystemKeyboard
         self.personal = isSystemKeyboard ? .shared : PersonalLanguageModel(url: nil)
         // This build ships pointing at a deployed backend
         // (`BackendTransport.bundledDefaultURL`), so the cloud half is normally

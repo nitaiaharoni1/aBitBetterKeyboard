@@ -70,6 +70,10 @@ public final class SharedStore: ObservableObject {
     enum Key {
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let enabledLanguages = "enabledLanguages"
+        /// `KeyboardLanguage.rawValue` for the language the user last put the
+        /// keyboard on themselves, and the one the next launch opens on. See
+        /// `storedOpeningLanguage`.
+        static let lastLanguage = "lastLanguage"
         static let autocorrect = "autocorrect"
         static let completeOnIdle = "completeOnIdle"
         static let spaceOnIdle = "spaceOnIdle"
@@ -216,6 +220,54 @@ public final class SharedStore: ObservableObject {
             if !parsed.isEmpty { return parsed }
         }
         return enabledLanguages.isEmpty ? Self.shippedDefaultLanguages : enabledLanguages
+    }
+
+    /// The language a freshly launched keyboard draws.
+    ///
+    /// **iOS builds a new `KeyboardViewController` far more often than a user
+    /// changes their mind.** The extension is torn down when it is not needed and
+    /// rebuilt on the next field, so before this every launch opened on
+    /// `enabledLanguages.first` — English for the shipped pair — and a Hebrew
+    /// speaker slid the space bar back by hand several times a day. The keys are
+    /// the one piece of keyboard state a user sets deliberately and expects to
+    /// find where they left it.
+    ///
+    /// **Validated against the enabled list rather than trusted**, so a language
+    /// turned off in the app cannot come back on the next launch, and a rawValue
+    /// from an older build that no longer names a language falls through. The
+    /// fallback is exactly what this replaced.
+    ///
+    /// Deliberately *not* `storedDictationLanguage`, which also holds a
+    /// `KeyboardLanguage.rawValue` written by the keyboard. That one records what
+    /// the keys were showing at the moment a dictation utterance opened, for the
+    /// app process to transcribe against; it is written only on that tap, so a
+    /// user who never dictates would have nothing here and a user who dictated in
+    /// English an hour ago would reopen in it.
+    public var storedOpeningLanguage: KeyboardLanguage {
+        let enabled = storedEnabledLanguages
+        if let remembered = defaults.string(forKey: Key.lastLanguage)
+            .flatMap(KeyboardLanguage.init(rawValue:)), enabled.contains(remembered)
+        {
+            return remembered
+        }
+        return enabled.first ?? .english
+    }
+
+    /// Records the language the user has just put the keyboard on.
+    ///
+    /// **Only a language the *user* chose.** `KeyboardController.stepLanguage` is
+    /// the one caller, and it is where the globe key and a slide along the space
+    /// bar both land. The keyboard's own imposition on an ASCII field
+    /// (`adoptFieldKeyboardType`) deliberately does not come through here: it
+    /// already puts the language back when the user leaves the field, and
+    /// remembering it would carry one email address into every app on the phone
+    /// and outlast the process that could undo it.
+    ///
+    /// One string write to `UserDefaults`, on an action a person takes a few
+    /// times a minute at most. Nothing worth debouncing, the same judgement
+    /// `recordDictationLanguage` makes.
+    public func rememberLanguage(_ language: KeyboardLanguage) {
+        defaults.set(language.rawValue, forKey: Key.lastLanguage)
     }
 
     /// Appends or removes `language` from `enabledLanguages`.

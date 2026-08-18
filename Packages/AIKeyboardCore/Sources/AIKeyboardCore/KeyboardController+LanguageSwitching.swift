@@ -61,6 +61,15 @@ extension KeyboardController {
 
     /// Moves `places` along the enabled languages, wrapping, and names where it
     /// landed on the space bar for a moment afterwards.
+    ///
+    /// **The one place a language is remembered, because it is the one place the
+    /// user picks one.** Both ways of changing language arrive here — the globe
+    /// taps through `advanceLanguage`, a slide along the space bar through
+    /// `spaceBarTouch` — and the next launch of the extension opens on whatever
+    /// this last wrote. iOS rebuilds a keyboard extension far more often than a
+    /// person changes their mind, so without it a Hebrew speaker slid the space
+    /// bar back by hand several times a day. See `SharedStore.rememberLanguage`
+    /// for the two writers it deliberately excludes.
     public func stepLanguage(by places: Int) {
         let enabled = enabledLanguages
         guard let destination = SpaceSwipe.language(from: language, in: enabled, places: places)
@@ -70,6 +79,7 @@ extension KeyboardController {
             language = destination
             plane = .letters
         }
+        if isSystemKeyboard { store.rememberLanguage(destination) }
         announceLanguage(destination, in: enabled, pending: false, step: places)
         endGroupedWord()
         refreshSuggestions()
