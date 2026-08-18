@@ -45,6 +45,32 @@ extension KeyboardController {
         return (enabledLanguages.first { $0.script == .latin } ?? .english).inputModeTag
     }
 
+    /// Puts the keys back on a language the user still has, for the appearance
+    /// after they turned the current one off in the app.
+    ///
+    /// **One extension instance outlives any number of trips to Settings.** iOS
+    /// keeps a keyboard extension alive in the background, so a user who switches
+    /// Hebrew off in the app and comes back to WhatsApp met a Hebrew keyboard
+    /// they had just removed, and went on meeting it until iOS happened to
+    /// rebuild the process. `storedOpeningLanguage` already refuses a disabled
+    /// language on the launch path; this is the same rule for the instance that
+    /// did not relaunch.
+    ///
+    /// Called from the appearance, which is the only moment the app can have
+    /// changed anything, and deliberately not from the keystroke path: a keyboard
+    /// that re-decides its own language while somebody is typing is the defect
+    /// `adoptFieldKeyboardType` documents at length.
+    ///
+    /// The rescore is paid only in the branch that moved. It is the branch that
+    /// approximately never runs, and when it does the bar is holding candidates
+    /// in a language the user has just deleted.
+    public func settleLanguage() {
+        let enabled = enabledLanguages
+        guard !enabled.contains(language) else { return }
+        language = store.storedOpeningLanguage
+        refreshSuggestions()
+    }
+
     /// The globe key. One step per tap — the same step a slide makes, so the two
     /// ways of changing language walk the enabled list in the same order — and it
     /// still hands the keyboard over to iOS when the user has only enabled one of

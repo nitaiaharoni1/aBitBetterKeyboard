@@ -124,9 +124,13 @@ extension DictationService {
         // The layout the keyboard was on when it opened the utterance, read fresh
         // off the store for the cross-process reason `close(utterance:)` reads it
         // fresh: this is a different process from the one that wrote it.
+        // The fallback is the language the keyboard is sitting on, not the head of
+        // the enabled list, which was an alphabetical accident of whatever the user
+        // turned on. Both are guesses for the one case this is nil in — see
+        // `close(utterance:)` — and one of them is a fact about this keyboard.
         let language =
             SharedStore.shared.storedDictationLanguage
-            ?? SharedStore.shared.enabledLanguages.first ?? .english
+            ?? SharedStore.shared.storedOpeningLanguage
         Task { [weak self] in
             guard let locale = await LiveTranscriber.supportedLocale(for: language) else { return }
             guard let self, self.openUtterance == utterance else { return }
@@ -241,6 +245,14 @@ extension DictationService {
         // session started and stopped in the app before the keyboard ever
         // opened an utterance in it, which is the one case with no "current
         // language" to read.
+        //
+        // **Deliberately still the whole list, where `startLiveTranscription`
+        // falls back to `storedOpeningLanguage`.** That one has to name exactly
+        // one language and a remembered one beats an arbitrary one. This takes
+        // hints, so narrowing it to a single guess about a session the keyboard
+        // did not open would cost a whole transcription when the guess is wrong,
+        // and this repo scores dictation against a corpus rather than by
+        // argument.
         let languages =
             SharedStore.shared.storedDictationLanguage.map { [$0] }
             ?? SharedStore.shared.enabledLanguages

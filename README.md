@@ -62,6 +62,11 @@ xcrun swift-format --in-place --recursive \
   top row (Hebrew is currently the only one); otherwise it stays on the bottom.
   Every key row is pinned left-to-right, matching Apple's physical key order
   rather than mirroring for right-to-left
+- Language switching by sliding along the space bar or tapping the globe, one
+  language per gesture either way, with the space bar naming where the slide is
+  going while the thumb is still down. The keyboard opens on the language it was
+  left on rather than on the head of the enabled list, and moves off a language
+  only when its owner switches that language off in the app
 - Suggestion bar with three fixed slots edge to edge; the AI actions live in a
   row above the keys, and both of the bar's ends ship empty
 - Select a whole word anywhere in the field and the bar answers about *that*

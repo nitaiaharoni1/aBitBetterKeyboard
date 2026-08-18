@@ -235,6 +235,11 @@ final class KeyboardViewController: UIInputViewController {
         // `$customization` sink landed — that sink is `.receive(on: RunLoop.main)`
         // and so is never synchronous with this.
         controller?.reloadCustomization()
+        // The same re-read, for the language rather than the layout, and it has to
+        // be before the field is looked at below: `prepareForNewDocument` shapes
+        // the keys for the field, and shaping the wrong language first would mean
+        // deciding twice. See `KeyboardController.settleLanguage`.
+        controller?.settleLanguage()
         controller?.refreshCopyClip()
         // Re-read for exactly the reason above: the picker is in the companion
         // app, iOS keeps this process alive in the background, and the first
@@ -262,7 +267,9 @@ final class KeyboardViewController: UIInputViewController {
         // screen is a fresh visit, which is the moment that freeze is allowed to
         // lift. See `KeyboardController.visibleRecentEmoji`.
         controller?.settleRecentEmoji()
-        publishInputLanguage()
+        // The host on the other side of this appearance may never have heard the
+        // tag this instance is already holding. See `publishInputLanguage`.
+        publishInputLanguage(announcingAnyway: true)
         updateKeyboardHeight()
     }
 
@@ -464,24 +471,38 @@ final class KeyboardViewController: UIInputViewController {
     /// so the sink must use the emitted value. Appear calls
     /// `prepareForNewDocument` first, then publishes `hostLanguage`.
     ///
-    /// **Written only when the tag actually moves, because this property is not
-    /// ours.** Everything else in this file writes state this process owns, where
-    /// a redundant assignment costs a comparison. This one hands iOS a new
-    /// identity for a keyboard that is already on screen, and iOS answers it
-    /// however it likes — including by deciding the field is better served by its
-    /// own keyboard. Before this guard the same tag was re-announced on every
-    /// appearance and on every republish of `hostLanguage`, so a bilingual user
-    /// spent that risk dozens of times a session for no change at all.
+    /// **Mid-session it is written only when the tag actually moves, because this
+    /// property is not ours.** Everything else in this file writes state this
+    /// process owns, where a redundant assignment costs a comparison. This one
+    /// hands iOS a new identity for a keyboard that is already on screen, and iOS
+    /// answers it however it likes — including by deciding the field is better
+    /// served by its own keyboard. Before this guard the same tag was
+    /// re-announced on every republish of `hostLanguage`, so a bilingual user
+    /// spent that risk for no change at all.
     /// `KeyboardController.announcedInputModeTag(for:)` decides *what* is said;
     /// this decides whether it is worth saying.
-    private func publishInputLanguage(_ language: KeyboardLanguage? = nil) {
+    ///
+    /// **An appearance says it anyway, and that asymmetry is the point.** One
+    /// extension instance is reused across fields and across host apps, so the
+    /// same tag can be both already set and never heard by the app now holding
+    /// the field — and whether iOS re-reads the property when a host attaches or
+    /// only reacts to it changing is not something this repo can prove without a
+    /// device. Skipping it there would risk the defect `bbd3c6b7` fixed, a Hebrew
+    /// draft sitting on the left, to save a write at the one moment iOS is
+    /// re-deciding which keyboard serves the field anyway. The write worth
+    /// removing is the one that changes our identity *under* a host that has
+    /// already been told, which is the swipe.
+    private func publishInputLanguage(
+        _ language: KeyboardLanguage? = nil, announcingAnyway: Bool = false
+    ) {
         guard let controller else { return }
         let tag = controller.announcedInputModeTag(for: language ?? controller.hostLanguage)
-        guard primaryLanguage != tag else { return }
+        guard announcingAnyway || primaryLanguage != tag else { return }
         inputModeLogger.info(
             """
             primaryLanguage \(self.primaryLanguage ?? "unset", privacy: .public) -> \
-            \(tag, privacy: .public)
+            \(tag, privacy: .public) \
+            (\(announcingAnyway ? "appear" : "mid-session", privacy: .public))
             """)
         primaryLanguage = tag
     }

@@ -35,6 +35,17 @@ final class LanguageMemoryTests: XCTestCase {
 
     /// The real keyboard, which is the only controller allowed to remember
     /// anything.
+    ///
+    /// **These are the only `isSystemKeyboard: true` constructions in the suite,
+    /// and every document here is empty on purpose.** That flag also hands the
+    /// controller the shared `PersonalLanguageModel` and a live
+    /// `PredictiveRefiner`, which is why the other fifty-seven test constructions
+    /// leave it off — a suite that learns words teaches the store its own
+    /// fixtures, which `KeyboardController.personal` records happening. Nothing
+    /// here types, so nothing is learned, and `PredictiveRefiner.shouldRefine`
+    /// refuses a request whose `textBefore` is empty with no screen context, so
+    /// no model call is spent either. A test added to this file that types first
+    /// breaks both of those guarantees.
     private func keyboard(language: KeyboardLanguage) -> KeyboardController {
         KeyboardController(target: MockTextTarget(), language: language, isSystemKeyboard: true)
     }
@@ -113,5 +124,39 @@ final class LanguageMemoryTests: XCTestCase {
         SharedStore.shared.enabledLanguages = [.hebrew, .english]
 
         XCTAssertEqual(SharedStore.shared.storedOpeningLanguage, .hebrew)
+    }
+
+    // MARK: The instance that did not relaunch
+
+    /// **iOS keeps one extension instance alive across any number of trips to
+    /// Settings.** Validating the remembered language on the launch path is only
+    /// half the rule: a user who switches Hebrew off in the app and comes back to
+    /// WhatsApp was met by the Hebrew keyboard they had just removed, for as long
+    /// as iOS chose not to rebuild the process.
+    func testTurningOffTheCurrentLanguageMovesTheKeysOnTheNextAppearance() {
+        let controller = keyboard(language: .english)
+        slide(controller, 60)
+        XCTAssertEqual(controller.language, .hebrew)
+
+        SharedStore.shared.enabledLanguages = [.english]
+        controller.settleLanguage()
+
+        XCTAssertEqual(
+            controller.language, .english,
+            "the keyboard went on drawing a language its owner had deleted")
+    }
+
+    /// The control, and the one that matters: an appearance must not move a
+    /// keyboard that is standing somewhere legitimate. This runs on every single
+    /// appearance, so a version that reset to the head of the list would undo
+    /// every swipe the moment the user switched apps.
+    func testAnAppearanceLeavesAnEnabledLanguageAlone() {
+        let controller = keyboard(language: .english)
+        slide(controller, 60)
+
+        controller.settleLanguage()
+
+        XCTAssertEqual(
+            controller.language, .hebrew, "an ordinary appearance undid the user's own swipe")
     }
 }

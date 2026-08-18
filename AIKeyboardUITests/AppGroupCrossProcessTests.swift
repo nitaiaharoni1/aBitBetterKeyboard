@@ -11,10 +11,16 @@ import XCTest
 /// wrote.
 ///
 /// The observable is the keyboard layout. `KeyboardViewController` starts in
-/// `store.enabledLanguages.first`, so turning English off in the app must leave
+/// `store.storedOpeningLanguage`, so turning English off in the app must leave
 /// the extension rendering Hebrew. If the two processes are not sharing state
 /// the extension reads an empty store, falls back to the shipped default of
 /// `[.english, .hebrew]`, and draws QWERTY — which fails this test.
+///
+/// That property remembers the language the user last chose, and it cannot
+/// weaken this test in either direction: `-uiTestReset` clears the remembered
+/// value before the app launches, and a value that survived anyway is validated
+/// against the enabled list, so an English one would be refused by the very
+/// write this test is checking crossed the process boundary.
 ///
 ///     xcodebuild test -project AIKeyboard.xcodeproj -scheme AIKeyboard \
 ///       -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
