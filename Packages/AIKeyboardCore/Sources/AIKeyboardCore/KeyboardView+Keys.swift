@@ -471,6 +471,9 @@ extension KeyboardView {
                 onCharacterTouch: characterTouchHandler(for: key),
                 onPopupLayerChange: popupLayerHandler(for: key)
             )
+            // The key redraws when something it draws from moved, and not
+            // because the controller published. See `KeyView.==`.
+            .equatable()
             // The overlay sits outside KeyView so VoiceOver can see ReplayKit's
             // real button (`.accessibilityElement()` hides descendants). Hits
             // must not also reach the SwiftUI gesture, or one tap both opens
@@ -487,11 +490,22 @@ extension KeyboardView {
                     )
                 }
             }
+            // **Only the layout editor reads these frames, and the system
+            // keyboard was publishing them anyway.** `LayoutView` is the one
+            // `onPreferenceChange(KeyFramesKey.self)` in the project — it puts a
+            // selection ring and a drop target over the real keyboard rather than
+            // over a drawing of one — and `isEditingLayout: true` is passed from
+            // exactly that call site. Everywhere else this was a `GeometryReader`
+            // and a dictionary merge per key, on every layout pass, feeding a
+            // preference with no reader on the other end. `KeyFramesKey`'s own
+            // doc comment has named the cost since it was written.
             .background {
-                GeometryReader { proxy in
-                    Color.clear.preference(
-                        key: KeyFramesKey.self,
-                        value: [key.id: proxy.frame(in: .named(Self.frameSpace))])
+                if isEditingLayout {
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: KeyFramesKey.self,
+                            value: [key.id: proxy.frame(in: .named(Self.frameSpace))])
+                    }
                 }
             }
         }

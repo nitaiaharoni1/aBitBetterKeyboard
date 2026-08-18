@@ -2,7 +2,7 @@ import SwiftUI
 
 /// One key. Owns its own press state so a touch registers on finger-down rather
 /// than on lift, which is what makes typing feel immediate.
-public struct KeyView: View {
+public struct KeyView: View, Equatable {
 
     let spec: KeySpec
     let width: CGFloat
@@ -68,6 +68,25 @@ public struct KeyView: View {
     /// Live work on this key, if it is the one that started it. `.idle` on
     /// every other key so a 60 Hz phase tick does not rebuild the grid.
     let activity: KeyActivity
+
+    /// The accent this key was drawn with.
+    ///
+    /// **The one thing this view reads that is neither passed in nor SwiftUI
+    /// state, and `==` below is what makes capturing it necessary.** Every brand
+    /// colour on a key comes from `Theme.Brand`, which reads the mutable global
+    /// `Theme.palette`; the picker lives in the companion app, so the extension
+    /// repaints by writing that global and firing `controller.objectWillChange`
+    /// (see `KeyboardViewController.applyBrandPalette`). That nudge rebuilds
+    /// `KeyboardView` and constructs fresh keys, and without the palette among
+    /// the compared values every one of them would compare equal to the key it
+    /// replaced and keep the old accent — an equality check quietly undoing the
+    /// only repaint route the keyboard has.
+    ///
+    /// A property initialiser rather than an `init` parameter, so it is captured
+    /// at construction with no call site having to know: `Theme.palette` is read
+    /// once per key, where the key is built, which is exactly the moment its
+    /// colours are decided.
+    let palette: BrandPalette = Theme.palette
     let onPress: (KeyCap, CGPoint) -> Void
     let onRepeat: (() -> Void)?
     let onAlternate: ((String) -> Void)?
@@ -165,6 +184,55 @@ public struct KeyView: View {
         self.onSpaceTouch = onSpaceTouch
         self.onCharacterTouch = onCharacterTouch
         self.onPopupLayerChange = onPopupLayerChange
+    }
+
+    /// Every value this key draws from, and none of the six closures it is handed.
+    ///
+    /// **`KeyboardController` publishes on every keystroke and every key on the
+    /// board redraws, because a `View` holding a closure can never compare equal
+    /// to itself.** `KeyboardView` observes that one object, so `suggestions`,
+    /// `shift`, `documentHasText`, a dictation level tick or the 60 Hz
+    /// `workingPhase` sweep each rebuild the whole grid — and SwiftUI cannot skip
+    /// a body it cannot prove is unchanged, which for a struct carrying function
+    /// values it never can. Roughly forty keys, two shadows and a gradient each,
+    /// several times per letter. `KeyView+Keys` already went to the trouble of
+    /// handing letter keys `activity: .idle` "so a 60 Hz tick does not rebuild the
+    /// grid"; that intent could not work until this existed.
+    ///
+    /// **Ignoring the closures is sound rather than convenient, and it rests on
+    /// what they capture.** Every one of them captures `controller`, whose
+    /// identity never changes, plus values that are compared here: `onRepeat`,
+    /// `onSpaceTouch`, `onCharacterTouch` and `onPopupLayerChange` are chosen by
+    /// `spec.cap`, `onAlternate` by `spec` and by the three alternates lists, and
+    /// `onPress` is the same expression for every key. So a stale closure held
+    /// past an update that compared equal cannot behave differently from a fresh
+    /// one. Add a stored property to this view and it must be added here too, or
+    /// the key stops following it.
+    ///
+    /// `@State`, `@GestureState` and `@Environment` are unaffected: SwiftUI tracks
+    /// those separately, so a press, a cancelled touch, a rotation or a Dynamic
+    /// Type change still redraws the key that owns it.
+    public static func == (lhs: KeyView, rhs: KeyView) -> Bool {
+        lhs.spec == rhs.spec
+            && lhs.width == rhs.width
+            && lhs.height == rhs.height
+            && lhs.language == rhs.language
+            && lhs.shift == rhs.shift
+            && lhs.indication == rhs.indication
+            && lhs.enabledLanguages == rhs.enabledLanguages
+            && lhs.toneAlternates == rhs.toneAlternates
+            && lhs.fixAlternates == rhs.fixAlternates
+            && lhs.copyclipAlternates == rhs.copyclipAlternates
+            && lhs.isEmojiOpen == rhs.isEmojiOpen
+            && lhs.isCopyClipOpen == rhs.isCopyClipOpen
+            && lhs.showsActionCaption == rhs.showsActionCaption
+            && lhs.usesNeutralActionTint == rhs.usesNeutralActionTint
+            && lhs.isActionActive == rhs.isActionActive
+            && lhs.isDisabled == rhs.isDisabled
+            && lhs.disabledHint == rhs.disabledHint
+            && lhs.dictationState == rhs.dictationState
+            && lhs.activity == rhs.activity
+            && lhs.palette == rhs.palette
     }
 
     public var body: some View {

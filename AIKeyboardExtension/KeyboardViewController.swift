@@ -116,8 +116,15 @@ final class KeyboardViewController: UIInputViewController {
         // compared only after that turn: every keystroke and every loudness tick
         // publishes, and the constraint must not move unless the strip actually
         // appeared.
+        // **One hop, not two.** This fires on every keystroke, every dictation
+        // level tick and every frame of the 60 Hz `workingPhase` sweep, and it
+        // used to schedule a `RunLoop.main` turn *and then* a
+        // `DispatchQueue.main.async` inside it, so the busiest publisher in the
+        // process paid two main-queue round trips to compare one `Bool`. The
+        // deferral the comment below describes is what `async` already gives:
+        // `objectWillChange` fires from `willSet`, so the read has to happen
+        // after this turn, and one hop is after this turn.
         controller.objectWillChange
-            .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 DispatchQueue.main.async {
                     guard let self, let controller = self.controller else { return }
@@ -283,6 +290,23 @@ final class KeyboardViewController: UIInputViewController {
             .shared, as: .keyboard, ownUIHeightFraction: ownUIHeightFraction())
         recordPresence()
         recordMemory()
+        // Off the main thread, and from here rather than `viewDidLoad` for the
+        // reason `recordPresence()` gives: this is the moment the keyboard is
+        // genuinely in use, and it is off the path between the keyboard being
+        // asked for and the keys being drawn. See
+        // `KeyboardController.warmRebuildableCaches(for:)` for what the first
+        // keystroke used to cost.
+        //
+        // The keys that are actually on screen go first, in the same shape
+        // `refreshSuggestions` builds its own language list. It runs on every
+        // appearance and not only the first: after the caches are built every
+        // lookup in there is a hit measured at 0.01 ms, and the one case where it
+        // is not is a keyboard that has just been through `didReceiveMemoryWarning`
+        // — which is exactly the keyboard that should rebuild them off this thread
+        // rather than under the next finger.
+        let language = controller.language
+        KeyboardController.warmRebuildableCaches(
+            for: [language] + controller.enabledLanguages.filter { $0 != language })
     }
 
     /// The one warning iOS sends before it starts killing.
