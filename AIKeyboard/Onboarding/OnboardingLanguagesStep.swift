@@ -23,9 +23,13 @@ struct LanguagesStep: View {
                 }
             }
 
-            // Said here as well as on step 4, because this is the screen where the
-            // choice is made and the keyboard cannot honour it yet. Withheld once
-            // Full Access is confirmed, when it is no longer true of this phone.
+            // Said here as well as on the add-keyboard step, because this is the
+            // screen where the choice is made and the keyboard cannot honour it
+            // yet. That matters more now that this step is optional: a user who
+            // never opens it keeps English and Hebrew, which the keyboard draws
+            // with or without the permission, so the only person who reads this
+            // is the one whose choice actually depends on it. Withheld once Full
+            // Access is confirmed, when it is no longer true of this phone.
             if setup.fullAccess != .confirmed {
                 Text(SetupState.languagesNeedFullAccess)
                     .font(Theme.Fonts.caption)

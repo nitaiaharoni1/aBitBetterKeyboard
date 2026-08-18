@@ -244,9 +244,29 @@ extension KeyboardController {
         let tailText = editTail
         let tailDeletes = editDeleteSpanAfterCursor
         target?.adjustTextPosition(byCharacterOffset: tail)
-        if contextBefore.hasSuffix(tailText) {
-            deleteBackward(utf16Units: head + tailDeletes)
+        // **The insert used to happen whether or not the delete did, and that
+        // duplicated the message.** If the caret did not land where this expects,
+        // the delete was skipped and the replacement went in anyway, so the field
+        // ended up holding the original text *and* the whole answer. The guard is
+        // this code saying it has lost track of the field; inserting on a model
+        // known to be wrong is the one response guaranteed to make it worse.
+        //
+        // It fails for two reasons that are not bugs: `adjustTextPosition` is a
+        // request the host may not honour, and `documentContextBeforeInput` is
+        // truncated by iOS, so a `tailText` longer than the window cannot be
+        // matched at all. Neither is a reason to write.
+        //
+        // Pre-existing, and reachable far more often since the undo stopped
+        // expiring at the next keystroke: `revertEdit`'s `.wholeField` branch
+        // comes through here with the caret wherever the user left it, which was
+        // a state the old one-keystroke lifetime made nearly unreachable.
+        guard contextBefore.hasSuffix(tailText) else {
+            // Put the caret back, so a refusal costs the user nothing at all.
+            target?.adjustTextPosition(byCharacterOffset: -tail)
+            refreshSuggestions()
+            return
         }
+        deleteBackward(utf16Units: head + tailDeletes)
         target?.insertText(replacement)
         refreshSuggestions()
     }

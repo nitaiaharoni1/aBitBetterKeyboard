@@ -105,6 +105,17 @@ public enum BannerState: Equatable {
             /// establishes that a SwiftUI tap cannot start a session itself, and for
             /// what hosting the picker still does not establish.
             case broadcastPicker
+            /// A button that opens the CopyClip panel.
+            ///
+            /// **The only remedy that is answered inside this keyboard**, and it
+            /// exists because the sentence it belongs to cannot name a key.
+            /// Reply from the clipboard needs the copied message to be in the
+            /// ledger, the one alert-free route in is the `UIPasteControl` the
+            /// CopyClip panel draws, and the CopyClip key is a configurable slot
+            /// the user may have moved off the bar entirely — which is the rule
+            /// `SuggestionBar.aiButtonName` was written under. So the refusal
+            /// carries the way in rather than describing where to look for it.
+            case copyclip
             /// A button that asks the extension host to open the containing app at
             /// the given URL. The host tries `extensionContext?.open(_:)` first and
             /// falls back to the responder-chain workaround if that fails. The URL

@@ -1,6 +1,15 @@
 import SwiftUI
 import AIKeyboardCore
 
+/// The Pro screen, kept whole and currently unreachable.
+///
+/// **Nothing in the shipping build pushes this.**
+/// `AppFeatureFlags.subscriptionPaywall` is false, so Home's upgrade card,
+/// Settings' account row and the search entry that jumps here are all withheld;
+/// the three of them were the only ways in. The screen is not deleted because
+/// the copy below is written, argued over (see the removed free-tier rows) and
+/// needed intact the moment NIT-20 wires real StoreKit behind it. Read that flag
+/// before adding a fourth entry point.
 struct SubscriptionView: View {
     @EnvironmentObject private var store: SharedStore
     @Environment(\.dismiss) private var dismiss

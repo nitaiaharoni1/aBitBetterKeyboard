@@ -16,7 +16,7 @@ import SwiftUI
 /// the opposite of the truth.
 extension SetupState {
     static func current(store: SharedStore = .shared) -> SetupState {
-        SetupState(
+        let state = SetupState(
             presence: KeyboardPresence.load(),
             microphone: .current,
             // `isReady`, not `configured() != nil`: a build ships an address, so
@@ -24,6 +24,37 @@ extension SetupState {
             // screen would tick off a setup step the keyboard then 401s on.
             cloudConfigured: BackendTransport.isReady(),
             switchAcknowledged: store.hasAcknowledgedKeyboardSwitch)
+        state.reportFirstConfirmations()
+        return state
+    }
+
+    /// `full_access_confirmed` and `keyboard_added_confirmed`, reported from the
+    /// measurement rather than from a screen.
+    ///
+    /// **This is the only place that sees every recompute, which is why it is
+    /// here and not in a view.** Thirteen call sites across Home, Settings, Keys,
+    /// Languages, Dictionary, the layout editor and onboarding recompute this on
+    /// `onAppear` and on every return to the foreground, and the transition being
+    /// counted can happen behind any one of them — the user leaves for iOS
+    /// Settings, grants Full Access, and comes back to whichever tab they left.
+    /// Putting the call on Home alone would miss them; putting it on all
+    /// thirteen is thirteen chances for the fourteenth to be forgotten.
+    ///
+    /// **No latch here on purpose.** `Analytics.record` holds the
+    /// once-per-install flag through `AnalyticsEvent.oncePerInstallKey`, so this
+    /// stays a plain statement of what was just measured and there is exactly one
+    /// implementation of "only ever once" to get wrong. That also makes this
+    /// cheap enough to sit in a function called on every foreground: a
+    /// `UserDefaults` bool read, after the first time.
+    ///
+    /// Both are reported rather than only the stronger one. `fullAccess` implies
+    /// `keyboardAdded` today, since both are read off one `KeyboardPresence`
+    /// record, but the policy joins the two events against `onboarding_completed`
+    /// to tell "never added" from "added, never granted" — and that join needs
+    /// both rows present, not one inferred from the other.
+    private func reportFirstConfirmations() {
+        if keyboardAdded == .confirmed { Analytics.record(.keyboardAddedConfirmed) }
+        if fullAccess == .confirmed { Analytics.record(.fullAccessConfirmed) }
     }
 }
 

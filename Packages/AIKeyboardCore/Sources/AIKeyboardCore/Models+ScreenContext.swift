@@ -35,6 +35,27 @@ public struct ScreenContext: Identifiable, Equatable, Sendable {
         self.message = message
         self.language = language
     }
+
+    /// What the model is shown: the message, headed by the sender only when one
+    /// is known.
+    ///
+    /// **`From \(sender):` was interpolated at both engines and neither asked
+    /// whether there was a name.** An empty sender is not hypothetical — the
+    /// capture path already publishes one (`ScreenReadService` writes
+    /// `reading?.sender ?? ""` whenever the read names nobody), and every
+    /// clipboard context has one by construction, because a copied string does
+    /// not carry its author. Sent as written, that reached the model as a line
+    /// reading `From :`, immediately above a schema field asking it to infer the
+    /// sender's grammatical gender *from their name*. The Hebrew instructions
+    /// make that inference mandatory and forbid the slash forms that hedge it, so
+    /// the model was being pressed to pick a gender from a colon.
+    ///
+    /// Naming nobody is the honest input. `addressee` already has a `none` answer
+    /// for a language that does not inflect, and it is the same answer for a
+    /// message whose author is not named.
+    public var modelPrompt: String {
+        sender.isEmpty ? message : "From \(sender):\n\(message)"
+    }
 }
 
 /// What the capture session is doing right now.

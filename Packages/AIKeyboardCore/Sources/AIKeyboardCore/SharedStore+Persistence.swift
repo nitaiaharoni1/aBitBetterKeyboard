@@ -15,7 +15,7 @@ extension SharedStore {
             Key.autocorrect, Key.autocorrectLevel,
             Key.completeOnIdle, Key.spaceOnIdle, Key.idleDelayMs,
             Key.autocapitalise, Key.predictions, Key.haptics, Key.hapticStrength, Key.keySounds,
-            Key.defaultTone, Key.customToneInstruction, Key.dictationSessionMinutes,
+            Key.defaultTone, Key.customToneInstruction,
             Key.prefersCustomTone, Key.personalDictionary,
             Key.isSubscribed, Key.screenContextAllowed, Key.keyboardLayout,
             Key.recentEmoji, Key.emojiSkinTone, Key.copyclipHistory,
@@ -50,7 +50,6 @@ extension SharedStore {
         hapticStrength = .default
         keySounds = true
         defaultTone = .normal
-        dictationSessionMinutes = 5
         personalDictionary = Self.shippedPersonalDictionary
         recentEmoji = Self.shippedRecentEmoji
         emojiSkinTone = .generic
@@ -111,8 +110,6 @@ extension SharedStore {
             hapticStrength = strength
         }
         if defaults.object(forKey: Key.keySounds) != nil { keySounds = defaults.bool(forKey: Key.keySounds) }
-        let minutes = defaults.integer(forKey: Key.dictationSessionMinutes)
-        if Self.dictationSessionChoices.contains(minutes) { dictationSessionMinutes = minutes }
         if let tone = defaults.string(forKey: Key.defaultTone).flatMap(ToneStyle.init(rawValue:)) {
             defaultTone = tone
         }

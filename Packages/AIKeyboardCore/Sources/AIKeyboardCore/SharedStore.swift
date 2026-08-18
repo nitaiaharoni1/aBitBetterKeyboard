@@ -105,7 +105,6 @@ public final class SharedStore: ObservableObject {
         static let personalDictionary = "personalDictionary"
         static let isSubscribed = "isSubscribed"
         static let screenContextAllowed = "screenContextAllowed"
-        static let dictationSessionMinutes = "dictationSessionMinutes"
         static let keyboardLayout = "keyboardLayout"
         static let recentEmoji = "recentEmoji"
         static let emojiSkinTone = "emojiSkinTone"
@@ -477,29 +476,6 @@ public final class SharedStore: ObservableObject {
     @Published public var defaultTone: ToneStyle = .normal {
         didSet { defaults.set(defaultTone.rawValue, forKey: Key.defaultTone) }
     }
-
-    /// How long a dictation session stays open before it closes itself.
-    ///
-    /// **A session with no end is a microphone somebody forgot.** The recording
-    /// runs in this app under the `audio` background mode, so it survives the
-    /// switch to WhatsApp — which is the entire point, and is also exactly how a
-    /// live microphone comes to be running an hour after the user last thought
-    /// about it. Wispr Flow, which has the same architecture for the same
-    /// reason, offers 5, 15, 60 and never; this offers the first three and no
-    /// never, because "never" is the one choice that cannot be undone by
-    /// forgetting.
-    ///
-    /// **Default is 5 minutes, not 15.** Most dictation sessions are short: the
-    /// keyboard handoff sends the user back to aBitBetterKeyboard, they tap Start, and
-    /// they are back in their app within seconds. A 15-minute open microphone is
-    /// more than most users will ever use and more than most should leave running.
-    /// 5 is the choice that covers the session without leaving the microphone
-    /// open for a lunch break.
-    @Published public var dictationSessionMinutes = 5 {
-        didSet { defaults.set(dictationSessionMinutes, forKey: Key.dictationSessionMinutes) }
-    }
-
-    public static let dictationSessionChoices = [5, 15, 60]
 
     // MARK: Dictation handoff
 

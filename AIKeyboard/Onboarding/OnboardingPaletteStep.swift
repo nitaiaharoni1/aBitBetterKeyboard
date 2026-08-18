@@ -1,15 +1,19 @@
 import AIKeyboardCore
 import SwiftUI
 
-/// Second step, and deliberately the second rather than the last: everything
-/// after it — the progress bar, the Continue button, the eyebrow on each of the
-/// five setup steps, and the live keyboard the practice stages embed — is drawn
-/// in whatever was chosen here. Put at the end it would have recoloured three
-/// screens instead of eight.
+/// **It used to be the second step so that the eight screens after it were
+/// drawn in the colour just chosen. There are no longer eight screens after
+/// anything**, so that argument no longer buys a place on the required path and
+/// this became the first of `OnboardingStep.extras` instead. The recolouring
+/// still works from here — `RootView`'s brand `id` rebuilds the tab tree, and
+/// the flow's own rebuilds the remaining steps — it just has less left to do.
 ///
 /// The only step with no `SetupState`. Nothing about a colour can be verified
 /// outside the app, and there is nothing here to skip: a palette is always set,
-/// because `orange` is the shipped default and the step opens on it.
+/// because `orange` is the shipped default and the step opens on it. Skip is
+/// offered anyway now, rather than suppressed as a special case, because on an
+/// optional screen "Skip" and "Continue" doing the same thing is honest — the
+/// user asked to see this, and either button takes them onward.
 struct PaletteStep: View {
     var body: some View {
         StepLayout(

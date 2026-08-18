@@ -19,6 +19,19 @@ struct SettingsView: View {
     /// on top.
     @State private var memory: KeyboardMemoryPeak?
 
+    /// Whether the Reset row has been tapped on this visit, which is the only
+    /// thing it has to say afterwards: the identifier is gone the instant it is
+    /// pressed and the next one is not made until something is sent, so there is
+    /// no new value to show and nothing to read back.
+    @State private var didResetAnalyticsID = false
+
+    /// Mirrors `Analytics.isOptedOut`, which lives in `UserDefaults.standard`
+    /// rather than in `SharedStore`: analytics is app-only by design, and the
+    /// keyboard must not be able to reach any of it. Seeded on appear rather than
+    /// bound through `@AppStorage` so the whole screen keeps one way of reading
+    /// state that another process cannot change under it.
+    @State private var analyticsOptedOut = Analytics.isOptedOut
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -33,6 +46,7 @@ struct SettingsView: View {
                                 SettingsTypingSection(setup: setup)
                                 SettingsAISection(setup: setup)
                                 accountSection
+                                privacySection
                                 diagnosticsSection
                                 footer
                             }
@@ -72,16 +86,28 @@ struct SettingsView: View {
 
     // MARK: Account
 
+    /// **The header follows the contents.** With the paywall gated there is no
+    /// account in this build at all — nothing signs in, nothing is bought, and
+    /// `SharedStore.isSubscribed` is false for everyone — so "Account" would be
+    /// a heading over one button that replays onboarding. It comes back with the
+    /// row, under `AppFeatureFlags.subscriptionPaywall`.
     private var accountSection: some View {
-        section("Account") {
-            NavigationRow(
-                title: store.isSubscribed ? "Subscription" : "Upgrade to Pro",
-                subtitle: store.isSubscribed ? "Active" : "Mock paywall, nothing is gated yet",
-                icon: "sparkles"
-            ) {
-                SubscriptionView()
+        section(AppFeatureFlags.subscriptionPaywall ? "Account" : "Setup") {
+            // **The row that said "Mock paywall, nothing is gated yet".** It is
+            // the last way into `SubscriptionView` from the shipping app, so
+            // `AppFeatureFlags.subscriptionPaywall` takes it and its hairline
+            // together; the destination below stays wired for the search jump
+            // the same flag currently withholds. NIT-20 is the condition.
+            if AppFeatureFlags.subscriptionPaywall {
+                NavigationRow(
+                    title: store.isSubscribed ? "Subscription" : "Upgrade to Pro",
+                    subtitle: store.isSubscribed ? "Active" : "Mock paywall, nothing is gated yet",
+                    icon: "sparkles"
+                ) {
+                    SubscriptionView()
+                }
+                Divider.themed
             }
-            Divider.themed
             Button {
                 store.hasCompletedOnboarding = false
             } label: {
@@ -97,6 +123,142 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .searchTarget(.replayOnboarding)
         }
+    }
+
+    // MARK: Privacy
+
+    /// The sentence `.claude/docs/analytics-policy.md` section 6 requires in the
+    /// app, and the row that makes its "resettable" claim true from here.
+    ///
+    /// **The policy names two homes for this and one of them no longer exists.**
+    /// It asked for the landing page's privacy page, which has it, and for
+    /// `OnboardingFullAccessStep`, which the onboarding cut deleted. Settings is
+    /// the surface that survived and it is the better of the two anyway: this is
+    /// what somebody comes looking for, on purpose, days after they installed —
+    /// not something to be handed on the way past a permission dialog.
+    private var privacySection: some View {
+        section("Privacy") {
+            InfoRow(icon: "hand.raised", title: "What we count", detail: Self.whatWeCount)
+                .searchTarget(.privacy)
+            Divider.themed
+            countMeToggle
+            Divider.themed
+            resetAnalyticsRow
+        }
+    }
+
+    /// **The screen-sharing clause is withheld while the feature is, and it is
+    /// tied to the flag rather than deleted.** The policy's wording counts
+    /// "whether you open a screen-sharing session", which is
+    /// `screen_context_session_started` — an event that cannot fire while
+    /// `FeatureFlags.screenCaptureReply` is false, because nothing in the build
+    /// can start a broadcast. Claiming to count something uncountable is the
+    /// smaller of the two errors it would make. The larger one is that this
+    /// paragraph would introduce *screen sharing* to somebody who has seen no
+    /// trace of it anywhere in this app, in the one place where the app is
+    /// making a promise about trust — which is the same rule the rest of this
+    /// release follows: nothing here describes a capability the build does not
+    /// ship. Written as a branch on the flag so the clause returns with the
+    /// feature instead of waiting for somebody to remember it.
+    ///
+    /// **The `false` branch is word for word the landing page's "What we count"
+    /// section** (`Landing/app/privacy/page.tsx`), which dropped the same clause
+    /// independently. The policy asks for this statement in two places, and two
+    /// places that say it differently is worse than one that says it at all, so
+    /// an edit to either of them belongs in both.
+    private static var whatWeCount: String {
+        let counted =
+            FeatureFlags.screenCaptureReply
+            ? "how far setup gets, whether Full Access and the keyboard were confirmed, whether "
+                + "you open a screen-sharing session, and whether you come back to the app"
+            : "how far setup gets, whether Full Access and the keyboard were confirmed, and "
+                + "whether you come back to the app"
+        // **The last sentence answers "who is counting", which the rest of the
+        // paragraph never did.** `.claude/docs/analytics-policy.md` section 5
+        // rejects a third-party SDK, and its reason is the same fear the Full
+        // Access permission itself raises: a stranger's closed binary running
+        // inside the process that holds the shared container, whose "no content
+        // collected" claim cannot be checked the way this file can. That is the
+        // strongest thing this app can say here and it was going unsaid. The
+        // landing page's "Never sold" section covers advertising rather than
+        // SDKs, so neither surface carried it.
+        return "The app counts \(counted). It never counts a keystroke, a correction, a dictated "
+            + "word, an AI answer, or anything read off your screen. The keyboard itself sends "
+            + "nothing, with or without Full Access. Nothing is sold, and no other company's "
+            + "code is doing the counting."
+    }
+
+    /// The switch the policy does not require, phrased as the thing being done
+    /// rather than as the thing being refused.
+    ///
+    /// **"Count this install" rather than "Opt out of analytics".** A negative
+    /// toggle makes the on position mean "off", which is the shape people get
+    /// wrong when they are skimming, and this is a screen where getting it wrong
+    /// means believing you turned something off that is still on. The stored
+    /// value is `Analytics.isOptedOut`, so the binding inverts once, here, rather
+    /// than making every reader remember the polarity.
+    ///
+    /// Turning it off does not clear the identifier. That is the row below, and
+    /// keeping them separate is deliberate: "stop counting me" and "forget who I
+    /// was" are different asks, and doing the second silently as a side effect of
+    /// the first would be a surprise in the direction nobody wants surprises.
+    private var countMeToggle: some View {
+        ToggleRow(
+            title: "Count this install",
+            subtitle: "Switch it off and the app sends none of the six counts above",
+            icon: "chart.bar",
+            isOn: Binding(
+                get: { !analyticsOptedOut },
+                set: { newValue in
+                    analyticsOptedOut = !newValue
+                    Analytics.isOptedOut = !newValue
+                })
+        )
+        .searchTarget(.privacy)
+    }
+
+    /// **What makes the identifier resettable, which until now was a promise
+    /// kept only in a comment.** `Analytics.installID` is a locally generated
+    /// UUID rather than `identifierForVendor` precisely so it *can* be thrown
+    /// away, and `Analytics.reset()` has existed unused since the day it was
+    /// written, waiting for a row to call it. This is that row.
+    ///
+    /// **Deliberately not a confirmation dialog**, unlike the dictionary's
+    /// Forget button beside it in spirit: nothing of the user's is destroyed
+    /// here. The only consequence is that this install stops being joinable to
+    /// the counts it sent before, which is the thing the user is asking for. The
+    /// caption confirms afterwards instead, because a button that reports
+    /// nothing is a button people press twice.
+    ///
+    /// The reset also clears the two once-per-install latches, so the next time
+    /// `SetupState.current` runs it reports Full Access and the keyboard once
+    /// more under the new identifier. That is correct rather than a leak: a new
+    /// identity with no state reported is a row nothing can be read from.
+    private var resetAnalyticsRow: some View {
+        Button {
+            Analytics.reset()
+            didResetAnalyticsID = true
+        } label: {
+            HStack(spacing: Theme.Space.sm) {
+                IconBadge(systemName: "arrow.counterclockwise.circle", tint: Theme.Text.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Reset the anonymous ID")
+                        .font(Theme.Fonts.body)
+                        .foregroundStyle(Theme.Text.primary)
+                    Text(
+                        didResetAnalyticsID
+                            ? "Done. The next count starts a fresh one."
+                            : "Starts a count that cannot be joined to the old one"
+                    )
+                    .font(Theme.Fonts.caption)
+                    .foregroundStyle(Theme.Text.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("settings-reset-analytics-id")
     }
 
     // MARK: Diagnostics

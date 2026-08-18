@@ -156,15 +156,18 @@ extension KeyboardController {
     /// a model call every time the keyboard appears, for a word nobody has begun
     /// typing.
     ///
-    /// The second fact is that an edit can only be taken back while the text it
-    /// replaced is still standing. **A host that empties the field — the message
-    /// was sent — is the case that matters**, because nothing the user did clears
-    /// the revert there: the send happened in the other app, `textDidChange`
-    /// brings the news, and without this the revert button would still be sitting
-    /// in the bar offering to type a sent message back into an empty box. Ordered
-    /// after the flag so it reads the fresh answer, and safe to run from inside
-    /// `replaceTargetText` — `applyDirectly` records the edit *after* that call
-    /// returns, so this can never delete the edit that is being made.
+    /// The second fact is that an edit can only be taken back while what it wrote
+    /// is still standing where it wrote it. **This is the whole of the undo's
+    /// lifetime now**, and it used to be one line of it: the revert was cleared by
+    /// every keystroke and this only caught the case no keystroke covers, a host
+    /// emptying the field because the message was sent. Both are one question
+    /// asked of the document — an empty field cannot contain what the edit wrote —
+    /// and asking it here rather than at each keystroke is what lets the undo
+    /// survive typing without any path having to remember to keep it alive.
+    /// Ordered after the flag so it reads the fresh answer, and safe to run from
+    /// inside `replaceTargetText` — `applyDirectly` and `insertClip` both record
+    /// the edit *after* that call returns, so this can never delete the edit that
+    /// is being made.
     public func refreshDocumentState() {
         let hadText = documentHasText
         // Assigned only when it moved, for the reason `revertibleEdit` on the next
@@ -175,7 +178,7 @@ extension KeyboardController {
         // so the `hadText` comparison below reads exactly what it always did.
         let hasText = hasTextToWorkWith
         if hasText != documentHasText { documentHasText = hasText }
-        if revertibleEdit != nil, !documentHasText { revertibleEdit = nil }
+        expireRevertibleEditIfUnusable()
         // Send, or switching to an empty chat, with the keyboard still up.
         // Appear is not guaranteed. Only the *transition* onto empty, because
         // `insertText` then immediately reading the proxy can still look empty,
@@ -357,6 +360,13 @@ extension KeyboardController {
                 let guess = grouped.cased(longer, in: language)
                 Feedback.keyPress()
                 Feedback.keyClick(.tock)
+                // **Grouped typing is the one writer that still clears the way
+                // back outright**, here and in `pressGroupedKey`. Everything else
+                // leaves it to `expireRevertibleEditIfUnusable`, which runs from
+                // `refreshDocumentState` — and a grouped guess is written by
+                // `writeGroupedGuess`, which rewrites the word in the field
+                // without going through `refreshSuggestions` at all. An expiry
+                // that is never asked is not an expiry.
                 clearRevertibleEdit()
                 writeGroupedGuess(guess)
                 closeGroupedIfCurrentWord()
@@ -387,7 +397,6 @@ extension KeyboardController {
             } else {
                 Feedback.keyPress()
                 Feedback.keyClick(.tock)
-                clearRevertibleEdit()
                 endGroupedWord()
                 replaceCurrentWord(with: candidate.text)
                 recordCommittedWord(SuggestionEngine.wordCore(candidate.text))
@@ -448,7 +457,6 @@ extension KeyboardController {
 
     public func apply(_ suggestion: Suggestion) {
         Feedback.keyPress()
-        clearRevertibleEdit()
         // Text in, so it sounds like text going in. Tapping a candidate is the
         // one insertion that reaches the document without a `KeyCap` behind it,
         // and `press(_:)` is where every other one gets its click.

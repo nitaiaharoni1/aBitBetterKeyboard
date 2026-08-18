@@ -6,6 +6,7 @@ export default function Privacy({ t }: { t: Copy }) {
     { title: t.privacyOnDevice, body: t.privacyOnDeviceBody },
     { title: t.privacyCloud, body: t.privacyCloudBody },
     { title: t.privacySold, body: t.privacySoldBody },
+    { title: t.privacyCount, body: t.privacyCountBody },
   ];
 
   return (

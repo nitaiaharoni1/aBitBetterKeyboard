@@ -19,6 +19,23 @@ paths:
 
 # Screen context and capture
 
+> **None of this ships in v1. `FeatureFlags.screenCaptureReply` is `false`** (2026-08-18,
+> NIT-159). Every entry point that could offer or start a broadcast is gated on it, and
+> that gating is provable rather than assumed: `replyKeyBroadcastPrompt` returns nil, and
+> the only producer of `Remedy.broadcastPicker` is gated on `ScreenContextPrompt.offersPicker`,
+> which the `capturePermitted` guard forces false. **Reply's v1 source is the pasteboard**
+> instead, via `ReplySource` and the CopyClip ledger.
+>
+> Nothing here is deleted, and nothing below is retracted: the *reading* half is real and
+> the measurements in this file stand. What is held back is the *capture* half, because no
+> line of it has ever executed anywhere (the Simulator ships no `replayd`, so `SampleHandler`
+> has never been called). The flag flips when NIT-6 passes on a real device and NIT-12
+> measures the extension under the ~50 MB cap. "It compiles" is not the condition.
+>
+> So when you change anything in these files, remember you are changing code that **cannot
+> be reached by running the app**. A test is the only thing that will notice.
+> `.claude/docs/screen-capture-v1-hold.md` carries the full decision.
+
 ## Reading the screen
 
 - **Vision has no Hebrew, and `VisionLanguageTests` pins that from the simulator** — specifically that Hebrew is absent and Arabic is present, which is the load-bearing pair; the count of 30 is prose beside it, not an assertion. If it ever fails, that is permission to delete most of `CloudScreenReader`.

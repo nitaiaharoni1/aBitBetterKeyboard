@@ -83,16 +83,29 @@ extension KeyboardController {
         }
     }
 
-    /// Reply, against whatever is on screen at the moment of the tap.
+    /// Reply, against whatever the user copied — or, once
+    /// `FeatureFlags.screenCaptureReply` flips, whatever is on screen at the
+    /// moment of the tap.
     ///
-    /// The reading is asked for here rather than read off the state, and the two
-    /// are not the same thing: `screenContext` may be showing a reading the
-    /// freshness gate has since refused, and `contextForReply()` will raise a new
-    /// read and wait rather than answer the wrong message. The wait happens
-    /// inside `beginWork`, so the panel shimmers through it exactly as it does
-    /// through a model call.
+    /// **The source is decided here, at the tap, and never read off held state.**
+    /// `ReplySource` answers with the message rather than with a bool about a
+    /// session, because the two are not the same thing in either direction:
+    /// `screenContext` may be showing a reading the freshness gate has since
+    /// refused, so the capture branch asks `contextForReply()` to raise a new read
+    /// and wait; and the newest clip may have been overtaken by a copy this
+    /// keyboard is not allowed to read, which `ReplySource.fromClipboard` refuses on
+    /// rather than answering the message before it. The wait, where there is one,
+    /// happens inside `beginWork`, so the key shimmers through it exactly as it
+    /// does through a model call.
     private func runReply() {
-        guard hasUsableReplyContext else {
+        // **Before the source is asked, because it is what makes the answer
+        // current.** A copied image leaves a pasteboard generation the ledger has
+        // not classified, and `.userAsked` is the one refresh allowed to settle
+        // that — a Reply tap is the user asking. It reads no contents and raises
+        // no alert; see `refreshCopyClip(_:)`.
+        refreshCopyClip(.userAsked)
+
+        guard let source = replySource else {
             refuseForScreenContext(screenContextPrompt)
             return
         }
@@ -112,6 +125,19 @@ extension KeyboardController {
         // otherwise leave open is an already-offerable reading, and writing a
         // generated sentence into a password field is not an improvement on
         // photographing one.
+        //
+        // **That wider half is the whole of why the clipboard path is guarded
+        // too.** A clip photographs nothing — it is text the user copied
+        // themselves, somewhere else, and no frame of this screen leaves the
+        // device for it — so the privacy argument the guard was written for does
+        // not apply to it at all. What does apply is the sentence above: Reply
+        // *inserts*, and inserting a generated sentence into a credential field
+        // is wrong whatever the sentence was written about. The counters keep
+        // measuring the same question they always did, which is whether any host
+        // populates `isSecureTextEntry` through a `UITextDocumentProxy`; every
+        // Reply tap is a decision about the focused field regardless of where the
+        // message came from, so counting them all is the answer rather than a
+        // dilution of it.
         guard session.permitsRead(secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
         else {
             replies = []
@@ -124,8 +150,11 @@ extension KeyboardController {
             // to fix yet" — stays on screen and the password-field refusal the user
             // has just earned is never shown at all.
             block = nil
+            // Names what Reply would do rather than naming screen context, which
+            // this build has switched off and which was never the whole reason
+            // anyway: the refusal covers the insertion as well as the read.
             aiError = .screenNotRead(
-                "Screen context does not read password fields, and this field either is one or would not say."
+                "Reply doesn't write into password fields, and this field either is one or wouldn't say."
             )
             // Named, so the banner can label the refusal with the action that was
             // refused. Without it `BannerState.resolve` has an error and nothing to
@@ -135,11 +164,66 @@ extension KeyboardController {
             return
         }
 
+        // **The wall every source ends at, asked after the secure-field guard and
+        // not before it.** A clip sitting in the ledger says nothing about whether
+        // a reply can be *generated*, and that check was lost when the clipboard
+        // source went in: `replySource` consults only the ledger and the pasteboard
+        // generation, so a clip made it non-nil and carried the tap into
+        // `beginWork` over a keyboard with no network. The call then failed and
+        // printed `setUpRecovery`, "aBitBetterKeyboard is reconnecting. Try again
+        // in a moment." — deliberately a status rather than an instruction,
+        // because for a stale token there is nothing a person can do. A user
+        // without Full Access has something to do, in Settings, and nothing was
+        // saying so. `ScreenContextPrompt` asks `canReachChannel` first for
+        // exactly this reason.
+        //
+        // **It sits here, below `permitsRead`, because putting it above cost two
+        // things and both were caught by tests.** The secure-field guard has to
+        // fire for a password field whatever the network is doing, or a refusal
+        // about credentials is replaced by one about connectivity; and
+        // `permitsRead` *counts* every decision it makes, which is the only
+        // evidence that will ever answer whether a host populates
+        // `isSecureTextEntry` through a `UITextDocumentProxy` at all. A guard in
+        // front of it silences that measurement.
+        //
+        // The no-source path above needs nothing from this: `screenContextPrompt`
+        // already asks `canReachChannel` and `cloudConfigured` before it asks
+        // about the clipboard, so "no clip and no Full Access" already says Full
+        // Access. This is only for the case where a clip *is* there.
+        //
+        // **It asks `isReachable` and deliberately not `BackendTransport.isReady()`,
+        // and the difference is a whole engine.** The two failures are not the same
+        // shape. No shared container means no Full Access, which means no network
+        // at all and no route to any answer, so refusing is the only honest move
+        // and Settings is a real thing to do about it. A missing session token
+        // means the *cloud* is dead — but `RoutedIntelligence` may still have an
+        // on-device engine that answers without one, and Hebrew is the language
+        // that needs the cloud rather than every language. Refusing both together
+        // would turn an English reply Apple's model could have written into a
+        // "not connected", which is a refusal the user cannot act on and did not
+        // earn. When the cloud genuinely is the only route, the call fails and
+        // `BackendTransport.mapped` turns the 401 into `.cloudNotConfigured`,
+        // which is the path that already exists for it.
+        guard CaptureChannel.isReachable else {
+            refuseForScreenContext(screenContextPrompt)
+            return
+        }
+
         // A reply replaces nothing; it is inserted where the cursor already is.
         aiSourceText = ""
         replyContext = nil
         beginWork(.reply, showing: .none) { [engine, weak self] in
-            let context = try await session.contextForReply()
+            let context: ScreenContext
+            switch source {
+            case .clipboard(let copied):
+                // Already built, at the tap, from the clip that was newest then.
+                context = copied
+            case .scripted, .capture:
+                // Both go through the session: the scripted sample short-circuits
+                // inside `contextForReply` and a capture session raises the read
+                // and waits there.
+                context = try await session.contextForReply()
+            }
             await MainActor.run { self?.replyContext = context }
             return try await engine.replies(to: context)
         } apply: { controller, replies in
@@ -165,16 +249,21 @@ extension KeyboardController {
     /// One refusal for `runReply` and the overlay's touch-up, so the two taps
     /// cannot print different sentences for one prompt.
     ///
-    /// `offersPicker` still means a session started now could get somewhere.
-    /// The consumer is the ReplayKit overlay on the key and on this sentence.
-    /// Opening the app is a fallback the Home row already hosts.
+    /// **At most one of the two flags is ever set**, and which one is available at
+    /// all is decided by `FeatureFlags.screenCaptureReply`: `offersPicker` means a
+    /// broadcast started now could get somewhere and is false in every shipping
+    /// build, `offersCopyClip` means the copied message is one tap inside this
+    /// keyboard away. `ScreenContextPrompt` is where that exclusivity is written;
+    /// the order here only decides which would win if it ever stopped holding.
     private func refuseForScreenContext(_ prompt: ScreenContextPrompt) {
+        let remedy: BannerState.Block.Remedy =
+            prompt.offersPicker ? .broadcastPicker : (prompt.offersCopyClip ? .copyclip : .none)
         refuse(
             .init(
                 action: .reply,
                 title: prompt.title,
                 detail: prompt.detail,
-                remedy: prompt.offersPicker ? .broadcastPicker : .none))
+                remedy: remedy))
     }
 
     /// Runs one model call. The latency here is the model's, not a sleep: the
@@ -285,9 +374,12 @@ extension KeyboardController {
     ///
     /// **What that buys has to be paid for with an undo**, because the keyboard has
     /// now changed somebody's message on its own: `revertibleEdit` holds what was
-    /// there, `SuggestionBar` draws the way back, and the next keystroke clears it
-    /// (`clearRevertibleEdit`). `UITextDocumentProxy` offers no undo of any kind, so
-    /// having kept the text is the entire mechanism.
+    /// there and `SuggestionBar` draws the way back. `UITextDocumentProxy` offers
+    /// no undo of any kind, so having kept the text is the entire mechanism.
+    /// It used to expire on the next keystroke; it lasts as long as what it wrote
+    /// is still standing where it wrote it now (`RevertibleEdit.rebased(onto:)`
+    /// and `spanUndo(behind:)`), because a wrong word is noticed a few words after
+    /// it lands rather than before the next one is typed.
     ///
     /// **An empty answer is left to the banner on purpose.** `BannerState.resolve`
     /// turns "finished, no error, nothing to show" into "Nothing came back", which
@@ -396,34 +488,64 @@ extension KeyboardController {
     /// old ones back.
     ///
     /// The guard is what makes the second path safe rather than merely narrow:
-    /// the insertion leaves the caret immediately after what it wrote, so the
-    /// field must still end there. If it does not — a caret the host moved, which
-    /// fires no callback this keyboard can see — the edit is dropped without
-    /// touching the document, because deleting a count from the wrong place is the
-    /// one outcome worse than no undo at all. `RevertibleEdit.standsAtEnd(of:)`
-    /// is that guard, and it is asked of a *window* rather than of the field,
-    /// which is why a clip longer than iOS hands back still undoes.
+    /// `RevertibleEdit.spanUndo(behind:)` has to *find* what the edit wrote in
+    /// front of the caret before a single character is deleted. If it cannot — a
+    /// caret the host moved, which fires no callback this keyboard can see, or a
+    /// span the user has typed over — the edit is dropped without touching the
+    /// document, because deleting a count from the wrong place is the one outcome
+    /// worse than no undo at all. It is asked of a *window* rather than of the
+    /// field, which is why a clip longer than iOS hands back still undoes.
+    ///
+    /// **Both paths rebase rather than replace, which is what lets the undo
+    /// outlive the next keystroke.** They put back exactly the span this edit
+    /// wrote and leave every character around it alone, so anything typed since
+    /// survives being taken back. `refreshDocumentState` retires the edit the
+    /// moment either of them stops being able to find its own span, so the
+    /// control is never on screen over an undo that would do nothing or do harm.
     public func revertEdit() {
         guard let edit = revertibleEdit else { return }
-        Feedback.modifierPress()
-        revertibleEdit = nil
 
         guard edit.undo == .spanAtCursor else {
+            // **A refusal takes the control away, and must, because the predicate
+            // is cached between document callbacks.** `expireRevertibleEditIfUnusable`
+            // retires the edit once per document change, so the button says what
+            // was true at the last callback rather than what is true now — and
+            // `applyDirectly` records the edit *after* `replaceTargetText` has
+            // already run `refreshSuggestions`, so there is a window at the very
+            // start of every edit's life where nothing has asked yet.
+            //
+            // Returning quietly there left a drawn control that did nothing, gave
+            // no haptic, and stayed until the next keystroke. The property worth
+            // keeping is the one the old caret-guarded code had for free by
+            // clearing above its guard: a tap on Undo always has a visible
+            // consequence, either the text comes back or the button goes.
+            guard let rebased = edit.rebased(onto: wholeField) else {
+                revertibleEdit = nil
+                return
+            }
+            Feedback.modifierPress()
+            revertibleEdit = nil
             // `replaceTargetText` refuses on an empty source — that guard is what
             // makes an insertion an insertion — so it is told what is standing
             // there now, which is exactly what this is taking out.
-            aiSourceText = edit.applied
-            replaceTargetText(with: edit.previous)
+            aiSourceText = wholeField
+            replaceTargetText(with: rebased)
             aiSourceText = ""
             return
         }
 
-        guard edit.standsAtEnd(of: contextBefore) else { return }
-        deleteBackward(utf16Units: edit.applied.utf16.count)
-        // Empty for a reply and for a clip, neither of which replaced anything:
-        // `insertText("")` is harmless and the branch is here to say so rather
-        // than to guard against it.
-        if !edit.previous.isEmpty { target?.insertText(edit.previous) }
+        // Same refusal rule as the branch above, for the same reason.
+        guard let step = edit.spanUndo(behind: contextBefore, ahead: contextAfter) else {
+            revertibleEdit = nil
+            return
+        }
+        Feedback.modifierPress()
+        revertibleEdit = nil
+        deleteBackward(utf16Units: step.delete)
+        // Empty for a reply and for a clip taken back with nothing typed after
+        // them, neither of which replaced anything: `insertText("")` is harmless
+        // and the branch is here to say so rather than to guard against it.
+        if !step.insert.isEmpty { target?.insertText(step.insert) }
         refreshSuggestions()
     }
 
@@ -452,14 +574,50 @@ extension KeyboardController {
         clearBannerState()
     }
 
-    /// Drops the way back, because the field has moved on.
+    /// Drops the way back outright.
     ///
-    /// Called from every path that changes the document by the user's own hand. It
-    /// is deliberately *not* called from `refreshSuggestions`, which would be one
-    /// line instead of five: `replaceTargetText` refreshes the bar itself, so the
-    /// revert would be cleared by the very edit that created it.
+    /// **The typing paths no longer call this, and that is the change NIT-154
+    /// asked for.** It used to be called from every path that put a character in,
+    /// so an undo lasted exactly one keystroke; what retires an edit now is
+    /// `expireRevertibleEditIfUnusable`, asked once per document change, which
+    /// drops it when what it wrote can no longer be found where it wrote it.
+    ///
+    /// What is left are the three kinds of caller that are not ordinary typing:
+    /// an action about to record an edit of its own (`applyDirectly`,
+    /// `applyResult`, `insertClip`), a recording writing a transcript into the
+    /// field, and a caret key we moved ourselves. It is still deliberately *not*
+    /// called from `refreshSuggestions` — `replaceTargetText` refreshes the bar
+    /// itself, so the revert would be cleared by the very edit that created it.
     func clearRevertibleEdit() {
         guard revertibleEdit != nil else { return }
         revertibleEdit = nil
+    }
+
+    /// Retires the way back the moment taking it would do nothing, or harm.
+    ///
+    /// **One question, asked of the document, in the one place every document
+    /// change already goes through** (`refreshDocumentState`). It is the same
+    /// question `revertEdit` asks before it touches a character, so the control
+    /// and the action cannot disagree: if this leaves the edit standing, taking it
+    /// puts back exactly what the keyboard wrote and leaves everything the user
+    /// typed since alone; if it drops the edit, there was no safe way to do that.
+    ///
+    /// **This replaced nine calls to `clearRevertibleEdit()` on the typing
+    /// paths** — both cursor keys, a character, space, backspace, word-delete, an
+    /// emoji, a candidate tapped on the bar and the idle completion — and that is
+    /// the point rather than a tidy-up: an undo that expired
+    /// on the next keystroke was gone before the wrong word had been read in the
+    /// sentence it landed in, which is when anybody notices one (NIT-154). The
+    /// keystroke calls could not simply be deleted, because the undo they were
+    /// protecting against was a whole-field replacement that would have taken the
+    /// new characters with it — that is what `RevertibleEdit.rebased(onto:)` fixed
+    /// and this is what makes the fix load-bearing rather than optimistic.
+    func expireRevertibleEditIfUnusable() {
+        guard let edit = revertibleEdit else { return }
+        let usable =
+            edit.undo == .spanAtCursor
+            ? edit.spanUndo(behind: contextBefore, ahead: contextAfter) != nil
+            : edit.rebased(onto: wholeField) != nil
+        if !usable { revertibleEdit = nil }
     }
 }

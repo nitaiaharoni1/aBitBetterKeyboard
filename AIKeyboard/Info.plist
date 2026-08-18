@@ -17,9 +17,23 @@
 	  the built plist, not the build setting, for exactly that reason.
 
 	  The recording session is also the *only* thing this mode is for. Nothing
-	  here plays audio, and a session closes itself after 5, 15 or 60 minutes —
-	  see `SharedStore.dictationSessionMinutes`, which deliberately has no
-	  "never".
+	  here plays audio.
+
+	  **A session does not close itself, and this comment used to say it did.**
+	  It described a `SharedStore.dictationSessionMinutes` setting (5, 15 or 60,
+	  and "deliberately no never") as the bound on how long this app may keep
+	  recording. That setting never had a control the user could reach, and as of
+	  2026-08-18 it is deleted: all three starters open a session with
+	  `DictationService.noSessionLimit`. A session ends when the user stops it,
+	  when the audio session is interrupted, or when this process dies.
+
+	  That is a deliberate product decision, not drift: dictation is something
+	  you start and stop, and a recording cut off mid-sentence is the worse
+	  failure. It is written here because this is the file that justifies the
+	  entitlement, and the honest justification is now "the user starts a
+	  recording, sees it running, and ends it" rather than "it times out". If App
+	  Review asks why this app records in the background, that is the answer, and
+	  `DictationService.noSessionLimit` carries the rest of the reasoning.
 	-->
 	<key>UIBackgroundModes</key>
 	<array>

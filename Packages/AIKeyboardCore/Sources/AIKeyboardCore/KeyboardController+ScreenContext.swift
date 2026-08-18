@@ -4,32 +4,84 @@ extension KeyboardController {
 
     // MARK: Screen context
 
-    /// Reply is worth offering for as long as a session is live, whether or not
-    /// anything has been read yet.
+    /// Where the message Reply would answer is coming from, or nil when there is
+    /// none.
     ///
-    /// It used to require a reading. That was right when the session read every
-    /// frame speculatively and is wrong now: there is one trigger for a read and
-    /// it is this tap, so waiting for a reading before showing the button would
-    /// mean never showing it. The tap raises `intent.readNow` and waits.
-    public var canReply: Bool {
-        screenContextIsPermitted && screenContext.isLive
+    /// **The order is the precedence and it is not arbitrary.** The scripted
+    /// sample is first because it is the *only* thing the in-app playground can
+    /// answer with — it is a fiction the app labels as one, and letting a clip
+    /// win there would put a real message into a demo. A live capture session is
+    /// next, because it is about the screen actually in front of the user, and it
+    /// is unreachable until `FeatureFlags.screenCaptureReply` flips (NIT-6). The
+    /// clipboard is last and is the only one that answers on a shipping build.
+    ///
+    /// Read at the tap. `copyclipCaptureState` inside `ReplySource.fromClipboard`
+    /// asks `UIPasteboard.changeCount`, which is the free counter and never the
+    /// contents — see `PasteboardReader`.
+    var replySource: ReplySource? {
+        if screenContextIsPermitted, screenContextSource == .scripted, screenContext.isLive {
+            return .scripted
+        }
+        if FeatureFlags.screenCaptureReply, screenContextIsPermitted,
+            screenContext.isLive || screenContext.context != nil
+        {
+            return .capture
+        }
+        return ReplySource.fromClipboard(newest: clips.first, capture: copyclipCaptureState)
     }
 
-    /// The same gate `runReply()` takes before it generates.
-    var hasUsableReplyContext: Bool {
-        screenContextIsPermitted
-            && (screenContext.isLive || screenContext.context != nil)
-    }
+    /// Whether Reply has anything to answer.
+    ///
+    /// **It used to be a question about a capture session** — live or not — and
+    /// that was right while a broadcast was the only source. It is the source
+    /// itself now, so a clip in the ledger makes this true with no session,
+    /// no broadcast and no Full Access prompt.
+    public var canReply: Bool { replySource != nil }
+
+    /// The same question under the name `runReply()` and the ReplayKit overlay
+    /// read it by. The two used to differ — `canReply` demanded a live session
+    /// and this also accepted a reading left behind by one — and `replySource`
+    /// collapsed the difference by answering with the source rather than with a
+    /// bool about one of them.
+    var hasUsableReplyContext: Bool { canReply }
 
     /// Non-nil only when the Reply key must become ReplayKit's real button.
+    ///
+    /// **Nil in every shipping build, because `FeatureFlags.screenCaptureReply`
+    /// is false.** That flag is what makes the Reply key a Reply key again: with
+    /// it off nothing here can put a screen-recording picker under the user's
+    /// thumb, `KeyboardView+Keys` draws no overlay, and `ScreenContextPrompt`
+    /// prints no sentence about starting a broadcast. Flip it with NIT-6, not
+    /// before — the flag's own comment carries the conditions.
     ///
     /// Dictation is excluded because the overlay sits *outside* `KeyView`, past
     /// `.disabled`, so a dim Reply key would still start a broadcast while
     /// somebody is speaking.
     var replyKeyBroadcastPrompt: ScreenContextPrompt? {
+        guard FeatureFlags.screenCaptureReply else { return nil }
         guard !isDictationActive, !hasUsableReplyContext else { return nil }
         let prompt = screenContextPrompt
         return prompt.offersPicker ? prompt : nil
+    }
+
+    /// The clipboard's half of `dropStaleReplyBroadcastRefusal`, and it exists for
+    /// exactly the same reason: `BannerState.resolve` prefers `block` over
+    /// everything below it, so "Paste it in first" would sit on the strip after
+    /// the user had done precisely that, over a Reply that would now generate.
+    ///
+    /// Called from `persistCopyclip`, which is the one place the ledger changes.
+    /// Narrow on purpose — only the refusal a clip can actually answer, so a Full
+    /// Access or a not-connected refusal is left standing, the way a live session
+    /// leaves those two standing one function down.
+    func dropStaleReplyClipboardRefusal() {
+        // `Remedy.copyclip` spelled out. `block?.remedy` is an optional, and this
+        // repo has been bitten four times by a bare case name resolving to
+        // `Optional` in that position — see AGENTS.md.
+        guard block?.action == .reply,
+            block?.remedy == BannerState.Block.Remedy.copyclip,
+            canReply
+        else { return }
+        block = nil
     }
 
     /// `BannerState.resolve` prefers `block` over a reading, so once a session
@@ -55,9 +107,13 @@ extension KeyboardController {
         return reason
     }
 
-    /// Why Reply cannot run, in the four distinct sentences `ScreenContextPrompt`
+    /// Why Reply cannot run, in the distinct sentences `ScreenContextPrompt`
     /// separates, and whether starting a broadcast now could get further than the
     /// last one did.
+    ///
+    /// **Which sentences are on the table is `FeatureFlags.screenCaptureReply`'s
+    /// answer, not this one's**: with it off the two clipboard refusals replace
+    /// the two that name screen context, and nothing here offers a broadcast.
     ///
     /// **Moved off the setup panel when that panel was deleted**, and it belongs
     /// here rather than in the banner for the reason it never belonged in a view:
@@ -76,9 +132,12 @@ extension KeyboardController {
     /// this would export four sentences of copy as API.
     var screenContextPrompt: ScreenContextPrompt {
         ScreenContextPrompt(
+            capturePermitted: FeatureFlags.screenCaptureReply,
             canReachChannel: CaptureChannel.isReachable,
             cloudConfigured: BackendTransport.isReady(),
-            ended: screenContextEndReason)
+            ended: screenContextEndReason,
+            clipboard: ReplySource.clipboardGap(
+                newest: clips.first, capture: copyclipCaptureState))
     }
 
     /// What screen context has to say when it has not read anything, or nil when
@@ -87,14 +146,29 @@ extension KeyboardController {
     /// **This is what is left of `ScreenContextStrip`, and the strip is gone.** It
     /// was a 30pt row that appeared and disappeared with the session; the banner is
     /// always drawn and already shows the reading itself, so the only part that
-    /// needed a home was the five states that are not a reading. The strip's own
-    /// restart button is not reproduced: Reply with no session hosts the
-    /// picker on the key itself. `ScreenContextPrompt.offersPicker` is
-    /// whether that overlay is worth drawing.
+    /// needed a home was the five states that are not a reading.
     ///
     /// `.off` returns nil rather than a sentence, because a phone that has never
     /// started a broadcast is not in an error state and the banner has an ordinary
     /// hint to show instead.
+    ///
+    /// **Every sentence below is unreachable in a v1 build, by two independent
+    /// facts rather than by the guard on the first line.** With
+    /// `FeatureFlags.screenCaptureReply` false nothing can raise a `.capture`
+    /// session, and `SharedStore.screenContextAllowed` — the opt-in for the
+    /// scripted sample, and the other half of `screenContextIsPermitted` — has no
+    /// control in the app that writes it, so it is false on every install. With
+    /// neither, `screenContext` never leaves `.off` and this answers nil.
+    ///
+    /// The flag is deliberately **not** added to `screenContextIsPermitted`: that
+    /// property also gates the scripted sample, which photographs nothing and is
+    /// not what the flag holds back. Narrowing it here would conflate the two.
+    ///
+    /// This comment used to end "Reply with no session hosts the picker on the key
+    /// itself", which was true and is not: `replyKeyBroadcastPrompt` returns nil in
+    /// every shipping build, so the Reply key never becomes ReplayKit's button.
+    /// What Reply says with nothing to answer is `ScreenContextPrompt`'s clipboard
+    /// half instead.
     public var screenContextHint: String? {
         guard screenContextIsPermitted else { return nil }
         switch screenContext {

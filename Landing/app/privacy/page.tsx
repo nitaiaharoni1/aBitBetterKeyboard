@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Privacy",
   description:
-    "What aBitBetterKeyboard does with what you type: on-device first, cloud only when you ask, never sold.",
+    "What aBitBetterKeyboard does with what you type: on-device first, cloud only when you ask, never sold, and what the app counts.",
 };
 
 export default function PrivacyPage() {
@@ -33,6 +33,15 @@ export default function PrivacyPage() {
       <p>
         Keystrokes and messages are not used for advertising, and they are not
         sold.
+      </p>
+      <h2>What we count</h2>
+      <p>
+        The app counts how far setup gets, whether Full Access and the keyboard
+        were confirmed, and whether you come back to the app. It never counts a
+        keystroke, a correction, a dictated word, an AI answer, or anything read
+        off your screen. The keyboard itself sends nothing, with or without Full
+        Access. Nothing is sold, and no other company's code is doing the
+        counting.
       </p>
     </main>
   );

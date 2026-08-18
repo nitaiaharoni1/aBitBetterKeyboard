@@ -95,6 +95,11 @@ struct RootView: View {
     /// so the palette cannot change while the editor is pushed. Anything that
     /// lets it change from a pushed screen has to clear this on the way.
     @State private var chrome = AppChrome()
+    /// Whether the last published screen-context state was a live capture
+    /// session. Only `screen_context_session_started` reads it: the analytics
+    /// event is a transition, and the channel publishes on every poll that
+    /// changes anything.
+    @State private var wasCapturingScreen = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -132,8 +137,16 @@ struct RootView: View {
             } else if url == SharedStore.dictationStartURL {
                 beginDictationHandoffIfFresh()
             } else if url == SharedStore.screenContextURL {
+                // **The keyboard can still send this while
+                // `FeatureFlags.screenCaptureReply` is false**, because the
+                // banner that opens the URL lives in `AIKeyboardCore` and is
+                // not gated there yet. Land on Home, which is what the user
+                // asked for, but skip the wash: `openScreenContext` scrolls to
+                // and highlights a Screen Context row the flag has taken off
+                // that screen, and a jump that lights up nothing reads as a
+                // broken app rather than a withheld feature.
                 selectedMainTab = .home
-                search.openScreenContext()
+                if FeatureFlags.screenCaptureReply { search.openScreenContext() }
             }
         }
         // The app watches the same capture channel the keyboard does, as an
@@ -143,6 +156,15 @@ struct RootView: View {
         // that can honestly claim to be on screen.
         .onAppear {
             ScreenContextSession.shared.startConsuming(.shared, as: .observer)
+            // Here as well as in the `scenePhase` handler below, because a cold
+            // launch is not guaranteed to *change* `scenePhase`: the value can
+            // already be `.active` by the time this view appears, and then
+            // `onChange` never fires and the first day of an install goes
+            // uncounted. `recordSessionStartIfNewDay` holds its own calendar-day
+            // latch, so being called twice in one launch costs one `UserDefaults`
+            // read. Same shape as the attestation call below it, for the same
+            // reason.
+            Analytics.recordSessionStartIfNewDay()
             // Cold-launch fallback: the keyboard wrote a handoff before the app
             // was running. Consume it here so the hot-path `onOpenURL` and this
             // path cannot both trigger auto-start.
@@ -174,6 +196,34 @@ struct RootView: View {
                 return
             }
             Task { await AppAttestation.refreshIfNeeded(store: store) }
+            // The event the policy calls `app_session_started`. Here rather than
+            // on a screen because this view sits *above* the onboarding/tabs
+            // split, so it is the one handler that sees a foreground return
+            // whether the user is midway through onboarding or on any of the
+            // four tabs. The day latch is `recordSessionStartIfNewDay`'s.
+            Analytics.recordSessionStartIfNewDay()
+        }
+        // **The one place that sees a real capture session start, and it is
+        // deliberately not a view that draws one.** `HomeScreenContextCard` was
+        // the obvious site and `FeatureFlags.screenCaptureReply` has taken it out
+        // of the build; this app is a channel `.observer` from the `onAppear`
+        // above regardless, so the transition is still observable here whether or
+        // not anything renders it. That makes the event dormant rather than dead:
+        // it cannot fire in v1 because no broadcast can be started, and it starts
+        // reporting the day NIT-6 flips the flag, with no second edit.
+        //
+        // `@Published` publishes from `willSet`, so `state` itself is still the
+        // old value in here and the new one is the parameter — but `source` is
+        // assigned before `state` in `ScreenContextSession.publish`, so reading it
+        // off the session is correct. The `wasCapturingScreen` latch makes this
+        // a transition rather than a report of every poll that lands while a
+        // session runs; `Analytics` has no once-per-install latch for this event,
+        // because a second broadcast genuinely is a second session.
+        .onReceive(ScreenContextSession.shared.$state) { state in
+            let capturing = state.isLive && ScreenContextSession.shared.source == .capture
+            defer { wasCapturingScreen = capturing }
+            guard capturing, !wasCapturingScreen else { return }
+            Analytics.record(.screenContextSessionStarted)
         }
     }
 
@@ -190,8 +240,22 @@ struct RootView: View {
         guard SharedStore.shared.consumeDictationHandoff() else { return }
         selectedMainTab = .home
         search.openDictation()
+        // **No session length, the same as the other two doors.** See
+        // `HomeDictationCard` for the decision and `DictationService
+        // .noSessionLimit` for what the literal `0` this used to pass actually
+        // meant.
+        //
+        // This is the door where an unbounded microphone is felt most, and that
+        // is worth saying rather than leaving to be rediscovered: it is the
+        // handoff from the keyboard's mic key, so the user arrives here on their
+        // way *back* to the app they were writing in. The card that says LIVE is
+        // the screen they are about to leave, and nothing in front of them
+        // afterwards says a microphone is open. What tells them is the keyboard's
+        // own microphone key, which wears a filled red cap for as long as the
+        // recording runs — that cap is now the only thing standing where a
+        // timeout used to.
         Task {
-            _ = await DictationService.shared.start(minutes: 0)
+            _ = await DictationService.shared.start(minutes: DictationService.noSessionLimit)
         }
     }
 }

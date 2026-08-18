@@ -101,6 +101,82 @@ in its caption. A store listing that promised a rebuildable keyboard while leavi
 part of the audience typing on the unchanged default, with nothing telling them so,
 is exactly the kind of overclaim this document exists to prevent.
 
+## The counter-argument: lead with Hebrew (added 2026-08-18)
+
+**The landing page now leads with Hebrew, not with the layout editor, and that is a
+deliberate disagreement with the section above rather than an oversight.** It is
+recorded here rather than replacing the argument above, because the argument above is
+good and most of it survives; what changed is which of two true claims goes first.
+
+The disagreement in one line: **a rebuildable keyboard is differentiated but is not
+by itself a reason to switch keyboards, whereas Hebrew autocorrect that works is.**
+
+Four reasons, in the order they carry weight.
+
+**Installing a keyboard is a switching decision, and switching costs muscle memory.**
+The thing that makes someone pay that cost is a daily irritation, not a capability
+they did not know they wanted. For the audience this product is built for, the daily
+irritation is that Hebrew autocorrect is bad: a hand that lands one key over could
+not be repaired at all until `TypoChannel` and `TypoLexicon` landed, `לעבודה` is one
+token no dictionary lists, and Apple's Hebrew checker calls `תדוה` and `שלמו`
+perfectly good words. "Your keyboard finally fixes Hebrew" answers a complaint the
+reader already has. "You can rearrange the rows" answers one they do not.
+
+**Customisation is a second-session feature.** Nobody rebuilds a keyboard they have
+not yet decided to keep. The layout editor is what makes someone stay and what they
+tell a friend about; it is a poor argument for the first thirty seconds, when the
+reader is deciding whether this is worth a Settings trip and a Full Access dialog.
+Ordering the page Hebrew first, layout second matches the order in which those two
+claims actually do their work.
+
+**The two claims are not equally hard to copy.** A competitor can add a layout editor
+in a release. Hebrew that reaches `לעבודה` from `לעבו` is `HebrewMorphology` splitting
+the clitics ה ב ל מ ו ש כ, a frequency prior over 300,000 sentences, a typo channel
+that prices a slip by *kind* rather than counting edits, and a wrong-plane rule that
+turns `akuo` into `שלום`. Apple's own stack has no Hebrew in three places out of four
+(Foundation Models, `SpeechTranscriber`, Vision's text recogniser; `UITextChecker` is
+the exception and its Hebrew is weaker than it sounds). That is the moat, and it is
+the one thing on the page a well-funded competitor cannot ship next quarter.
+
+**The evidence is stronger on the Hebrew side, and it is the kind that matters.** The
+editor's evidence is that it works: `LayoutEditorTests`, `CustomLayoutRenderingTests`,
+nothing in README's "Not built". The Hebrew claim's evidence is that it works *better
+than the alternative*, which is a different and more persuasive kind: 75/76 on
+`Bar/typing/corpus.json` against 47/76, and 90 of 107 misspellings corrected against
+61, with what ships (`AutocorrectLevel.shippedDefault`) reading 73/76 and 85 of 107
+while cutting the wrong-word column from 10 to 3. Those numbers do not go on the
+store page (see the last section of this document, which still stands), but they are
+why the claim can be made at all.
+
+**What survives from the argument above, unchanged.** The screenshot medium point is
+correct and was not the thing being disputed: a still frame proves the editor and
+does not prove an AI action. That is exactly why the layout editor keeps a prominent
+slot with a visual rather than being demoted to a footnote, and why the landing page
+sells Hebrew through a scrolling story and one legible chip (`akuo → שלום`, a
+before/after nobody can mistake for stock autocorrect) rather than through a still
+frame of a corrected word, which would indeed look like any other keyboard's
+spell-check screenshot. Also unchanged: Reply stays out of the launch set (now for a
+stronger reason, see `.claude/docs/screen-capture-v1-hold.md`), no `Bar/` number
+appears in consumer copy, the 64-language claim stays scoped to typing and the
+layout, and the AI-action claims stay scoped to Hebrew and English.
+
+**What this changes concretely.** The keyword field above already leads with
+`hebrew`, so it needs no edit. The subtitle "A keyboard shaped like you" was chosen
+to mirror the landing page's old hero line ("A keyboard that writes with you"), and
+that mirror is gone: the hero is now "Hebrew autocorrect that actually works." If the
+subtitle is meant to keep mirroring the site, it wants a Hebrew-first phrasing within
+the 30-character limit. The description's opening two sentences above still lead with
+the editor; under this counter-argument they should lead with the Hebrew claim and
+keep the editor as the second sentence. Neither edit is made here, because the store
+listing is a separate deliverable from the landing page and should be changed
+deliberately rather than as a side effect of a copy pass on the site.
+
+**What would change this back.** If the store listing turns out to need a still image
+that proves its headline claim, and no single frame can prove Hebrew autocorrect the
+way one frame proves a dragged key, then the editor is the better *store* hero even
+while Hebrew stays the better *site* hero. The two surfaces are allowed to differ,
+and this document governs the store.
+
 ## Screenshot sequence
 
 Five screenshots, in order. Each is a real, capturable app state, not a composite.
@@ -184,6 +260,26 @@ Full Access line wherever they are mentioned in the body, because they need the
 cloud path and Full Access is what gives the keyboard a network at all.
 
 ## Onboarding order
+
+**NIT-15 landed on 2026-08-18, and it changes what two of the three options below
+cost.** The flow is now three required screens (welcome, add-keyboard,
+practice-writing) with five optional ones behind a "Show me more" button at the end:
+palette, languages, microphone, practice-everyday, practice-smart-tools. There is no
+Full Access step anywhere in it. The paragraph below that treats NIT-15 as a proposal
+was written before that, and its conclusion survives intact, since all three options
+were chosen to be Full-Access-independent. What changes:
+
+- **Option 1 gets stronger.** Welcome is now one of only three screens every user
+  sees, so a fifth `InfoRow` there is a larger share of the whole flow than it was.
+- **Option 2 gets weaker, and its premise is gone.** Palette is no longer step 1; it
+  is optional, reached only by a user who asks for more at the end. A pointer into
+  the layout editor placed there is seen by the subset who opted in, which is close
+  to the deferral the option was written to fix. If the editor is worth pointing at
+  early, Welcome is now the only screen early enough.
+- **Option 3 is unchanged**, and still costs what it said it costs: `.writing` is on
+  the required path while `.everyday` and `.smartTools` are optional, so a new stage
+  would have to choose a side, and that choice is the estimate rather than a detail
+  of it.
 
 The issue asks where the editor should sit so a user meets it early rather than
 finds it in a tab. Two moves below are genuinely "not new engineering," matching how

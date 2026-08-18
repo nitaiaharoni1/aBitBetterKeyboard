@@ -135,12 +135,14 @@ public final class KeyboardController: ObservableObject {
     /// sending. An edit made without being asked has to be undoable, and this is
     /// the whole of that: the text that was replaced, the text that replaced it,
     /// and which key did it. `SuggestionBar` draws a revert control while it is
-    /// set, and the next keystroke clears it — see `clearRevertibleEdit`.
+    /// set, and `expireRevertibleEditIfUnusable` retires it once what it wrote can
+    /// no longer be found where it wrote it — which outlasts ordinary typing, and
+    /// used to be the next keystroke (NIT-154).
     ///
     /// **One slot, and CopyClip shares it rather than growing a second.** Tapping
     /// a clip is the same event as a Fix from the field's point of view — text the
     /// user did not type, arriving whole, gone from reach the moment it lands —
-    /// and its undo expires on the same keystroke. See `RevertibleEdit`.
+    /// and its undo expires the same way. See `RevertibleEdit`.
     ///
     /// `internal(set)` for the reason `emojiQuery` is: it is written from
     /// `KeyboardController+AI`, which is a different file, and closed to the app and

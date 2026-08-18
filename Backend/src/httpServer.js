@@ -3,6 +3,7 @@
 // `requestHandler.js`, which never sees a socket.
 
 import { createServer as createHttpServer } from "node:http";
+import { handleEvent } from "./eventHandler.js";
 import { authorize, callerKey, createRateLimiter } from "./gate.js";
 import { handleRequest } from "./requestHandler.js";
 
@@ -22,6 +23,13 @@ const DEFAULT_MAX_BODY_BYTES = 8 * 1024 * 1024;
 // service buffer 8 MB before it has proved anything at all — which is exactly
 // the exhaustion route `sendJSONAndClose` was written to close.
 const ATTEST_MAX_BODY_BYTES = 64 * 1024;
+
+// An event is an envelope and at most three small properties: the largest one
+// `AnalyticsEvent` can build is about 250 bytes. 4 KB leaves room for a longer
+// version number without leaving room for anything interesting, and the same
+// reasoning as the line above applies twice over here, because `/v1/event` is
+// unauthenticated by design.
+const EVENT_MAX_BODY_BYTES = 4 * 1024;
 
 function sendJSON(res, status, body) {
   res.writeHead(status, { "content-type": "application/json" });
@@ -172,6 +180,45 @@ export function createServer({
       }
 
       sendJSON(res, 200, await tokens.signSession(verdict.deviceId));
+      return;
+    }
+
+    // **Unauthenticated deliberately, and the reasoning is not "it is only
+    // analytics".** App Attest gates the three routes below because each of them
+    // spends this project's Vertex budget on every call; a counter costs nothing
+    // per request and has no abuse profile worth a Secure Enclave round trip.
+    // Gating it would also make the app's own setup funnel unmeasurable on
+    // exactly the installs where attestation is what failed — the population the
+    // funnel most needs to see. See `.claude/docs/analytics-policy.md` section 5,
+    // and `eventHandler.js` for what an unauthenticated endpoint is allowed to
+    // store, which is only what its own two tables name.
+    //
+    // It stays inside the rate limiter and takes a body cap three orders of
+    // magnitude below the model routes', for the same reason `/v1/challenge`
+    // does: an unauthenticated endpoint that will buffer 8 MB is a denial of
+    // service with a polite name.
+    if (route === "/v1/event") {
+      const allowance = rateLimiter.check(callerKey(req, null));
+      if (!allowance.ok) {
+        sendJSONAndClose(
+          req, res, allowance.status, { error: allowance.error },
+          { "retry-after": String(allowance.retryAfterSeconds) }
+        );
+        return;
+      }
+
+      let eventBody;
+      try {
+        const raw = await readBody(req, EVENT_MAX_BODY_BYTES);
+        eventBody = raw.length > 0 ? JSON.parse(raw.toString("utf8")) : {};
+      } catch (error) {
+        if (error.tooLarge) sendJSONAndClose(req, res, 413, { error: "request body too large" });
+        else sendJSONAndClose(req, res, 400, { error: "could not read request body" });
+        return;
+      }
+
+      const { status, body } = handleEvent(eventBody);
+      sendJSON(res, status, body);
       return;
     }
 

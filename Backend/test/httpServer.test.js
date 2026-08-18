@@ -641,3 +641,97 @@ test("a token signed under a rotated-away secret still opens /v1/text when the s
     { tokens: createTokens({ secret: newSecret, previousSecrets: [oldSecret] }) }
   );
 });
+
+// ── /v1/event ───────────────────────────────────────────────────────────────
+//
+// The route's own vocabulary is `eventHandler.test.js`'s subject; what these
+// four cases pin is the wiring: that it is reachable with no bearer on a server
+// that requires one everywhere else, that it never touches the vertex client,
+// and that being unauthenticated does not also mean unbounded.
+//
+// The sink is `console.log`, so each accepted event would otherwise print a
+// JSON line into the test output. `withoutLogging` swallows it rather than
+// making `createServer` take a sink parameter that only tests would ever pass.
+
+const EVENT_BODY = JSON.stringify({
+  event: "app_session_started",
+  install_id: "8B0F0A5E-2C4D-4E1A-9F3B-7A6C5D4E3F21",
+  app_version: "0.1 (46)",
+  os_version: "26.2",
+  sent_at: "2026-08-18T09:14:02Z",
+  days_since_install: 12
+});
+
+async function withoutLogging(run) {
+  const original = console.log;
+  const lines = [];
+  console.log = (line) => lines.push(line);
+  try {
+    await run();
+  } finally {
+    console.log = original;
+  }
+  return lines;
+}
+
+test("POST /v1/event is accepted with no bearer on a server that demands one elsewhere", async () => {
+  await withServer(
+    fakeVertexClient(async () => {
+      throw new Error("must not be called");
+    }),
+    async (base) => {
+      const lines = await withoutLogging(async () => {
+        const response = await fetch(`${base}/v1/event`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: EVENT_BODY
+        });
+        assert.equal(response.status, 200);
+        assert.deepEqual(await response.json(), { recorded: true });
+      });
+      assert.equal(lines.length, 1);
+      assert.equal(JSON.parse(lines[0]).analytics.event, "app_session_started");
+    },
+    { expectedToken: "shared-secret" }
+  );
+});
+
+test("an event carrying a key nobody declared is 400 and reaches no sink", async () => {
+  await withServer(
+    fakeVertexClient(async () => ({ kind: "ok", fields: {} })),
+    async (base) => {
+      const lines = await withoutLogging(async () => {
+        const response = await fetch(`${base}/v1/event`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...JSON.parse(EVENT_BODY), message: "what they typed" })
+        });
+        assert.equal(response.status, 400);
+      });
+      assert.deepEqual(lines, []);
+    }
+  );
+});
+
+test("an event body over the route's own 4 KB cap is 413", async () => {
+  await withServer(fakeVertexClient(async () => ({ kind: "ok", fields: {} })), async (base) => {
+    const lines = await withoutLogging(async () => {
+      const response = await fetch(`${base}/v1/event`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        // Well under the 8 MB the model routes allow, so this proves the
+        // smaller cap rather than the shared one.
+        body: JSON.stringify({ event: "full_access_confirmed", padding: "x".repeat(8000) })
+      });
+      assert.equal(response.status, 413);
+    });
+    assert.deepEqual(lines, []);
+  });
+});
+
+test("GET /v1/event is 404 — the route exists for POST only", async () => {
+  await withServer(fakeVertexClient(async () => ({ kind: "ok", fields: {} })), async (base) => {
+    const response = await fetch(`${base}/v1/event`);
+    assert.equal(response.status, 404);
+  });
+});

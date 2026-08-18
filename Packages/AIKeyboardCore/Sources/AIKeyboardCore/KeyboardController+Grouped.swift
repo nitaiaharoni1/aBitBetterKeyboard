@@ -293,6 +293,11 @@ extension KeyboardController {
     /// not need its own rendering anywhere.
     func pressGroupedKey(_ cap: String, at unitPoint: CGPoint? = nil) {
         block = nil
+        // Cleared rather than left to expire, unlike every other typing path.
+        // `applyGroupedGuess` rewrites the word in the field through
+        // `writeGroupedGuess` and never calls `refreshSuggestions`, so
+        // `expireRevertibleEditIfUnusable` is not asked on this path and an edit
+        // left standing here would be one nothing retires.
         clearRevertibleEdit()
 
         // **The strokes are a claim about the characters behind the cursor, and

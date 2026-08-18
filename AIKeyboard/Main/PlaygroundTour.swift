@@ -21,7 +21,7 @@ enum PlaygroundTourStep: Int, CaseIterable {
         case .emoji: return "Add an emoji"
         case .dictation: return "Try dictation"
         case .languageSwitch: return "Switch languages"
-        case .reply: return "Reply from the screen"
+        case .reply: return "Reply to a message"
         case .send: return "Send a message"
         }
     }
@@ -43,7 +43,17 @@ enum PlaygroundTourStep: Int, CaseIterable {
         case .languageSwitch:
             return "Swipe sideways across the space bar to switch languages."
         case .reply:
-            return "Tap Reply to answer what's on screen. Start screen context from Home first."
+            // **Named a screen and a Home control, and both are gone.** This
+            // said "answer what's on screen. Start screen context from Home
+            // first", which is a capability `FeatureFlags.screenCaptureReply`
+            // holds back and a card Home no longer draws. Reply's v1 source is
+            // the clipboard (NIT-162), and the refusal is a good enough teacher
+            // here that the step is satisfiable either way: with nothing copied
+            // the tap prints "Copy the message you want to answer, then let it
+            // in with CopyClip's Paste", and the block advances the tour. Better
+            // to meet that sentence in the playground than mid-conversation.
+            return "Reply answers a message you copied. Copy one first, or tap Reply now and it "
+                + "will say what it needs."
         case .send:
             return "Tap the orange send button. Then keep chatting as much as you like."
         }

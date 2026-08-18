@@ -28,21 +28,35 @@ anonymous, locally generated, resettable install identifier (never IDFA, never a
 value that identifies a person), app version, OS version, event name, and a
 client timestamp. No event below repeats this envelope in its own property list.
 
-Onboarding is **ten steps today**, not the six the issue text names: seven setup
-steps (`OnboardingFlow.setupStepCount`) plus three guided practice stages
-(`OnboardingPracticeStage.allCases`), confirmed by `AIKeyboardUITests`'s own comment
-("Ten steps today, so the bound has to clear ten taps, not equal them"). The schema
-below uses the real count so a query written against it does not silently misread
-step 7 as "done."
+Onboarding was **ten steps** when this section was written and is **three** now, or
+eight if the user asks for the rest (NIT-15, landed 2026-08-18, corrected here the
+same day). `OnboardingStep.required` is welcome, add-keyboard and practice-writing;
+`OnboardingStep.extras` — palette, languages, microphone, practice-everyday,
+practice-smart-tools — sits behind a "Show me more" button on the last required
+step. The reason the count is stated here at all is unchanged: a schema written
+against the wrong length silently misreads the last step as "done."
 
-1. **`onboarding_step_advanced`**: `step_index` (Int, 0-9), `step_name` (`welcome`,
-   `palette`, `languages`, `add_keyboard`, `full_access`, `switch_confirmation`,
-   `microphone`, `practice_writing`, `practice_everyday`, `practice_smart_tools`),
-   `via` (`continue` | `skip` | `switch_confirmed`). Fired in
-   `OnboardingFlow.primaryAction()` / `skipAction()`, the instant `step` increments.
-   Answers **Q1**: the full per-step funnel, including whether people stop at the
-   six-step "reach a working keyboard" boundary (`step_index <= 6`) or carry on into
-   the practice tour.
+1. **`onboarding_step_advanced`**: `step_index` (Int, the position in the path the
+   user actually walked, which is no longer a fixed range: 0-2 on the required
+   path, extending to 7 when the optional half is opened), `step_name` (`welcome`,
+   `add_keyboard`, `practice_writing` on the required path; `palette`, `languages`,
+   `microphone`, `practice_everyday`, `practice_smart_tools` optional), `via`
+   (`continue` | `skip` | `switch_confirmed`). Fired in `OnboardingFlow.record(via:)`,
+   the instant `step` increments. Answers **Q1**: the full per-step funnel. The
+   boundary worth querying is no longer an index — it is whether any event carries
+   an optional `step_name` at all, which is the "reached a working keyboard, then
+   asked for more" split that `step_index <= 6` used to approximate.
+
+   **Two of the ten names are emitted by no screen, and are kept on purpose.**
+   `full_access` has none since the standalone Full Access step went; the grant
+   itself is still measured by `full_access_confirmed`, which is the event that
+   actually mattered. `switch_confirmation` folded into `add_keyboard`, and its
+   measurement survived the merge as `via: switch_confirmed` on that step, so
+   "reached add-keyboard" and "proved the globe key works" stay distinguishable.
+   Deleting either name would stop a pre-cut run and a post-cut run being
+   comparable, and would make a funnel query written against the ten names fail
+   rather than show a name that stopped appearing. `AnalyticsEvent.Step` carries
+   both cases with that reasoning written on them.
 2. **`onboarding_completed`**: `skipped_step_count` (Int, how many of the ten were
    advanced via Skip rather than Continue). Fired when `store.hasCompletedOnboarding`
    is set true. Answers **Q1**.
@@ -104,9 +118,9 @@ Quotable as written:
 
 ## 4. The unanswerable questions
 
-**Q1, onboarding funnel: fully answered.** Events 1 and 2 give the complete ten-step
-funnel, including the split between "reached a working keyboard" and "went on
-through the practice tour."
+**Q1, onboarding funnel: fully answered.** Events 1 and 2 give the complete funnel
+over whatever path the user walked, including the split between the three-step
+required path and the optional half opened by "Show me more."
 
 **Q2, Full Access grant rate and where the rest stop: answered, with one gap.**
 Events 3 and 4 need the app to be reopened after the user leaves Settings:
@@ -194,10 +208,23 @@ second copy of the same fear this decision exists to put to rest.
 
 One sentence, or close to it, has to appear in two places: the landing page's privacy
 page (`Landing/app/privacy/page.tsx`), as a new section after "Never sold," and
-somewhere in the app itself. The natural spot is beside the existing "What we never
-send" row on the Full Access onboarding step (`OnboardingFullAccessStep.swift`) or in
-a Settings/About screen, whichever the app's owner prefers; this document recommends
-the location but leaves the edit to whoever owns those files.
+somewhere in the app itself.
+
+**The landing page half is done** (2026-08-18), as a fourth section on the privacy
+page and a fourth point in the site's privacy strip, in both locales.
+
+**The app half is being added to Settings, on a surface that exists.** The Full
+Access onboarding step is deleted and its "What we never send" row went with it
+(NIT-15), so `OnboardingFullAccessStep.swift` — the home this section originally
+named — is not a place anything can be put. `SettingsView` is: it already has
+typing, AI, account and diagnostics sections and no About section to compete with,
+and a curious user reaches it deliberately rather than being made to walk past it.
+That edit is in flight as this is written and is not verified here.
+
+The alternative was the add-keyboard step, where the one remaining Full Access
+consequence line lives, and it is rejected on the same ground NIT-15 was decided on:
+that step is the required path, so a privacy paragraph there is a screen every user
+reads past on the way to a first keystroke.
 
 Recommended wording, matching the existing privacy page's short, declarative
 sentences:
@@ -207,6 +234,15 @@ sentences:
 > come back to the app. It never counts a keystroke, a correction, a dictated word,
 > an AI answer, or anything read off your screen. The keyboard itself sends nothing,
 > with or without Full Access.
+
+**One clause is held back until the feature is**, and the published copy says so by
+omission rather than by hedging. "Whether you open a screen-sharing session" describes
+`screen_context_session_started`, which cannot fire while
+`FeatureFlags.screenCaptureReply` is false, because nothing in the build can raise a
+real capture session (`.claude/docs/screen-capture-v1-hold.md`). Publishing it today
+would describe a feature a v1 user cannot find. The clause goes back in the day the
+flag flips, and the event is deliberately still in section 2 so that is a copy change
+rather than a policy change.
 
 The existing "Cloud, only when you tap" and "Never sold" sections stay as written;
 this is a fourth, separate point, not a rewrite of either.

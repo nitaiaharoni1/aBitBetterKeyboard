@@ -4,7 +4,7 @@
 
 .list {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   margin: 38px 0 0;
   padding: 0;
   list-style: none;
@@ -34,6 +34,21 @@
   color: var(--muted);
   font-size: 14.5px;
   line-height: 1.55;
+}
+
+@media (max-width: 980px) {
+  .list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .item:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .item:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
 }
 
 @media (max-width: 700px) {

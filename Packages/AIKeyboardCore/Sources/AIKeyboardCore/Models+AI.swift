@@ -3,8 +3,15 @@ import Foundation
 // MARK: - AI actions
 
 public enum AIAction: String, CaseIterable, Identifiable, Hashable, Sendable {
-    /// Answers the message on screen. Only useful while a screen context session
-    /// is running, so it leads the menu and explains itself when it cannot run.
+    /// Answers the message the user copied.
+    ///
+    /// **It used to say "on screen", and that is the capability
+    /// `FeatureFlags.screenCaptureReply` holds back.** In v1 the message comes
+    /// from the CopyClip ledger rather than from a ReplayKit reading, so this is
+    /// the one action whose usefulness depends on something the user did in
+    /// *another* app a moment ago. It still leads the menu and still explains
+    /// itself when it cannot run; what changed is which sentence it explains.
+    /// See `ReplySource` for the order the sources are preferred in.
     case reply
     case fix
     case rewrite
@@ -23,7 +30,21 @@ public enum AIAction: String, CaseIterable, Identifiable, Hashable, Sendable {
 
     public var subtitle: String {
         switch self {
-        case .reply: return "Answer what's on screen"
+        // "Copied" rather than "on screen", because the pasteboard is where v1
+        // gets the message.
+        //
+        // **Nothing reads this property today**, checked across every target on
+        // 2026-08-18: the only `.subtitle` call sites belong to `BrandPalette`
+        // and `AppSearchItem`. It is corrected rather than deleted because it is
+        // public API of a public enum and a wrong string is a trap for the first
+        // screen that draws one. If it is still unread the next time somebody
+        // passes through here, delete it instead of maintaining it.
+        //
+        // Kept to the length of the three below it, and naming no key position,
+        // for whenever that happens: CopyClip is movable in the layout editor,
+        // and Reply's end of the suggestion bar is the leading end, which is the
+        // right-hand one in Hebrew.
+        case .reply: return "Answer what you copied"
         case .fix: return "Grammar & spelling"
         case .rewrite: return "Three ways to say it"
         case .tone: return "Pick a register"
@@ -39,8 +60,21 @@ public enum AIAction: String, CaseIterable, Identifiable, Hashable, Sendable {
         }
     }
 
-    /// Reply reads the screen; everything else only reads the text field.
-    public var needsScreenContext: Bool { self == .reply }
+    /// Whether this action has something to work on when the field is empty.
+    ///
+    /// **It was `needsScreenContext`, and that name stopped being true.** It never
+    /// described what the property decides — `isAvailable` uses it to mean "an
+    /// empty field is not a reason to grey this out" — and once v1 sourced Reply
+    /// from the pasteboard it named a mechanism the build does not even contain.
+    /// Renamed for the reason `AIEdit.replacedSelection` became `AIEdit.undo`: a
+    /// name that lies about its callers is worse than a long one.
+    ///
+    /// Reply is the only action this is true of, and it is true for a reason that
+    /// outlives the source: it answers a message somebody *else* wrote, so the
+    /// user having typed nothing yet is the ordinary case rather than the
+    /// degenerate one. Fix, Rewrite and Tone all act on the user's own words and
+    /// genuinely have nothing to do without them.
+    public var worksWithoutTypedText: Bool { self == .reply }
 
     /// Whether this action has anything to do right now.
     ///
@@ -53,7 +87,7 @@ public enum AIAction: String, CaseIterable, Identifiable, Hashable, Sendable {
     /// controls are lit, and the bar and the panel disagreeing about what an empty
     /// field means was D8's defect. The panel is deleted; the question is not.
     public func isAvailable(hasTextToWorkWith: Bool) -> Bool {
-        needsScreenContext ? true : hasTextToWorkWith
+        worksWithoutTypedText ? true : hasTextToWorkWith
     }
 
     /// Whether *any* action could run right now.
@@ -82,15 +116,24 @@ public enum AIAction: String, CaseIterable, Identifiable, Hashable, Sendable {
 /// **It was `AIEdit` until CopyClip started pasting whole paragraphs on one
 /// tap.** A clip insert is the same event seen from a different key: text the
 /// user did not type, arriving in one movement, with no way back once it is in.
-/// Its lifetime is identical too — until the next keystroke — so a second slot
-/// beside this one would be a second thing to clear from the seventeen places
-/// `clearRevertibleEdit()` is already called from, and the first one anybody
-/// forgot would delete characters the user typed. One slot, one step, one
+/// Its lifetime is identical too, so a second slot beside this one would be a
+/// second thing to retire everywhere this one is retired, and the first place
+/// anybody forgot would delete characters the user typed. One slot, one step, one
 /// implementation of "delete exactly what was put in, from where it was put in".
 ///
-/// `applied` is held as well as `previous` because the revert has to delete
-/// exactly what was inserted: the field may be a different length by then only if
-/// the user typed, and typing is what clears this.
+/// **How long it lasts is `rebased(onto:)` and `spanUndo(behind:)`, and it used
+/// to be one keystroke.** That was safe and far too short: it expired before the
+/// wrong word had been read in the sentence it landed in, which is when anybody
+/// notices one (NIT-154). Both functions locate what this edit wrote inside the
+/// document and refuse unless they find it exactly once, so an undo taken after
+/// half a sentence more has been typed puts back the span and leaves that half
+/// sentence alone. `KeyboardController.expireRevertibleEditIfUnusable` asks the
+/// same question once per document change, so the control is never drawn over an
+/// undo that would do nothing or do harm.
+///
+/// `applied` is held as well as `previous` because the revert has to find and
+/// delete exactly what was inserted, wherever in the field it has since ended
+/// up.
 public struct RevertibleEdit: Equatable, Sendable {
     /// Which key wrote it, and therefore what the undo control calls itself. The
     /// text actions carry their own `AIAction` rather than collapsing into one
@@ -157,22 +200,132 @@ public struct RevertibleEdit: Equatable, Sendable {
         self.undo = undo
     }
 
-    /// Whether what this edit put in is still standing at the cursor, which is
-    /// the claim `.spanAtCursor` deletes a count of units on.
+    // MARK: - How long the way back lasts
+
+    /// How much the user may write after an edit before the way back is retired.
     ///
-    /// **Two tests, because `documentContextBeforeInput` is a window and not the
-    /// field.** iOS hands back what is near the cursor and no more, so a clip
-    /// several lines long — the ordinary thing to keep in a clipboard history —
-    /// is longer than anything the keyboard can see, and the exact test alone
-    /// answers false on an edit that is perfectly intact. The second test is the
-    /// same claim asked of a truncated window: everything visible behind the
-    /// cursor is the tail of what this edit wrote, so none of it belongs to the
-    /// user. An empty window is refused rather than accepted, because `""` is a
-    /// suffix of every string and deleting a count from a field the keyboard
-    /// cannot see is the one outcome worse than no undo at all.
-    public func standsAtEnd(of contextBefore: String) -> Bool {
-        if contextBefore.hasSuffix(applied) { return true }
-        return !contextBefore.isEmpty && applied.hasSuffix(contextBefore)
+    /// **A stated guess, and the only number here that is one.** The expiry that
+    /// matters is the safety one and it is exact — the two functions below refuse
+    /// unless they can find, in the document, precisely what this edit wrote. This
+    /// is the other half: `SuggestionBar` spends a separator and 44pt on the undo
+    /// control for as long as it is offered, which is about 52pt off the three
+    /// candidate slots, and an undo of a correction from three sentences ago is a
+    /// permanent tax on the bar for a decision nobody is still making. Sixty
+    /// characters is roughly a line of a chat message: long enough that the wrong
+    /// word is still being read in the sentence it landed in, which is when it is
+    /// actually noticed, and short enough that the bar is three candidates again
+    /// well before the message is finished.
+    ///
+    /// Counted out of the document rather than out of a keystroke tally, so
+    /// there is no counter to increment at every place a keystroke arrives and no
+    /// path that can forget to.
+    public static let charactersOfTypingAllowed = 60
+
+    /// What the whole field has to become for a `.wholeField` edit to be taken
+    /// back, or nil when it can no longer be taken back safely.
+    ///
+    /// **This is what lets the undo survive typing, and the survival is entirely
+    /// in the rebase.** The old rule was that the next keystroke retired the
+    /// edit, because `revertEdit` put `previous` back as the whole field and
+    /// anything typed since would have gone with it. Locating `applied` inside the
+    /// field instead means the characters around it are preserved: type `and one
+    /// more thing` after a Fix, take the Fix back, and that clause is still there.
+    ///
+    /// Three refusals, and each one is a case where taking the undo would destroy
+    /// something:
+    ///
+    /// 1. **Not found.** The user has typed over it, deleted into it, or the host
+    ///    has replaced the field. There is nothing to put back and no way to know
+    ///    where it would go.
+    /// 2. **Found more than once.** A short answer can repeat — `applied` may be a
+    ///    single corrected word — and there is no way to tell which occurrence
+    ///    this edit wrote. Replacing the wrong one changes a word the user typed.
+    /// 3. **Too much written since**, which is `charactersOfTypingAllowed` and is
+    ///    about the bar rather than about safety.
+    ///
+    /// The field this is asked about is `KeyboardController.wholeField`, which is
+    /// what the host hands over and is truncated by iOS on a long message. A field
+    /// longer than that window fails test 1 and expires, which is the conservative
+    /// direction: the undo goes away rather than being offered over text the
+    /// keyboard cannot see.
+    public func rebased(onto field: String) -> String? {
+        guard undo == .wholeField, !applied.isEmpty else { return nil }
+        guard let span = onlyOccurrence(of: applied, in: field) else { return nil }
+        guard field.count - applied.count <= Self.charactersOfTypingAllowed else { return nil }
+        return field.replacingCharacters(in: span, with: previous)
+    }
+
+    /// How far back from the caret a `.spanAtCursor` edit has to delete and what
+    /// to type in its place, or nil when it can no longer be taken back safely.
+    ///
+    /// **Two shapes.** Ordinarily what this edit wrote is somewhere in the window
+    /// with the user's own characters behind it — none if nothing has been typed
+    /// since, which is the case `standsAtEnd(of:)` used to be the whole of. Those
+    /// characters are deleted and typed back unchanged either side of the swap,
+    /// because `UITextDocumentProxy` deletes backwards from the caret and has no
+    /// way to address a range, so reaching the span means passing through them.
+    /// The caret ends where it started.
+    ///
+    /// The second shape is the truncated window: iOS hands back what is near the
+    /// cursor and no more, so a clip several lines long — the ordinary thing to
+    /// keep in a clipboard history — is longer than anything the keyboard can see,
+    /// and everything visible behind the caret is the tail of it. Nothing in that
+    /// window says where the edit *began*, so it cannot be rebased and a keystroke
+    /// since is one this cannot see around; it is asked second, so an edit that is
+    /// locatable takes the branch that preserves what was typed.
+    ///
+    /// **Two occurrences is a refusal, and that is a real narrowing of
+    /// `standsAtEnd(of:)`.** That test was an exact suffix, which is right
+    /// whenever nothing has been typed since and wrong the moment something has:
+    /// paste `ok`, type ` ok`, and the suffix test happily deletes the copy the
+    /// user typed. It could not fire before, because typing retired the edit; it
+    /// can now, so the span has to be unambiguous instead. The cost is an undo
+    /// silently withheld when the pasted text already stood in the field —
+    /// `KeyboardController.expireRevertibleEditIfUnusable` asks the same question,
+    /// so the control is not drawn rather than drawn dead.
+    /// - Parameter contextAfter: What the field holds *ahead* of the caret, when
+    ///   the caller can see it. Defaulted so the tests that ask about the
+    ///   before-caret rules alone stay readable.
+    ///
+    ///   **This closes the one hole the before-caret rules cannot see.** Every
+    ///   other way to reach a wrong match is excluded by `onlyOccurrence`: a
+    ///   decoy already in the message, or typed later, makes two occurrences and
+    ///   the edit is retired at the next refresh. What that reasoning cannot
+    ///   exclude is the edit's own span sitting *ahead* of the caret while
+    ///   exactly one decoy sits behind it — reachable only with a message long
+    ///   enough for iOS to truncate `documentContextBeforeInput`, a caret jump in
+    ///   one event, and a token rare enough not to appear a third time. Vanishing
+    ///   rather than impossible, and the cost of excluding it outright is a
+    ///   conservative refusal when the answer legitimately repeats ahead of the
+    ///   caret. A guarantee that holds by construction is worth more than one
+    ///   that holds because of how much window iOS happened to hand back.
+    public func spanUndo(
+        behind contextBefore: String,
+        ahead contextAfter: String = ""
+    ) -> (delete: Int, insert: String)? {
+        guard undo == .spanAtCursor, !applied.isEmpty else { return nil }
+        // A legitimate undo has its span behind the caret by construction, so
+        // seeing it ahead means the match behind is somebody else's text.
+        guard !contextAfter.contains(applied) else { return nil }
+        if let span = onlyOccurrence(of: applied, in: contextBefore) {
+            let typedSince = String(contextBefore[span.upperBound...])
+            guard typedSince.count <= Self.charactersOfTypingAllowed else { return nil }
+            return (applied.utf16.count + typedSince.utf16.count, previous + typedSince)
+        }
+        guard !contextBefore.isEmpty, applied.hasSuffix(contextBefore) else { return nil }
+        return (applied.utf16.count, previous)
+    }
+
+    /// Where `needle` sits in `haystack`, when it sits there exactly once.
+    ///
+    /// Searched from both ends rather than counted, because "does it appear
+    /// again" is the whole question and one `range(of:)` cannot answer it.
+    private func onlyOccurrence(of needle: String, in haystack: String) -> Range<String.Index>? {
+        guard let first = haystack.range(of: needle, options: .literal),
+            let last = haystack.range(of: needle, options: [.literal, .backwards]),
+            first == last
+        else { return nil }
+        return first
     }
 }
 

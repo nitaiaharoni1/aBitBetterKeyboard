@@ -68,13 +68,19 @@ final class AIDirectEditTests: XCTestCase {
         XCTAssertNil(controller.revertibleEdit, "the way back is still on offer after it was taken")
     }
 
-    /// **Until a new key is typed, and not one keystroke longer.** The revert
-    /// replaces the whole field with what was there before the action ran, so
-    /// letting it survive a keystroke means offering to delete what the user typed
-    /// after the correction. Every path that puts a character in has to clear it,
-    /// which is why this asks four of them rather than one.
-    func testTheNextKeystrokeTakesTheRevertAway() async {
-        for key in [KeyCap.character("a"), .space, .backspace] {
+    /// **It used to end at the next keystroke and now outlives ordinary typing
+    /// (NIT-154).** The old rule was safe for one reason — the revert replaced the
+    /// whole field, so surviving a keystroke meant offering to delete what had
+    /// been typed since — and far too short for the case it exists for: ten
+    /// autocorrections a session commit a real word nobody meant, and a wrong word
+    /// is noticed in the sentence it landed in rather than before the next one is
+    /// typed.
+    ///
+    /// Two keys and a candidate tap, because they reach the document by three
+    /// different routes. The broken build here is the *shipped* one: it answers
+    /// nil to every one of these.
+    func testTheRevertSurvivesTypingOnAfterTheCorrection() async {
+        for key in [KeyCap.character("a"), .space] {
             let engine = DirectEditEngine(fixed: "Fixed.")
             let controller = makeDirectEditController(text: "fixd", engine: engine)
 
@@ -83,17 +89,65 @@ final class AIDirectEditTests: XCTestCase {
             XCTAssertNotNil(controller.revertibleEdit, "the answer was never applied")
 
             controller.press(key)
-            XCTAssertNil(controller.revertibleEdit, "\(key) left the revert standing")
+            XCTAssertNotNil(controller.revertibleEdit, "\(key) took the revert away")
         }
 
-        // And the fourth: committing a candidate from the bar, which reaches the
-        // document without a `KeyCap` behind it.
+        // And a candidate committed from the bar, which reaches the document
+        // without a `KeyCap` behind it.
         let engine = DirectEditEngine(fixed: "Fixed.")
         let controller = makeDirectEditController(text: "fixd", engine: engine)
         controller.run(.fix)
         await settleToneController(controller)
+        controller.press(.character(" "))
         controller.apply(Suggestion(text: "later", language: .english))
-        XCTAssertNil(controller.revertibleEdit, "tapping a candidate left the revert standing")
+        XCTAssertNotNil(
+            controller.revertibleEdit, "tapping a candidate took the revert away")
+    }
+
+    /// **And it takes back the correction without taking the new words with it**,
+    /// which is the property that made the longer life safe to give.
+    ///
+    /// The shipped revert replaced the whole field with `previous`, so a build
+    /// that merely stopped clearing the edit would answer `fixd` here and delete
+    /// ` and one more thing` — the exact destruction the one-keystroke rule was
+    /// protecting against. `RevertibleEdit.rebased(onto:)` is what makes this the
+    /// answer instead.
+    func testRevertingAfterTypingPutsBackOnlyTheCorrection() async {
+        let engine = DirectEditEngine(fixed: "Fixed.")
+        let controller = makeDirectEditController(text: "fixd", engine: engine)
+
+        controller.run(.fix)
+        await settleToneController(controller)
+        for character in " and one more thing" {
+            controller.press(.character(String(character)))
+        }
+        XCTAssertEqual(controller.contextBefore, "Fixed. and one more thing")
+
+        controller.revertEdit()
+
+        XCTAssertEqual(controller.contextBefore, "fixd and one more thing")
+        XCTAssertNil(controller.revertibleEdit)
+    }
+
+    /// **Typing over the correction retires it**, because there is no longer
+    /// anything to put back and no way to know where it would go. A build that
+    /// simply never expired the edit offers a button here that would either do
+    /// nothing or write `fixd` into the middle of somebody's sentence.
+    func testTypingOverTheCorrectionRetiresTheRevert() async {
+        let engine = DirectEditEngine(fixed: "Fixed.")
+        let controller = makeDirectEditController(text: "fixd", engine: engine)
+
+        controller.run(.fix)
+        await settleToneController(controller)
+        XCTAssertNotNil(controller.revertibleEdit)
+
+        // Six backspaces take `Fixed.` out of the field character by character.
+        for _ in 0..<6 { controller.press(.backspace) }
+
+        XCTAssertEqual(controller.contextBefore, "")
+        XCTAssertNil(
+            controller.revertibleEdit,
+            "the bar still offers to put back a correction that is no longer there")
     }
 
     /// **A selection edit undoes five characters, not the whole message.**

@@ -53,8 +53,15 @@ extension FoundationModelsEngine: TextPrediction {
     /// is continuing, and it guesses wrong often enough to matter.
     private func prompt(for text: String, context: ScreenContext?) -> String {
         guard let context else { return "Typed so far:\n\(text)" }
+        // "from " and then nothing is what an unnamed sender used to produce
+        // here, the same defect `ScreenContext.modelPrompt` exists for. The
+        // reading is what the label is about either way, so the name is the part
+        // that drops out.
+        let received =
+            context.sender.isEmpty
+            ? "They received this message:" : "They received this message from \(context.sender):"
         return """
-            They received this message from \(context.sender):
+            \(received)
             \(context.message)
 
             Typed so far, as their reply:

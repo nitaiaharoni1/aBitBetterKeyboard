@@ -115,14 +115,25 @@ final class EmptyFieldBarTests: XCTestCase {
     private func skipOnboardingIfPresent() {
         let start = app.buttons["Start typing"]
         let cont = app.buttons["Continue"]
-        // Nine onboarding steps (ten before NIT-15 removed the Full Access step), so
-        // the bound clears them rather than equalling them.
+        let switched = app.buttons["I've switched to it"]
+        // Three required onboarding steps (nine before the required path was cut
+        // to three, ten before NIT-15 removed the Full Access step), so the bound
+        // clears them rather than equalling them. The optional half is never
+        // opened here: reaching it takes a "Show me more" this walk does not tap.
         for _ in 0..<14 {
             Thread.sleep(forTimeInterval: 0.5)
             if start.exists {
                 start.tap()
                 Thread.sleep(forTimeInterval: 1.0)
                 return
+            }
+            // The add-keyboard step's primary action is the globe confirmation
+            // rather than Continue, and it now sits on the required path where
+            // every walk meets it. Without this branch the loop falls out of the
+            // guard below with onboarding still on screen.
+            if switched.exists {
+                switched.tap()
+                continue
             }
             guard cont.exists else { return }
             cont.tap()

@@ -169,10 +169,15 @@ public struct SuggestionBar: View {
             // their answer straight into the field (see
             // `KeyboardController.applyDirectly`), so the undo has to live where the
             // user is already looking when the text changes under them — the row
-            // directly above the keys. It lasts until the next keystroke and costs
-            // the three candidates about 52pt of the bar for that long, which is
-            // the right trade while the last thing that happened to the field is an
-            // edit the keyboard made rather than a word the user is typing.
+            // directly above the keys.
+            //
+            // **It used to last exactly one keystroke and now outlives ordinary
+            // typing**, because a wrong word is noticed in the sentence it landed
+            // in rather than before the next one is typed (NIT-154). It costs the
+            // three candidates about 52pt of the bar for as long as it is up, which
+            // is what `RevertibleEdit.charactersOfTypingAllowed` is a bound on:
+            // that number is about this row, and the exactness of the undo itself
+            // is `rebased(onto:)` and `spanUndo(behind:)`.
             if controller.revertibleEdit != nil {
                 separator
                 revertButton

@@ -38,11 +38,11 @@ export default function ImmersiveStory({
   const hebrewLayout = locale === "he";
   const steps = [
     {
-      id: "understand",
-      title: t.storyUnderstand,
-      body: t.storyUnderstandBody,
+      id: "type",
+      title: t.storyType,
+      body: t.storyTypeBody,
     },
-    { id: "draft", title: t.storyDraft, body: t.storyDraftBody },
+    { id: "suggest", title: t.storySuggest, body: t.storySuggestBody },
     { id: "refine", title: t.storyRefine, body: t.storyRefineBody },
     { id: "dictate", title: t.storyDictate, body: t.storyDictateBody },
     { id: "send", title: t.storySend, body: t.storySendBody },
@@ -96,7 +96,7 @@ export default function ImmersiveStory({
               },
             });
 
-            tl.addLabel("understand", 0);
+            tl.addLabel("type", 0);
             tl.fromTo(
               el("doodle-path"),
               { strokeDashoffset: 1 },
@@ -116,10 +116,10 @@ export default function ImmersiveStory({
               0.68
             );
 
-            tl.addLabel("draft", 1);
-            tl.to(cap("understand"), { autoAlpha: 0, y: -10, duration: 0.2 }, 1);
+            tl.addLabel("suggest", 1);
+            tl.to(cap("type"), { autoAlpha: 0, y: -10, duration: 0.2 }, 1);
             tl.fromTo(
-              cap("draft"),
+              cap("suggest"),
               { autoAlpha: 0, y: 12 },
               { autoAlpha: 1, y: 0, duration: 0.25 },
               1.08
@@ -142,18 +142,6 @@ export default function ImmersiveStory({
               { autoAlpha: 0, y: 6 },
               { autoAlpha: 1, y: 0, duration: 0.25 },
               1.2
-            );
-            tl.fromTo(
-              all("ai-btn"),
-              { scale: 1 },
-              {
-                scale: 1.14,
-                duration: 0.14,
-                ease: "power2.inOut",
-                yoyo: true,
-                repeat: 1,
-              },
-              1.08
             );
             if (pressKeys.length) {
               tl.fromTo(
@@ -178,12 +166,24 @@ export default function ImmersiveStory({
             );
 
             tl.addLabel("refine", 2);
-            tl.to(cap("draft"), { autoAlpha: 0, y: -10, duration: 0.2 }, 2);
+            tl.to(cap("suggest"), { autoAlpha: 0, y: -10, duration: 0.2 }, 2);
             tl.fromTo(
               cap("refine"),
               { autoAlpha: 0, y: 12 },
               { autoAlpha: 1, y: 0, duration: 0.25 },
               2.08
+            );
+            tl.fromTo(
+              all("ai-btn"),
+              { scale: 1 },
+              {
+                scale: 1.14,
+                duration: 0.14,
+                ease: "power2.inOut",
+                yoyo: true,
+                repeat: 1,
+              },
+              2.02
             );
             tl.fromTo(
               el("panel-rewrite"),
@@ -346,13 +346,13 @@ export default function ImmersiveStory({
                 <h3 className={styles.stepTitle}>{step.title}</h3>
                 <p className={styles.stepBody}>{step.body}</p>
                 <div className={styles.stepVisual} aria-hidden="true">
-                  {step.id === "understand" && (
+                  {step.id === "type" && (
                     <div className={styles.miniChat}>
                       <p className={styles.miniBubble}>{t.sceneIn}</p>
                       <p className={styles.miniChip}>{t.storyChip}</p>
                     </div>
                   )}
-                  {step.id === "draft" && (
+                  {step.id === "suggest" && (
                     <div className={styles.miniPills}>
                       {t.suggestions.map((word) => (
                         <span key={word}>{word}</span>
@@ -562,14 +562,14 @@ export default function ImmersiveStory({
                   <span className={styles.action}>
                     <EmojiIcon />
                   </span>
+                  <span className={styles.action}>{t.actions[0]}</span>
+                  <span className={styles.action}>{t.actions[1]}</span>
                   <span
                     className={`${styles.action} ${styles.actionLive}`}
                     data-el="ai-btn"
                   >
-                    {t.actions[0]}
+                    {t.actions[2]}
                   </span>
-                  <span className={styles.action}>{t.actions[1]}</span>
-                  <span className={styles.action}>{t.actions[2]}</span>
                   <span className={`${styles.action} ${styles.actionMic}`}>
                     <MicIcon />
                     <span>{t.dictate}</span>

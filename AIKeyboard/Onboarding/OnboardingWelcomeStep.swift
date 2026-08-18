@@ -28,11 +28,29 @@ struct WelcomeStep: View {
                     title: "Fix and rewrite in one tap",
                     detail: "Small edits on the text in front of you, not a chatbot to talk to."
                 )
+                // **This promised screen reading on the first screen every user
+                // sees**: "Turn on screen context and the keyboard answers the
+                // message you're looking at." It pointed at a control that is no
+                // longer drawn — `FeatureFlags.screenCaptureReply` takes Home's
+                // Screen Context card out of the v1 build — and at a capability
+                // no part of which has ever run. What Reply does in v1 is answer
+                // the message the user copied, so that is what the line says.
+                //
+                // **The words are `HomeView.replySteps`' and
+                // `ScreenContextPrompt`'s, deliberately.** "CopyClip's Paste" is
+                // one gesture, and a user who meets the keyboard's own refusal
+                // first must not have to work out that it and this sentence are
+                // describing the same thing. For the same reason neither of them
+                // names where a key sits: CopyClip can be moved or removed in the
+                // layout editor, and Reply's end of the suggestion bar is the
+                // *leading* end, which is the right-hand one in Hebrew. The name
+                // and the glyph come off `AIAction.reply` rather than being spelt
+                // again here.
                 InfoRow(
-                    icon: "eye",
-                    title: "Replies that read the room",
+                    icon: AIAction.reply.icon,
+                    title: "Answers the message you copied",
                     detail:
-                        "Turn on screen context and the keyboard answers the message you're looking at."
+                        "Copy it, let it in with CopyClip's Paste, and \(AIAction.reply.title) writes the answer."
                 )
                 // This was a dictation promise — "Dictation that keeps up when you
                 // switch language mid-sentence" — made when the mic key streamed a

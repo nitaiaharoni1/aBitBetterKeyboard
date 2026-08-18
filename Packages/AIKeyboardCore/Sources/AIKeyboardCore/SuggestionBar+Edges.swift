@@ -357,9 +357,16 @@ extension SuggestionBar {
     ///
     /// **Tinted rather than filled, because it is an offer and not a state.** The
     /// filled cap above means "this is happening"; this button means "you can take
-    /// that back", it is on screen for one keystroke, and it sits beside three
-    /// candidate slots that are empty at that exact moment — so it has to catch the
-    /// eye without reading as the thing that just ran.
+    /// that back", and at the moment it appears it sits beside three candidate
+    /// slots that are empty — so it has to catch the eye without reading as the
+    /// thing that just ran.
+    ///
+    /// **It is up for longer than it used to be.** Its life was one keystroke;
+    /// since NIT-154 it lasts while what the edit wrote is still standing where it
+    /// wrote it, bounded by `RevertibleEdit.charactersOfTypingAllowed` — which is a
+    /// bound on *this control's* cost to the bar rather than on the undo's safety.
+    /// So it now shares the row with candidates that are no longer empty, and the
+    /// tint has to hold up against three words rather than against nothing.
     ///
     /// It names the action it undoes rather than saying "Undo", because by the time
     /// it is read the field has already changed and the word is the only thing

@@ -173,7 +173,11 @@ public struct CloudIntelligence: TextIntelligence {
         // that agrees to it is written.
         let fields = try await run(
             instructions: Prompts.reply(for: context),
-            prompt: "From \(context.sender):\n\(context.message)",
+            // Names the sender only when there is one, which a clipboard context
+            // never has and a screen reading often does not. See
+            // `ScreenContext.modelPrompt`; the corpus entries all carry a sender,
+            // so what is sent for them is byte-identical to what was measured.
+            prompt: context.modelPrompt,
             fields: [
                 CloudField(
                     "unnamed",
@@ -181,7 +185,7 @@ public struct CloudIntelligence: TextIntelligence {
                 ),
                 CloudField(
                     "addressee",
-                    "The grammatical gender to address the sender in, worked out from their name: 'feminine' or 'masculine'. 'none' when the reply is in a language that does not inflect for it."
+                    "The grammatical gender to address the sender in, worked out from their name: 'feminine' or 'masculine'. 'none' when the reply is in a language that does not inflect for it, or when no sender is named."
                 ),
                 CloudField(
                     "accept",

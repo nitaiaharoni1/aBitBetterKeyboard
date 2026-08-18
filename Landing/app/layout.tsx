@@ -2,20 +2,20 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "aBitBetterKeyboard: A keyboard that writes with you",
+  title: "aBitBetterKeyboard: Hebrew autocorrect that actually works",
   description:
-    "An iOS keyboard with reply, rewrite, and dictation in the app you are already in. Hebrew and English, on the keys.",
+    "An iOS keyboard built for Hebrew. It knows what glues onto the front of a word, keeps your English words in English, and lets you rebuild the keys. Hebrew and English, on the keys.",
   openGraph: {
-    title: "aBitBetterKeyboard: A keyboard that writes with you",
+    title: "aBitBetterKeyboard: Hebrew autocorrect that actually works",
     description:
-      "Reply, rewrite, and dictate in the app you are already in. Hebrew and English.",
+      "Built for Hebrew: the letters that glue onto a word, English words kept in English, and a keyboard you can rebuild.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "aBitBetterKeyboard: A keyboard that writes with you",
+    title: "aBitBetterKeyboard: Hebrew autocorrect that actually works",
     description:
-      "Reply, rewrite, and dictate in the app you are already in. Hebrew and English.",
+      "Built for Hebrew: the letters that glue onto a word, English words kept in English, and a keyboard you can rebuild.",
   },
 };
 

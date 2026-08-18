@@ -78,18 +78,40 @@ extension ActionBanner {
             caption(text)
 
         case .context(let sender, let message, let language):
+            // **A reading can name nobody, and drawn unguarded that cost a line
+            // of a 58pt strip and a spoken "From, colon".** This is the same
+            // defect `ScreenContext.modelPrompt` exists for, in the one place
+            // that speaks to a person rather than to a model, so it is answered
+            // the same way: with no name, the banner is about the message alone
+            // rather than about a blank where a name would go.
+            //
+            // **Where it comes from is worth stating exactly, because an earlier
+            // version of this comment had it wrong.** It is *not* the clipboard:
+            // `KeyboardController.bannerState` feeds this case from
+            // `screenContext.context`, which is the capture session's own state,
+            // and a clip never reaches it — `replyContext` is read by
+            // `bannerOptions` and by nothing here. The unnamed sender arrives
+            // from a *reading*: `ScreenReadService` publishes `reading?.sender
+            // ?? ""` whenever the read answers a message and names no author.
+            // With `FeatureFlags.screenCaptureReply` off that leaves the
+            // scripted sample, whose three fixtures all carry a sender, so this
+            // guard is currently unreachable in a shipping build and is the
+            // half of the empty-sender sweep that is kept for when the flag
+            // flips rather than the half that ships.
             VStack(alignment: .leading, spacing: 0) {
-                Text(sender)
-                    .font(
-                        .system(
-                            size: Self.badgeFontSize(base: 10, dynamicTypeSize: dynamicTypeSize),
-                            weight: .semibold)
-                    )
-                    .foregroundStyle(Theme.Keys.secondaryLabel)
+                if !sender.isEmpty {
+                    Text(sender)
+                        .font(
+                            .system(
+                                size: Self.badgeFontSize(base: 10, dynamicTypeSize: dynamicTypeSize),
+                                weight: .semibold)
+                        )
+                        .foregroundStyle(Theme.Keys.secondaryLabel)
+                }
                 answer(message, language: language, size: 13)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("From \(sender): \(message)")
+            .accessibilityLabel(sender.isEmpty ? message : "From \(sender): \(message)")
 
         case .options(_, let options, let index):
             let option = options[index]

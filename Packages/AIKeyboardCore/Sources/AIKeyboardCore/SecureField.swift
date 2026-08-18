@@ -46,6 +46,13 @@ import UIKit
 /// behind an ordinary search box is not caught here at all. What protects the
 /// user is that there is no speculative read: a frame leaves only in answer to a
 /// tap. This is narrow defence in depth on top of that, and it is free.
+///
+/// **It guards two things now, and only one of them is a read.** Since Reply's
+/// message can come from the clipboard (`ReplySource`), the ordinary case
+/// photographs nothing at all — and the guard still refuses, because Reply
+/// *inserts*, and writing a generated sentence into a credential field is wrong
+/// whatever the sentence was written about. `KeyboardController.runReply` is
+/// where that second half is spelled out; the truth table below is unchanged.
 public enum SecureField {
 
     /// Three rules, and they are the design rather than an implementation

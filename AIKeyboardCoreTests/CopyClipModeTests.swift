@@ -305,10 +305,14 @@ final class CopyClipModeTests: XCTestCase {
             controller.overlay, .copyclip, "the undo closed the panel it was tapped in")
     }
 
-    /// The way back lasts until the next keystroke, exactly as a Fix's does. A
-    /// build that let it stand would offer to delete five characters the user
-    /// typed after the paste.
-    func testTypingAfterAPasteEndsTheWayBack() {
+    /// The way back outlives the next keystroke, exactly as a Fix's does since
+    /// NIT-154 — and taking it removes the clip and nothing else.
+    ///
+    /// **The document is the assertion, not the flag**, because the build this
+    /// rejects is the one that keeps offering an undo it can no longer walk: a
+    /// `spanUndo` that still deleted a bare `applied.utf16.count` from the caret
+    /// would take `re!` out and leave `hi the` standing.
+    func testTypingAfterAPasteDoesNotEndTheWayBack() {
         let before = SharedStore.shared.copyclipRecord
         defer { SharedStore.shared.copyclipRecord = before }
         let target = MockTextTarget(text: "hi ")
@@ -318,8 +322,31 @@ final class CopyClipModeTests: XCTestCase {
         XCTAssertNotNil(controller.revertibleEdit)
 
         controller.press(.character("!"))
+        XCTAssertEqual(target.text, "hi there!")
+        XCTAssertNotNil(
+            controller.revertibleEdit, "the paste's undo died on the keystroke after it")
 
-        XCTAssertNil(controller.revertibleEdit, "the paste's undo outlived the keystroke after it")
+        controller.revertEdit()
+        XCTAssertEqual(target.text, "hi !", "the undo took back the wrong characters")
+    }
+
+    /// Deleting into the pasted clip retires the way back, because there is
+    /// nothing left to take out and nowhere to put the old text.
+    func testDeletingIntoAPasteRetiresTheWayBack() {
+        let before = SharedStore.shared.copyclipRecord
+        defer { SharedStore.shared.copyclipRecord = before }
+        let target = MockTextTarget(text: "hi ")
+        let controller = KeyboardController(target: target)
+        let clip = Clip(id: UUID(), text: ClipText(raw: "there")!, capturedAt: Date())
+        controller.insertClip(clip)
+        XCTAssertNotNil(controller.revertibleEdit)
+
+        controller.press(.backspace)
+
+        XCTAssertEqual(target.text, "hi ther")
+        XCTAssertNil(
+            controller.revertibleEdit,
+            "the bar still offers to take out a clip that is no longer in the field")
     }
 
     /// **The panel covers the letters, so its own delete key is the only one on
@@ -358,19 +385,25 @@ final class CopyClipModeTests: XCTestCase {
 
     /// **A clip longer than the window iOS hands back still undoes.**
     /// `documentContextBeforeInput` is truncated, and a clipboard history is
-    /// exactly where multi-line text lives, so the exact-suffix test alone
-    /// answers false on a paste that is perfectly intact. An empty window still
-    /// proves nothing: `""` is a suffix of every string.
+    /// exactly where multi-line text lives, so locating the paste inside the
+    /// window answers nothing on a paste that is perfectly intact. An empty
+    /// window still proves nothing: `""` is a suffix of every string.
+    ///
+    /// Asked of `spanUndo(behind:)`, which is what `revertEdit` walks.
+    /// `standsAtEnd(of:)` was the same claim as a bool and is deleted: the undo
+    /// has to say *how far back* to reach now, not only whether it may.
     func testTheUndoClaimSurvivesATruncatedContextWindow() {
         let edit = RevertibleEdit(
             origin: .clip, previous: "", applied: "line one\nline two", undo: .spanAtCursor)
-        XCTAssertTrue(edit.standsAtEnd(of: "before line one\nline two"))
-        XCTAssertTrue(
-            edit.standsAtEnd(of: "line two"),
+        let units = "line one\nline two".utf16.count
+
+        XCTAssertEqual(edit.spanUndo(behind: "before line one\nline two")?.delete, units)
+        XCTAssertEqual(
+            edit.spanUndo(behind: "line two")?.delete, units,
             "a window holding only the last line of the paste refused an intact undo")
-        XCTAssertFalse(
-            edit.standsAtEnd(of: ""),
+        XCTAssertNil(
+            edit.spanUndo(behind: ""),
             "a field the keyboard cannot see was treated as one it had just written")
-        XCTAssertFalse(edit.standsAtEnd(of: "something else"))
+        XCTAssertNil(edit.spanUndo(behind: "something else"))
     }
 }

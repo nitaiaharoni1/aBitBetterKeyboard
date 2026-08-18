@@ -99,7 +99,7 @@ struct ReplyDraft {
     var unnamed: String
     @Guide(
         description:
-            "The grammatical gender to address the sender in, worked out from their name: 'feminine' or 'masculine'. 'none' when the reply is in a language that does not inflect for it."
+            "The grammatical gender to address the sender in, worked out from their name: 'feminine' or 'masculine'. 'none' when the reply is in a language that does not inflect for it, or when no sender is named."
     )
     var addressee: String
     @Guide(

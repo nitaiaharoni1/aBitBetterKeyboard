@@ -80,28 +80,47 @@ final class DemoWalkthroughTests: XCTestCase {
     func testOnboarding() throws {
         app.launch()
 
-        // **`full-access` is deliberately absent.** NIT-15 removed the dedicated
-        // Full Access step: it was the one blocking, alarming ask standing before
-        // the user had seen the keyboard do anything, and the permission is now
-        // raised where it buys something instead. The mention did not vanish with
-        // it, so this list shrinking is the whole change and not a coverage loss:
-        // `add-keyboard` still carries the Allow Full Access row and its one-tap
-        // route to Settings, and `languages` still says the list is unreadable
-        // until the permission is on. Nine steps now, six setup plus three
-        // practice.
+        // **Only the first three of these are the required path.** Welcome,
+        // add-keyboard and practice-writing are what a new user must pass to
+        // reach a keystroke; the five after them are `OnboardingStep.extras`,
+        // reached only by tapping "Show me more" on the last required step. The
+        // walkthrough takes that door on purpose — it exists to photograph every
+        // screen — so this list being eight long is not evidence that onboarding
+        // is eight steps. A user who never asks sees three.
+        //
+        // **`full-access` and `switch` are both deliberately absent.** NIT-15
+        // removed the dedicated Full Access step — the one blocking, alarming ask
+        // standing before the user had seen the keyboard do anything — and the
+        // permission is now raised where it buys something. The separate switch
+        // step is gone too, folded into `add-keyboard`: the app cannot see the
+        // keyboard until it has run, which cannot happen until the user has
+        // switched to it, so the two rows were always one task. Neither mention
+        // vanished: `add-keyboard` carries the Allow Full Access row, the Hebrew
+        // consequence beside it, the globe instructions and the confirmation
+        // button, and `languages` still says the list is unreadable until the
+        // permission is on.
         let names = [
-            "welcome", "palette", "languages", "add-keyboard", "switch",
-            "microphone",
-            "practice-writing", "practice-everyday", "practice-smart-tools"
+            "welcome", "add-keyboard", "practice-writing",
+            "palette", "languages", "microphone",
+            "practice-everyday", "practice-smart-tools"
         ]
         for (index, name) in names.enumerated() {
             settle()
             capture("onboarding-\(name)")
             if index < names.count - 1 {
-                // On the switch step the primary action is the confirmation it
-                // exists to collect; the walkthrough takes it, so the shot after
-                // this one is a wizard whose globe row has ticked.
-                let primary = name == "switch" ? "I've switched to it" : "Continue"
+                // Two steps leave by a button that is not Continue. On
+                // add-keyboard the primary action is the globe confirmation it
+                // exists to collect, so the shot after this one is a wizard whose
+                // globe row has ticked. On practice-writing — the end of the
+                // required path — Continue is "Start typing" and would finish
+                // onboarding, so the walkthrough takes the secondary door into
+                // the optional half instead.
+                let primary: String
+                switch name {
+                case "add-keyboard": primary = "I've switched to it"
+                case "practice-writing": primary = "Show me more"
+                default: primary = "Continue"
+                }
                 tap(app.buttons[primary], "\(primary) on \(name)")
             }
         }
@@ -239,26 +258,53 @@ final class DemoWalkthroughTests: XCTestCase {
         capture("keyboard-hebrew-numbers")
     }
 
-    // MARK: Screen context
+    // MARK: Reply, and the capture path that is not in this build
 
+    /// Named for screen context and now mostly about its absence: the half that
+    /// still runs is Reply, which v1 sources from the pasteboard. The name is
+    /// kept so a run's history stays comparable across the flag.
     func testScreenContext() throws {
         app.launchArguments.append("-uiTestSkipOnboarding")
         app.launch()
         skipOnboardingIfPresent()
 
-        capture("home-context-off")
+        capture("home-without-screen-context")
 
+        // **This waited for `screen-context-start-broadcast`, and now requires it
+        // to be absent.** `FeatureFlags.screenCaptureReply` is false — no part of
+        // the ReplayKit path has ever run, because the Simulator ships no
+        // `replayd`, and NIT-6 needs a physical phone — so `HomeView` does not
+        // draw `HomeScreenContextCard` at all, and that card is the app's only
+        // route into Apple's broadcast picker. The absence is worth asserting
+        // rather than deleting: this is the most expensive permission the product
+        // asks for, attached to the one feature nobody has watched work, and a
+        // line that waits for the button to appear catches nothing when somebody
+        // puts it back.
+        //
+        // Two details make this reject the build it is named after. The dictation
+        // row is required *first* because it is the other row of the same feature
+        // card, so the line below means "the card rendered with one row" rather
+        // than "Home never loaded". And the identifier asserted absent is the
+        // picker button, deliberately not the card's own `home-screen-context`,
+        // which is `accessibilityHidden` whenever no session is live and would
+        // therefore read as absent in a build with the flag switched back on.
         XCTAssertTrue(
-            element("screen-context-start-broadcast").waitForExistence(timeout: 6),
-            "missing element: screen context start")
+            element("dictation-start").waitForExistence(timeout: 6),
+            "Home never rendered, so the absence asserted below would prove nothing")
+        XCTAssertFalse(
+            element("screen-context-start-broadcast").exists,
+            "the broadcast picker is on Home while FeatureFlags.screenCaptureReply is false")
 
         tap(element("home-playground"), "playground card")
         settle(1.4)
-        capture("keyboard-context-banner")
+        capture("keyboard-reply-banner")
 
         // And Reply is a key in the action row rather than a button inside the
         // strip, which is what makes it reachable when there is no session at all —
-        // the state the strip could not render, because it was not drawn.
+        // the state the strip could not render, because it was not drawn. With
+        // capture off the panel's copy is about the pasteboard instead, which is
+        // v1's source for it; `ScreenContextPrompt` holds which sentence is said
+        // when.
         tap(element("key-ai-reply"), "Reply key")
         settle(0.3)
         capture("reply-working")
@@ -296,18 +342,38 @@ final class DemoWalkthroughTests: XCTestCase {
         settle()
         capture("settings")
 
-        tap(element("row-Upgrade to Pro"), "subscription row", timeout: 4)
-        settle()
-        capture("subscription")
+        // **This tapped `row-Upgrade to Pro` and photographed the paywall behind
+        // it.** `AppFeatureFlags.subscriptionPaywall` is false, so Settings draws
+        // neither that row nor its hairline and nothing in the shipping app
+        // reaches `SubscriptionView`: the screen says "MOCK PAYWALL" on itself
+        // and its CTA charges nothing, which App Store review reads as a broken
+        // or deceptive purchase screen. Asserted absent rather than deleted,
+        // because this is the only test that opens Settings — without a line here
+        // a purchase screen that makes no purchase comes back unnoticed. NIT-20
+        // is the condition for the flag, and the tap and the `subscription` shot
+        // come back with it. The row's title is `Subscription` rather than
+        // `Upgrade to Pro` once `isSubscribed` is true, which `-uiTestReset`
+        // makes false, so one identifier covers this launch.
+        XCTAssertTrue(
+            element("app-search-settings").waitForExistence(timeout: 4),
+            "Settings never rendered, so the absence asserted below would prove nothing")
+        XCTAssertFalse(
+            element("row-Upgrade to Pro").exists,
+            "the mock paywall row is in Settings while AppFeatureFlags.subscriptionPaywall is false")
     }
 
     // MARK: Helpers
 
     /// Onboarding fits inside this guard; skip it when the screens under test come later.
-    /// Nine steps today, so the bound has to clear nine taps, not equal them.
-    /// It was ten until NIT-15 removed the dedicated Full Access step. The bound
-    /// is deliberately loose rather than exact, which is why that change did not
-    /// break this the way it broke `testOnboarding`'s hardcoded list.
+    ///
+    /// **Three required steps today**, and this walk never opens the optional
+    /// half — it only ever taps Continue, the globe confirmation, and "Start
+    /// typing", and "Show me more" is a fourth button it does not know. So the
+    /// bound has to clear three taps, not eight and not equal them. It was nine
+    /// before the required path was cut to three, and ten before NIT-15 removed
+    /// the dedicated Full Access step. The bound is deliberately loose rather
+    /// than exact, which is why neither change broke this the way they broke
+    /// `testOnboarding`'s hardcoded list.
     private func skipOnboardingIfPresent() {
         let start = app.buttons["Start typing"]
         let cont = app.buttons["Continue"]

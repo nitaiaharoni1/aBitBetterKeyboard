@@ -6,9 +6,40 @@ extension DictationService {
 
     // MARK: Session lifecycle
 
+    /// A session with no end, which is what all three starters ask for.
+    ///
+    /// **Spelled rather than written as `0` at each call site.** There used to be
+    /// a `SharedStore.dictationSessionMinutes` (5, 15 or 60), and `0` read like a
+    /// caller passing it while actually bypassing it: the persistence layer
+    /// validated a loaded value against that list and dropped anything else, so
+    /// `0` was never a value that setting could hold. A bare literal that looks
+    /// like one thing and means another is what let two starters drift from a
+    /// third for as long as they did, which is why this has a name.
+    ///
+    /// **Unbounded is the product decision, taken 2026-08-18, not an oversight
+    /// left standing.** A bound was briefly added here on the argument that an
+    /// open microphone under the `audio` background mode should close itself;
+    /// the owner's answer was that dictation is not to be bounded at all, on the
+    /// grounds a session is something the user starts and stops. What that costs
+    /// is stated where it matters rather than here: see `AIKeyboard/Info.plist`,
+    /// whose background-mode comment is the justification this affects.
+    ///
+    /// `SharedStore.dictationSessionMinutes` and `dictationSessionChoices` are
+    /// **deleted**, along with their persistence. They had no reader once the
+    /// bound came out, and a stored setting nothing consults is the shape that
+    /// invites somebody to wire it back up without re-taking the decision. An
+    /// orphaned key left in the plist is harmless; a live-looking setting is not.
+    /// Restoring a bound means restoring them, deliberately, with a control the
+    /// user can actually reach: there never was one.
+    public static let noSessionLimit = 0
+
     /// Starts a session. **Must be called with the app in the foreground** — see
     /// the note above; from the background this is the 561145187 that shaped the
     /// whole design.
+    ///
+    /// `minutes` is `noSessionLimit` at every call site today, which leaves
+    /// `expiresAt` nil and the polling expiry check (`expiresAtMonotonic > 0`)
+    /// permanently false. The timer is kept armed-able rather than removed.
     @discardableResult
     public func start(minutes: Int) async -> Bool {
         guard !isRunning else { return true }

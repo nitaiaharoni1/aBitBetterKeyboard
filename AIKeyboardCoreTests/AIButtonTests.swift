@@ -65,7 +65,7 @@ final class SparkleReachabilityTests: XCTestCase {
     /// actions stay greyed, because they genuinely have nothing to do.
     func testReplyIsTheActionThatKeepsTheMenuWorthOpening() {
         XCTAssertTrue(AIAction.reply.isAvailable(hasTextToWorkWith: false))
-        for action in AIAction.allCases where !action.needsScreenContext {
+        for action in AIAction.allCases where !action.worksWithoutTypedText {
             XCTAssertFalse(
                 action.isAvailable(hasTextToWorkWith: false),
                 "\(action.title) has nothing to work on and must not look tappable")
@@ -83,7 +83,13 @@ final class SparkleReachabilityTests: XCTestCase {
         let allowed = SharedStore.shared.screenContextAllowed
         ScreenContextSession.shared.stop()
         SharedStore.shared.screenContextAllowed = false
-        defer { SharedStore.shared.screenContextAllowed = allowed }
+        // Nothing copied either, or Reply has a clipboard message to answer and
+        // rightly does not refuse at all. See `prepareLedger`.
+        let restoreLedger = prepareLedger([])
+        defer {
+            SharedStore.shared.screenContextAllowed = allowed
+            restoreLedger()
+        }
 
         let controller = KeyboardController(target: MockTextTarget(text: ""))
         XCTAssertFalse(controller.hasTextToWorkWith, "the state under test is an empty field")
@@ -103,7 +109,10 @@ final class SparkleReachabilityTests: XCTestCase {
     /// how this used to fail: the extension often cannot open a URL, and the
     /// key itself did nothing.
     @MainActor
-    func testReplyWithNoSessionHostsThePickerAndDoesNotOpenTheApp() {
+    func testReplyWithNoSessionHostsThePickerAndDoesNotOpenTheApp() throws {
+        try XCTSkipUnless(
+            FeatureFlags.screenCaptureReply,
+            "capture is on hold for NIT-6; the flag-off behaviour is asserted below")
         let restore = preparePickerReadyStore()
         defer { restore() }
 
@@ -146,7 +155,10 @@ final class SparkleReachabilityTests: XCTestCase {
     /// sits outside `KeyView`'s `.disabled`. The prompt must be nil so the
     /// overlay is not drawn, and the tap must not open the app either.
     @MainActor
-    func testReplyDoesNotHostThePickerWhileDictating() {
+    func testReplyDoesNotHostThePickerWhileDictating() throws {
+        try XCTSkipUnless(
+            FeatureFlags.screenCaptureReply,
+            "with capture off the overlay is never drawn at all, so this cannot fail")
         let restore = preparePickerReadyStore()
         defer { restore() }
 
@@ -169,7 +181,10 @@ final class SparkleReachabilityTests: XCTestCase {
     /// The overlay's touch-up cannot reach `press(.aiReply)`, so this is the
     /// only path that prints the refusal after the system button is pressed.
     @MainActor
-    func testTheReplyKeyOverlayPrintsTheSameRefusalAsRunReply() {
+    func testTheReplyKeyOverlayPrintsTheSameRefusalAsRunReply() throws {
+        try XCTSkipUnless(
+            FeatureFlags.screenCaptureReply,
+            "capture is on hold for NIT-6; `acknowledgeReplyBroadcastTap` is unreachable")
         let restore = preparePickerReadyStore()
         defer { restore() }
 
@@ -194,10 +209,14 @@ final class SparkleReachabilityTests: XCTestCase {
         let token = SharedStore.shared.cloudBackendToken
         let sessionToken = SharedStore.shared.cloudSessionToken
         ScreenContextSession.shared.stop()
+        // An empty ledger, so the refusal's remedy is `Remedy.none` rather than
+        // the CopyClip chip an unread copy would earn.
+        let restoreLedger = prepareLedger([])
         defer {
             SharedStore.shared.screenContextAllowed = allowed
             SharedStore.shared.cloudBackendToken = token
             SharedStore.shared.cloudSessionToken = sessionToken
+            restoreLedger()
         }
 
         let controller = KeyboardController(target: MockTextTarget(text: ""))
@@ -259,7 +278,10 @@ final class SparkleReachabilityTests: XCTestCase {
     /// refusal up would keep printing "Screen context is off" on a Reply that
     /// is about to generate.
     @MainActor
-    func testTheBroadcastRefusalLeavesOnceASessionIsLive() {
+    func testTheBroadcastRefusalLeavesOnceASessionIsLive() throws {
+        try XCTSkipUnless(
+            FeatureFlags.screenCaptureReply,
+            "no refusal carries `.broadcastPicker` while capture is on hold")
         let restore = preparePickerReadyStore()
         defer { restore() }
 
@@ -292,6 +314,24 @@ final class SparkleReachabilityTests: XCTestCase {
         XCTAssertEqual(
             controller.block?.remedy, BannerState.Block.Remedy.none,
             "a live session cleared a refusal starting a broadcast cannot fix")
+    }
+
+    /// Puts the CopyClip ledger into a known state and syncs its cursor to the
+    /// live pasteboard, so `ReplySource` answers the same thing on every run.
+    ///
+    /// **Both halves matter.** The clips decide whether Reply has anything to
+    /// answer; the cursor decides whether the keyboard believes a *newer* copy is
+    /// waiting that it has not been allowed to read — and a cursor left at its
+    /// `-1` default makes every simulator report `CopyClipCaptureState.control`,
+    /// which is a different refusal with a different remedy. Restored because
+    /// `SharedStore.shared` is process-wide.
+    @MainActor
+    private func prepareLedger(_ clips: [Clip]) -> () -> Void {
+        let store = SharedStore.shared
+        let before = store.copyclipRecord
+        store.copyclipRecord = CopyclipRecord(
+            clips: clips, lastChangeCount: PasteboardReader.changeCount)
+        return { store.copyclipRecord = before }
     }
 
     /// Typed token so `ScreenContextPrompt.offersPicker` can be true; restored
@@ -327,13 +367,18 @@ final class SparkleReachabilityTests: XCTestCase {
         SharedStore.shared.screenContextAllowed = true
         defer { SharedStore.shared.screenContextAllowed = allowed }
 
+        // A message exists, so `runReply` gets past its first guard and reaches
+        // the secure-field one, which is the guard under test. It comes from the
+        // clipboard rather than from a reading, because with
+        // `FeatureFlags.screenCaptureReply` off a reading is not a source Reply
+        // will act on — and the guard has to hold for the clipboard path too,
+        // which is the point of asserting it here.
+        let restoreLedger = prepareLedger([
+            Clip(id: UUID(), text: ClipText(raw: "sent it")!, capturedAt: Date())
+        ])
+        defer { restoreLedger() }
+
         let controller = KeyboardController(target: SecureTextTarget())
-        // A reading exists, so `runReply` gets past its first guard and reaches the
-        // secure-field one, which is the guard under test.
-        controller.screenContext = .ready(
-            ScreenContext(
-                appName: "Bank", appIcon: "lock", sender: "Dana", message: "sent it",
-                language: .english))
 
         controller.refuseForEmptyField(.fix)
         XCTAssertEqual(controller.block?.action, .fix, "the state under test was not set up")

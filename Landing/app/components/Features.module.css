@@ -85,45 +85,33 @@
   line-height: 1.4;
 }
 
-.toneMock {
+.layoutMock {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 5px;
   margin-bottom: auto;
-  padding: 12px 0 8px;
+  padding: 12px 0 6px;
 }
 
-.toneWord {
-  color: var(--muted);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.layoutRow {
+  display: flex;
+  gap: 4px;
 }
 
-.toneOn {
-  color: var(--orange-deep);
-}
-
-.toneTrack {
-  position: relative;
+.layoutKey {
   flex: 1;
-  height: 4px;
+  height: 11px;
   border-radius: 4px;
   background: var(--line);
 }
 
-.toneKnob {
-  position: absolute;
-  top: 50%;
-  left: 78%;
-  width: 16px;
-  height: 16px;
-  margin-top: -8px;
-  border-radius: 50%;
-  background: var(--orange-action);
-  transform: translateX(-50%);
-  box-shadow: 0 2px 6px rgba(238, 116, 66, 0.4);
+.layoutKeyTall {
+  height: 17px;
+}
+
+.layoutKeyOn {
+  background: var(--orange-soft);
+  box-shadow: inset 0 0 0 1px var(--orange-action);
 }
 
 .waveMock {

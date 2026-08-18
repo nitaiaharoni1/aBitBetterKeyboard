@@ -201,7 +201,9 @@ public struct FoundationModelsEngine: TextIntelligence {
     public func replies(to context: ScreenContext) async throws -> [ReplyOption] {
         let draft: ReplyDraft = try await generate(
             instructions: Prompts.reply(for: context),
-            prompt: "From \(context.sender):\n\(context.message)",
+            // Names the sender only when the reading found one. See
+            // `ScreenContext.modelPrompt`.
+            prompt: context.modelPrompt,
             source: context.message
         )
         return try ReplyOption.vetted(

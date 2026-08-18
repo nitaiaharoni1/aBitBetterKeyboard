@@ -1,18 +1,39 @@
 # aBitBetterKeyboard
 
-A Hebrew/English iOS keyboard with AI text actions, dictation, and screen-context
-replies.
+A Hebrew/English iOS keyboard with AI text actions, dictation, and a Reply that
+answers the message you copied.
 
-**The AI is real; the input to it is still partly faked.** Text actions, screen
-reading and dictation call real models and are scored against frozen corpora in
-`Bar/`. Screen capture is now built up
-to the read: the app hosts Apple's broadcast picker, a broadcast upload extension
-fingerprints frames into a shared page, the keyboard asks it for a reading when
-you tap Reply, and the capture process answers by encoding one frame and reading
-it in the cloud. The whole loop is written. **None of the ReplayKit half has ever
-run**, because the iOS Simulator ships no `replayd`, so no frame has ever reached
-any of it. The table at the end says which parts are measured and which are only
-compiled.
+**The AI is real; one of its inputs is held back.** Text actions, screen reading
+and dictation call real models and are scored against frozen corpora in `Bar/`.
+Screen capture is built all the way up to the read: the app hosts Apple's
+broadcast picker, a broadcast upload extension fingerprints frames into a shared
+page, the keyboard asks it for a reading when you tap Reply, and the capture
+process answers by encoding one frame and reading it in the cloud. The whole loop
+is written, and **none of the ReplayKit half has ever run**, because the iOS
+Simulator ships no `replayd`, so no frame has ever reached any of it.
+
+**So it is not in v1.** `FeatureFlags.screenCaptureReply` is `false`, every entry
+point that could start a broadcast is gated on it, and nothing is deleted: 3,792
+lines of transport stay in the tree behind the flag (counted 2026-08-18), with a
+named condition for turning it back on — NIT-6 passing on a phone, plus NIT-12's
+memory number under the ~50 MB cap. **Reply's v1 source is the pasteboard
+instead**: copy the message you are answering, let it in with CopyClip's Paste,
+then tap Reply. Three taps rather than two, and the middle one is not a
+formality: reading the pasteboard's contents outright is what raises iOS's
+"Allow Paste?" alert, so Apple's own `UIPasteControl` in the CopyClip panel is
+the only route in and the user's tap on it *is* the permission. No entitlement, no
+broadcast, and no alert. The reasoning, the line counts and the exact flip
+condition are in `.claude/docs/screen-capture-v1-hold.md`.
+
+`ReplySource` (NIT-162) is what picks between the three: the scripted sample, a
+live capture session, and the newest clip in the CopyClip ledger. It is in the
+tree and reads as finished; nothing here has run it, so treat it as written
+rather than measured. **What it costs is stated in the type rather than hidden**:
+a keyboard cannot read the pasteboard's contents without either the iOS paste
+alert or a tap on `UIPasteControl`, so the message has to reach the CopyClip
+ledger before Reply can see it, and a pasteboard that has moved since the ledger
+last caught up makes Reply refuse rather than answer the clip behind it. The
+table at the end says which parts are measured and which are only compiled.
 
 ```
 AIKeyboard.xcodeproj
@@ -80,7 +101,23 @@ xcrun swift-format --in-place --recursive \
   one you lift on is the one the whole panel is drawn in from then on
 - AI actions: Reply, Fix, Rewrite, Tone. Each writes its answer straight into the
   field, with a progress line above the suggestion bar while the model is
-  thinking and an undo button beside the candidates until the next keystroke
+  thinking and an undo button beside the candidates. **The undo survives typing**,
+  which it did not use to: `RevertibleEdit.rebased(onto:)` and `.spanUndo(behind:)`
+  locate what the edit wrote *inside* the document and put back exactly that span,
+  so a clause typed after a Fix is still there once the Fix is taken back. It
+  retires on three conditions, and only two of them are about safety: what it
+  wrote is gone, or what it wrote appears more than once and nothing can say which
+  occurrence this edit made. The third is `RevertibleEdit.charactersOfTypingAllowed`,
+  60 characters, roughly a line of a chat message — a stated guess rather than a
+  measurement, and its own comment says it is the suggestion bar buying back the
+  ~52pt that the undo control costs its three candidate slots, not a safety bound.
+  Reply answers the message you copied — `Prompts.reply(for:)` reads `message` and
+  `language` and nothing else, so it always needed the *text* of the message
+  rather than a picture of it, and the CopyClip ledger already had one. Three of
+  `ScreenContext`'s five fields come back empty from a clip and are deliberately
+  left empty: inventing a sender would put a stranger's name into the prompt and,
+  in Hebrew, into the grammatical gender the reply is written in. The
+  screen-capture source is behind `FeatureFlags.screenCaptureReply` and off
 - Dictation driven by a real recording, with the words appearing in the field as
   they are spoken rather than all at once at the end. The live words come from
   Apple's own on-device dictation model, free and offline; the cloud transcript
@@ -91,17 +128,65 @@ xcrun swift-format --in-place --recursive \
   one — see below
 - Screen-context strip: the capture indicator, the message that was read, and
   one-tap Reply; it also carries "paused" and "stopped unexpectedly, restart it
-  in aBitBetterKeyboard"
+  in aBitBetterKeyboard". Written and unit-tested, and unreachable in v1 while
+  `FeatureFlags.screenCaptureReply` is false, because nothing can raise the
+  session it renders
 
 **Companion app**
-- Six-step onboarding ending in a working keyboard
+- **Onboarding is three screens, down from ten** (NIT-15): welcome, add the
+  keyboard, type a sentence. Five more sit behind a "Show me more" button on the
+  last of those three — palette, languages, microphone, and the other two
+  practice stages — because every screen in front of a first useful keystroke is
+  a place people leave, and none of those five gated anything. The old standalone
+  switch step was *merged into* add-keyboard rather than demoted, so
+  `hasAcknowledgedKeyboardSwitch` is still collected on the required path: the
+  merged step's primary button is still the globe-key confirmation.
+  `OnboardingStep.required` and `.extras` hold the ordering, so the two lengths
+  cannot disagree with a hand-written tab tag the way `switchStep = 4` once did
+- **There is no Full Access ask anywhere in onboarding.** It is a status row plus
+  one consequence line on the add-keyboard step, the same note beside the
+  language picker, and the ask itself on Home's setup card, where it is next to
+  the thing it buys
 - Home with session state, setup checklist and playground. There is no stat row;
   it read "1,284 words fixed" and "37m time saved", both invented constants, and
   neither is measurable today
+- Keys: the layout editor. Drag keys between rows, three height bands, a number
+  row, one-handed reach, five presets, and a canvas that is the live
+  `KeyboardView` rather than a preview of it. **The Grouped keys picker that sat
+  under it is gone, and only the control went.** It printed the measured top-1
+  rate beside each `GroupedKeys.Level`, out of `Bar/grouped/results.json` — the
+  note left in `KeysView.swift` quotes "the right word is chosen 91% of the time
+  in English", and which row of that file the figure came from is not re-derived
+  here. The number being honest is the problem: a buyer reads it as "the wrong
+  word one time in ten", which is a research result wearing a product's clothes.
+  `GroupedKeys`, `GroupedDecoder`, `GroupedLexiconResource`,
+  `KeyboardController+Grouped` and all of `Bar/grouped/` stay, because the decoder
+  is the substrate glide typing would reuse (NIT-17, NIT-161), and
+  `SharedStore.groupedLevel` already defaulted to `.off`, so removing the only
+  control leaves every install on the shipped default rather than stranding
+  anyone on a level they cannot leave
 - Screen Context: Apple's broadcast picker, the capture process's own counters,
   a sample conversation to try it without starting anything, what it does and
-  does not do
-- Languages, personal dictionary, settings, paywall
+  does not do. **Written, and unreachable in v1.** `HomeScreenContextCard` is the
+  only surface in the app that can start a broadcast, so it is what the flag
+  turns off: `HomeView` draws it only while `FeatureFlags.screenCaptureReply` is
+  true, and `AppSearch` withholds the row that lands on the screen
+- **The scripted sample is unreachable too, and not because it was gated.**
+  `ScreenContextSession.start()` — the fake conversation, `source == .scripted` —
+  has no call site outside `AIKeyboardCoreTests`: the button that played it is
+  gone, and `SharedStore.screenContextAllowed`, its only other way in, has no
+  control in the app that writes it and is false on every install. The type is
+  now a test fixture, kept rather than deleted. The reason it went is worth
+  recording: v1 Reply reads the pasteboard rather than the screen, so a sample
+  acting out "Reply reads the conversation on your screen" would demonstrate a
+  capability this build does not have
+- Languages, personal dictionary, settings
+- **The paywall is written and unreachable in v1**, behind
+  `AppFeatureFlags.subscriptionPaywall == false` (`AIKeyboard/Main/AppFeatureFlags.swift`).
+  `SubscriptionView` is intact and untouched: it says "MOCK PAYWALL" on itself,
+  its CTA toggles `SharedStore.isSubscribed` instead of charging anything, the
+  two prices are invented, and nothing in the build is gated on that flag. NIT-20
+  (real StoreKit and a pricing model) is the named condition for flipping it
 
 ## Design decisions worth arguing with
 
@@ -126,10 +211,17 @@ first version of any of this turned `I` into `idea`, which is exactly how
 autocorrect earns its reputation.
 
 **AI actions are small and reversible, never a chat box.** Fix and Rewrite write
-into the field, with one keystroke of undo in the suggestion bar. Nothing is
+into the field, with one tap of undo in the suggestion bar. Nothing is
 applied silently.
 
-**Reply explains itself when it cannot run.** Tapping it
+**Reply explains itself when it cannot run.** *This paragraph describes the
+screen-capture path, which is behind `FeatureFlags.screenCaptureReply` and off in
+v1; it stays because the flag is a hold, not a teardown. What a v1 user sees when
+Reply has nothing to work with is a refusal that names the fix rather than the
+feature. With nothing copied: "Copy the message you want to answer, then let it in
+with CopyClip's Paste." With a copy the keyboard has not been allowed to read:
+"Tap Paste in CopyClip, then tap Reply and it answers what you copied", and that
+one draws the button that opens the panel.* Tapping it
 without a capture session says what screen context is and, when a broadcast
 started now could actually get somewhere, hosts Apple's own picker so it can be
 started from the keyboard. `RPSystemBroadcastPickerView` is a plain `UIView` that
@@ -169,6 +261,14 @@ an extension can launch its containing app — `UIApplication` is unavailable
 there and the responder-chain `openURL` workaround is explicitly disallowed — so
 when no session is running the keyboard says so and says where to go, rather
 than spinning. This is still the part most likely to break on an iOS update.
+
+*Everything from here down to "Full Access is optional in English" describes the
+ReplayKit capture path, which is behind `FeatureFlags.screenCaptureReply` and not
+in v1. It stays because the flag is a hold rather than a teardown, and because
+every measurement in it was taken and still stands. None of it is reachable in a
+shipping build today, including the picker the app and the keyboard host, and
+including the reading half, which has nothing to read once no frames arrive.
+`.claude/docs/screen-capture-v1-hold.md` has the decision.*
 
 **Screen context is a session, not a permission.** Apple's persistent-capture
 entitlement is meant for remote-desktop apps, so "allow once, works forever" is
@@ -265,11 +365,19 @@ Access. Two things follow. iOS only lets a keyboard extension reach a shared
 container once Full Access is granted, so without it the keyboard falls back to
 shipped defaults instead of the settings the user chose in the app — including
 the language list, which leaves a French-only user on an English/Hebrew keyboard
-with no way to change it from inside one. The app says that in both places it
-matters: `SetupState.worksWithoutFullAccess` on the Full Access step, and
-`SetupState.languagesNeedFullAccess` beside the language picker itself, in
-onboarding and in the Languages tab, withheld once Full Access is confirmed. And
-for the audience this keyboard is built for, "optional" is the wrong word.
+with no way to change it from inside one. The app says that in the places it
+matters, and the places changed when onboarding lost its Full Access step.
+`SetupState.worksWithoutFullAccess` went with that step and no longer exists. On
+the required path the sentence is now `fullAccessConsequence` on the add-keyboard
+step, one line under a status row, and it is read off `enabledLanguages` rather
+than said the same way to everyone: with Hebrew enabled it says Hebrew needs Full
+Access because Apple's on-device model does not speak it, and otherwise it says
+Full Access is what reaches the network at all. Beside the language picker it is
+still `SetupState.languagesNeedFullAccess`, in onboarding's optional Languages
+step and in the Languages tab, withheld once Full Access is confirmed, and
+mirrored by the layout editor and the personal dictionary, which have the same
+problem for the same reason. And for the audience this keyboard is built for,
+"optional" is the wrong word.
 
 **Full Access is not sufficient either, and the app has to say so.** It buys the
 network; it does not buy something that will answer. A backend is deployed and
@@ -283,13 +391,15 @@ filled by `AppAttestation`, not typed in. So a fresh install is "not finished" r
 and the question every surface asks is `BackendTransport.isReady()` — *would a
 call be accepted* — not `configured() != nil`, which is true from the first launch
 and would credit a keyboard that 401s on every action. Every surface that depends
-on it reads that same measurement: Home's Full
-Access row and onboarding's "What it turns on" both go through
-`SetupState.cloudConfigured` instead of claiming cloud rewrites work, the four
+on it reads that same measurement: `SetupState.fullAccessDetail` branches on
+`cloudConfigured` rather than claiming cloud rewrites work, and it is what both
+Home's Full Access row and the add-keyboard step's status row print (onboarding's
+"What it turns on" list went with the Full Access step it lived on), the four
 failures that dead-end on it (`unsupportedLanguage`, `cloudNotConfigured`,
 `deviceNotSupported`, `ScreenContextEndReason.notConfigured`) all print that one
 path, and the keyboard's Reply panel withholds the broadcast picker rather than
-starting a screen recording iOS ends inside a second.
+starting a screen recording iOS ends inside a second — moot in v1, where
+`FeatureFlags.screenCaptureReply` withholds that picker unconditionally.
 
 ## The mocks, and what replaces them
 
@@ -298,7 +408,7 @@ starting a screen recording iOS ends inside a second.
 | ~~`MockSuggestionEngine`~~ — now `SuggestionEngine` | **Done, and measured: 75/76 on `Bar/typing/corpus.json`, up from 47/76**, plus **90 of 107 misspellings corrected on `Bar/typing/typos/`, up from 61, with all 21 of its controls intact**. Those two are the engine with every rule allowed to fire (`AUTOCORRECT_LEVEL=full`). What ships is `AutocorrectLevel.shippedDefault`, a confidence floor that reads 73/76 and 85 of 107 and cuts the wrong-word column from 10 to 3; the per-rule prices and the probe behind them are in `AutocorrectConfidence.swift`. Correction used to be one edit deep everywhere — a 353-word neighbour list and Apple's own unranked guesses — so a hand that landed one key over could not be repaired at all: `דוגמטןת` for `דוגמאות` ("examples") drew a single offer, `דוגמטית`, a word that appears nowhere in 50,000 words of real Hebrew. `TypoChannel` prices a slip by what kind of slip it is (an adjacent key, a transposition, a Hebrew final form, a dropped mater lectionis, a homophone letter) rather than counting edits, and `TypoLexicon` ranks the candidates against a frequency list with a Zipfian prior, so two *explainable* mistakes stay in reach and two unrelated ones do not. That list is also the second dictionary the commit decision never had: Apple's Hebrew checker calls `תדוה` and `שלמו` perfectly good words, and 300,000 sentences of real Hebrew have never seen either (it read 73/76 until `score.py` was made to measure the commit column it had been printing the offered column into; the same engine scores 71/76 under the honest one). That corpus — 90 frozen moments mid-typing — had existed for a while with nothing running the engine against it, so every judgement about the suggestion bar was somebody's opinion until `Bar/typing/harness/` was written. Completions, spelling guesses and autocorrect come from `UITextChecker` (the public on-device API a third-party keyboard can call — *not*, as this row used to claim, "the engine the system keyboard's autocorrect draws on", which Apple documents nowhere), ranked against a bundled frequency prior, what the user's own typing has taught the keyboard, and the sentence in front of the cursor. The prior is what the checker has never had: `helo` used to complete to `helot` and `helots`, both real words, and never to `hello`. **Hebrew works here**, unlike Foundation Models, `SpeechTranscriber` and Vision's text recogniser: `UITextChecker.availableLanguages` lists `he_IL` among 42, and `אנ` completes to `אני`. Its Hebrew is weaker than that sounds and the gaps are handled rather than described: `שלומ` ("hello" with a plain mem) has twelve real completions, so the spelling-guess path never runs and the bar used to commit "who are studying" — corrected by orthography, not lookup. Hebrew also glues ה ב ל מ ו ש כ to the front of the next word, so `לעבודה` is one token no dictionary lists; `HebrewMorphology` takes it apart, which is what makes `לעבו` reach `לעבודה` instead of two unrelated verbs. And `akuo` typed on the wrong plane now offers `שלום`, which no keyboard on iOS does. What is *not* claimed: predicting the next word is QuickType's job and Apple ships no public API for it, so `nextWordSuggestions` is a bigram table plus what this user actually writes, and is disclosed as that rather than as a model. The optional async tier (`PredictiveRefiner`) can improve slots 1 and 2 on a typing pause and can never change slot 0 or what the space bar commits; its mechanism is unit-tested and the **quality of its answers is not yet measured**, because the corpus has no pauses in it. |
 | ~~`MockAI`~~ — now `RoutedIntelligence` | **Done.** Apple Foundation Models on device for the languages it lists, a cloud LLM behind it for the rest. Hebrew is not one of Apple's supported languages, so it needs the cloud path. The cloud provider sits behind a protocol; a shipped app cannot hold cloud credentials, so it must point at your own backend. The direct-to-Vertex client used to score `Bar/ai-text/` lives in the harness and is deliberately not in the app target. |
 | ~~`MockDictation`~~ — now `DictationService` + `CloudDictation` | **Done, and the shape was forced rather than chosen.** The keyboard genuinely cannot record: Apple's guidance lists, verbatim, *"No access to microphone and speaker"* under the standard sandbox, open access adds Location, Contacts, a shared container, server-side processing and iCloud while naming the microphone nowhere, and a keyboard that tries anyway gets `AVAudioSession` error 561145187, `cannotStartRecording`. So the microphone lives in the companion app and the transcript crosses the App Group — the architecture screen context already uses, and the one [Wispr Flow ships on iOS](https://docs.wisprflow.ai/articles/7453988911-set-up-the-flow-keyboard-on-iphone) as a "Flow Session". The same error code forces the session model: an app cannot *begin* recording from the background, but an active session survives an app switch under the `audio` background mode. Nothing in an extension can launch its own app, so with no session running the keyboard explains rather than spins. **Transcription is cloud-only and that is measured, not conceded**: `SpeechTranscriber` lists 30 locales and no Hebrew, and legacy `SFSpeechRecognizer` lists `he-IL` with `supportsOnDeviceRecognition == false`, so there is no on-device path for the language this product is for. Scored on `Bar/dictation/`'s 36 clips: word error rate 10.7% Hebrew, 8.5% English, 23.5% code-switched, 14.2% overall, 38/60 named entities, 25/36 of the English words inside Hebrew sentences kept in Latin letters. Across 29 more languages in `Bar/dictation/multilingual/`: 29/29 came back in the right writing system. **The model cannot be trusted to say it heard nothing** — four seconds of silence come back as a fluent invented sentence — so `SpeechGate` decides that on the device, by arithmetic, before anything is uploaded. `Scripts/prove-dictation.sh` proves the cross-process half; nothing has yet proved a microphone opens on a real phone. |
-| `MockScreenContext` | **Reading a frame is done and measured** — `RoutedScreenReader`, scored against `Bar/screen-context/`. **Getting** one is not. ScreenCaptureKit is `iOS 27.0+` and absent from the iOS 26.2 SDK this project compiles against. The ReplayKit route is built except for the read: the app hosts `RPSystemBroadcastPickerView` so a user can start a broadcast, `AIKeyboardBroadcast` fingerprints every sampled frame and publishes a `CaptureStatus` page, and `ScreenContextSession` consumes that page — the strip and the app screen render no session, starting, watching, a reading, paused and stopped-unexpectedly from it, and Reply raises `intent.readNow` and waits for a reading the freshness gate accepts. The read is there too: a tap makes `AIKeyboardBroadcast` encode one frame and call `CloudScreenReader` on its own serial queue, then publish the text with the identity of the frame it read. **And none of it has ever run**: the iOS Simulator ships no `replayd`, so no broadcast session starts here and `SampleHandler` has never been called. The scripted sample stays behind a button on the Screen Context screen, labelled as a sample, and yields to a real session the moment one appears. `ScreenContextSession.submit(_:appName:appIcon:)` is the in-app seam. |
+| `MockScreenContext` | **Reading a frame is done and measured** — `RoutedScreenReader`, scored against `Bar/screen-context/`. **Getting** one is not. ScreenCaptureKit is `iOS 27.0+` and absent from the iOS 26.2 SDK this project compiles against. The ReplayKit route is built except for the read: the app hosts `RPSystemBroadcastPickerView` so a user can start a broadcast, `AIKeyboardBroadcast` fingerprints every sampled frame and publishes a `CaptureStatus` page, and `ScreenContextSession` consumes that page — the strip and the app screen render no session, starting, watching, a reading, paused and stopped-unexpectedly from it, and Reply raises `intent.readNow` and waits for a reading the freshness gate accepts. The read is there too: a tap makes `AIKeyboardBroadcast` encode one frame and call `CloudScreenReader` on its own serial queue, then publish the text with the identity of the frame it read. **And none of it has ever run**: the iOS Simulator ships no `replayd`, so no broadcast session starts here and `SampleHandler` has never been called. `ScreenContextSession.submit(_:appName:appIcon:)` is the in-app seam. **And as of 2026-08-18 none of this is in v1**: `FeatureFlags.screenCaptureReply` is `false`, so the picker, the Home card and the route to the Screen Context screen are all gated off, Reply is sourced from the pasteboard instead, and the 3,792 lines of transport stay in the tree with a named condition for coming back. The scripted sample used to sit behind a button on the Screen Context screen, labelled as a sample, yielding to a real session the moment one appeared; **that button is gone and nothing replaced it**. `ScreenContextSession.start()` has no call site outside `AIKeyboardCoreTests` and `SharedStore.screenContextAllowed` has no control that writes it, so `MockScreenContext` is now a test fixture rather than a demo — which is the right outcome while Reply answers the clipboard, since a sample acting out "Reply reads your screen" would be showing a capability this build does not have. `.claude/docs/screen-capture-v1-hold.md`. |
 | ~~`SharedStore`~~ | **Done.** Both targets carry the App Group entitlement and share one suite. |
 | `MockTextTarget` | `UITextDocumentProxy`, already wired via `ProxyTextTarget` |
 
@@ -328,6 +438,36 @@ prove is that the producing process is the broadcast extension. There is no
 `replayd` here, so the producer in that run is the app driving the same writer
 over synthetic frames, and ReplayKit's half is untested on any hardware.
 
+## What the app counts
+
+**Six events, in the companion app only, and the boundary is structural rather
+than promised.** `AIKeyboardExtension` and `AIKeyboardBroadcast` emit zero events,
+forever, independent of Full Access, subscription state or any feature shipped
+later. `Analytics` lives in the app target, not in `AIKeyboardCore` or
+`AIKeyboardShared`, so a keyboard-side call site would have to import a module the
+extension does not have and cannot get: "please don't" is a compiler error here.
+The install identifier is locally generated, resettable, never IDFA, and is kept
+in the app's own `UserDefaults.standard` rather than the App Group, where the
+keyboard structurally cannot reach it.
+
+The six are `onboarding_step_advanced`, `onboarding_completed`,
+`full_access_confirmed`, `keyboard_added_confirmed`, `app_session_started` and
+`screen_context_session_started`. **No event carries anything typed, corrected,
+dictated or read off a screen** — `AnalyticsEvent` has no `case custom(String,
+[String: Any])` and every associated value is an `Int`, a `Bool` or a closed enum,
+so there is no slot a message could go in and adding one is a visible edit to that
+file. The sixth event is dormant while `FeatureFlags.screenCaptureReply` is false,
+because nothing in the build can raise a real capture session; it is kept rather
+than deleted, since the flag is a hold on shipping and not a decision to stop
+measuring.
+
+Two of the five questions this was built to answer are given up rather than
+approximated: which AI action people actually use, and whether the *keyboard*
+keeps getting used, both of which live inside the extension. `app_session_started`
+is companion-app retention and must never be reported as keyboard retention.
+`.claude/docs/analytics-policy.md` is the decision, including the never-list and
+why no third-party SDK is used.
+
 ## Testing
 
 `AIKeyboardUITests` drives the app by accessibility identifier and writes a PNG
@@ -356,7 +496,9 @@ the `Scripts/prove-*.sh` scripts rather than judged by their own assertions; see
 
 - Anything about ReplayKit that a device would settle: that frames arrive, in
   what pixel format and size, whether the extension fits its ~50 MB cap, and
-  whether the picker's button works from inside a keyboard extension
+  whether the picker's button works from inside a keyboard extension (NIT-6,
+  NIT-12, NIT-13, NIT-14). That is why the path is flagged off rather than
+  shipped, and NIT-6 plus NIT-12 are the two that flip the flag back
 - The keyboard extension runs in a real text field — `Scripts/prove-app-group.sh`
   drives it — but only far enough to prove it reads shared settings; the panels
   are still exercised through the in-app playground

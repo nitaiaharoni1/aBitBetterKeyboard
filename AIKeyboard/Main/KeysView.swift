@@ -6,10 +6,9 @@ struct KeysView: View {
     @EnvironmentObject private var search: AppSearch
     @Environment(\.scenePhase) private var scenePhase
 
-    /// **Nothing on this screen survives without Full Access.** Layout,
-    /// Grouped keys and the number-row toggle all go through
-    /// `SharedStore.keyboardLayout` / `storedGroupedLevel`; the palette in
-    /// `lookSection` is `storedBrandPalette`; both feedback switches in
+    /// **Nothing on this screen survives without Full Access.** Layout and the
+    /// number-row toggle both go through `SharedStore.keyboardLayout`; the
+    /// palette in `lookSection` is `storedBrandPalette`; both feedback switches in
     /// `feelSection` are `storedHaptics` / `storedKeySounds`. Every one of
     /// them is read across the App Group, so there is no row here to carve
     /// out as a survivor the way `accountSection` is on Settings. Re-read on
@@ -84,9 +83,19 @@ struct KeysView: View {
             ) {
                 LayoutView()
             }
-            Divider.themed
-            groupedKeysRow
-                .searchTarget(.groupedKeys)
+            // **The Grouped keys picker was here, and only the control went.**
+            // It offered every `GroupedKeys.Level` and printed the measured
+            // top-1 rate under the choice — "the right word is chosen 91% of the
+            // time in English", straight out of `Bar/grouped/results.json`. The
+            // number is honest and that is the problem: a buyer reads 91% as
+            // "the wrong word one time in ten", which is a research result
+            // wearing a product's clothes.
+            // `GroupedKeys`, `GroupedDecoder`, `GroupedLexiconResource`,
+            // `KeyboardController+Grouped` and the corpus all stay — the decoder
+            // is the substrate glide typing would reuse (NIT-17) — and
+            // `SharedStore.groupedLevel` already defaults to `.off`, so removing
+            // the only way to change it leaves every install on the shipped
+            // default rather than stranding anyone on a level they cannot leave.
             Divider.themed
             ToggleRow(
                 title: "Number row",
@@ -104,63 +113,6 @@ struct KeysView: View {
             return "Custom"
         }
         return preset.name
-    }
-
-    /// Wider keys, several letters each, and the keyboard works out the word.
-    ///
-    /// **The accuracy is on the row, next to the choice, because it is the whole
-    /// trade.** Every step up this dial makes the keys bigger and the guessing
-    /// worse, and a picker that only says "Three letters" hides the half that
-    /// costs something. The numbers are the top-1 rates measured in
-    /// `Bar/grouped/results.json` — what the space bar would insert — and they are
-    /// labelled as measured rather than promised.
-    @ViewBuilder private var groupedKeysRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: Theme.Space.sm) {
-                IconBadge(systemName: "rectangle.grid.1x2")
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Grouped keys")
-                        .font(Theme.Fonts.body)
-                        .foregroundStyle(Theme.Text.primary)
-                    Text("Bigger keys holding several letters. The keyboard picks the word.")
-                        .font(Theme.Fonts.caption)
-                        .foregroundStyle(Theme.Text.secondary)
-                }
-                Spacer(minLength: 0)
-                Picker("Grouped keys", selection: $store.groupedLevel) {
-                    ForEach(GroupedKeys.Level.allCases, id: \.self) { level in
-                        Text(level.title).tag(level)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-            }
-            if store.groupedLevel != .off {
-                let measured = store.groupedLevel.measuredAccuracy
-                let hebrewCapped = store.groupedLevel.rawValue > GroupedKeys.Level.hebrewCeiling.rawValue
-                Text(
-                    hebrewCapped
-                        ? "Measured: English \(measured.english)%. Hebrew stays at three letters "
-                            + "(\(GroupedKeys.Level.hebrewCeiling.measuredAccuracy.hebrew)%), because four "
-                            + "commits the wrong word about three times in ten. Tap a corner to pick "
-                            + "that letter. Hold a key to pick one letter exactly."
-                        : "Measured: the right word is chosen \(measured.english)% of the time in English, "
-                            + "\(measured.hebrew)% in Hebrew. Tap a corner to pick that letter. "
-                            + "Hold a key to pick one letter exactly."
-                )
-                .font(Theme.Fonts.caption)
-                .foregroundStyle(Theme.Text.secondary)
-                if !GroupedKeys.hasBundledLexicon(for: .english)
-                    || !GroupedKeys.hasBundledLexicon(for: .hebrew)
-                {
-                    Text(
-                        "This build has no full word list, so grouping only knows a few hundred common words."
-                    )
-                    .font(Theme.Fonts.caption)
-                    .foregroundStyle(Theme.Text.secondary)
-                }
-            }
-        }
     }
 
     /// Writes `showsNumberRow` and, if that moves the layout away from its

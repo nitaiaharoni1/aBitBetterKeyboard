@@ -167,24 +167,25 @@ extension KeyboardController {
             case .needsText: refuseForEmptyField(.rewrite)
             case .ignore: break
             }
-        // **Both of these end the undo window, and they are the only keys that do
-        // so without changing a character.** A selection-scoped revert deletes a
-        // count of units from where the caret is standing, so a caret that has
-        // moved since would take the wrong ones — see `revertEdit`, whose guard
-        // catches the case the host moves it and this catches the case we do.
+        // **Both of these end a hand repair, and they are the only keys that do so
+        // without changing a character**: it is a claim about the word under the
+        // caret, and the caret is what just moved.
         //
-        // They end a hand repair for the same reason: it is a claim about the
-        // word under the caret, and the caret is what just moved.
+        // **They used to end the undo window too, and no longer do.** That was
+        // right while a selection-scoped revert deleted a count of units from
+        // wherever the caret happened to be standing; `RevertibleEdit
+        // .spanUndo(behind:)` locates what the edit wrote before it deletes
+        // anything, so a caret moved off the span refuses on its own and a caret
+        // moved back over it undoes correctly. `refreshSuggestions` below asks
+        // that question either way.
         case .cursorLeft:
             Feedback.keyPress()
-            clearRevertibleEdit()
             deletedWordPrefix = nil
             pendingAutocorrectUndo = nil
             target?.adjustTextPosition(byCharacterOffset: -1)
             refreshSuggestions()
         case .cursorRight:
             Feedback.keyPress()
-            clearRevertibleEdit()
             deletedWordPrefix = nil
             pendingAutocorrectUndo = nil
             target?.adjustTextPosition(byCharacterOffset: 1)
@@ -349,11 +350,13 @@ extension KeyboardController {
         // same keystroke, because fixing a typo before accepting a rewrite is
         // ordinary, so this cannot be `clearBannerState()`.
         block = nil
-        // The way back to what Fix or Rewrite replaced lasts until the next
-        // keystroke, which is this one: past it the field is no longer the field
-        // that answer was written into, and putting the old text back would take
-        // the new characters with it.
-        clearRevertibleEdit()
+        // **The way back to what Fix or Rewrite replaced survives this keystroke**,
+        // which it did not until NIT-154: it used to be cleared here, on the
+        // argument that putting the old text back would take the new characters
+        // with it. That was true of a revert that replaced the whole field and is
+        // no longer true of one that finds its own span
+        // (`RevertibleEdit.rebased(onto:)`), so the retirement moved to
+        // `expireRevertibleEditIfUnusable`, which `refreshSuggestions` asks below.
         pendingAutocorrectUndo = nil
         // **A cap never types a line break.** The only newline any cap carries is
         // the one a banded grouped cap uses to say where its second row of letters
@@ -429,7 +432,10 @@ extension KeyboardController {
 
     func insertSpace() {
         Feedback.keyPress()
-        clearRevertibleEdit()
+        // **The way back survives a space**, which is most of what NIT-154 asked
+        // for: a wrong word is noticed in the sentence it landed in, and a space
+        // is what finishes the word after it. `refreshSuggestions` at the end of
+        // this retires it if the correction has been typed over since.
         // The word is finished, so the strokes that built it stop describing
         // anything under the cursor. Everything below — including committing the
         // bold suggestion — then runs exactly as it does with grouping off, on the
@@ -507,7 +513,9 @@ extension KeyboardController {
         // Deleting can empty the field as easily as typing can fill it, so the
         // refusal has to be re-earned either way rather than left standing.
         block = nil
-        clearRevertibleEdit()
+        // A delete that eats into what the last action wrote is what retires the
+        // way back, and `refreshSuggestions` at the end of this notices. A delete
+        // somewhere else leaves it standing.
         // Backspace takes back a whole key press while a grouped word is open,
         // because the letters on screen were never typed one at a time: removing
         // one leaves a word the remaining keystrokes cannot produce, and the next
@@ -589,7 +597,6 @@ extension KeyboardController {
 
         Feedback.keyPress()
         block = nil
-        clearRevertibleEdit()
         if grouped.isTyping {
             endGroupedWord()
             replaceCurrentWord(with: "")
@@ -680,7 +687,6 @@ extension KeyboardController {
 
     public func insertEmoji(_ emoji: String) {
         Feedback.keyPress()
-        clearRevertibleEdit()
         // Picked from the grid rather than pressed as a `KeyCap`, so this is the
         // one insertion `press(_:)` never speaks for. It still put text in.
         Feedback.keyClick(.tock)

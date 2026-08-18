@@ -11,10 +11,11 @@ const stripIcons = {
   bookmark: (
     <path d="M8.75 3h6.5A1.75 1.75 0 0 1 17 4.75V21l-5-3.75L7 21V4.75A1.75 1.75 0 0 1 8.75 3z" />
   ),
-  layout: (
+  globe: (
     <>
-      <rect x="4" y="5" width="16" height="14" rx="3" />
-      <path d="M7.6 9.4h1.8M11.1 9.4h1.8M14.6 9.4h1.8M7.6 12.4h1.8M11.1 12.4h1.8M14.6 12.4h1.8M9.2 15.4h5.6" />
+      <circle cx="12" cy="12" r="8.25" />
+      <path d="M3.9 12h16.2" />
+      <path d="M12 3.75c2 2.3 3 5 3 8.25s-1 5.95-3 8.25c-2-2.3-3-5-3-8.25s1-5.95 3-8.25z" />
     </>
   ),
 } as const;
@@ -23,11 +24,19 @@ type StripIcon = keyof typeof stripIcons;
 
 const waveHeights = [6, 11, 8, 14, 9, 16, 11, 7, 13, 9, 12, 6];
 
+// Three rows of a keyboard being rearranged: one band taller than the others,
+// and one key lifted out of place.
+const layoutRows: { count: number; tall?: boolean; on?: number }[] = [
+  { count: 9 },
+  { count: 8, tall: true },
+  { count: 5, on: 3 },
+];
+
 export default function Features({ t }: { t: Copy }) {
   const supporting: { icon: StripIcon; title: string; body: string }[] = [
-    { icon: "check", title: t.grammarTitle, body: t.grammarBody },
+    { icon: "check", title: t.fixTitle, body: t.fixBody },
     { icon: "bookmark", title: t.dictionaryTitle, body: t.dictionaryBody },
-    { icon: "layout", title: t.layoutsTitle, body: t.layoutsBody },
+    { icon: "globe", title: t.switchTitle, body: t.switchBody },
   ];
 
   return (
@@ -44,26 +53,35 @@ export default function Features({ t }: { t: Copy }) {
       </div>
       <div className={styles.core}>
         <article className={styles.mainCard}>
-          <div className={styles.chatMock} aria-hidden="true">
-            <p className={styles.chatIn}>{t.sceneIn}</p>
-            <p className={styles.chatChip}>{t.screenChip}</p>
-            <p className={styles.chatOut}>{t.sceneOut}</p>
+          <div className={styles.chatMock} dir="rtl" lang="he" aria-hidden="true">
+            <p className={styles.chatIn}>{t.hebrewTyped}</p>
+            <p className={styles.chatChip}>{t.hebrewChip}</p>
+            <p className={styles.chatOut}>{t.hebrewSent}</p>
           </div>
-          <h3 className={styles.cardTitle}>{t.screenTitle}</h3>
-          <p className={styles.cardBody}>{t.screenBody}</p>
+          <h3 className={styles.cardTitle}>{t.hebrewTitle}</h3>
+          <p className={styles.cardBody}>{t.hebrewBody}</p>
         </article>
         <article className={styles.sideCard}>
-          <div className={styles.toneMock} aria-hidden="true">
-            <span className={styles.toneWord}>{t.casual}</span>
-            <span className={styles.toneTrack}>
-              <span className={styles.toneKnob} />
-            </span>
-            <span className={`${styles.toneWord} ${styles.toneOn}`}>
-              {t.professional}
-            </span>
+          <div className={styles.layoutMock} aria-hidden="true">
+            {layoutRows.map((row, rowIndex) => (
+              <span key={rowIndex} className={styles.layoutRow}>
+                {Array.from({ length: row.count }).map((_, keyIndex) => (
+                  <span
+                    key={keyIndex}
+                    className={[
+                      styles.layoutKey,
+                      row.tall ? styles.layoutKeyTall : "",
+                      row.on === keyIndex ? styles.layoutKeyOn : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  />
+                ))}
+              </span>
+            ))}
           </div>
-          <h3 className={styles.cardTitle}>{t.rewriteTitle}</h3>
-          <p className={styles.cardBody}>{t.rewriteBody}</p>
+          <h3 className={styles.cardTitle}>{t.layoutsTitle}</h3>
+          <p className={styles.cardBody}>{t.layoutsBody}</p>
         </article>
         <article className={styles.sideCard}>
           <div className={styles.waveMock} aria-hidden="true">

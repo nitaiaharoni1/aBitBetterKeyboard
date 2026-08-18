@@ -48,6 +48,50 @@ disappears on the way into Swift with no error anywhere. (An earlier version of
 this paragraph priced it at "7 points". That number was retired — see
 `CloudField.items` — the drop is silent either way, which is reason enough.)
 
+## The analytics endpoint
+
+`POST /v1/event` is the fourth endpoint and the odd one out: its client is
+`AIKeyboard/Analytics/Analytics.swift` rather than `CloudTransport.swift`, it
+never touches Vertex, and it is **unauthenticated on purpose**. App Attest gates
+the three routes above because each of them spends money per call; a counter has
+no cost and no abuse profile worth a Secure Enclave round trip, and gating it
+would make the app's own setup funnel unmeasurable on exactly the installs where
+attestation is what failed. It still runs inside the per-caller rate limiter and
+takes a 4 KB body cap, three orders of magnitude below the model routes'.
+
+The body is flat JSON: the envelope `Analytics.envelope` builds — `event`,
+`install_id`, `app_version`, `os_version`, `sent_at` — plus that event's own
+properties.
+
+| | |
+|---|---|
+| 200 | `{"recorded": true}` |
+| 400 | `{"error": "<what was expected>"}`, never quoting what the caller sent |
+| 413 | body over 4 KB |
+| 429 | the same per-caller limiter the other routes use, with `retry-after` |
+
+**`src/eventHandler.js` is the never-list made checkable.** The policy
+(`.claude/docs/analytics-policy.md`, sections 2 and 3) promises that no event
+carries anything typed, corrected, dictated or read off a screen. The client keeps
+that promise with a closed enum; this service keeps it with two tables — the six
+event names with their exact property keys, and the envelope, whose four values
+are matched against *patterns* rather than merely typed as strings, because "it is
+a string" is the check that lets a sentence through. An install id that is not a
+UUID, an app version that is not `0.1 (46)`, a timestamp that is not an instant:
+all 400. Unknown event names and unknown property keys are 400. What is stored is
+rebuilt key by key from those tables rather than being the body that arrived.
+
+**The sink is the log, and its limits are real.** This service has no datastore
+and adding one would be the first runtime dependency of a project whose stated
+property is that it has none, so an accepted event is one structured line on
+stdout (`{"analytics": {...}}`), which Cloud Run delivers to Cloud Logging as a
+queryable `jsonPayload`. That means: retention is whatever the log bucket keeps
+(30 days by default), counting means a log-based metric or a BigQuery sink rather
+than a query, there is no dedupe (`Analytics.send` never retries, which is now
+load-bearing on this side too), and a dropped log line is a lost event with
+nothing to reconcile against. Good enough for a setup funnel; anything needing
+joins over months needs a real sink, which is a new decision.
+
 ## Error mapping
 
 The client (`BackendTransport.mapped`) already knows how to read exactly
@@ -64,10 +108,11 @@ failure:
 | 5xx | Vertex, or this service, is unavailable |
 | anything else | `{"error": "<message>"}`, surfaced to the user verbatim |
 
-`GET /healthz` is the one endpoint outside this table: 200 `text/plain`, no
+`GET /healthz` is outside this table: 200 `text/plain`, no
 gate, because Cloud Run's own probes carry no bearer token. It answers that way
 locally and 404s on the deployment, which is Google's frontend and not this
-service — see "Known gaps".
+service — see "Known gaps". `POST /v1/event` is outside it too, and has its own
+table above.
 
 A 200 response to any of the three is either `{"fields": {...}}` or `{"refused": true}`. The
 second is for a decline that isn't a safety verdict — Vertex's `RECITATION`

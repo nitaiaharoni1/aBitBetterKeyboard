@@ -190,8 +190,9 @@ extension KeyboardController {
     /// arriving whole — so it is recorded in the same slot and undone by the same
     /// code. `.spanAtCursor` because an insert replaced nothing; `previous` is
     /// empty for the same reason. `CopyClipControlRow` draws the undo while the
-    /// panel is up, `SuggestionBar` draws it once the letters are back, and the
-    /// next keystroke clears it either way.
+    /// panel is up, `SuggestionBar` draws it once the letters are back, and
+    /// `expireRevertibleEditIfUnusable` retires it either way, once the clip is no
+    /// longer standing where it landed.
     ///
     /// Set *after* the insertion, not before, for the reason `applyDirectly` sets
     /// it after `replaceTargetText`: `refreshSuggestions` drops a way back that is
@@ -227,6 +228,10 @@ extension KeyboardController {
         clips = next
         lastChangeCount = nextCount
         store.copyclipRecord = CopyclipRecord(clips: next, lastChangeCount: nextCount)
+        // The ledger is one of Reply's two sources, so a clip arriving can settle
+        // a refusal the user is still looking at. See
+        // `dropStaleReplyClipboardRefusal`.
+        dropStaleReplyClipboardRefusal()
         if overlay == .copyclipSearch {
             setCopyclipQuery(copyclipQuery)
         }

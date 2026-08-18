@@ -158,6 +158,7 @@ enum AppSearchSettingsPush: String, Identifiable {
 /// Search scrolls to it rather than pushing.
 enum AppSearchRow: String, Hashable {
     case screenContext
+    case reply
     case dictation
     case autocorrect
     case completeOnPause
@@ -165,26 +166,26 @@ enum AppSearchRow: String, Hashable {
     case pauseLength
     case autocapitalise
     case predictions
-    case groupedKeys
     case numberRow
     case defaultTone
     case palette
     case haptics
     case keySounds
     case replayOnboarding
+    case privacy
     case mixing
 
     var tab: MainTab {
         switch self {
-        case .screenContext, .dictation:
+        case .screenContext, .reply, .dictation:
             return .home
         case .mixing:
             return .languages
-        case .groupedKeys, .numberRow, .palette, .haptics, .keySounds:
+        case .numberRow, .palette, .haptics, .keySounds:
             return .keys
         case .autocorrect, .completeOnPause, .spaceOnPause, .pauseLength,
             .autocapitalise, .predictions,
-            .defaultTone, .replayOnboarding:
+            .defaultTone, .replayOnboarding, .privacy:
             return .settings
         }
     }
@@ -240,16 +241,40 @@ struct AppSearchItem: Identifiable {
         screens + rows + languages
     }
 
+    /// **Search is the back door every gate on a screen has to cover too.** A row
+    /// taken off Home or Settings is still reachable while the catalogue points
+    /// at it, and it lands worse from here: the jump switches tab, scrolls, and
+    /// washes a row that is not on the screen. Two entries are gated rather than
+    /// deleted, so each comes back with its flag —
+    /// `FeatureFlags.screenCaptureReply` (NIT-6) for Screen Context, and
+    /// `AppFeatureFlags.subscriptionPaywall` (NIT-20) for the Pro screen.
     private static var screens: [AppSearchItem] {
         let items: [AppSearchItem] = [
             item(
-                "Home", "Setup, Screen Context, Dictation", icon: "house.fill",
+                // The subtitle lists what the Home card actually holds, so it
+                // loses Screen Context with the card rather than promising a
+                // second feature to anyone who searches for "home".
+                "Home",
+                FeatureFlags.screenCaptureReply
+                    ? "Setup, Screen Context, Dictation" : "Setup, Reply and Dictation",
+                icon: "house.fill",
                 keywords: ["setup", "full access", "add keyboard"],
                 .tab(.home)),
             item(
                 "Dictation", "Start a session to dictate from the keyboard", icon: "mic.fill",
                 keywords: ["microphone", "speech", "voice"],
                 .row(.dictation)),
+            // **"reply" used to match only the Screen Context entry**, which the
+            // gate above withholds, so searching the app for the feature by name
+            // found nothing at all. This is the same kind of entry as Dictation:
+            // a Home row with no screen of its own. `paste` and `clipboard` are
+            // keywords because the middle step is the one people will come
+            // looking for, and `copyclip` because that is what it is called on
+            // the keyboard.
+            item(
+                "Reply", "Answer the message you copied", icon: "arrowshape.turn.up.left",
+                keywords: ["answer", "copy", "copyclip", "clipboard", "paste", "message"],
+                .row(.reply)),
             item(
                 "Languages", "Which layouts the globe key cycles", icon: "globe",
                 keywords: ["languages", "globe"],
@@ -287,7 +312,13 @@ struct AppSearchItem: Identifiable {
                 keywords: ["upgrade", "paywall", "pro"],
                 .subscription)
         ]
-        return items
+        return items.filter { item in
+            switch item.destination {
+            case .row(.screenContext): return FeatureFlags.screenCaptureReply
+            case .subscription: return AppFeatureFlags.subscriptionPaywall
+            default: return true
+            }
+        }
     }
 
     private static var rows: [AppSearchItem] {
@@ -317,10 +348,6 @@ struct AppSearchItem: Identifiable {
                 keywords: ["suggestions"],
                 .row(.predictions)),
             item(
-                "Grouped keys", "Bigger keys holding several letters",
-                icon: "rectangle.grid.1x2",
-                .row(.groupedKeys)),
-            item(
                 "Number row", "Digits above the letters", icon: "textformat.123",
                 .row(.numberRow)),
             item(
@@ -345,6 +372,18 @@ struct AppSearchItem: Identifiable {
                 "Replay onboarding", "Walk through setup again",
                 icon: "arrow.counterclockwise",
                 .row(.replayOnboarding)),
+            // Findable by the words somebody worried about a keyboard would
+            // actually type, which are mostly not the words on the row: nobody
+            // searches "what we count", they search "privacy", "data" or
+            // "tracking". "Reset" and "anonymous" reach the row underneath it.
+            item(
+                "What we count", "What the app counts, and everything it never does",
+                icon: "hand.raised",
+                keywords: [
+                    "privacy", "analytics", "data", "tracking", "telemetry", "collect",
+                    "reset", "anonymous", "identifier"
+                ],
+                .row(.privacy)),
             item(
                 "Forget what it learned", "On Personal dictionary. Names you added stay.",
                 icon: "trash",
