@@ -144,20 +144,33 @@ final class AutocorrectLevelTests: XCTestCase {
 
     // MARK: The upgrade
 
-    /// **An install that had the old boolean keeps what it had.**
+    /// **An install that had the old boolean lands where a fresh install lands.**
     ///
-    /// `UserDefaults` reads a stored `Bool` back as the integer 1, which is
-    /// `.confident` — so a build that reused `Key.autocorrect` would move every
-    /// existing user onto a setting they never chose, silently, and onto
-    /// behaviour nobody has measured for them. Both directions are asserted
-    /// because only the `true` case can go wrong that way, and a fix that mapped
-    /// everything to `.full` would pass on it alone.
+    /// On, per `storedAutocorrectLevel`'s own reasoning, is one answer to a
+    /// question that now has three, so it is not information about which of the
+    /// three the user wants: they get `shippedDefault`, the same as somebody
+    /// installing today. Off is not ambiguous and stays off.
+    ///
+    /// **This assertion could once tell a decision from an accident and no longer
+    /// can, which is worth knowing before trusting it.** `UserDefaults` reads a
+    /// stored `Bool` back as the integer 1, so a build that reused
+    /// `Key.autocorrect` as a raw value would coerce true to `.confident` and
+    /// false to `.off`. While `shippedDefault` was `.full` those two paths gave
+    /// different answers and asserting `.full` caught the coercion. `shippedDefault`
+    /// is `.confident` now (`AutocorrectConfidence.swift`), whose raw value *is*
+    /// 1 — so the correct path and the coercion bug now agree on both inputs and
+    /// nothing asserted here can separate them. That is why this asserts
+    /// `shippedDefault` rather than the literal `.confident`: it tracks the
+    /// product decision instead of a number that currently coincides with a bug.
+    ///
+    /// `testTheNewKeyWinsOverTheOldOne` below is what still has teeth against the
+    /// key being reused, because it proves the new key is read at all.
     func testAnOldBooleanUpgradesToWhatItMeant() {
         let defaults = SharedStore.shared.userDefaults
         defaults.removeObject(forKey: SharedStore.Key.autocorrectLevel)
 
         defaults.set(true, forKey: SharedStore.Key.autocorrect)
-        XCTAssertEqual(SharedStore.shared.storedAutocorrectLevel, .full)
+        XCTAssertEqual(SharedStore.shared.storedAutocorrectLevel, .shippedDefault)
 
         defaults.set(false, forKey: SharedStore.Key.autocorrect)
         XCTAssertEqual(SharedStore.shared.storedAutocorrectLevel, .off)
@@ -166,8 +179,17 @@ final class AutocorrectLevelTests: XCTestCase {
     /// And a choice made since the upgrade wins over the value left behind.
     func testTheNewKeyWinsOverTheOldOne() {
         let defaults = SharedStore.shared.userDefaults
+        defer { defaults.removeObject(forKey: SharedStore.Key.autocorrectLevel) }
+
+        // **`.full`, not `.confident`, and that is the whole of what makes this
+        // test say anything.** It stored `.confident` until 2026-08-18, whose raw
+        // value is 1 — the same 1 a stored `Bool` coerces to — so a build that had
+        // dropped the new key entirely and read `Key.autocorrect` as a raw value
+        // would have passed it, on both inputs, while being exactly the defect the
+        // test is named after. `.full` is raw value 2, which no boolean can
+        // produce, so this now fails on that build and only on that build.
         defaults.set(true, forKey: SharedStore.Key.autocorrect)
-        defaults.set(AutocorrectLevel.confident.rawValue, forKey: SharedStore.Key.autocorrectLevel)
-        XCTAssertEqual(SharedStore.shared.storedAutocorrectLevel, .confident)
+        defaults.set(AutocorrectLevel.full.rawValue, forKey: SharedStore.Key.autocorrectLevel)
+        XCTAssertEqual(SharedStore.shared.storedAutocorrectLevel, .full)
     }
 }
