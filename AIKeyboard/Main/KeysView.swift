@@ -197,18 +197,8 @@ struct KeysView: View {
 
     private var feelSection: some View {
         section("Feel") {
-            // **Was undocumented, and it is exactly as affected as Key
-            // sounds below.** `Feedback.hapticsEnabled` reads
-            // `storedHaptics` at the press, the same cross-process read as
-            // `storedKeySounds` — so this row gets the same static subtitle
-            // Key sounds already carries, not a new dialect.
-            ToggleRow(
-                title: "Haptics",
-                subtitle: "Needs Full Access",
-                icon: "hand.tap",
-                isOn: $store.haptics
-            )
-            .searchTarget(.haptics)
+            hapticsRows
+                .searchTarget(.haptics)
             Divider.themed
             ToggleRow(
                 title: "Key sounds",
@@ -217,6 +207,62 @@ struct KeysView: View {
                 isOn: $store.keySounds
             )
             .searchTarget(.keySounds)
+        }
+    }
+
+    /// The switch and the strength dial, as one row.
+    ///
+    /// **Both are exactly as affected as Key sounds below.**
+    /// `Feedback.hapticsEnabled` reads `storedHaptics` and `Feedback.strength`
+    /// reads `storedHapticStrength`, both at the press, the same cross-process
+    /// read as `storedKeySounds` — so they get the same static subtitle Key
+    /// sounds already carries, not a new dialect.
+    ///
+    /// The dial is drawn only when the switch is on: greyed out it would still
+    /// be a row asking to be read, and a strength for a haptic nobody is
+    /// playing is a question with no answer.
+    @ViewBuilder private var hapticsRows: some View {
+        VStack(spacing: Theme.Space.sm) {
+            ToggleRow(
+                title: "Haptics",
+                subtitle: "Needs Full Access",
+                icon: "hand.tap",
+                isOn: $store.haptics
+            )
+            if store.haptics {
+                HStack(spacing: Theme.Space.sm) {
+                    IconBadge(systemName: "slider.horizontal.3")
+                    // 16 / 13 rather than a named role, because this row sits
+                    // directly under a `ToggleRow` in the same card and has to
+                    // line up with it. `Theme.Fonts.body` is 15 and would read
+                    // as a smaller row. Same reason `idleDelayRow` spells them.
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Strength")
+                            .font(.system(size: 16))
+                            .foregroundStyle(Theme.Text.primary)
+                        Text("How hard a key hits back")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.Text.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Picker("Strength", selection: $store.hapticStrength) {
+                        ForEach(HapticStrength.allCases, id: \.self) { level in
+                            Text(level.title).tag(level)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                }
+                // Plays the stop the user just picked, here in the app, because
+                // a strength you cannot feel until you next open the keyboard in
+                // another app is a choice made blind. `Feedback` reads the suite
+                // at the press, so this is the same impact the keyboard will
+                // play — the generator is only unbound from a view, which costs
+                // this one tap a little latency and nothing else.
+                .onChange(of: store.hapticStrength) { _, _ in
+                    Feedback.keyPress()
+                }
+            }
         }
     }
 

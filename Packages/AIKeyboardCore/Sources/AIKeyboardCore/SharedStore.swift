@@ -81,6 +81,7 @@ public final class SharedStore: ObservableObject {
         static let autocapitalise = "autocapitalise"
         static let predictions = "predictions"
         static let haptics = "haptics"
+        static let hapticStrength = "hapticStrength"
         static let keySounds = "keySounds"
         static let groupedLevel = "groupedLevel"
         static let defaultTone = "defaultTone"
@@ -424,6 +425,24 @@ public final class SharedStore: ObservableObject {
     public var storedKeySounds: Bool {
         if defaults.object(forKey: Key.keySounds) != nil { return defaults.bool(forKey: Key.keySounds) }
         return keySounds
+    }
+
+    /// How hard a press hits when haptics are on at all.
+    ///
+    /// A second setting rather than a fourth stop on the switch, so an install
+    /// that already has `haptics` off keeps it off with nothing to migrate, and
+    /// so turning haptics back on returns the strength the user last chose.
+    @Published public var hapticStrength: HapticStrength = .default {
+        didSet { defaults.set(hapticStrength.rawValue, forKey: Key.hapticStrength) }
+    }
+
+    /// Same cross-process rule as the pair above, and the same consequence: the
+    /// dial is in the app, every press it shapes happens in the keyboard, so a
+    /// read of the `@Published` copy keeps hitting at the old strength for as
+    /// long as iOS holds that extension instance.
+    public var storedHapticStrength: HapticStrength {
+        guard defaults.object(forKey: Key.hapticStrength) != nil else { return hapticStrength }
+        return HapticStrength(rawValue: defaults.integer(forKey: Key.hapticStrength)) ?? .default
     }
 
     // MARK: AI

@@ -15,18 +15,22 @@ final class FeedbackSettingsTests: XCTestCase {
 
     private var haptics = true
     private var keySounds = true
+    private var strength = HapticStrength.default
 
     override func setUp() {
         super.setUp()
         haptics = SharedStore.shared.haptics
         keySounds = SharedStore.shared.keySounds
+        strength = SharedStore.shared.hapticStrength
         SharedStore.shared.haptics = true
         SharedStore.shared.keySounds = true
+        SharedStore.shared.hapticStrength = .default
     }
 
     override func tearDown() {
         SharedStore.shared.haptics = haptics
         SharedStore.shared.keySounds = keySounds
+        SharedStore.shared.hapticStrength = strength
         super.tearDown()
     }
 
@@ -70,10 +74,81 @@ final class FeedbackSettingsTests: XCTestCase {
         XCTAssertTrue(SharedStore.shared.storedHaptics)
     }
 
+    /// The dial nobody has moved has no key either, and `integer(forKey:)` answers
+    /// 0 for it — which is why no case is numbered 0. An install that predates the
+    /// dial has to keep the impact it has always played.
+    func testAnUntouchedStrengthReadsAsTheShippedDefault() {
+        SharedStore.shared.userDefaults.removeObject(forKey: SharedStore.Key.hapticStrength)
+
+        XCTAssertNil(HapticStrength(rawValue: 0), "0 is what an absent key reads as")
+        XCTAssertEqual(SharedStore.shared.storedHapticStrength, .strong)
+        XCTAssertEqual(HapticStrength.default.style, .heavy)
+    }
+
+    /// **The dial changes the collision, not the `intensity:` argument.** A build
+    /// that stored the setting, read it at the press and went on playing `.heavy`
+    /// would pass every assertion above: `UIImpactFeedbackGenerator` fixes its
+    /// style at init, so the only proof the setting reaches the motor is that the
+    /// generator was rebuilt. Written through the suite alone, behind the
+    /// published copy's back, for the reason the two tests above are.
+    func testMovingTheDialRebuildsTheGeneratorAtTheNextPress() {
+        // Seeded rather than assumed: `builtStyle` is process-wide, and a test
+        // that ran earlier and left it on `.light` would make the assertion
+        // below true of a build that never rebuilds anything.
+        Feedback.keyPress()
+        XCTAssertEqual(Feedback.builtStyle, .heavy, "setUp put the dial back on the default")
+
+        SharedStore.shared.userDefaults.set(
+            HapticStrength.light.rawValue, forKey: SharedStore.Key.hapticStrength)
+        XCTAssertEqual(
+            SharedStore.shared.hapticStrength, .strong,
+            "the published copy must stay stale, or this proves nothing")
+
+        Feedback.keyPress()
+        XCTAssertEqual(
+            Feedback.builtStyle, .light,
+            "the keyboard is still hitting at full strength after the user turned the dial down")
+
+        SharedStore.shared.userDefaults.set(
+            HapticStrength.medium.rawValue, forKey: SharedStore.Key.hapticStrength)
+        Feedback.keyPress()
+        XCTAssertEqual(Feedback.builtStyle, .medium)
+    }
+
+    /// **The dial is moved while the keyboard is off screen, so the warm-up is
+    /// where it has to land.** `prepare()` runs from `KeyboardView.onAppear`; a
+    /// version that warmed the generator the user had just replaced would leave
+    /// the rebuild to the first press, and a generator built at the press is
+    /// cold — the late first tap `attach` and `prepare` exist to stop.
+    func testWarmingUpPicksUpADialMovedWhileTheKeyboardWasAway() {
+        Feedback.prepare()
+        XCTAssertEqual(Feedback.builtStyle, .heavy, "setUp put the dial back on the default")
+
+        SharedStore.shared.userDefaults.set(
+            HapticStrength.light.rawValue, forKey: SharedStore.Key.hapticStrength)
+        Feedback.prepare()
+        XCTAssertEqual(
+            Feedback.builtStyle, .light,
+            "the burst was warmed on the generator the user had already replaced")
+    }
+
+    /// Every stop is a different collision at full intensity. Two stops sharing a
+    /// style is a dial with a dead position.
+    func testEachStopIsADistinctCollision() {
+        let styles = HapticStrength.allCases.map(\.style)
+        XCTAssertEqual(Set(styles).count, HapticStrength.allCases.count)
+        XCTAssertEqual(HapticStrength.light.style, .light)
+        XCTAssertEqual(HapticStrength.medium.style, .medium)
+    }
+
     /// The mock damped every letter to 0.6 of `.light`. `.rigid` at 1.0 was the
     /// next stop and still read as a miss. Asking only "is there a generator"
     /// would pass against both; these two numbers are what changed.
-    func testEveryPressIsFullHeavy() {
+    ///
+    /// Still pinned now the Strength dial exists, because the dial moves the
+    /// style and leaves the intensity at 1.0: a stop that damped its waveform
+    /// instead would put the mock's feel back under a new name.
+    func testEveryPressIsFullHeavyByDefault() {
         XCTAssertNotEqual(
             Feedback.impactStyle, .light,
             "light at 0.6 was the mock; a letter has to land as a thud")

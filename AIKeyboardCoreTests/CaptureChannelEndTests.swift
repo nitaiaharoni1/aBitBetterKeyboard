@@ -44,7 +44,7 @@ final class CaptureChannelEndTests: XCTestCase {
         let live = Set(
             [
                 "hasCompletedOnboarding", "enabledLanguages", "autocorrect", "autocapitalise",
-                "predictions", "haptics", "keySounds", "defaultTone",
+                "predictions", "haptics", "hapticStrength", "keySounds", "defaultTone",
                 "customToneInstruction", "prefersCustomTone",
                 "personalDictionary", "isSubscribed", "screenContextAllowed",
                 "cloudBackendURL", "cloudBackendToken"

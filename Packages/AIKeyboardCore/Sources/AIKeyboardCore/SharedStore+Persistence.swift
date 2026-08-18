@@ -10,7 +10,7 @@ extension SharedStore {
         for key in [
             Key.hasCompletedOnboarding, Key.enabledLanguages, Key.lastLanguage, Key.autocorrect,
             Key.completeOnIdle, Key.spaceOnIdle, Key.idleDelayMs,
-            Key.autocapitalise, Key.predictions, Key.haptics, Key.keySounds,
+            Key.autocapitalise, Key.predictions, Key.haptics, Key.hapticStrength, Key.keySounds,
             Key.defaultTone, Key.customToneInstruction, Key.dictationSessionMinutes,
             Key.prefersCustomTone, Key.personalDictionary,
             Key.isSubscribed, Key.screenContextAllowed, Key.keyboardLayout,
@@ -43,6 +43,7 @@ extension SharedStore {
         autocapitalise = true
         predictions = true
         haptics = true
+        hapticStrength = .default
         keySounds = true
         defaultTone = .normal
         dictationSessionMinutes = 5
@@ -102,6 +103,9 @@ extension SharedStore {
             groupedLevel = level
         }
         if defaults.object(forKey: Key.haptics) != nil { haptics = defaults.bool(forKey: Key.haptics) }
+        if let strength = HapticStrength(rawValue: defaults.integer(forKey: Key.hapticStrength)) {
+            hapticStrength = strength
+        }
         if defaults.object(forKey: Key.keySounds) != nil { keySounds = defaults.bool(forKey: Key.keySounds) }
         let minutes = defaults.integer(forKey: Key.dictationSessionMinutes)
         if Self.dictationSessionChoices.contains(minutes) { dictationSessionMinutes = minutes }

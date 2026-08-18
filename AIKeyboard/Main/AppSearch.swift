@@ -332,7 +332,8 @@ struct AppSearchItem: Identifiable {
                 keywords: ["palette", "colour", "color", "theme", "orange", "pink", "blue"],
                 .row(.palette)),
             item(
-                "Haptics", "Tap feedback on keys", icon: "hand.tap",
+                "Haptics", "Tap feedback on keys, and how hard it hits", icon: "hand.tap",
+                keywords: ["strength", "intensity", "vibration", "buzz"],
                 .row(.haptics)),
             item(
                 "Key sounds", "Clicks as you type. Needs Full Access.",
