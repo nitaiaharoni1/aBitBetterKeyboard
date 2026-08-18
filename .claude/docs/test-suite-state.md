@@ -5,6 +5,48 @@ commit on it, so the next person can tell a new failure from one that was
 already there. **Re-run it and update this table rather than trusting it**: every
 number here is a reading, not a property of the code.
 
+## The run of 2026-08-18, at `76b322fd`
+
+**Whole suite: 1473 passed, 25 failed.** Six core, nineteen UI, and the split
+matters more than the total because the nineteen have one cause between them.
+
+**Core, and what each one was:**
+
+| Test | Verdict |
+|---|---|
+| `ReplySourceTests.testReplyAnswersTheCopiedMessage` | **Ours, fixed.** A readiness guard added to `runReply` sat above the secure-field guard and refused before Reply could run. |
+| `SparkleReachabilityTests.testAPasswordFieldRefusalIsNotHiddenByAnEarlierOne` | **Ours, fixed.** Same guard: a password field reported "Not connected" instead of the secure-field refusal, and `permitsRead`'s counters stopped moving. The guard now sits below it and asks only `CaptureChannel.isReachable`, not `BackendTransport.isReady()`, so an on-device reply is not refused for want of a cloud token. |
+| `AutocorrectLevelTests.testAnOldBooleanUpgradesToWhatItMeant` | **Stale test, fixed.** It asserted `.full` where `storedAutocorrectLevel` deliberately returns `shippedDefault`. See the commit for why that assertion can no longer tell the decision from the coercion bug it was written to catch. |
+| `EmojiModeTests` (2) | **Pre-existing**, the two known ranking failures this file already records. Unchanged. |
+| `PersonalDictionaryTests.testTheSameWordsPlusAMarkAreStillDestroyedWithNoList` | **Not ours.** Nothing in `PersonalLanguageModel`, `SuggestionEngine` or `TypoLexicon` was in our diff. |
+
+**UI: nineteen failures, one cause, and not ours.** Every one of them ends at
+XCUITest failing to find the tab bar: "No matches found for Descendants matching
+type TabBar", "Languages tab never appeared", "Failed to tap Keys Button". The
+evidence that it is not this session's work:
+
+- **Zero UI tests passed.** Nineteen separate regressions do not produce zero
+  passes; one broken precondition does.
+- **The app does not crash.** No crash, no termination, no "failed to launch" in
+  the log; it launches and its own rows are found (one failure is a
+  `row-Personal dictionary` that exists but is not hittable).
+- **`MainTabView.swift`, which draws the bar and carries
+  `TabBarAccessibilityProbe`, was last modified three days before this run** and
+  by no commit in this session.
+- XCUITest reports a runtime diagnostic alongside it: *"Automation type mismatch:
+  computed Button from legacy attributes vs PopUpButton from modern attribute."*
+- It reproduced identically on a second, uncontended run of `AIKeyboardUITests`
+  alone, so it is not the two-runs-kill-each-other problem `AGENTS.md` warns of.
+
+Two of the nineteen would not have counted anyway: `AppGroupCrossProcessTests`
+and `CaptureChannelCrossProcessTests` "assert almost nothing themselves" and are
+judged by `Scripts/prove-*.sh` reading the other process's log, per the testing
+doc. `DictationCrossProcessTests` is the same shape.
+
+**What was not done:** the tab-bar cause was not chased to the bottom. It is the
+next thing to look at if the UI suite matters, and the place to start is whether
+that probe still satisfies an XCUITest `TabBar` query on this Xcode version.
+
 ## The run
 
 | | |
