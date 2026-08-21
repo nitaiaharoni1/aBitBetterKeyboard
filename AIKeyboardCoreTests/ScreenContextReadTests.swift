@@ -36,6 +36,24 @@ final class ScreenContextReadTests: XCTestCase {
         channel = nil
         writer = nil
         try? FileManager.default.removeItem(at: directory)
+        // **`permitsRead` writes outside this scratch directory now, and this is
+        // what stops the suite leaving it behind.** Since NIT-187 every decision
+        // is counted into `SecureDecisionRecord` as well as into the channel
+        // page, and that record lives in the App Group container — which the
+        // simulator hands this target for real, entitlement or not, as
+        // `KeyboardMemoryPeakTests` records. Without this, running the suite
+        // leaves a "Reply and secure fields" row in the simulator's own Settings
+        // describing taps nobody made. Same family as the suite teaching
+        // `PersonalLanguageModel` the word `Handi` ten times, and the reason
+        // every other record's tests take an explicit URL instead.
+        //
+        // The write is dispatched, so it is drained first: `note(_:)` uses one
+        // serial queue and a barrier-free `sync` on it returns only after every
+        // block queued before it has run.
+        SecureDecisionRecord.waitForPendingWrites()
+        if let url = SecureDecisionRecord.url {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     private func step() {

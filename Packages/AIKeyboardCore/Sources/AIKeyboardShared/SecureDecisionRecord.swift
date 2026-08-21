@@ -192,6 +192,23 @@ public struct SecureDecisionRecord: Codable, Equatable, Sendable {
         queue.async { record(decision, now: now) }
     }
 
+    /// Returns once every write queued before it has landed.
+    ///
+    /// **Its only caller is a test tear-down, and it exists because this is the
+    /// one record written from inside the package rather than from
+    /// `KeyboardViewController`.** `ScreenContextReadTests` drives `permitsRead`
+    /// directly, so it writes into the real App Group container the simulator
+    /// hands `AIKeyboardCoreTests` — and a tear-down that deleted the file
+    /// without this would race the dispatched write and leave it behind about as
+    /// often as not. The three older records need nothing like it because no test
+    /// reaches their singleton path at all.
+    ///
+    /// `sync` on a serial queue is the whole mechanism: the block cannot start
+    /// until everything queued ahead of it has finished.
+    public static func waitForPendingWrites() {
+        queue.sync {}
+    }
+
     /// Folds one decision into the stored record, and logs it either way.
     @discardableResult
     public static func record(

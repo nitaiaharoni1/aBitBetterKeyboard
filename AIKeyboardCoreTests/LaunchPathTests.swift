@@ -55,6 +55,23 @@ final class LaunchPathTests: XCTestCase {
         try Data(json.utf8).write(to: url, options: .atomic)
     }
 
+    /// Writes and then pins the modification date to a fixed value.
+    ///
+    /// **Both writes in a same-stamp test have to be pinned to the *same
+    /// explicit* date, and pushing the second one back onto a date read off the
+    /// filesystem does not work.** Measured on macOS 2026-08-22:
+    /// `setAttributes(_:ofItemAtPath:)` does not round-trip a `Date` that came
+    /// from `attributesOfItem`, so the forged stamp came back subtly different
+    /// and the test failed against correct code. Pinning both writes to one
+    /// constant applies whatever rounding there is identically to each.
+    private func writeStore(_ json: String, to url: URL, pinnedTo date: Date) throws {
+        try writeStore(json, to: url)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
+    }
+
+    /// Any fixed instant. Only its stability matters.
+    private let pinnedDate = Date(timeIntervalSince1970: 1_700_000_000)
+
     private func temporaryDirectory() throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("launch-path-\(UUID().uuidString)", isDirectory: true)
@@ -76,15 +93,14 @@ final class LaunchPathTests: XCTestCase {
     @MainActor
     func testAFileThatHasNotMovedIsNotDecodedAgain() throws {
         let url = try temporaryDirectory().appendingPathComponent("model.json")
-        try writeStore(#"{"unigrams":{"en":{"aaa":9}},"bigrams":{}}"#, to: url)
-        let stamped = try XCTUnwrap(
-            try FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date)
+        try writeStore(
+            #"{"unigrams":{"en":{"aaa":9}},"bigrams":{}}"#, to: url, pinnedTo: pinnedDate)
 
         let model = PersonalLanguageModel(url: url)
         XCTAssertEqual(model.count(of: "aaa", in: .english), 9, "the fixture did not load")
 
-        try writeStore(#"{"unigrams":{"en":{"bbb":9}},"bigrams":{}}"#, to: url)
-        try FileManager.default.setAttributes([.modificationDate: stamped], ofItemAtPath: url.path)
+        try writeStore(
+            #"{"unigrams":{"en":{"bbb":9}},"bigrams":{}}"#, to: url, pinnedTo: pinnedDate)
 
         model.reload()
         XCTAssertEqual(model.count(of: "aaa", in: .english), 9)

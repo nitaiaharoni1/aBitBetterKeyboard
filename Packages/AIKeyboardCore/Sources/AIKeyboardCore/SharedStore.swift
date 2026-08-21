@@ -82,6 +82,14 @@ public final class SharedStore: ObservableObject {
     public var userDefaults: UserDefaults { defaults }
 
     /// Set for the length of `load()`. See `persist(_:forKey:)`.
+    ///
+    /// **Unsynchronised, and that is not a new hazard.** Two concurrent `load()`
+    /// calls would race this flag and one could suppress the other's writes —
+    /// but two concurrent `load()` calls already race all twenty-two
+    /// `@Published` assignments underneath it, which is worse. Every caller is on
+    /// the main thread: `AIKeyboardApp`'s `onAppear`, `viewDidLoad` and
+    /// `viewWillAppear` in `KeyboardViewController`, and one test. Adding a lock
+    /// here would suggest the rest of the function is safe off it.
     var isLoading = false
 
     /// The two settings held as JSON rather than as a scalar, and therefore the

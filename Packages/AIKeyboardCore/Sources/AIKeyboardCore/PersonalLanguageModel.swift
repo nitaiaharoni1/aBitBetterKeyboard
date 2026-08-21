@@ -355,13 +355,25 @@ public final class PersonalLanguageModel {
     // MARK: Persistence
 
     /// The file's size and modification date, or nil if it is not there.
+    ///
+    /// **`FileManager.attributesOfItem` and never `URL.resourceValues`, and that
+    /// was measured rather than reasoned about.** `URL` caches resource values on
+    /// the `NSURL` behind it, and `url` here is a *stored* property read on every
+    /// reload — so the first version of this returned the same stamp forever.
+    /// Measured on macOS 2026-08-22: a rewrite that changed the file's length,
+    /// read back through the same stored `URL`, produced a byte-identical stamp.
+    /// That is a keyboard that never re-reads the file at all: Forget in the app
+    /// would not reach a live keyboard, and a word learned in one process would
+    /// never reach the other — the exact two defects `reload()` exists to
+    /// prevent, reintroduced by the change meant to make it cheaper.
+    ///
+    /// `attributesOfItem(atPath:)` is a fresh `stat` on every call with no cache
+    /// to go stale. Building a new `URL` per call was measured and works too;
+    /// this is the one that does not require knowing why.
     private static func stamp(of url: URL) -> FileStamp? {
-        guard
-            let values = try? url.resourceValues(forKeys: [
-                .contentModificationDateKey, .fileSizeKey
-            ]),
-            let modified = values.contentModificationDate,
-            let size = values.fileSize
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+            let modified = attributes[.modificationDate] as? Date,
+            let size = attributes[.size] as? Int
         else { return nil }
         return FileStamp(modified: modified, size: size)
     }
