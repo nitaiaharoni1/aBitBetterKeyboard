@@ -369,6 +369,25 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
+    /// The one queue both ends of a launch are written on, and **serial for a
+    /// reason the shape of the record forces.**
+    ///
+    /// `KeyboardLaunchRecord.record` is read-modify-write on a single file, and
+    /// its fields are *counters*. Two of these on `DispatchQueue.global`, which
+    /// is concurrent, can interleave so that `.presented` reads the file before
+    /// `.loaded` has written it and the load is lost. That is not a cosmetic
+    /// loss: an undercounted `loads` closes the very gap the record exists to
+    /// show, so the race hides the bug rather than inventing one. The two writes
+    /// are normally a whole layout pass apart and would almost always win the
+    /// race anyway — "almost always" is not a property an instrument that counts
+    /// should rest on.
+    ///
+    /// `KeyboardMemoryPeak` shares the hazard and not the consequence: its merge
+    /// takes a `max`, so a lost update loses one reading rather than corrupting
+    /// a running total. It is deliberately left where it is.
+    private static let launchQueue = DispatchQueue(
+        label: "com.nitai.aikeyboard.launch-record", qos: .utility)
+
     /// Counts one end of a launch, off the main thread.
     ///
     /// **The dispatch is the point rather than a nicety.** This instrument
@@ -379,7 +398,7 @@ final class KeyboardViewController: UIInputViewController {
     private func recordLaunch(_ moment: KeyboardLaunchRecord.Moment) {
         let now = CaptureClock.now()
         if case .loaded = moment { loadedAt = now }
-        DispatchQueue.global(qos: .utility).async {
+        Self.launchQueue.async {
             KeyboardLaunchRecord.record(moment, now: now)
         }
     }
