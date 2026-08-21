@@ -797,7 +797,15 @@ public final class SharedStore: ObservableObject {
         if let clips = try? JSONDecoder().decode([Clip].self, from: data) {
             return (CopyclipRecord(clips: clips, lastChangeCount: -1), true)
         }
-        return (.empty, false)
+        // **A blob that exists and decodes as neither shape counts as a
+        // migration**, which is the same answer `decodedLayout` gives for its
+        // twin case and the opposite of what the first version of this said. The
+        // unconditional write-back used to clear the corrupt bytes; reporting
+        // `false` would leave them on disk forever and charge every future
+        // `load()` two failed JSON decodes of them, which breaks the
+        // self-limiting property `persistMigrations` requires of everything it
+        // writes. Writing `.empty` over them is what stops it being asked again.
+        return (.empty, true)
     }
 
     /// Encodes and writes, with no opinion about whether it should have been

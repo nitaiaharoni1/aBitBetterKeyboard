@@ -719,13 +719,37 @@ public final class KeyboardController: ObservableObject {
     /// a runloop hop and a second `updateKeyboardHeight()` on top. The same
     /// guard `updateKeyboardHeight()` and `applyBrandPalette()` already keep.
     ///
-    /// Comparing is meaningful here because identity is stored rather than
-    /// generated: `SlotSpec.id` is a `Codable` `UUID`, so two decodes of one
-    /// blob carry the same ids, and `LayoutPreset.all` and
-    /// `KeyboardCustomization.default` are both `static let`. Were any of those a
-    /// computed `var`, every read would mint fresh ids, this guard would never
-    /// fire, and every appearance would be re-keying every `ForEach` in the
-    /// keyboard.
+    /// Comparing is meaningful only because **every** id on the path is stable,
+    /// and there are three of them rather than the two an earlier version of this
+    /// comment audited. `SlotSpec.id` is a `Codable` `UUID`, so two decodes of one
+    /// blob carry the same ids; `LayoutPreset.all` and
+    /// `KeyboardCustomization.default` are both `static let`; **and the globe key
+    /// this function repairs in is given `repairedGlobeID` rather than a fresh
+    /// one.** The first version of this guard checked the first two and shipped
+    /// with the third minting a new `UUID()` on every call, which cancelled the
+    /// guard on every phone with a second keyboard installed — that is, on every
+    /// real install. If any of the three becomes a computed `var`, every read
+    /// mints fresh ids, this guard silently stops firing, and every appearance
+    /// re-keys every `ForEach` in the keyboard.
+    /// The identity the repaired globe key is given, **fixed rather than fresh,
+    /// and the guard below is why.**
+    ///
+    /// `SlotSpec.init` defaults to `id: UUID()` and `SlotSpec`'s `Equatable` is
+    /// synthesised, so `id` is part of it. Minting one here made every repaired
+    /// layout unequal to every other repaired layout built from the identical
+    /// stored bytes — which cancelled the guard below outright on any phone with
+    /// a second keyboard installed, meaning **every real install**, since this
+    /// product only exists alongside a system keyboard. It is the exact failure
+    /// that guard's own doc comment warns about, arriving from two lines above it
+    /// rather than from the presets it audited. Caught in review; the first
+    /// version of the guard shipped without it.
+    ///
+    /// A fixed id is safe here where it would not be in general: the insert is
+    /// guarded on `!hasGlobe`, so there is never a second globe key in the layout
+    /// for this to collide with, which is the duplicate-identity hazard
+    /// `SlotSpec.init` documents.
+    static let repairedGlobeID = UUID(uuidString: "9E0B1E4C-3F8A-4C21-9E0D-6B5A1F2C7D34")!
+
     public func apply(_ layout: KeyboardCustomization, allowingIncomplete: Bool = false) {
         var repaired = layout
         let hasGlobe = (repaired.bottomRow + repaired.cursorRow).contains { $0.action == .globe }
@@ -733,7 +757,8 @@ public final class KeyboardController: ObservableObject {
             // Second from the start: beside the plane key and away from the space
             // bar.
             let index = min(1, repaired.bottomRow.count)
-            repaired.bottomRow.insert(SlotSpec(action: .globe, width: .units(1.0)), at: index)
+            repaired.bottomRow.insert(
+                SlotSpec(id: Self.repairedGlobeID, action: .globe, width: .units(1.0)), at: index)
         }
         guard allowingIncomplete || LayoutValidator.isUsable(repaired) else {
             guard customization != .default else { return }

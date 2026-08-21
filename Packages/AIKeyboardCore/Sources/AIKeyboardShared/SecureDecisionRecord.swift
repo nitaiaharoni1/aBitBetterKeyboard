@@ -23,13 +23,19 @@ import os
 /// `merge`, `load(from:)` / `record(_:at:)` overloads so a test can take an
 /// explicit URL, `bootIdentity` from `kern.boottime`, and a Settings →
 /// Diagnostics row. Being independent of the capture channel is the point —
-/// `permitsRead` is reached on **every Reply tap**, and Reply ships in v1 sourced
-/// from the pasteboard, so this fills up whether the screen-capture flag is on or
-/// off.
+/// `permitsRead` is reached on **every Reply tap that has something to reply
+/// to**, and Reply ships in v1 sourced from the pasteboard, so this fills up
+/// whether the screen-capture flag is on or off. The qualifier matters for
+/// reading a device run: `runReply`'s `guard let source = replySource` sits above
+/// the call, and in v1 `replySource` reduces to the clipboard, so **a Reply tap
+/// with nothing copied is refused before any decision is taken**. An empty record
+/// after a session of tapping Reply means the ledger was empty, not that the
+/// keyboard lacks Full Access.
 ///
 /// **`permitted` is not stored, because it is arithmetic.** The two refusal
-/// reasons are mutually exclusive by construction — `permitsRead` returns on
-/// `secure == true` before it ever looks at the content type — so
+/// reasons are mutually exclusive because `Decision.taken(secure:permitted:)` is
+/// the only way to build one and derives them from the truth table's own
+/// short-circuit — so
 /// `decisions - refusedSecure - refusedContentType` is exactly the number of taps
 /// that were allowed through. A stored fourth counter would be a second spelling
 /// of the same fact and something for the other three to eventually disagree
@@ -85,11 +91,33 @@ public struct SecureDecisionRecord: Codable, Equatable, Sendable {
         public let answered: Bool
         /// `secure == true`.
         public let refusedSecure: Bool
-        /// Refused by the content type, which by construction can only be true
-        /// when `refusedSecure` is false.
+        /// Refused by the content type, which can only be true when
+        /// `refusedSecure` is false — see `taken(secure:permitted:)`, which is
+        /// the only way to build one.
         public let refusedContentType: Bool
 
-        public init(answered: Bool, refusedSecure: Bool, refusedContentType: Bool) {
+        /// **The only way to make a `Decision`, and the initialiser is private so
+        /// that stays true.**
+        ///
+        /// `permitted` is stored as `decisions - refusedSecure -
+        /// refusedContentType`, which is only right while the two refusals are
+        /// mutually exclusive — a decision claiming both would subtract twice and
+        /// take the count negative. An earlier version of this type said that
+        /// exclusivity held "by construction" while exposing a memberwise
+        /// initialiser taking three raw `Bool`s, so it actually held by the
+        /// discipline of the single call site. Deriving it here from the two
+        /// facts a caller genuinely has makes it a property of the type: the
+        /// truth table returns on `secure == true` before it looks at the content
+        /// type, so `refusedContentType` is exactly "refused, and not because it
+        /// said it was secure".
+        public static func taken(secure: Bool?, permitted: Bool) -> Decision {
+            Decision(
+                answered: secure != nil,
+                refusedSecure: secure == true,
+                refusedContentType: !permitted && secure != true)
+        }
+
+        private init(answered: Bool, refusedSecure: Bool, refusedContentType: Bool) {
             self.answered = answered
             self.refusedSecure = refusedSecure
             self.refusedContentType = refusedContentType

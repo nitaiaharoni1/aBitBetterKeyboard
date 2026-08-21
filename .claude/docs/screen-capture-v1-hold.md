@@ -145,9 +145,12 @@ always meant dumping the shared page by hand.
 **`SecureDecisionRecord` is the home NIT-187 asked for and it is independent of
 this flag.** Fourth boot-scoped App Group record, same shape as
 `KeyboardPresence` / `KeyboardMemoryPeak` / `KeyboardLaunchRecord`, with a
-Settings → Diagnostics row. It is written on **every** Reply tap, and Reply ships
-in v1 sourced from the pasteboard, so it fills up on an ordinary phone rather
-than waiting for this flag. `answered` sitting at zero against a large
+Settings → Diagnostics row. It is written on every Reply tap **that has something
+to reply to**, and Reply ships in v1 sourced from the pasteboard, so it fills up
+on an ordinary phone rather than waiting for this flag. The qualifier matters when
+reading it: `runReply` refuses above the guard when `replySource` is nil, which in
+v1 means an empty CopyClip ledger, so an empty record is "nothing was copied"
+rather than "no Full Access". `answered` sitting at zero against a large
 `decisions` is the question answered no. The channel write stays alongside it as
 the secondary copy, because it is one line, a no-op while `channel` is nil, and a
 named Phase 7 deliverable of the capture design (R14) with a test on it. **A nil

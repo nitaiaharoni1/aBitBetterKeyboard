@@ -50,10 +50,7 @@ final class ScreenContextReadTests: XCTestCase {
         // The write is dispatched, so it is drained first: `note(_:)` uses one
         // serial queue and a barrier-free `sync` on it returns only after every
         // block queued before it has run.
-        SecureDecisionRecord.waitForPendingWrites()
-        if let url = SecureDecisionRecord.url {
-            try? FileManager.default.removeItem(at: url)
-        }
+        removeSecureDecisionRecord()
     }
 
     private func step() {

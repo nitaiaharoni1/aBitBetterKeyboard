@@ -184,6 +184,40 @@ final class LaunchPathTests: XCTestCase {
         XCTAssertEqual(emissions, 2, "a layout that actually moved still has to reach the keys")
     }
 
+    /// **The case above cannot see the way this guard was actually broken**, so
+    /// this is the one that matters.
+    ///
+    /// `showsGlobeKey` is true on any phone with a second keyboard installed,
+    /// which is every real install of this product — and `apply` *repairs a globe
+    /// key in* on that path. The first version built it with `SlotSpec`'s default
+    /// `id: UUID()`, and `SlotSpec`'s `Equatable` is synthesised and includes
+    /// `id`, so two repairs of identical stored bytes were never equal and the
+    /// guard never fired on a real device. `repairedGlobeID` is what fixes it.
+    ///
+    /// Driven through `reloadCustomization()` rather than `apply` directly,
+    /// because that is the pair the launch path actually makes — `viewDidLoad`
+    /// calls it once `showsGlobeKey` is known and `viewWillAppear` calls it again.
+    @MainActor
+    func testARepairedGlobeKeyDoesNotMakeTwoIdenticalLayoutsUnequal() {
+        let controller = KeyboardController(target: MockTextTarget(text: ""))
+        controller.showsGlobeKey = true
+        controller.reloadCustomization()
+        XCTAssertTrue(
+            (controller.customization.bottomRow + controller.customization.cursorRow)
+                .contains { $0.action == .globe },
+            "the state under test is a layout the repair actually touched")
+
+        var emissions = 0
+        var bag = Set<AnyCancellable>()
+        controller.$customization.sink { _ in emissions += 1 }.store(in: &bag)
+        XCTAssertEqual(emissions, 1)
+
+        controller.reloadCustomization()
+        XCTAssertEqual(
+            emissions, 1,
+            "the repaired globe key was given a fresh identity and defeated the guard")
+    }
+
     /// **The dangerous version of this cache is the one that decodes once and
     /// never again**, and that is the half this asserts hardest.
     ///

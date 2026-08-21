@@ -14,6 +14,14 @@ import XCTest
 @MainActor
 final class ReplySourceTests: XCTestCase {
 
+    /// `run(.reply)` with a clip in the ledger reaches
+    /// `ScreenContextSession.permitsRead`, which writes a `SecureDecisionRecord`
+    /// into the real App Group container. See `removeSecureDecisionRecord()`.
+    override func tearDown() {
+        removeSecureDecisionRecord()
+        super.tearDown()
+    }
+
     private func clip(_ text: String) -> Clip {
         Clip(id: UUID(), text: ClipText(raw: text)!, capturedAt: Date())
     }

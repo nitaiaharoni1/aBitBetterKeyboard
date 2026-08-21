@@ -162,15 +162,20 @@ the row reads `12 Reply taps, no host answered isSecureTextEntry, none refused`.
 
 | Reply and secure fields | What it means |
 |---|---|
-| no row at all | Nobody has tapped Reply with Full Access since the restart. **Not** a reading of zero. |
+| no row at all | No Reply tap has *reached the decision* since the restart. **Not** a reading of zero, and **not** necessarily a Full Access problem — see the sentence below the table before chasing it. |
 | `no host answered` with a real tap count | The expected answer. Silence is all there is, so the `secure == true` branch is unreachable in practice and permitting on silence is the whole rule. |
 | any number `answered` | Hosts do populate the trait. Worth knowing before anyone reasons about that guard again. |
 | any number `said the field was secure` (tinted) | Contradicts Apple's own documentation that the system replaces a custom keyboard for a secure field. Note the app. |
 | any number `refused by content type` | The guard catching a one-time-code or card-number field. Working as intended, not a fault. |
 
-To fill it, tap Reply a few times in ordinary apps — it needs no clipboard
-content and no successful reply, because the decision is taken before anything
-else Reply does. It is boot-scoped like the other two.
+**To fill it you have to copy something first**, and this is the one place it is
+easy to get wrong. `runReply` refuses before the decision is taken when there is
+nothing to reply to: in v1 Reply's source is the CopyClip ledger, so a Reply tap
+with an empty ledger never reaches the guard and never counts. So: **copy a
+message, then tap Reply**, in a few different apps. The reply itself does not
+have to succeed — the decision is taken before the model call — and an empty row
+after tapping Reply with nothing copied is that, rather than the Full Access
+problem the memory row above is about.
 
 ---
 

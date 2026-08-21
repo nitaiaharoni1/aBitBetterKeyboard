@@ -32,6 +32,14 @@ import XCTest
 /// action runnable, because that is the state Reply exists for.
 final class SparkleReachabilityTests: XCTestCase {
 
+    /// `run(.reply)` over a secure field reaches
+    /// `ScreenContextSession.permitsRead`, which writes a `SecureDecisionRecord`
+    /// into the real App Group container. See `removeSecureDecisionRecord()`.
+    override func tearDown() {
+        removeSecureDecisionRecord()
+        super.tearDown()
+    }
+
     /// The state the defect is about, and the one the old expression answered
     /// `false` for.
     func testAnEmptyFieldWithNoSessionStillLeavesAnActionRunnable() {

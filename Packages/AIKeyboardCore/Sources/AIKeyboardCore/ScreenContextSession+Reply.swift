@@ -30,9 +30,14 @@ extension ScreenContextSession {
     ///
     /// `SecureDecisionRecord` is the answer: a boot-scoped App Group record with
     /// a Settings → Diagnostics row, independent of the capture channel and
-    /// therefore of the flag. **It is reached on every Reply tap and Reply ships
-    /// in v1**, sourced from the pasteboard, so it fills up on an ordinary phone
-    /// rather than waiting for a feature nobody has switched on.
+    /// therefore of the flag. **It is reached on every Reply tap that has
+    /// something to reply to**, and Reply ships in v1 sourced from the
+    /// pasteboard, so it fills up on an ordinary phone rather than waiting for a
+    /// feature nobody has switched on. The qualifier is not pedantry:
+    /// `runReply`'s `guard let source = replySource` sits *above* this call, and
+    /// in a v1 build `replySource` reduces to the clipboard, so a Reply tap with
+    /// an empty CopyClip ledger is refused before any decision is taken and
+    /// nothing is counted.
     ///
     /// **Both writes stay, and the channel one is the secondary copy.** It is one
     /// line, it is a no-op while `channel` is nil, and it is a named Phase 7
@@ -40,22 +45,15 @@ extension ScreenContextSession {
     /// test on it. Deleting it to remove a duplicate would quietly drop that. The
     /// record is the one to read.
     ///
-    /// The two refusal reasons go into the record separately, and
-    /// `refusedContentType` is computed as "refused, and not because the host
-    /// said it was secure" rather than by asking the truth table a second time:
-    /// `SecureField.permitsRead` returns on `secure == true` before it ever looks
-    /// at the content type, so that expression *is* the same question and cannot
-    /// drift from it.
+    /// The two refusal reasons are derived by `Decision.taken(secure:permitted:)`
+    /// rather than spelled out here, so the exclusivity `permitted` depends on is
+    /// a property of the type rather than of this call site's discipline.
     @discardableResult
     public func permitsRead(secure: Bool?, contentType: UITextContentType??) -> Bool {
         let permitted = SecureField.permitsRead(secure: secure, contentType: contentType)
-        let answered = SecureField.answered(secure: secure)
-        SecureDecisionRecord.note(
-            SecureDecisionRecord.Decision(
-                answered: answered,
-                refusedSecure: secure == true,
-                refusedContentType: !permitted && secure != true))
-        channel?.countSecureDecision(refused: !permitted, unanswered: !answered)
+        SecureDecisionRecord.note(.taken(secure: secure, permitted: permitted))
+        channel?.countSecureDecision(
+            refused: !permitted, unanswered: !SecureField.answered(secure: secure))
         return permitted
     }
 

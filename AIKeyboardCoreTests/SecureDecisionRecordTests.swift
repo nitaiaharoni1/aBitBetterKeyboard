@@ -32,14 +32,18 @@ final class SecureDecisionRecordTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    /// The three decisions `SecureField`'s truth table can produce, spelled the
-    /// way `ScreenContextSession.permitsRead` spells them.
+    /// A decision built the only way one can be built, through the real truth
+    /// table rather than through a second spelling of it.
+    ///
+    /// This used to restate the derivation, which meant every test here could
+    /// have been right about a rule the product does not follow.
+    /// `Decision.taken(secure:permitted:)` is now the only initialiser, so the
+    /// derivation is the type's and the truth table is `SecureField`'s.
     private func decision(secure: Bool?, sensitiveType: Bool) -> SecureDecisionRecord.Decision {
-        let refusedSecure = secure == true
-        return SecureDecisionRecord.Decision(
-            answered: secure != nil,
-            refusedSecure: refusedSecure,
-            refusedContentType: !refusedSecure && sensitiveType)
+        .taken(
+            secure: secure,
+            permitted: SecureField.permitsRead(
+                secure: secure, contentType: sensitiveType ? .some(.password) : nil))
     }
 
     // MARK: The number the record exists for
@@ -100,21 +104,29 @@ final class SecureDecisionRecordTests: XCTestCase {
         XCTAssertEqual(current.permitted, 0)
     }
 
-    /// The truth table is `SecureField`'s and the helper above is a second
-    /// spelling of it, so this asserts they agree rather than trusting the
-    /// helper. Without it every test in this file could be right about a rule the
-    /// product does not follow.
-    func testTheHelperAgreesWithTheTruthTableItRestates() {
-        XCTAssertEqual(
-            decision(secure: true, sensitiveType: false).refusedSecure,
-            !SecureField.permitsRead(secure: true, contentType: nil))
-        XCTAssertEqual(
-            decision(secure: false, sensitiveType: true).refusedContentType,
-            !SecureField.permitsRead(secure: false, contentType: .some(.password)))
-        XCTAssertTrue(SecureField.permitsRead(secure: nil, contentType: nil))
-        XCTAssertEqual(decision(secure: nil, sensitiveType: false).answered, false)
-        XCTAssertEqual(decision(secure: nil, sensitiveType: false).refusedSecure, false)
-        XCTAssertEqual(decision(secure: nil, sensitiveType: false).refusedContentType, false)
+    /// `Decision.taken` is what makes the exclusivity a property of the type
+    /// rather than of one call site's discipline, so it is worth asserting
+    /// directly and over the whole input space.
+    ///
+    /// The old memberwise initialiser took three raw `Bool`s and would happily
+    /// build a decision claiming both refusals, which subtracts twice and takes
+    /// `permitted` negative. It is private now; this walks every input that can
+    /// reach the factory and checks no combination produces both.
+    func testNoDecisionCanClaimBothRefusalsAtOnce() {
+        for secure in [true, false, nil] as [Bool?] {
+            for sensitive in [true, false] {
+                let taken = decision(secure: secure, sensitiveType: sensitive)
+                XCTAssertFalse(
+                    taken.refusedSecure && taken.refusedContentType,
+                    "secure=\(String(describing: secure)) sensitive=\(sensitive)")
+                XCTAssertEqual(
+                    taken.answered, secure != nil,
+                    "answered is the host having implemented the trait, nothing else")
+                let merged = SecureDecisionRecord.merge(
+                    taken, into: nil, now: 1, bootIdentity: boot)
+                XCTAssertGreaterThanOrEqual(merged.permitted, 0)
+            }
+        }
     }
 
     // MARK: Boot scoping
