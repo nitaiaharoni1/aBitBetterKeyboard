@@ -106,8 +106,79 @@ whole loop is real.
    pad, or an app that opted out) or intermittent (a memory kill). The ten second
    test is the globe key: after a kill it brings ours straight back and it stays.
 
-Then check Settings → Diagnostics in the app for the keyboard's own memory peak.
-Anything with zero memory warnings has never been close to the ~50 MB cap.
+**NIT-90 — are the proxy's traits fresh when the keyboard appears?** Thirty
+seconds, and it is the one part of the NIT-9 / NIT-10 work a Mac cannot settle:
+all 19 tests use mocks, and there are long-standing reports that
+`UITextDocumentProxy`'s trait properties are stale in `viewWillAppear`.
+
+6. Find a screen with a **number field and a text field**, and tap the number
+   field first. Confirm the keyboard opens as a number pad.
+7. Now tap the text field and **type nothing**. Confirm the keyboard is a full
+   QWERTY rather than still the number pad.
+
+Step 7 is the whole check. A nil trait is handled by construction, so the failure
+this is looking for is a **stale non-nil**: the proxy still reporting the previous
+field's `.numberPad`. Typing would hide it, because the first `textDidChange`
+adopts correctly, which is exactly why step 7 says type nothing.
+
+If it is stale, do not fix it speculatively. The fallback is to adopt on the first
+document callback instead of on appearance, which trades a guaranteed hook for an
+unproven one and costs a frame of the wrong plane.
+
+### NIT-185 — why the stock keyboard sometimes wins the first tap
+
+Reported 2026-08-21: tapping a field brings up the stock iOS keyboard, and
+tapping the *same field* again brings ours back. That detail does real work.
+Apple's three substitutions — secure field, phone pad, opted-out app — are all
+per-field and deterministic, so the same box would give the stock keyboard every
+time. It does not. Ours was on offer and iOS did not have it ready.
+
+**Settings → Diagnostics now has two rows, and you need both.** The second one
+is new (`KeyboardLaunchRecord`) and counts `viewDidLoad` against the first
+`viewDidAppear` of each instance, so a launch that began and never reached the
+screen shows up as a gap.
+
+| Keyboard memory | Keyboard launches | What it means |
+|---|---|---|
+| warnings above zero | anything | The jetsam kill. Work is footprint; `GroupedLexiconResource.load` first. |
+| zero warnings | launches above presentations | Not memory. Runs start and do not arrive. |
+| zero warnings | counters equal, slowest small | Both current hypotheses are wrong. What is left is the unconditional `primaryLanguage` write in `viewWillAppear`. |
+
+One point of gap is noise, because iOS may build a controller it never presents.
+A persistent ratio is the evidence. Use the keyboard normally until the bug has
+happened at least twice before reading it, and note **which app** it happened in:
+if it is always the same one, that changes the answer.
+
+Both rows are boot-scoped, so a restart wipes them and you start again.
+
+---
+
+## 3b. NIT-184 — does the emoji grid still stick? (1 minute)
+
+Reported 2026-08-21: the grid sometimes stops scrolling sideways. Two mechanisms
+were found; **one is fixed and the other is not**, and this check is what decides
+whether the second one needs doing at all.
+
+1. Open the emoji grid and scroll it hard, back and forth, through every
+   category.
+2. If it sticks, note **which tab you were in** before anything else. That is the
+   whole check.
+
+**All 304 skin-toned emoji are in People**, where they are 83.7% of the cells,
+and every other category has exactly zero. Only those cells carry the extra
+`DragGesture(minimumDistance: 0)` that competes with the scroll.
+
+- Sticks in **People or Recents only** → the gesture arbitration is real, and the
+  fix is to rewrite the hold as `LongPressGesture.sequenced(before: DragGesture)`.
+- Sticks in **Flags, Food, Symbols or any other tab** → arbitration is refuted,
+  those tabs have no such gesture, and the cause is somewhere nobody has looked.
+- **Does not stick at all** → the stranded tone strip was the whole of it, and
+  that is already fixed.
+
+Also worth one try while you are here: hold 👋 to open the tone strip, then tap
+somewhere else on the panel. It should close. Until this change there was no way
+to dismiss a strip except by lifting the finger that opened it, which is why a
+stranded one froze the grid until the panel was closed and reopened.
 
 ---
 
@@ -157,11 +228,47 @@ passed.
 
 ---
 
+## 6. Landscape and Dynamic Type — the two that only a screen can settle (3 minutes)
+
+Both of these shipped, and both left specific questions that no test can answer
+because the answer is "does it look wrong". Neither blocks anything; do them while
+the phone is already in your hand.
+
+**Landscape** (NIT-18, shipped). Rotate the phone in WhatsApp.
+
+1. Confirm Fix, Rewrite, CopyClip, Dictation and Settings are all reachable. They
+   are drawn as chips on the suggestion bar rather than in an action row, because
+   the row is shed for height (NIT-101).
+2. Open CopyClip or Emoji sideways and confirm you can close it again. The row
+   carrying the key that closes a panel is the row that was shed, so the bar keeps
+   the action strip rather than becoming a search box. Rotating back used to be the
+   only way out.
+3. On a small phone (SE, 12 mini, 13 mini) confirm the keyboard does not look
+   cramped. Landscape row spacing was cut 8 pt to 4 to get under the fingerprint
+   cap on those widths (NIT-114). The gap is dead space and no touch target moved,
+   but nobody has looked at it.
+
+**Dynamic Type** (NIT-19, shipped). Settings → Accessibility → Display & Text Size
+→ Larger Text.
+
+4. At **AX5**, confirm a Hebrew letter at roughly 32 pt still sits inside the key
+   rather than crowding `Theme.Radius.key`'s corner. This is the one the commits
+   flagged three separate times as needing a screen.
+5. At AX5, confirm the space bar's two-line badge tier does not read as cramped.
+6. Confirm the emoji category row is legible. **Its icons are deliberately not
+   scaled**, matching Apple's own keyboard, which grows the letter glyph at
+   accessibility sizes but not its control icons. NIT-19 named that row and left
+   it out on purpose, so the question is whether that decision holds at AX5.
+7. Back at the **default** size, confirm nothing got smaller. That is the failure
+   mode this work already hit once: the space bar drew its language name at 14.4 pt
+   where the shipped size is 15, on a 36 pt bottom row.
+
+---
+
 ## What none of this covers
 
-- Landscape and iPad. Not built.
-- Dynamic Type above the default size. Not built (another session is working on
-  it as of 2026-08-18).
+- iPad. Not built, and it currently ships to iPad with the iPhone geometry
+  stretched (NIT-177).
 - Real StoreKit. The paywall is unreachable behind `AppFeatureFlags.subscriptionPaywall`
   until NIT-20 lands.
 - Whether the keyboard survives a day of real use. Nothing here can tell you that
