@@ -168,8 +168,11 @@ whether the second one needs doing at all.
 and every other category has exactly zero. Only those cells carry the extra
 `DragGesture(minimumDistance: 0)` that competes with the scroll.
 
-- Sticks in **People or Recents only** → the gesture arbitration is real, and the
-  fix is to rewrite the hold as `LongPressGesture.sequenced(before: DragGesture)`.
+- Sticks in **People or Recents only** → the gesture arbitration is real. The
+  repair is *not* simply `LongPressGesture.sequenced(before: DragGesture)`: that
+  rewrite loses `pickerTookTouch`'s only reset point, and the cell then swallows
+  every later tap on it, permanently. NIT-184 has the detail; it needs solving
+  before that road is taken.
 - Sticks in **Flags, Food, Symbols or any other tab** → arbitration is refuted,
   those tabs have no such gesture, and the cause is somewhere nobody has looked.
 - **Does not stick at all** → the stranded tone strip was the whole of it, and
