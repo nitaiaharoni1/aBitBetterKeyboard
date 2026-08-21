@@ -74,6 +74,29 @@ public final class PersonalLanguageModel {
     private let url: URL?
     private var pendingWrites = 0
     private var loadedGeneration = 0
+    /// What the file looked like when `store` was decoded from it. See
+    /// `FileStamp` and `reload()`.
+    private var loadedStamp: FileStamp?
+
+    /// Enough of the file's identity to answer "is this the same bytes I already
+    /// decoded" without reading them.
+    ///
+    /// Size as well as time, because the two are independent and cheap: a
+    /// modification that keeps the length has to move the clock, and a
+    /// modification inside the clock's resolution has to be the same length to
+    /// slip past. Both together is a `stat`, against a read-and-decode of the
+    /// whole store.
+    ///
+    /// **What it cannot see** is a write that lands within the modification
+    /// date's resolution — around 100 ns at this end of the epoch — and produces
+    /// a file of exactly the same size. `save()` is `Data.write(options:
+    /// .atomic)`, a create and a rename, so two of those from two processes are
+    /// milliseconds apart at their closest. It is a real limit and not a
+    /// reachable one.
+    private struct FileStamp: Equatable {
+        let modified: Date
+        let size: Int
+    }
 
     /// - Parameter url: where to persist. Defaults to the App Group container;
     ///   `nil` keeps the model entirely in memory, which is what tests and the
@@ -121,17 +144,39 @@ public final class PersonalLanguageModel {
     /// copy is from launch and goes stale the moment you type elsewhere.
     /// A missing file is empty, not "keep what we had": Forget deletes the
     /// file, and a keyboard that is still alive must drop the old counts.
+    ///
+    /// **A file that has not moved is not read again**, which is what takes the
+    /// second full decode off the keyboard's cold launch path:
+    /// `KeyboardController.init` constructs `.shared`, whose `init` decodes the
+    /// store, and `KeyboardViewController.viewWillAppear` then calls this — two
+    /// reads and two decodes of the same bytes before the first frame.
+    ///
+    /// **The file decides, never a clock, and that is the point.** The obvious
+    /// version of this saving is "skip the reload when this is the instance's
+    /// first appearance, since nothing can change in between", and that
+    /// reasoning is unsound: iOS may build a keyboard extension's controller and
+    /// present it much later, and the user genuinely can go and press Forget in
+    /// the app inside that window. A stamp cannot be fooled by the length of the
+    /// gap — if the app rewrote the file, the stamp moved, and this reads it.
+    ///
+    /// An absent file is deliberately **not** an early return. Its stamp is nil,
+    /// the `if let` below fails, and the reset runs — which is the Forget case
+    /// the paragraph above is about.
     public func reload() {
         loadedGeneration = Self.generation
         guard let url else { return }
+        let stamp = Self.stamp(of: url)
+        if let stamp, stamp == loadedStamp { return }
         guard let data = try? Data(contentsOf: url),
             let decoded = try? JSONDecoder().decode(Store.self, from: data)
         else {
             store = Store()
             pendingWrites = 0
+            loadedStamp = nil
             return
         }
         store = decoded
+        loadedStamp = stamp
     }
 
     /// Whether the word is this user's own, firmly enough that autocorrect must
@@ -309,20 +354,38 @@ public final class PersonalLanguageModel {
 
     // MARK: Persistence
 
+    /// The file's size and modification date, or nil if it is not there.
+    private static func stamp(of url: URL) -> FileStamp? {
+        guard
+            let values = try? url.resourceValues(forKeys: [
+                .contentModificationDateKey, .fileSizeKey
+            ]),
+            let modified = values.contentModificationDate,
+            let size = values.fileSize
+        else { return nil }
+        return FileStamp(modified: modified, size: size)
+    }
+
     private func load() {
         loadedGeneration = Self.generation
         guard let url, let data = try? Data(contentsOf: url),
             let decoded = try? JSONDecoder().decode(Store.self, from: data)
         else { return }
         store = decoded
+        loadedStamp = Self.stamp(of: url)
     }
 
     /// Write now. Called on every 25th word and by `KeyboardViewController` as the
     /// keyboard goes away, which is the only moment it is certain there is one.
+    ///
+    /// Re-stamps, because the bytes on disk are now the bytes in memory: without
+    /// this every save would cost the next `reload()` a decode of what this
+    /// process had just written.
     public func save() {
         pendingWrites = 0
         guard let url, let data = try? JSONEncoder().encode(store) else { return }
         try? data.write(to: url, options: .atomic)
+        loadedStamp = Self.stamp(of: url)
     }
 
     /// Drop one word and the pairs it sat in. Saved now so a keyboard that
@@ -348,6 +411,9 @@ public final class PersonalLanguageModel {
         store = Store()
         pendingWrites = 0
         if let url { try? FileManager.default.removeItem(at: url) }
+        // The file this stamp described is gone. Leaving it behind would let a
+        // later `save()` and `reload()` pair agree that nothing had changed.
+        loadedStamp = nil
         Self.generation += 1
         loadedGeneration = Self.generation
     }

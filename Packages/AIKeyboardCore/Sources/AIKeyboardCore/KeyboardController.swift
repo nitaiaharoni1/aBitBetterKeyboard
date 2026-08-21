@@ -708,6 +708,24 @@ public final class KeyboardController: ObservableObject {
     /// user can get out of from inside the keyboard. A preview
     /// (`allowingIncomplete`) skips the globe repair so the editor canvas matches
     /// the model. The real keyboard still inserts it.
+    ///
+    /// **A layout that did not move is not republished, and on this property
+    /// that is worth more than the comparison costs.** `customization` is
+    /// `@Published`, and this is called twice on a cold launch — once from
+    /// `init` and once from `reloadCustomization()` in `viewWillAppear`, both
+    /// before the first frame — with the same stored bytes each time. Each
+    /// assignment fires `KeyboardView`'s observation and the extension's
+    /// `$customization` sink, which is `.receive(on: RunLoop.main)` and so buys
+    /// a runloop hop and a second `updateKeyboardHeight()` on top. The same
+    /// guard `updateKeyboardHeight()` and `applyBrandPalette()` already keep.
+    ///
+    /// Comparing is meaningful here because identity is stored rather than
+    /// generated: `SlotSpec.id` is a `Codable` `UUID`, so two decodes of one
+    /// blob carry the same ids, and `LayoutPreset.all` and
+    /// `KeyboardCustomization.default` are both `static let`. Were any of those a
+    /// computed `var`, every read would mint fresh ids, this guard would never
+    /// fire, and every appearance would be re-keying every `ForEach` in the
+    /// keyboard.
     public func apply(_ layout: KeyboardCustomization, allowingIncomplete: Bool = false) {
         var repaired = layout
         let hasGlobe = (repaired.bottomRow + repaired.cursorRow).contains { $0.action == .globe }
@@ -718,9 +736,11 @@ public final class KeyboardController: ObservableObject {
             repaired.bottomRow.insert(SlotSpec(action: .globe, width: .units(1.0)), at: index)
         }
         guard allowingIncomplete || LayoutValidator.isUsable(repaired) else {
+            guard customization != .default else { return }
             customization = .default
             return
         }
+        guard customization != repaired else { return }
         customization = repaired
     }
 

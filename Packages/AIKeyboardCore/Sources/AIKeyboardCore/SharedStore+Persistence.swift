@@ -62,10 +62,63 @@ extension SharedStore {
         keyboardLayout = .default
     }
 
+    // MARK: Migrations
+
+    /// Writes back the three values `load()` read as something other than what
+    /// was stored.
+    ///
+    /// **This is the exception `persist(_:forKey:)` exists to have.** A load that
+    /// suppressed every write would be cheap and would silently stop three
+    /// upgrades from sticking, which is the trap NIT-186 names and the reason
+    /// this is a named function rather than a flag.
+    ///
+    /// **All three are self-limiting**, which is what makes them affordable:
+    /// performing the write is exactly what stops the condition holding next
+    /// time, so each costs one write per install and then nothing, for the life
+    /// of that install. Anything added here has to have that property, or it
+    /// puts a write back on every launch of every keyboard.
+    ///
+    /// These go through `defaults` and the two writers directly rather than
+    /// through `persist(_:forKey:)`, because the whole point of them is to write
+    /// while `isLoading` is still set.
+    private func persistMigrations(layoutMigrated: Bool, copyclipMigrated: Bool) {
+        // The pre-three-way boolean, upgraded by `storedAutocorrectLevel`. Also
+        // catches a fresh install, where neither key exists and the accessor
+        // hands back the shipped default — which is what the unconditional
+        // write-back did, so keeping it here keeps the stored plist identical to
+        // what every previous build produced.
+        if defaults.object(forKey: Key.autocorrectLevel) == nil {
+            defaults.set(autocorrectLevel.rawValue, forKey: Key.autocorrectLevel)
+        }
+        // The pre-`CopyclipRecord` `[Clip]` array.
+        if copyclipMigrated { writeCopyclipRecord(copyclipRecord) }
+        // The `.globe` → `.settings` repair, or a stored blob that exists and
+        // cannot be used. A refreshed preset is deliberately not either of those
+        // — see `decodedLayout(from:)`.
+        if layoutMigrated { writeLayout(keyboardLayout) }
+    }
+
     // MARK: Load
 
     /// Loads persisted values without firing the `didSet` writes above.
+    ///
+    /// **That sentence was false for the whole of this function's life, and is
+    /// now true.** `didSet` fires on every assignment outside `init`, so each
+    /// load wrote back all twenty-two values it had just read — two of them full
+    /// JSON encodes re-serialising the layout and the copyclip record a line
+    /// after deserialising them — and the keyboard runs this twice on a cold
+    /// launch, in `viewDidLoad` and again in `viewWillAppear`, both before the
+    /// first frame. `isLoading` and `persist(_:forKey:)` are what make the
+    /// comment describe the code.
+    ///
+    /// The suppression is **not** wholesale, because three of the assignments
+    /// below are migrations and for those the write-back is the thing that makes
+    /// the migration stick. They are written explicitly by
+    /// `persistMigrations(...)`, outside the window, and each one is
+    /// self-limiting: writing it is what stops it being asked for again.
     public func load() {
+        isLoading = true
+        defer { isLoading = false }
         Self.removeRetiredKeys(from: defaults)
 
         if defaults.object(forKey: Key.hasCompletedOnboarding) != nil {
@@ -130,8 +183,11 @@ extension SharedStore {
         emojiSkinTone = storedEmojiSkinTone
         // Absent key and unreadable JSON both stay empty. An empty stored
         // record is a user who tapped Clear, and must not be treated as missing.
+        var copyclipMigrated = false
         if defaults.data(forKey: Key.copyclipHistory) != nil {
-            copyclipRecord = Self.decodeCopyclipRecord(from: defaults)
+            let decoded = cachedCopyclipRecord()
+            copyclipRecord = decoded.record
+            copyclipMigrated = decoded.migrated
         }
         if defaults.object(forKey: Key.isSubscribed) != nil {
             isSubscribed = defaults.bool(forKey: Key.isSubscribed)
@@ -143,7 +199,10 @@ extension SharedStore {
         // absent key and for anything it cannot use. A guard here would be a
         // second opinion about what "no stored layout" means, and the two would
         // eventually disagree.
-        keyboardLayout = Self.decodeLayout(from: defaults)
+        let layout = cachedLayout()
+        keyboardLayout = layout.layout
+
+        persistMigrations(layoutMigrated: layout.migrated, copyclipMigrated: copyclipMigrated)
 
         // The app and the keyboard are separate processes, and a process always
         // sees its own writes — so the only way to observe that the App Group is

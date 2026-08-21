@@ -178,4 +178,96 @@ final class LayoutStoreTests: XCTestCase {
         defaults.set(try JSONEncoder().encode(power), forKey: SharedStore.layoutKey)
         XCTAssertEqual(SharedStore.decodeLayout(from: defaults), power)
     }
+
+    // MARK: What counts as a migration
+
+    /// The one that costs every install a JSON encode per launch if it is wrong.
+    ///
+    /// `load()` no longer writes back what it read, so `decodedLayout` has to say
+    /// which decodes actually changed the stored shape — and reloading a named
+    /// preset is not one of them. Almost every install is on a preset, and the
+    /// refresh is re-derived on every read *by design*, so reporting it would put
+    /// a full re-encode of the layout back on the launch path for everybody and
+    /// would never stop: writing it leaves `preset` set, so the next load
+    /// refreshes and reports again.
+    func testARefreshedPresetIsNotReportedAsAMigration() throws {
+        var stale = LayoutPreset.named("power")!.customization
+        stale.showsNumberRow.toggle()
+        defaults.set(try JSONEncoder().encode(stale), forKey: SharedStore.layoutKey)
+
+        let decoded = SharedStore.decodedLayout(from: defaults)
+        XCTAssertEqual(
+            decoded.layout, LayoutPreset.named("power")!.customization,
+            "the refresh itself still has to happen")
+        XCTAssertFalse(decoded.migrated)
+    }
+
+    /// The globe repair does count, because it replaces a key an older build
+    /// stored with a different one — and writing it is what stops the next load
+    /// being asked, since the layout then holds `.settings`.
+    func testTheGlobeRepairIsReportedAsAMigration() throws {
+        var old = KeyboardCustomization.default
+        old.preset = nil
+        old.barTrailing = old.barTrailing.map { slot in
+            var copy = slot
+            if copy.action == .settings { copy.action = .globe }
+            return copy
+        }
+        old.bottomRow = old.bottomRow.map { slot in
+            var copy = slot
+            if copy.action == .settings { copy.action = .globe }
+            return copy
+        }
+        try XCTSkipUnless(
+            (old.barLeading + old.barTrailing + old.bottomRow + old.cursorRow)
+                .contains { $0.action == .globe },
+            "the shipped default no longer has a settings key to age backwards")
+        defaults.set(try JSONEncoder().encode(old), forKey: SharedStore.layoutKey)
+
+        let decoded = SharedStore.decodedLayout(from: defaults)
+        XCTAssertTrue(decoded.migrated)
+        XCTAssertTrue(
+            (decoded.layout.barLeading + decoded.layout.barTrailing + decoded.layout.bottomRow
+                + decoded.layout.cursorRow).contains { $0.action == .settings })
+    }
+
+    /// **The condition is not the branch, and this is the difference.** An edited
+    /// layout with no `.settings` key enters the globe repair and comes out
+    /// unchanged, because it had no `.globe` key either. Reporting that as a
+    /// migration would ask for a write that changes nothing — and, worse, would
+    /// not stop the next load asking for it again, because the layout still has
+    /// no `.settings` key. The broken version returns true here.
+    func testALayoutWithNeitherGlobeNorSettingsIsNotAMigration() throws {
+        var edited = KeyboardCustomization.default
+        edited.preset = nil
+        let stripped: ([SlotSpec]) -> [SlotSpec] = { slots in
+            slots.filter { $0.action != .settings && $0.action != .globe }
+        }
+        edited.barLeading = stripped(edited.barLeading)
+        edited.barTrailing = stripped(edited.barTrailing)
+        edited.bottomRow = stripped(edited.bottomRow)
+        edited.cursorRow = stripped(edited.cursorRow)
+        try XCTSkipUnless(
+            LayoutValidator.isUsable(edited),
+            "removing the settings key alone made the layout unusable")
+        defaults.set(try JSONEncoder().encode(edited), forKey: SharedStore.layoutKey)
+
+        XCTAssertFalse(SharedStore.decodedLayout(from: defaults).migrated)
+    }
+
+    /// A blob that exists and cannot be used is replaced with the default, and
+    /// that replacement has to reach the plist or the error is logged on every
+    /// launch forever.
+    func testAStoredBlobThatCannotBeDecodedIsReportedAsAMigration() {
+        defaults.set(Data("not json".utf8), forKey: SharedStore.layoutKey)
+        let decoded = SharedStore.decodedLayout(from: defaults)
+        XCTAssertEqual(decoded.layout, .default)
+        XCTAssertTrue(decoded.migrated)
+    }
+
+    /// No stored blob is not a migration: there is nothing to replace, and the
+    /// shipped default is what an absent key already means.
+    func testAnAbsentLayoutIsNotAMigration() {
+        XCTAssertFalse(SharedStore.decodedLayout(from: defaults).migrated)
+    }
 }

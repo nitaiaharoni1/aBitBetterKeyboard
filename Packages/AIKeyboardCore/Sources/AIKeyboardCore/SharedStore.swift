@@ -2,6 +2,49 @@ import Foundation
 import Combine
 import os
 
+/// One decode of a stored JSON blob, kept against the exact bytes it was made
+/// from.
+///
+/// **The key is the stored `Data` and never a timestamp, a flag or a "first
+/// time" test**, for the same reason `PersonalLanguageModel`'s file stamp is the
+/// file rather than a clock: the app is a second process and can rewrite a
+/// setting at any moment, so the only question that is safe to ask is "are these
+/// the same bytes I decoded". Everything the `stored*` accessors promise about
+/// freshness survives — `UserDefaults` is still read at the moment of use, and a
+/// value the app changed is different bytes and therefore a real decode.
+///
+/// What it removes is repetition. The keyboard decoded the stored layout **five
+/// times** before its first frame — `load()` and `KeyboardController.init` and
+/// `reloadCustomization()` in `viewDidLoad`, then `load()` and
+/// `reloadCustomization()` again in `viewWillAppear` — each one running
+/// `JSONDecoder`, the preset refresh, the globe repair and `LayoutValidator`
+/// over bytes that had not moved. Comparing them is a memcmp.
+///
+/// Locked because `SharedStore` is not bound to an actor. Every current reader
+/// is on the main one; the lock is what stops that being load-bearing.
+final class StoredDecode<Value> {
+
+    private let lock = NSLock()
+    private var data: Data?
+    private var value: Value?
+
+    /// The decoded value for these bytes, decoding only if they are not the
+    /// bytes already held.
+    ///
+    /// An absent key caches too, and deliberately: nil bytes are a fact about
+    /// the store like any other, and re-deciding "there is no stored layout"
+    /// costs the same walk through the preset table as deciding it once.
+    func value(for data: Data?, decode: () -> Value) -> Value {
+        lock.lock()
+        defer { lock.unlock() }
+        if let value, self.data == data { return value }
+        let decoded = decode()
+        self.data = data
+        self.value = decoded
+        return decoded
+    }
+}
+
 /// Settings the app writes and the keyboard reads.
 ///
 /// Both targets carry the App Group entitlement, so `UserDefaults(suiteName:)`
@@ -37,6 +80,41 @@ public final class SharedStore: ObservableObject {
     /// the extension in the keyboard, and fails silently in exactly one of the
     /// two processes. `BackendTransport.configured` shipped that bug.
     public var userDefaults: UserDefaults { defaults }
+
+    /// Set for the length of `load()`. See `persist(_:forKey:)`.
+    var isLoading = false
+
+    /// The two settings held as JSON rather than as a scalar, and therefore the
+    /// two whose reads cost a decode. Internal rather than private so
+    /// `SharedStore+Layout.swift` can reach the first. See `StoredDecode`.
+    let layoutCache = StoredDecode<(layout: KeyboardCustomization, migrated: Bool)>()
+    let copyclipCache = StoredDecode<(record: CopyclipRecord, migrated: Bool)>()
+
+    /// The `didSet` write-back, skipped while `load()` is the one assigning.
+    ///
+    /// **`load()`'s doc comment claimed for its whole life that it read without
+    /// firing these writes, and `didSet` fires on every assignment outside
+    /// `init`, so the opposite was true.** Each `load()` assigned twenty-two
+    /// published properties and each one wrote straight back the value it had
+    /// just read: twenty-two `UserDefaults` writes, two of them full JSON
+    /// *encodes* re-serialising the layout and the copyclip record a line after
+    /// deserialising them. The keyboard calls `load()` twice on a cold launch,
+    /// in `viewDidLoad` and again in `viewWillAppear`, both before the first
+    /// frame.
+    ///
+    /// **It suppresses the write and nothing else**, which is why this is a
+    /// helper rather than a guard at the top of each `didSet`: `brandPalette`'s
+    /// `didSet` also puts the accent into `Theme`, and that half has to run on a
+    /// load or the process draws the shipped colour over the user's.
+    ///
+    /// The three assignments in `load()` that are genuine **migrations** write
+    /// themselves, explicitly, at the end of it — see `persistMigrations()`. A
+    /// wholesale suppression without that would be a migration that silently
+    /// stopped sticking, which is the trap NIT-186 names.
+    func persist(_ value: Any?, forKey key: String) {
+        guard !isLoading else { return }
+        defaults.set(value, forKey: key)
+    }
 
     static let log = Logger(subsystem: "com.nitai.aikeyboard", category: "SharedStore")
 
@@ -159,7 +237,7 @@ public final class SharedStore: ObservableObject {
     // MARK: Onboarding
 
     @Published public var hasCompletedOnboarding: Bool = false {
-        didSet { defaults.set(hasCompletedOnboarding, forKey: Key.hasCompletedOnboarding) }
+        didSet { persist(hasCompletedOnboarding, forKey: Key.hasCompletedOnboarding) }
     }
 
     /// Whether the user has ever confirmed, in the app, that they switched to AI
@@ -167,7 +245,7 @@ public final class SharedStore: ObservableObject {
     /// running — `KeyboardPresence` is the closest honest signal — and this is
     /// the user-side confirmation that the handoff happened.
     @Published public var hasAcknowledgedKeyboardSwitch: Bool = false {
-        didSet { defaults.set(hasAcknowledgedKeyboardSwitch, forKey: Key.hasAcknowledgedKeyboardSwitch) }
+        didSet { persist(hasAcknowledgedKeyboardSwitch, forKey: Key.hasAcknowledgedKeyboardSwitch) }
     }
 
     // MARK: Look
@@ -181,7 +259,11 @@ public final class SharedStore: ObservableObject {
     /// `onChange` — would render one frame in the old accent.
     @Published public var brandPalette: BrandPalette = .orange {
         didSet {
-            defaults.set(brandPalette.rawValue, forKey: Key.brandPalette)
+            persist(brandPalette.rawValue, forKey: Key.brandPalette)
+            // Outside `persist`, deliberately: this half of the `didSet` is the
+            // reason `load()` assigns this property unconditionally, and
+            // suppressing it during a load would leave `Theme.palette` on the
+            // shipped accent in a process that had just read the user's.
             Theme.palette = brandPalette
         }
     }
@@ -211,7 +293,7 @@ public final class SharedStore: ObservableObject {
     public static let shippedDefaultLanguages: [KeyboardLanguage] = [.english, .hebrew]
 
     @Published public var enabledLanguages: [KeyboardLanguage] = SharedStore.shippedDefaultLanguages {
-        didSet { defaults.set(enabledLanguages.map(\.rawValue), forKey: Key.enabledLanguages) }
+        didSet { persist(enabledLanguages.map(\.rawValue), forKey: Key.enabledLanguages) }
     }
 
     /// The language list as the keyboard must read it: from UserDefaults at the
@@ -297,7 +379,7 @@ public final class SharedStore: ObservableObject {
     /// `AutocorrectLevel.shippedDefault` carries the default and the measurement
     /// behind it.
     @Published public var autocorrectLevel: AutocorrectLevel = .shippedDefault {
-        didSet { defaults.set(autocorrectLevel.rawValue, forKey: Key.autocorrectLevel) }
+        didSet { persist(autocorrectLevel.rawValue, forKey: Key.autocorrectLevel) }
     }
 
     /// Whether space may replace the typed word with the default suggestion, and
@@ -338,13 +420,13 @@ public final class SharedStore: ObservableObject {
     /// field without a tap, and nobody should be opted into that. The wait is
     /// `idleDelayMs`, not a hardcoded 300.
     @Published public var completeOnIdle = false {
-        didSet { defaults.set(completeOnIdle, forKey: Key.completeOnIdle) }
+        didSet { persist(completeOnIdle, forKey: Key.completeOnIdle) }
     }
 
     /// Add a space after a 300 ms pause. Separate from completing the word, and
     /// off for the same reason: a space the user did not press is easy to hate.
     @Published public var spaceOnIdle = false {
-        didSet { defaults.set(spaceOnIdle, forKey: Key.spaceOnIdle) }
+        didSet { persist(spaceOnIdle, forKey: Key.spaceOnIdle) }
     }
 
     /// Same cross-process rule as `storedAutocorrectLevel`: the toggle is in the app
@@ -368,7 +450,7 @@ public final class SharedStore: ObservableObject {
     /// to 600: shorter than 200 catches the gap between keys, longer than 600
     /// is a wait you feel as the keyboard ignoring you.
     @Published public var idleDelayMs = 300 {
-        didSet { defaults.set(idleDelayMs, forKey: Key.idleDelayMs) }
+        didSet { persist(idleDelayMs, forKey: Key.idleDelayMs) }
     }
 
     public static let idleDelayChoices = Array(stride(from: 200, through: 600, by: 100))
@@ -386,7 +468,7 @@ public final class SharedStore: ObservableObject {
     }
 
     @Published public var autocapitalise = true {
-        didSet { defaults.set(autocapitalise, forKey: Key.autocapitalise) }
+        didSet { persist(autocapitalise, forKey: Key.autocapitalise) }
     }
 
     /// Same cross-process rule as `storedAutocorrectLevel`: the toggle is in the app
@@ -398,13 +480,13 @@ public final class SharedStore: ObservableObject {
         return autocapitalise
     }
 
-    @Published public var predictions = true { didSet { defaults.set(predictions, forKey: Key.predictions) } }
+    @Published public var predictions = true { didSet { persist(predictions, forKey: Key.predictions) } }
 
     /// How many letters share one key. `.off` ships, and that is not timidity:
     /// `Bar/grouped/` measured the trade and the gentlest setting still costs
     /// about a point and a half of accuracy, which nobody should be opted into.
     @Published public var groupedLevel: GroupedKeys.Level = .off {
-        didSet { defaults.set(groupedLevel.rawValue, forKey: Key.groupedLevel) }
+        didSet { persist(groupedLevel.rawValue, forKey: Key.groupedLevel) }
     }
 
     /// **Read at the keystroke, never from the `@Published` copy.** Exactly the
@@ -430,8 +512,8 @@ public final class SharedStore: ObservableObject {
         return predictions
     }
 
-    @Published public var haptics = true { didSet { defaults.set(haptics, forKey: Key.haptics) } }
-    @Published public var keySounds = true { didSet { defaults.set(keySounds, forKey: Key.keySounds) } }
+    @Published public var haptics = true { didSet { persist(haptics, forKey: Key.haptics) } }
+    @Published public var keySounds = true { didSet { persist(keySounds, forKey: Key.keySounds) } }
 
     /// The two feedback switches, as `Feedback` reads them at the press.
     ///
@@ -459,7 +541,7 @@ public final class SharedStore: ObservableObject {
     /// that already has `haptics` off keeps it off with nothing to migrate, and
     /// so turning haptics back on returns the strength the user last chose.
     @Published public var hapticStrength: HapticStrength = .default {
-        didSet { defaults.set(hapticStrength.rawValue, forKey: Key.hapticStrength) }
+        didSet { persist(hapticStrength.rawValue, forKey: Key.hapticStrength) }
     }
 
     /// Same cross-process rule as the pair above, and the same consequence: the
@@ -474,7 +556,7 @@ public final class SharedStore: ObservableObject {
     // MARK: AI
 
     @Published public var defaultTone: ToneStyle = .normal {
-        didSet { defaults.set(defaultTone.rawValue, forKey: Key.defaultTone) }
+        didSet { persist(defaultTone.rawValue, forKey: Key.defaultTone) }
     }
 
     // MARK: Dictation handoff
@@ -583,7 +665,7 @@ public final class SharedStore: ObservableObject {
     /// `KeyboardController.refreshSuggestions`.
     @Published public var personalDictionary: [String] = SharedStore.shippedPersonalDictionary
     {
-        didSet { defaults.set(personalDictionary, forKey: Key.personalDictionary) }
+        didSet { persist(personalDictionary, forKey: Key.personalDictionary) }
     }
 
     /// The same list, read out of the store at the moment it is needed.
@@ -626,7 +708,7 @@ public final class SharedStore: ObservableObject {
     /// process-local (see `SharedStore.storage`) and recents live only as long as
     /// the extension does — the same honest degradation the rest of the store has.
     @Published public var recentEmoji: [String] = SharedStore.shippedRecentEmoji {
-        didSet { defaults.set(recentEmoji, forKey: Key.recentEmoji) }
+        didSet { persist(recentEmoji, forKey: Key.recentEmoji) }
     }
 
     /// The same list, read at the moment it is needed, for the reason
@@ -644,7 +726,7 @@ public final class SharedStore: ObservableObject {
     /// number so an older build reading a newer one sees an `Int` it can fall
     /// back from rather than a decode failure — see `EmojiSkinTone.stored(_:)`.
     @Published public var emojiSkinTone: EmojiSkinTone = .generic {
-        didSet { defaults.set(emojiSkinTone.rawValue, forKey: Key.emojiSkinTone) }
+        didSet { persist(emojiSkinTone.rawValue, forKey: Key.emojiSkinTone) }
     }
 
     /// Read at the moment it is needed, because the process that wrote it is not
@@ -665,7 +747,7 @@ public final class SharedStore: ObservableObject {
     /// after Clear the next time iOS tore the keyboard down. The write is in
     /// `didSet` the way `recentEmoji` and the layout already are.
     @Published public var copyclipRecord: CopyclipRecord = .empty {
-        didSet { writeCopyclipRecord(copyclipRecord) }
+        didSet { if !isLoading { writeCopyclipRecord(copyclipRecord) } }
     }
 
     public static let copyclipHistoryKey = Key.copyclipHistory
@@ -673,20 +755,46 @@ public final class SharedStore: ObservableObject {
     /// Re-read at the moment of use. An empty stored list is a list the user
     /// cleared, not a missing key.
     public var storedCopyclipRecord: CopyclipRecord {
-        Self.decodeCopyclipRecord(from: defaults)
+        cachedCopyclipRecord().record
+    }
+
+    /// The stored record and whether reading it meant upgrading the older
+    /// `[Clip]` shape, decoded at most once per distinct stored value. See
+    /// `StoredDecode`.
+    func cachedCopyclipRecord() -> (record: CopyclipRecord, migrated: Bool) {
+        copyclipCache.value(for: defaults.data(forKey: Key.copyclipHistory)) {
+            Self.decodedCopyclipRecord(from: defaults)
+        }
     }
 
     static func decodeCopyclipRecord(from defaults: UserDefaults) -> CopyclipRecord {
-        guard let data = defaults.data(forKey: Key.copyclipHistory) else { return .empty }
-        if let record = try? JSONDecoder().decode(CopyclipRecord.self, from: data) {
-            return record
-        }
-        if let clips = try? JSONDecoder().decode([Clip].self, from: data) {
-            return CopyclipRecord(clips: clips, lastChangeCount: -1)
-        }
-        return .empty
+        decodedCopyclipRecord(from: defaults).record
     }
 
+    /// The same decode, plus whether the bytes were the pre-`CopyclipRecord`
+    /// `[Clip]` array. Same shape and same single caller as
+    /// `decodedLayout(from:)`: `persistMigrations()` is what keeps the upgrade in
+    /// the plist now that a load does not write back what it read. Writing it
+    /// once is what stops it being asked again, since the blob is then the new
+    /// shape.
+    static func decodedCopyclipRecord(
+        from defaults: UserDefaults
+    ) -> (
+        record: CopyclipRecord, migrated: Bool
+    ) {
+        guard let data = defaults.data(forKey: Key.copyclipHistory) else { return (.empty, false) }
+        if let record = try? JSONDecoder().decode(CopyclipRecord.self, from: data) {
+            return (record, false)
+        }
+        if let clips = try? JSONDecoder().decode([Clip].self, from: data) {
+            return (CopyclipRecord(clips: clips, lastChangeCount: -1), true)
+        }
+        return (.empty, false)
+    }
+
+    /// Encodes and writes, with no opinion about whether it should have been
+    /// called. The `didSet` above holds the `isLoading` guard, for the reason
+    /// `writeLayout` gives.
     func writeCopyclipRecord(_ record: CopyclipRecord) {
         guard let data = try? JSONEncoder().encode(record) else {
             Self.log.error("copyclip history could not be encoded, the change was not saved")
@@ -699,7 +807,7 @@ public final class SharedStore: ObservableObject {
 
     /// The shape of the keyboard, as the editor in the app last left it.
     @Published public var keyboardLayout: KeyboardCustomization = .default {
-        didSet { writeLayout(keyboardLayout) }
+        didSet { if !isLoading { writeLayout(keyboardLayout) } }
     }
 
     // MARK: Screen context
@@ -714,13 +822,13 @@ public final class SharedStore: ObservableObject {
     /// argument is measured on iOS in `ScreenContextBarTests` — so a switch
     /// promising otherwise would be a promise no code keeps.
     @Published public var screenContextAllowed = false {
-        didSet { defaults.set(screenContextAllowed, forKey: Key.screenContextAllowed) }
+        didSet { persist(screenContextAllowed, forKey: Key.screenContextAllowed) }
     }
 
     // MARK: Billing
 
     @Published public var isSubscribed = false {
-        didSet { defaults.set(isSubscribed, forKey: Key.isSubscribed) }
+        didSet { persist(isSubscribed, forKey: Key.isSubscribed) }
     }
 
 }
