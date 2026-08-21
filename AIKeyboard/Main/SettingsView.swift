@@ -19,6 +19,11 @@ struct SettingsView: View {
     /// on top.
     @State private var memory: KeyboardMemoryPeak?
 
+    /// Written by the same process at the two ends of a launch, and read here
+    /// for the same reason `memory` is. See `KeyboardLaunchRecord`, which says
+    /// what the two counters mean together and why neither means anything alone.
+    @State private var launch: KeyboardLaunchRecord?
+
     /// Whether the Reset row has been tapped on this visit, which is the only
     /// thing it has to say afterwards: the identifier is gone the instant it is
     /// pressed and the next one is not made until something is sent, so there is
@@ -76,11 +81,13 @@ struct SettingsView: View {
         .onAppear {
             setup = .current(store: store)
             memory = KeyboardMemoryPeak.load()
+            launch = KeyboardLaunchRecord.load()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             setup = .current(store: store)
             memory = KeyboardMemoryPeak.load()
+            launch = KeyboardLaunchRecord.load()
         }
     }
 
@@ -293,7 +300,38 @@ struct SettingsView: View {
                         keyboard does not have Full Access.
                         """)
             }
+            // Shown only when there is a reading for this boot, and with no
+            // empty-state twin. The memory row above already carries the one
+            // "use the keyboard and come back" sentence this screen needs, and
+            // a second copy of it under a different icon would read as a second
+            // thing being wrong.
+            if let launch, launch.bootIdentity == KeyboardPresence.bootIdentity {
+                Divider.themed
+                InfoRow(
+                    icon: "bolt.horizontal",
+                    tint: launch.loads > launch.presentations ? Theme.Semantic.warning : nil,
+                    title: "Keyboard launches",
+                    detail: launchDetail(launch))
+            }
         }
+    }
+
+    /// **The gap between the two counters is the reading, so it is what leads.**
+    /// A launch that began and never reached the screen is the shape of the
+    /// report this was built for; the timing is what says whether the ones that
+    /// did arrive were close to losing the same race. See `KeyboardLaunchRecord`
+    /// for why one point of gap is noise and a ratio is evidence.
+    private func launchDetail(_ launch: KeyboardLaunchRecord) -> String {
+        let missing = launch.loads - launch.presentations
+        var parts = ["\(launch.loads) launch\(launch.loads == 1 ? "" : "es")"]
+        parts.append(
+            missing > 0
+                ? "\(missing) never reached the screen"
+                : "all reached the screen")
+        if launch.presentations > 0 {
+            parts.append(String(format: "slowest %.0f ms", launch.slowestPresentMS))
+        }
+        return parts.joined(separator: ", ")
     }
 
     /// Peak first, because it is the number that answers the question, and the

@@ -33,9 +33,18 @@ final class KeyboardViewController: UIInputViewController {
     /// keyboard that starts without Full Access and is granted it mid-process
     /// still gets to leave one. See `recordPresence()`.
     private var hasRecordedPresence = false
+    /// When `viewDidLoad` ran, so the first appearance can say how long it took
+    /// to get there. See `KeyboardLaunchRecord`.
+    private var loadedAt: UInt64?
+    /// Latched after the first appearance of *this instance*, for the reason
+    /// `KeyboardLaunchRecord.presentations` gives: iOS reuses one instance across
+    /// fields, and counting every appearance would leave the two counters
+    /// measuring different things.
+    private var hasRecordedPresentation = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        recordLaunch(.loaded)
 
         // `store.load()` is what puts the palette into `Theme` at launch, through
         // `brandPalette`'s `didSet` — so there is deliberately no
@@ -290,6 +299,7 @@ final class KeyboardViewController: UIInputViewController {
             .shared, as: .keyboard, ownUIHeightFraction: ownUIHeightFraction())
         recordPresence()
         recordMemory()
+        recordFirstPresentation()
         // Off the main thread, and from here rather than `viewDidLoad` for the
         // reason `recordPresence()` gives: this is the moment the keyboard is
         // genuinely in use, and it is off the path between the keyboard being
@@ -340,6 +350,33 @@ final class KeyboardViewController: UIInputViewController {
         DispatchQueue.global(qos: .utility).async {
             KeyboardMemoryPeak.record(reading, warning: warning)
         }
+    }
+
+    /// Counts one end of a launch, off the main thread.
+    ///
+    /// **The dispatch is the point rather than a nicety.** This instrument
+    /// measures the path between the keyboard being asked for and the keys being
+    /// drawn, and a synchronous file write on that path would be measuring
+    /// itself. The clock is read here so it describes the moment that called it,
+    /// the same split `recordMemory()` uses.
+    private func recordLaunch(_ moment: KeyboardLaunchRecord.Moment) {
+        let now = CaptureClock.now()
+        if case .loaded = moment { loadedAt = now }
+        DispatchQueue.global(qos: .utility).async {
+            KeyboardLaunchRecord.record(moment, now: now)
+        }
+    }
+
+    /// The other end of the launch this instance began.
+    ///
+    /// Silent when `loadedAt` is missing rather than reporting a zero: a
+    /// duration nobody measured is not a fast launch, and `slowestPresentMS`
+    /// would be the field it lied to.
+    private func recordFirstPresentation() {
+        guard !hasRecordedPresentation, let loadedAt else { return }
+        hasRecordedPresentation = true
+        let millis = Double(CaptureClock.now() &- loadedAt) / 1_000_000
+        recordLaunch(.presented(millis: millis))
     }
 
     /// Leaves the containing app the one piece of evidence it can have that this
