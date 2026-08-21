@@ -317,6 +317,19 @@ struct EmojiPickCell: View {
             isTracking = false
             if isShowing { withAnimation(Theme.Motion.quick) { picker = nil } }
         }
+        // **The cleanup above cannot run if this view stops existing**, and
+        // inside a `LazyHGrid` that is an ordinary thing to happen: `@GestureState`
+        // resets and `onChange` fires only while something is still tracking the
+        // gesture. A cell recycled while it owned the strip left `picker` set with
+        // no other writer, and `EmojiPanel`'s `scrollDisabled` then froze the grid
+        // until the panel was closed. Guarded on ownership like every other path
+        // here, so a cell scrolling away while a *different* cell steers a strip
+        // does not close it.
+        .onDisappear {
+            holdTask?.cancel()
+            holdTask = nil
+            if isShowing { picker = nil }
+        }
     }
 
     private func hold(in geo: GeometryProxy) -> some Gesture {

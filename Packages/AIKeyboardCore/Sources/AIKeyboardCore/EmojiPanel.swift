@@ -224,7 +224,33 @@ public struct EmojiPanel: View {
             // over the rows either side of the cell that opened it.
             .overlay(alignment: .topLeading) {
                 if let tonePicker {
-                    EmojiTonePickerView(picker: tonePicker, surface: geo.size)
+                    // **A strip needs a way out that is not the finger that
+                    // opened it, because that finger is the only one there was.**
+                    // Every path that closes this lives in `EmojiPickCell` and is
+                    // guarded on that cell still owning the strip, so a cell that
+                    // stops observing — recycled out of the `LazyHGrid`, or torn
+                    // down between a rebuild and a lift — leaves `tonePicker` set
+                    // with nobody able to clear it, and `scrollDisabled` below
+                    // then freezes the grid for as long as the panel is open. The
+                    // user's only escape was closing emoji and reopening it. This
+                    // is the escape: one tap anywhere on the panel, whatever
+                    // stranded it.
+                    //
+                    // **Under the strip so it does not draw over it, and a tap on
+                    // the strip dismisses too** — `EmojiTonePickerView` is
+                    // `allowsHitTesting(false)`, because the finger that opened it
+                    // is what steers it and the strip must never take the touch.
+                    // So there is no part of the panel this does not answer for,
+                    // which is what makes it an escape rather than a target to
+                    // find.
+                    ZStack(alignment: .topLeading) {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(Theme.Motion.quick) { self.tonePicker = nil }
+                            }
+                        EmojiTonePickerView(picker: tonePicker, surface: geo.size)
+                    }
                 }
             }
         }
@@ -261,6 +287,27 @@ public struct EmojiPanel: View {
         guard rows > 0 else { return }
         sections = Self.sections(recent: recent, rowCount: rows)
         sectionRowCount = rows
+        tonePicker = Self.pickerSurviving(tonePicker, in: sections)
+    }
+
+    /// The open tone strip that is still steerable after a rebuild, or nil.
+    ///
+    /// **A cell id is a position, not an emoji** — `"\(category)-\(index)"`,
+    /// where the index counts through a section padded out to whole columns. So
+    /// a rebuild at a different row count renumbers every cell after the first
+    /// short section, and a strip left open across one is owned by an id that now
+    /// names a different emoji or no cell at all. Both are worse than closing it:
+    /// the first inserts a tone of something nobody held, and the second is
+    /// unclosable, because the only code that clears `tonePicker` is the cell
+    /// whose id matches `owner`.
+    static func pickerSurviving(
+        _ picker: EmojiTonePicker?, in sections: [Section]
+    ) -> EmojiTonePicker? {
+        guard let picker else { return nil }
+        let owned = sections.contains { section in
+            section.cells.contains { $0.id == picker.owner }
+        }
+        return owned ? picker : nil
     }
 
     /// Set by a tab tap, consumed by the grid's `ScrollViewReader`. A piece of

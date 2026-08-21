@@ -868,4 +868,63 @@ final class EmojiModeTests: XCTestCase {
             !toneScalars.contains($0) && $0 != 0xFE0F
         }
     }
+
+    // MARK: A strip whose cell is gone
+
+    /// **The grid stops scrolling while a strip is open, on purpose, so a strip
+    /// nobody can close is a grid nobody can scroll.** Every path that clears
+    /// `EmojiPanel.tonePicker` lives in `EmojiPickCell` and is guarded on that
+    /// cell still owning it, so an owner that is no longer on the strip has no
+    /// writer at all and `scrollDisabled` stays on until the panel is closed.
+    ///
+    /// The broken version returns the picker unchanged, which is why the
+    /// assertion is `XCTAssertNil` rather than anything about the contents.
+    func testAStripWhoseCellIsNoLongerOnTheGridDoesNotSurviveARebuild() {
+        let sections = EmojiPanel.sections(recent: [], rowCount: 4)
+        let orphan = picker(owner: "People-999999")
+
+        XCTAssertNil(EmojiPanel.pickerSurviving(orphan, in: sections))
+    }
+
+    /// The control the test above needs: a function that always answered nil
+    /// would pass it, and would close every tone strip the instant a rebuild
+    /// touched the grid.
+    func testAStripWhoseCellIsStillThereSurvivesARebuild() throws {
+        let sections = EmojiPanel.sections(recent: [], rowCount: 4)
+        let live = try XCTUnwrap(sections.first?.cells.first?.id)
+        let open = picker(owner: live)
+
+        XCTAssertEqual(EmojiPanel.pickerSurviving(open, in: sections)?.owner, live)
+    }
+
+    /// **A cell id is a position and the row count renumbers it**, which is the
+    /// case this guards that a fabricated id does not: the same held emoji has a
+    /// different id at a different row count, so a strip carried across a rebuild
+    /// would be steering a cell the user never touched.
+    func testTheSameEmojiHasADifferentCellIdAtADifferentRowCount() {
+        let four = EmojiPanel.sections(recent: [], rowCount: 4)
+        let three = EmojiPanel.sections(recent: [], rowCount: 3)
+
+        let idsAtThree = Set(three.flatMap { $0.cells.map(\.id) })
+        let strandedAtFour = four.flatMap { $0.cells.map(\.id) }.filter { !idsAtThree.contains($0) }
+
+        XCTAssertFalse(
+            strandedAtFour.isEmpty,
+            "a rebuild at a new row count has to orphan some ids, or pickerSurviving guards nothing")
+        XCTAssertNil(EmojiPanel.pickerSurviving(picker(owner: strandedAtFour[0]), in: three))
+    }
+
+    /// A strip with the shape the panel actually builds. Only `owner` is read by
+    /// `pickerSurviving`; the rest is filled so the value is a real one rather
+    /// than a stub that could drift from the type.
+    private func picker(owner: String) -> EmojiTonePicker {
+        EmojiTonePicker(
+            owner: owner,
+            variants: EmojiCatalog.variants(for: "\u{1F44B}"),
+            restIndex: 0,
+            selected: 0,
+            anchor: CGRect(x: 0, y: 0, width: 38, height: 29),
+            item: CGSize(width: 38, height: 34))
+    }
+
 }

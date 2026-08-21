@@ -70,6 +70,35 @@ paths:
   action runs before or after the gesture's `onEnded`, so it is cleared at the
   start of the *next* touch, where the order cannot matter.
 
+- **The strip's state lives on the panel and only the holding cell could clear
+  it, so a cell that stopped observing froze the whole grid.** `EmojiPanel
+  .tonePicker` is `@State` on the panel and drives `.scrollDisabled(tonePicker
+  != nil)`, but every path that cleared it was inside `EmojiPickCell` and guarded
+  on `strip.owner == identity` — so an owner that went away left the state set
+  with **no writer at all**, and the grid stopped scrolling until the panel was
+  closed and reopened, which is what destroys the `@State`. `KeyView` has the
+  same interaction and does not have this bug, because `showsAlternates` is
+  `@State` on the key itself and `endPress()` clears it unconditionally and
+  idempotently. Three things close it now, each a different way in:
+  `pickerSurviving(_:in:)` drops a strip whose owner is no longer a cell on the
+  rebuilt strip (**a cell id is a position, `"\(category)-\(index)"`, so a
+  rebuild at a new row count renumbers everything after the first short
+  section**); `onDisappear` clears an owned strip, because `@GestureState` resets
+  and `onChange` fires only while something is still tracking the gesture, and a
+  `LazyHGrid` recycles; and a tap-anywhere backdrop behind the strip is the
+  escape hatch, which also closes the original gap that **a tone strip could only
+  ever be dismissed by lifting the finger that opened it**.
+
+- **The hold reads its translation in `panelSpace`, not `scrollSpace`, and that
+  is what makes `hasSlid` able to cancel it.** Worth not re-deriving: a gesture
+  measured in the scrolling content's own space would see a finger that scrolled
+  the grid as stationary, because the content moves under it, so the 6 pt cancel
+  could never fire and every slow scroll starting on a toned cell would open a
+  picker 200 ms in. It does not, because `EmojiPickCell` is handed `panelSpace`
+  and the panel does not move when the grid scrolls. The `scrollSpace` /
+  `panelSpace` split was made for where the *strip* is drawn; this is the second
+  thing it buys.
+
 - **A picker keyed by its emoji is open on two cells at once.** The same emoji is
   in Recents *and* in its category, so both cells would answer the lift and both
   would insert. `EmojiTonePicker.owner` holds `EmojiPanel.Cell.id`, which is
