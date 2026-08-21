@@ -92,6 +92,39 @@ and `EmojiPanel`'s wiring to them, parse and format clean and have not been
 compiled. **Re-run the suite on a simulator before trusting the number at the top
 of this file again.**
 
+## Twenty-nine tests written since that run, and which of them have executed
+
+The suite has not been re-run since `76b322fd`, so the table at the top of this
+file is still the last real reading. What has changed underneath it:
+
+| Added | Where | Executed? |
+|---|---|---|
+| 4 emoji strip tests | `EmojiModeTests` | **No.** They reach `EmojiPanel`, which imports SwiftUI, so the standalone route below is closed to them. Hand-verified twice. |
+| 8 launch-record tests | `KeyboardLaunchRecordTests` | **Yes**, standalone: 24 assertions. |
+| 7 launch-path tests | `LaunchPathTests` | **Partly.** The three `PersonalLanguageModel` ones ran standalone as control flow (10/10, and 4/10 against the broken version); the `StoredDecode` one ran standalone (13/13). The `SharedContainer`, `apply` and `persist` ones need the simulator. |
+| 5 layout-migration tests | `LayoutStoreTests` | **No.** They reach `LayoutPreset` and `LayoutValidator`, which reach UIKit. |
+| 7 secure-decision tests | `SecureDecisionRecordTests` | **Yes**, standalone: 27 assertions. |
+
+**The standalone route is the reason those numbers exist, and it is worth
+knowing when it applies.** A file in `AIKeyboardShared` that imports only
+Foundation can be copied verbatim into a scratch directory, compiled on macOS
+with `xcrun swiftc` against two or three hand-written stubs for whatever it
+reaches out of its own file, and run as a command-line program with the tests'
+assertions transcribed into it. It takes about a minute and it costs no
+simulator. `Bar/emoji/harness/swift-check.sh` is the older precedent.
+
+**It found a real bug that reading did not.** `PersonalLanguageModel.stamp(of:)`
+used `URL.resourceValues(forKeys:)`, which caches on the `NSURL` behind a stored
+`URL`, so the stamp never moved and the keyboard would have stopped re-reading
+the learned-word file entirely. The three `LaunchPathTests` cases *would* have
+caught it — running the same control flow standalone caught it first, before the
+commit. `.claude/rules/keyboard-wiring.md` has the detail.
+
+**Two things it cannot do.** It tests the file as copied, so a file that has
+drifted since the copy proves nothing — copy it fresh every time. And anything
+touching SwiftUI, UIKit or `LayoutPreset` is out of reach, which is exactly the
+five layout tests and the four emoji ones above.
+
 ### The previous reading, and the two that were red for a reason nobody had checked
 
 2026-08-16 at `45fe74c8`: **1302 executed, 1296 passed, 3 failed, 3 skipped**,

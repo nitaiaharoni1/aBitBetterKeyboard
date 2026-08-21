@@ -78,9 +78,32 @@ overloads, so a stub returning 0 or nil can never be what the assertion is
 reading.
 
 This is what `KeyboardLaunchRecord`'s eight cases were verified with on
-2026-08-21, since the suite was not run. It works for anything in
-`AIKeyboardShared`; it does not work for `AIKeyboardCore`, which imports UIKit
-and SwiftUI and drags in the whole module.
+2026-08-21 and `SecureDecisionRecord`'s seven on 2026-08-22, since the suite was
+not run either time. It works for anything in `AIKeyboardShared`; it does not
+work for `AIKeyboardCore`, which imports UIKit and SwiftUI and drags in the whole
+module.
+
+**There is a weaker second form for `AIKeyboardCore`, and it is worth the
+distinction.** Where the *type* cannot be lifted out, the **control flow**
+sometimes can: copy the function bodies verbatim over a trivial stand-in for
+whatever they operate on, and run the same scenarios. That is a test of the
+control flow rather than of the shipping type, so it is evidence about the shape
+of the code and not about the code. Say which one you did.
+
+**Do both directions, or the harness proves nothing.** Run it against the fixed
+version *and* against the broken one, and check the broken one fails. On
+2026-08-22 that is what turned "10/10 assertions pass" into a real result:
+swapping `FileManager.attributesOfItem` back to `URL.resourceValues` made 4 of
+the 10 fail, and those four are the same four assertions `LaunchPathTests` makes
+— which is how those XCTest cases are known to reject the broken build rather
+than merely to compile.
+
+**And this is not decoration: it found a bug reading did not.** `URL` caches
+resource values on the `NSURL` behind it, so a stamp taken through a *stored*
+`URL` never moves, and `PersonalLanguageModel` would have stopped re-reading the
+learned-word file altogether. Reasoning about that API gave the wrong answer;
+running it took a minute. Reach for this whenever a change rests on how a
+Foundation API behaves rather than on what its documentation says.
 
 ## Running Tests
 
