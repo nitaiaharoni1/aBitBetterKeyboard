@@ -127,21 +127,32 @@ It changes no rendering, because every *reader* was already behind the flag:
 `source == .capture`, which needs a broadcast. `stopConsuming` stays ungated,
 being idempotent, so flipping the flag mid-session cannot strand a live one.
 
-**It has one cost, and it is a measurement rather than a feature.**
-`ScreenContextSession.permitsRead` counts every secure-field decision through
-`channel?.countSecureDecision`, and `channel` is set by `startConsuming` alone —
-so the counters cannot move while this flag is false. The question they exist to
-answer is real (whether any host populates `isSecureTextEntry` through a
-`UITextDocumentProxy`, which is what makes "silence permits" safe or not), and
-`KeyboardController+AI` orders its guards specifically to keep the count alive.
+**It had one cost, it was a measurement rather than a feature, and that cost is
+now paid off.** `ScreenContextSession.permitsRead` counted every secure-field
+decision through `channel?.countSecureDecision`, and `channel` is set by
+`startConsuming` alone — so those counters cannot move while this flag is false.
+The question they exist to answer is real (whether any host populates
+`isSecureTextEntry` through a `UITextDocumentProxy`, which is what makes "silence
+permits" safe or not), and `KeyboardController+AI` orders its guards specifically
+to keep the count alive.
 
-Two things stop that being a reason to revert. The decision is untouched, because
-`SecureField.permitsRead` is a pure truth table tested as one. And the count was
-**already going nowhere**: it lands in `CaptureIntent.refusedSecure`, and nothing
-in this repository reads those fields back, so reading them has always meant
-dumping the shared page by hand. NIT-187 gives the measurement a home that does
-not depend on this flag. Until then, **a zero is the question not asked rather
-than answered no**, and both comments now say so.
+Two things stopped that being a reason to revert. The decision is untouched,
+because `SecureField.permitsRead` is a pure truth table tested as one. And the
+count was **already going nowhere**: it lands in `CaptureIntent.refusedSecure`,
+and nothing in this repository reads those fields back, so reading them has
+always meant dumping the shared page by hand.
+
+**`SecureDecisionRecord` is the home NIT-187 asked for and it is independent of
+this flag.** Fourth boot-scoped App Group record, same shape as
+`KeyboardPresence` / `KeyboardMemoryPeak` / `KeyboardLaunchRecord`, with a
+Settings → Diagnostics row. It is written on **every** Reply tap, and Reply ships
+in v1 sourced from the pasteboard, so it fills up on an ordinary phone rather
+than waiting for this flag. `answered` sitting at zero against a large
+`decisions` is the question answered no. The channel write stays alongside it as
+the secondary copy, because it is one line, a no-op while `channel` is nil, and a
+named Phase 7 deliverable of the capture design (R14) with a test on it. **A nil
+record is still not a zero** — Settings draws no row at all rather than a row of
+zeroes, for exactly the reason this paragraph used to give.
 
 ## What replaces it in v1
 

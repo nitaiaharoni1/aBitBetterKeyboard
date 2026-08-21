@@ -24,6 +24,12 @@ struct SettingsView: View {
     /// what the two counters mean together and why neither means anything alone.
     @State private var launch: KeyboardLaunchRecord?
 
+    /// What the hosts this keyboard has served said about their own text fields,
+    /// read here for the same reason `memory` and `launch` are. See
+    /// `SecureDecisionRecord`, which says which of its numbers is the one the
+    /// record exists for and why a nil must not be drawn as a zero.
+    @State private var secure: SecureDecisionRecord?
+
     /// Whether the Reset row has been tapped on this visit, which is the only
     /// thing it has to say afterwards: the identifier is gone the instant it is
     /// pressed and the next one is not made until something is sent, so there is
@@ -82,12 +88,14 @@ struct SettingsView: View {
             setup = .current(store: store)
             memory = KeyboardMemoryPeak.load()
             launch = KeyboardLaunchRecord.load()
+            secure = SecureDecisionRecord.load()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             setup = .current(store: store)
             memory = KeyboardMemoryPeak.load()
             launch = KeyboardLaunchRecord.load()
+            secure = SecureDecisionRecord.load()
         }
     }
 
@@ -313,7 +321,50 @@ struct SettingsView: View {
                     title: "Keyboard launches",
                     detail: launchDetail(launch))
             }
+            // Same rule as the row above: shown only when there is a reading for
+            // this boot, and with no empty-state twin. A zero here would be
+            // actively misleading rather than merely unhelpful — the whole hazard
+            // `SecureDecisionRecord` was written for is a zero that means the
+            // question was never asked being read as the question answered no.
+            if let secure, secure.bootIdentity == KeyboardPresence.bootIdentity {
+                Divider.themed
+                InfoRow(
+                    icon: "lock.shield",
+                    tint: secure.refusedSecure > 0 ? Theme.Semantic.warning : nil,
+                    title: "Reply and secure fields",
+                    detail: secureDetail(secure))
+            }
         }
+    }
+
+    /// **The tint is on `refusedSecure` alone, and the other two numbers moving
+    /// is not news.**
+    ///
+    /// `answered` reading zero is the *expected* answer, and it is what "silence
+    /// permits" was chosen for, so colouring it would put a warning on the
+    /// ordinary case and teach the reader to ignore the colour — the same
+    /// argument `launchGapIsEvidence` is written under. `refusedContentType`
+    /// moving is the guard working, which is also not a fault. A host saying a
+    /// field *is* secure is the one reading that contradicts something Apple
+    /// documents — that the system replaces a custom keyboard for a secure field,
+    /// so this keyboard should never be on screen to be asked — and it is worth
+    /// a second look on its own.
+    private func secureDetail(_ record: SecureDecisionRecord) -> String {
+        var parts = ["\(record.decisions) Reply \(record.decisions == 1 ? "tap" : "taps")"]
+        parts.append(
+            record.answered == 0
+                ? "no host answered isSecureTextEntry"
+                : "\(record.answered) answered isSecureTextEntry")
+        if record.refusedSecure > 0 {
+            parts.append("\(record.refusedSecure) said the field was secure")
+        }
+        if record.refusedContentType > 0 {
+            parts.append("\(record.refusedContentType) refused by content type")
+        }
+        if record.refusedSecure == 0, record.refusedContentType == 0 {
+            parts.append("none refused")
+        }
+        return parts.joined(separator: ", ")
     }
 
     /// Whether the gap between the two counters has earned a warning tint.

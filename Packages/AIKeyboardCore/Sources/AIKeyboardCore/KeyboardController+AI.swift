@@ -186,13 +186,15 @@ extension KeyboardController {
         // `isSecureTextEntry` through a `UITextDocumentProxy` at all. A guard in
         // front of it silences that measurement.
         //
-        // **That last sentence is still the reason for the ordering and is no
-        // longer true of the shipping build.** Gating `startConsuming` on
-        // `FeatureFlags.screenCaptureReply` leaves the session's `channel` nil,
-        // so the count cannot move at all in v1 — and it was only ever written
-        // into a page nothing reads back. Keep the order: it costs nothing, and
-        // the measurement returns the day the flag flips. See `permitsRead` and
-        // NIT-187.
+        // **That last sentence stopped being true and is true again.** Gating
+        // `startConsuming` on `FeatureFlags.screenCaptureReply` leaves the
+        // session's `channel` nil, so the channel count cannot move in v1 — and
+        // it was only ever written into a page nothing reads back anyway.
+        // `SecureDecisionRecord` (NIT-187) is the count now: a boot-scoped App
+        // Group record with a Settings row, written on every decision whatever
+        // the flag says. So the ordering is load-bearing rather than merely
+        // cheap — a guard in front of `permitsRead` silences a measurement that
+        // is genuinely filling up on ordinary phones today.
         //
         // The no-source path above needs nothing from this: `screenContextPrompt`
         // already asks `canReachChannel` and `cloudConfigured` before it asks

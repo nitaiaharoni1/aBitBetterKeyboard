@@ -5,43 +5,57 @@ extension ScreenContextSession {
 
     // MARK: - The secure-field guard
 
-    /// Whether Reply may ask for a read of a field with these traits, counting
-    /// the refusal into the channel when it may not.
+    /// Whether Reply may ask for a read of a field with these traits, leaving a
+    /// number behind either way.
     ///
     /// The decision is `SecureField.permitsRead`, which is a pure truth table and
     /// is tested as one. What is here is the half that cannot be pure: the
-    /// decision has to leave a number behind, or the open question this guard
+    /// decision has to leave a count behind, or the open question this guard
     /// rests on — whether any host populates `isSecureTextEntry` through a
-    /// `UITextDocumentProxy` at all — stays folklore.
+    /// `UITextDocumentProxy` at all — stays folklore. It counts **every**
+    /// decision and not only the refusals, because silence permits, so a count
+    /// that only moved on a refusal could not tell a silent host from one
+    /// answering "not secure".
     ///
-    /// Both counters move on *every* decision, not only on refusals. Since
-    /// silence now permits, a silent host that only counted when it refused would
-    /// be indistinguishable from one answering "not secure", and the question
-    /// would be unanswerable from the field. `refusedSecureUnknown` standing at
-    /// the tap count after a device run is that question answered no.
+    /// **For its whole life that number went somewhere nobody could read, and
+    /// this is where it goes now.** `countSecureDecision` lands in
+    /// `CaptureIntent.refusedSecure` through `CaptureChannelReader`, and nothing
+    /// in this repository reads those fields back — not the app, not the
+    /// broadcast extension, not Settings, not `Bar/screen-context`. Inspecting
+    /// them means dumping the mmap'd shared page by hand, which nobody has a tool
+    /// for. On top of that, `channel` is set by `startConsuming` and by nothing
+    /// else, and that call is gated on `FeatureFlags.screenCaptureReply` in both
+    /// processes, so in a v1 build it cannot move at all. Two independent reasons
+    /// the measurement did not exist. NIT-187 is the issue.
     ///
-    /// **Both counters are suspended for as long as `FeatureFlags
-    /// .screenCaptureReply` is false, and a zero read off a device is therefore
-    /// the question *not asked* rather than answered no.** `channel` is set by
-    /// `startConsuming` and by nothing else, and that call is now gated on the
-    /// flag in both processes, because it installs a 0.25s `RunLoop.main` timer
-    /// over a page nothing can write — see `.claude/rules/screen-context.md`. The
-    /// decision above is unaffected, since `SecureField.permitsRead` is pure, so
-    /// no user sees anything different; only the number stops moving.
+    /// `SecureDecisionRecord` is the answer: a boot-scoped App Group record with
+    /// a Settings → Diagnostics row, independent of the capture channel and
+    /// therefore of the flag. **It is reached on every Reply tap and Reply ships
+    /// in v1**, sourced from the pasteboard, so it fills up on an ordinary phone
+    /// rather than waiting for a feature nobody has switched on.
     ///
-    /// **It was never readable anyway, which is the sharper half.**
-    /// `countSecureDecision` lands in `CaptureIntent.refusedSecure` through
-    /// `CaptureChannelReader`, and **nothing in this repository reads those two
-    /// fields back** — not the app, not the broadcast extension, not Settings,
-    /// not `Bar/screen-context`. Inspecting them has always meant dumping the
-    /// shared page by hand. NIT-187 is the issue for giving the measurement a
-    /// home that outlives the capture channel, which is what it needs to answer
-    /// the question this comment says it answers.
+    /// **Both writes stay, and the channel one is the secondary copy.** It is one
+    /// line, it is a no-op while `channel` is nil, and it is a named Phase 7
+    /// deliverable of the capture design (`screen-capture-design.md`, R14) with a
+    /// test on it. Deleting it to remove a duplicate would quietly drop that. The
+    /// record is the one to read.
+    ///
+    /// The two refusal reasons go into the record separately, and
+    /// `refusedContentType` is computed as "refused, and not because the host
+    /// said it was secure" rather than by asking the truth table a second time:
+    /// `SecureField.permitsRead` returns on `secure == true` before it ever looks
+    /// at the content type, so that expression *is* the same question and cannot
+    /// drift from it.
     @discardableResult
     public func permitsRead(secure: Bool?, contentType: UITextContentType??) -> Bool {
         let permitted = SecureField.permitsRead(secure: secure, contentType: contentType)
-        channel?.countSecureDecision(
-            refused: !permitted, unanswered: !SecureField.answered(secure: secure))
+        let answered = SecureField.answered(secure: secure)
+        SecureDecisionRecord.note(
+            SecureDecisionRecord.Decision(
+                answered: answered,
+                refusedSecure: secure == true,
+                refusedContentType: !permitted && secure != true))
+        channel?.countSecureDecision(refused: !permitted, unanswered: !answered)
         return permitted
     }
 

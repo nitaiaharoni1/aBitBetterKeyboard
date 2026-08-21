@@ -133,7 +133,7 @@ Apple's three substitutions — secure field, phone pad, opted-out app — are a
 per-field and deterministic, so the same box would give the stock keyboard every
 time. It does not. Ours was on offer and iOS did not have it ready.
 
-**Settings → Diagnostics now has two rows, and you need both.** The second one
+**Settings → Diagnostics has three rows now, and this check needs the first two.** The second one
 is new (`KeyboardLaunchRecord`) and counts `viewDidLoad` against the first
 `viewDidAppear` of each instance, so a launch that began and never reached the
 screen shows up as a gap.
@@ -150,6 +150,27 @@ happened at least twice before reading it, and note **which app** it happened in
 if it is always the same one, that changes the answer.
 
 Both rows are boot-scoped, so a restart wipes them and you start again.
+
+**A third row appears once you have tapped Reply at least once**, and it answers
+a different question that has been open since the secure-field guard was written:
+*does any host actually tell this keyboard its field is secure?* `SecureField
+.permitsRead` **permits on silence**, on the reasoning that `nil` is an
+unimplemented optional protocol member rather than a password field, and until
+now nothing could say whether silence is what hosts really answer — the count
+went into a shared page nothing reads back. `SecureDecisionRecord` is the record;
+the row reads `12 Reply taps, no host answered isSecureTextEntry, none refused`.
+
+| Reply and secure fields | What it means |
+|---|---|
+| no row at all | Nobody has tapped Reply with Full Access since the restart. **Not** a reading of zero. |
+| `no host answered` with a real tap count | The expected answer. Silence is all there is, so the `secure == true` branch is unreachable in practice and permitting on silence is the whole rule. |
+| any number `answered` | Hosts do populate the trait. Worth knowing before anyone reasons about that guard again. |
+| any number `said the field was secure` (tinted) | Contradicts Apple's own documentation that the system replaces a custom keyboard for a secure field. Note the app. |
+| any number `refused by content type` | The guard catching a one-time-code or card-number field. Working as intended, not a fault. |
+
+To fill it, tap Reply a few times in ordinary apps — it needs no clipboard
+content and no successful reply, because the decision is taken before anything
+else Reply does. It is boot-scoped like the other two.
 
 ---
 

@@ -37,9 +37,14 @@ import UIKit
 ///
 /// Refusing on `nil` therefore guards a case the OS already handles, and pays for
 /// it by disabling Reply on every host that answers `nil` — which, until a device
-/// says otherwise, may be all of them. Both counters survive so that question
-/// stays measurable: `refusedSecureUnknown` rising with the tap count is how you
-/// learn no host ever answers.
+/// says otherwise, may be all of them. The count survives so that question stays
+/// measurable, and **it is `SecureDecisionRecord` that answers it**, not the
+/// channel counters this comment used to point at: those land in
+/// `CaptureIntent.refusedSecure`, which nothing in this repository reads back and
+/// which cannot move at all while `FeatureFlags.screenCaptureReply` is false. The
+/// record is boot-scoped, independent of that flag, and has a Settings →
+/// Diagnostics row. `answered` sitting at zero against a large `decisions` is how
+/// you learn no host ever answers.
 ///
 /// **Do not mistake this for the thing that protects sensitive screens.** A read
 /// uploads the whole screen, not the focused field, so a password manager visible
@@ -68,19 +73,26 @@ public enum SecureField {
     ///    fall through to whatever `isSecureTextEntry` said, and a value in
     ///    `sensitive` refuses on its own even when the field claims not to be
     ///    secure.
-    /// 3. **A refusal is counted and named**, separately for the two reasons. See
-    ///    `CaptureIntent.refusedSecure`.
+    /// 3. **A refusal is counted and named**, separately for the two reasons, and
+    ///    so is every decision that is *not* a refusal — silence permits, so a
+    ///    count that moved only on refusals could not tell a silent host from one
+    ///    saying "not secure". `SecureDecisionRecord` is where that lands and
+    ///    where it can be read; `CaptureIntent.refusedSecure` is the older copy
+    ///    and goes nowhere.
     public static func permitsRead(secure: Bool?, contentType: UITextContentType??) -> Bool {
         guard secure != true else { return false }
         guard let inner = contentType, let type = inner else { return true }
         return !sensitive.contains(type)
     }
 
-    /// Whether the host answered the question at all. A refusal where this is
-    /// false is `refusedSecureUnknown` rather than `refusedSecure`, and the
-    /// difference is the whole point of counting them apart: the first says a
-    /// host told us it was a password field, the second says nobody told us
-    /// anything.
+    /// Whether the host answered the question at all, which is the single most
+    /// useful thing this file can measure.
+    ///
+    /// `SecureDecisionRecord.answered` is the running count. Zero against a large
+    /// `decisions` says no host populates the trait through a
+    /// `UITextDocumentProxy`, which would mean the `secure == true` branch above
+    /// is unreachable in practice and "silence permits" is the whole of the
+    /// rule.
     public static func answered(secure: Bool?) -> Bool { secure != nil }
 
     /// The five constants verified in `UITextInputTraits.h:305-309` and `:324` of
