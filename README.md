@@ -83,6 +83,26 @@ xcrun swift-format --in-place --recursive \
   top row (Hebrew is currently the only one); otherwise it stays on the bottom.
   Every key row is pinned left-to-right, matching Apple's physical key order
   rather than mirroring for right-to-left
+- **Landscape, on iPhone only.** The action row is shed for height and its five
+  controls are redrawn as chips on the suggestion bar, whose row is already paid
+  for, so nothing is unreachable sideways and nothing costs extra height. The
+  budget is not a constant: the frame-fingerprint cap is a *fraction* of screen
+  height (0.4210526) while the metrics spend points, and a phone's landscape
+  height is its portrait width, so it is a different number on every device.
+  Landscape spends 154pt, break-even 365.75, below every width this ships to.
+  That margin was wrong twice before it was measured — `LandscapeGeometryTests`
+  walks all eight shipping widths now rather than the reference one, which is
+  what makes the number mean anything
+- **Dynamic Type above the default size**, on the glyph rather than on the key.
+  `Theme.DynamicType.scale(for:)` is Apple's Body ramp read relative to `.large`,
+  the size every hardcoded number here was tuned against. Key height deliberately
+  does not move: the user already chose it in the layout editor, and
+  `keyAreaHeight` feeds the 368pt cliff above. A cap grows from about 25 to 32 on
+  a shipped 43pt key and then holds, and it is floored at its base size so the
+  compressed numbers row cannot end up *smaller* than the build without Dynamic
+  Type — which it did once, on the space bar, at the setting most people are on.
+  Control icons (shift, backspace, globe, return) do not scale, matching Apple's
+  own keyboard; the caption under an action key does
 - Language switching by sliding along the space bar or tapping the globe, one
   language per gesture either way, with the space bar naming where the slide is
   going while the thumb is still down. The keyboard opens on the language it was
@@ -502,7 +522,11 @@ the `Scripts/prove-*.sh` scripts rather than judged by their own assertions; see
 - The keyboard extension runs in a real text field — `Scripts/prove-app-group.sh`
   drives it — but only far enough to prove it reads shared settings; the panels
   are still exercised through the in-app playground
-- Landscape, iPad layouts, Dynamic Type above the default size
+- **iPad layouts.** Landscape iPhone and Dynamic Type both shipped and moved up
+  to "What's built"; iPad did not, and it is a different question rather than a
+  wider answer to the same one — a split or floating keyboard changes shape, not
+  aspect ratio. The targets still build for device family `1,2`, so an iPad user
+  today gets the iPhone geometry stretched (NIT-177)
 - Real StoreKit or accounts. The **backend is real and deployed** (`Backend/`,
   Cloud Run, `Scripts/prove-cloud-backend.sh` exercises the shipping client
   against it); what is untested there is a shared-state rate limit and the token

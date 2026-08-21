@@ -32,7 +32,7 @@ public enum KeyboardGeometry {
     ///
     /// **iPad is a different question, not a wider answer to this one.** A split
     /// or floating keyboard changes shape rather than just aspect ratio, so this
-    /// type does not attempt it — see NIT-18. `width > height` is exactly how
+    /// type does not attempt it — see NIT-177. `width > height` is exactly how
     /// UIKit's own `verticalSizeClass` decides "this is an iPhone in landscape"
     /// (`.compact`), which is what `KeyboardView` reads; this initialiser is the
     /// same test over the numbers `KeyboardViewController` measures from the

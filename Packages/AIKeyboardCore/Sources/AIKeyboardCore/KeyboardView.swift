@@ -55,7 +55,7 @@ public struct KeyboardView: View {
     /// `KeyboardViewController` measures from the window — one definition of
     /// landscape rather than two that can disagree. iPad and Slide Over/Split
     /// View can also report `.compact` for reasons that have nothing to do with
-    /// rotation, which is exactly why iPad needs its own answer; see NIT-18.
+    /// rotation, which is exactly why iPad needs its own answer; see NIT-177.
     var orientation: KeyboardGeometry.Orientation {
         verticalSizeClass == .compact ? .landscape : .portrait
     }
