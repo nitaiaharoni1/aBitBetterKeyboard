@@ -110,6 +110,39 @@ with the feature, not before it.
 **The code stays.** See the table above. A flag with a stated condition is a hold; a
 deleted directory is a decision to never revisit, and that is not the decision here.
 
+**Consuming the channel is cut too, as of 2026-08-21, and it was the one part of
+this subsystem the flag never reached.** `ScreenContextSession.startConsuming` ran
+unconditionally in both the keyboard and the app. It calls
+`ScreenContextChannel.startWatching`, which mmaps the App Group pages, writes the
+intent page and installs a repeating `Timer` on `RunLoop.main` at 0.25 s. Every
+tick assigns `@Published verdict` whether or not it moved — deliberate, since that
+is what carries a *new reading* under an unchanged verdict — so it woke a chain of
+`.receive(on: RunLoop.main)` sinks, and `report()` built its log string including
+`CaptureChannel.isReachable`, another `containerURL(...)` query, **before** its own
+dedupe. Four containermanagerd queries a second, forever, over a page that with
+this flag off nothing can ever write, in a process with roughly 50 MB to live in.
+
+It changes no rendering, because every *reader* was already behind the flag:
+`HomeScreenContextCard` is gated at its call site, and `isCapturing` needs
+`source == .capture`, which needs a broadcast. `stopConsuming` stays ungated,
+being idempotent, so flipping the flag mid-session cannot strand a live one.
+
+**It has one cost, and it is a measurement rather than a feature.**
+`ScreenContextSession.permitsRead` counts every secure-field decision through
+`channel?.countSecureDecision`, and `channel` is set by `startConsuming` alone —
+so the counters cannot move while this flag is false. The question they exist to
+answer is real (whether any host populates `isSecureTextEntry` through a
+`UITextDocumentProxy`, which is what makes "silence permits" safe or not), and
+`KeyboardController+AI` orders its guards specifically to keep the count alive.
+
+Two things stop that being a reason to revert. The decision is untouched, because
+`SecureField.permitsRead` is a pure truth table tested as one. And the count was
+**already going nowhere**: it lands in `CaptureIntent.refusedSecure`, and nothing
+in this repository reads those fields back, so reading them has always meant
+dumping the shared page by hand. NIT-187 gives the measurement a home that does
+not depend on this flag. Until then, **a zero is the question not asked rather
+than answered no**, and both comments now say so.
+
 ## What replaces it in v1
 
 **Reply is sourced from the pasteboard: copy the message you are answering, then tap

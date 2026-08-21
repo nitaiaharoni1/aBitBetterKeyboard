@@ -48,6 +48,40 @@ had quietly left the shipped layout — `.dictation` when it moved to the action
 then `.globe` when `.settings` took its slot. Prefer `try XCTUnwrap` over `!` in a
 fixture, so the test fails and the bundle carries on.
 
+## Running one file's logic without a simulator
+
+**A test that has only compiled has not run, and in this repo a lot of them never
+do.** `xcodebuild test` needs a simulator and is minutes long, so pure logic in
+`AIKeyboardShared` can sit unexercised for a long time behind a green build. The
+build proves it type-checks and nothing more.
+
+For a Foundation-only type there is a third option between "compiled" and "ran
+the suite": **compile the real source file on macOS with stubs for whatever it
+names, and run the assertions as a command-line program.** `Bar/emoji/harness/
+swift-check.sh` is the same idea for `EmojiSearch`. Copy the actual file rather
+than transcribing the logic, or the harness proves your understanding instead of
+the code:
+
+```bash
+cp Packages/AIKeyboardCore/Sources/AIKeyboardShared/KeyboardLaunchRecord.swift "$D/"
+# Stubs.swift: public enum CaptureClock { public static func now() -> UInt64 { 0 } }
+#              public enum KeyboardPresence { public static let bootIdentity: UInt64 = 0 }
+#              public enum SharedContainer { public static var url: URL? { nil } }
+swiftc -O -o check KeyboardLaunchRecord.swift Stubs.swift main.swift && ./check
+```
+
+Two things that bite. **The stubs have to be `public`** if the real type names
+them in a default argument of a `public` function, or the compiler refuses the
+default rather than the call. And **only stub what is off the path you are
+testing** — pass `now:` and `bootIdentity:` explicitly and use the `at:` URL
+overloads, so a stub returning 0 or nil can never be what the assertion is
+reading.
+
+This is what `KeyboardLaunchRecord`'s eight cases were verified with on
+2026-08-21, since the suite was not run. It works for anything in
+`AIKeyboardShared`; it does not work for `AIKeyboardCore`, which imports UIKit
+and SwiftUI and drags in the whole module.
+
 ## Running Tests
 
 ```bash
