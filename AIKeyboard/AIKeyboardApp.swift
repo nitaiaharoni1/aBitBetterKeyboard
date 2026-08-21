@@ -155,7 +155,14 @@ struct RootView: View {
         // `intent.keyboardVisible`, because the keyboard is the only thing
         // that can honestly claim to be on screen.
         .onAppear {
-            ScreenContextSession.shared.startConsuming(.shared, as: .observer)
+            // Behind the flag for the reason `KeyboardViewController.viewDidAppear`
+            // gives at length: this installs a 0.25s `RunLoop.main` timer over a
+            // page nothing can write while `screenCaptureReply` is false. Cheaper
+            // here than in the keyboard, since the app is not the process living
+            // under a ~50 MB cap, and pointless in both.
+            if FeatureFlags.screenCaptureReply {
+                ScreenContextSession.shared.startConsuming(.shared, as: .observer)
+            }
             // Here as well as in the `scenePhase` handler below, because a cold
             // launch is not guaranteed to *change* `scenePhase`: the value can
             // already be `.active` by the time this view appears, and then

@@ -295,8 +295,25 @@ final class KeyboardViewController: UIInputViewController {
     /// at, and `intent.keyboardVisible` would be a lie.
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        ScreenContextSession.shared.startConsuming(
-            .shared, as: .keyboard, ownUIHeightFraction: ownUIHeightFraction())
+        // **Gated on the flag, because with it off there is no producer and the
+        // poll is pure cost.** `startConsuming` calls
+        // `ScreenContextChannel.startWatching`, which mmaps the App Group pages,
+        // writes the intent page, and installs a repeating `Timer` on
+        // `RunLoop.main` at `ScreenContextChannel.pollInterval` — 0.25s, for as
+        // long as the keyboard is up. Every tick assigns `@Published verdict`
+        // unconditionally, by design, so it wakes a chain of
+        // `.receive(on: RunLoop.main)` sinks; and `report()` builds its log
+        // string, including a `CaptureChannel.isReachable` that costs another
+        // `containerURL(...)` query, *before* its own dedupe. With
+        // `FeatureFlags.screenCaptureReply` false no broadcast can be started,
+        // so nothing can ever write the page this is reading: four
+        // containermanagerd queries a second to learn nothing, on a process with
+        // roughly 50 MB to live in. Every other reader of this subsystem is
+        // already behind the same flag — see `KeyboardController+ScreenContext`.
+        if FeatureFlags.screenCaptureReply {
+            ScreenContextSession.shared.startConsuming(
+                .shared, as: .keyboard, ownUIHeightFraction: ownUIHeightFraction())
+        }
         recordPresence()
         recordMemory()
         recordFirstPresentation()
@@ -494,6 +511,10 @@ final class KeyboardViewController: UIInputViewController {
     /// keyboard goes away, and how long for is not ours to decide.
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        // Unconditional where the start is gated: `stopConsuming` is idempotent
+        // and nils a channel that was never set, so it costs nothing here — and
+        // gating it too would strand a live session if the flag were ever
+        // flipped between an appearance and a disappearance.
         ScreenContextSession.shared.stopConsuming()
         // Withdraws the utterance and stops the poll. A no-op unless dictation
         // was actually up; see `KeyboardController.stopDictation`.

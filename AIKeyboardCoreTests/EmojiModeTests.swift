@@ -897,21 +897,43 @@ final class EmojiModeTests: XCTestCase {
         XCTAssertEqual(EmojiPanel.pickerSurviving(open, in: sections)?.owner, live)
     }
 
-    /// **A cell id is a position and the row count renumbers it**, which is the
-    /// case this guards that a fabricated id does not: the same held emoji has a
-    /// different id at a different row count, so a strip carried across a rebuild
-    /// would be steering a cell the user never touched.
-    func testTheSameEmojiHasADifferentCellIdAtADifferentRowCount() {
+    /// **Recents is the list that actually moves, and the row count is not.**
+    ///
+    /// This test replaced one asserting that a rebuild at a different row count
+    /// renumbers cells. It does not: `section(_:)` mints `"\(id)-\(offset)"` from
+    /// the position within the category's own emoji array, which no row count
+    /// touches. Only the padding blanks move, and a blank has no emoji, so it gets
+    /// no `EmojiPickCell` and can never own a strip. Rotation was never the hazard.
+    ///
+    /// What moves is Recents. Hold the fourth entry and let the list shrink, and
+    /// `"Recent-3"` stops existing under an open strip, which nothing but that
+    /// cell could have closed.
+    func testAStripOnARecentThatFellOffTheListDoesNotSurvive() {
+        let four = EmojiPanel.sections(
+            recent: ["\u{1F600}", "\u{1F602}", "\u{1F970}", "\u{1F60E}"], rowCount: 4)
+        let held = "\(EmojiCatalog.recentID)-3"
+        XCTAssertNotNil(
+            EmojiPanel.pickerSurviving(picker(owner: held), in: four),
+            "Recent-3 has to exist while four emoji are in Recents, or this proves nothing")
+
+        let one = EmojiPanel.sections(recent: ["\u{1F600}"], rowCount: 4)
+        XCTAssertNil(EmojiPanel.pickerSurviving(picker(owner: held), in: one))
+    }
+
+    /// The row count is explicitly *not* a hazard, pinned so nobody re-adds a
+    /// guard for it or re-derives the wrong reason for this one.
+    func testTheRowCountDoesNotRenumberAnEmojiCell() {
         let four = EmojiPanel.sections(recent: [], rowCount: 4)
         let three = EmojiPanel.sections(recent: [], rowCount: 3)
 
-        let idsAtThree = Set(three.flatMap { $0.cells.map(\.id) })
-        let strandedAtFour = four.flatMap { $0.cells.map(\.id) }.filter { !idsAtThree.contains($0) }
+        let realIDsAtThree = Set(
+            three.flatMap { $0.cells }.filter { $0.emoji != nil }.map(\.id))
+        let renumbered = four.flatMap { $0.cells }
+            .filter { $0.emoji != nil }
+            .map(\.id)
+            .filter { !realIDsAtThree.contains($0) }
 
-        XCTAssertFalse(
-            strandedAtFour.isEmpty,
-            "a rebuild at a new row count has to orphan some ids, or pickerSurviving guards nothing")
-        XCTAssertNil(EmojiPanel.pickerSurviving(picker(owner: strandedAtFour[0]), in: three))
+        XCTAssertEqual(renumbered, [], "row count moved an emoji cell id: \(renumbered.prefix(5))")
     }
 
     /// A strip with the shape the panel actually builds. Only `owner` is read by

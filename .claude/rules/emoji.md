@@ -63,8 +63,16 @@ paths:
   to stop itself; a raw `DragGesture` does not know that, and would type an emoji
   every time somebody halted a flicking strip. `EmojiPickCell` therefore leaves
   the tap to the `Button` and adds the hold as a `simultaneousGesture`, with
-  `.scrollDisabled` going on only once the strip is up — a moment the finger has
-  by definition not moved, so no pan is in flight to cut short. The one touch both
+  `.scrollDisabled` going on only once the strip is up. **That was written as "a
+  moment the finger has by definition not moved, so no pan is in flight to cut
+  short", and the second half is false.** The hold opens after 200 ms and the
+  cancel needs *more than* `KeyView.slideThreshold`, so the finger may have
+  travelled a full 6 pt by then — and 6 pt is roughly where `UIScrollView`'s own
+  pan begins, so the slop window straddles the start of the pan instead of sitting
+  inside it. `scrollDisabled` can land on a scroll view with a live touch on it.
+  6 pt over 200 ms is 30 pt/s, which is an ordinary slow scan across a grid of
+  pictures, and `translation` is cumulative from `startLocation`, so out-and-back
+  never cancels either. The one touch both
   want is hold-then-lift-in-place, and **`pickerTookTouch` is deliberately not
   cleared when the strip commits**: SwiftUI does not say whether the button's
   action runs before or after the gesture's `onEnded`, so it is cleared at the
@@ -81,13 +89,31 @@ paths:
   `@State` on the key itself and `endPress()` clears it unconditionally and
   idempotently. Three things close it now, each a different way in:
   `pickerSurviving(_:in:)` drops a strip whose owner is no longer a cell on the
-  rebuilt strip (**a cell id is a position, `"\(category)-\(index)"`, so a
-  rebuild at a new row count renumbers everything after the first short
-  section**); `onDisappear` clears an owned strip, because `@GestureState` resets
-  and `onChange` fires only while something is still tracking the gesture, and a
-  `LazyHGrid` recycles; and a tap-anywhere backdrop behind the strip is the
-  escape hatch, which also closes the original gap that **a tone strip could only
-  ever be dismissed by lifting the finger that opened it**.
+  rebuilt strip; `onDisappear` clears an owned strip **and cancels `holdTask`**,
+  because `@GestureState` resets and `onChange` fires only while something is
+  still tracking the gesture, and a `LazyHGrid` recycles; and a tap-anywhere
+  backdrop behind the strip is the escape hatch, which also closes the original
+  gap that **a tone strip could only ever be dismissed by lifting the finger that
+  opened it**.
+
+- **`startHold` opens a raw `Task`, not a `.task` modifier, so SwiftUI does not
+  own its lifetime — and that is a second, sharper way to strand a strip.** A
+  released cell still fires `open()` 200 ms later, writing `picker = strip`
+  through a `@Binding` into the panel's `@State`, which is perfectly alive. Land
+  a finger on a People cell, flick, let the grid release the cell, and a strip
+  appears owned by a cell that no longer exists. It has to beat the `hasSlid`
+  cancel, which a fast flick usually wins, and that is exactly why the symptom is
+  intermittent rather than constant. Cancelling the task in `onDisappear` is what
+  closes it.
+
+- **Which cell ids move on a rebuild, since the obvious guess is wrong.** A cell
+  id is `"\(category)-\(offset)"` where `offset` is the position within that
+  category's own emoji array, so **row count does not renumber emoji cells at
+  all** and rotation cannot strand a strip. Only the padding blanks move, because
+  how many there are is `rowCount - remainder`, and a blank carries no emoji, gets
+  no `EmojiPickCell`, and can never own a strip. The list that really moves is
+  **Recents**: `settleRecentEmoji` rewrites it, and a list that shrinks takes its
+  tail ids with it, so `"Recent-3"` can stop existing under an open strip.
 
 - **The hold reads its translation in `panelSpace`, not `scrollSpace`, and that
   is what makes `hasSlid` able to cancel it.** Worth not re-deriving: a gesture

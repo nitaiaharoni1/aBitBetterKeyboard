@@ -292,14 +292,21 @@ public struct EmojiPanel: View {
 
     /// The open tone strip that is still steerable after a rebuild, or nil.
     ///
-    /// **A cell id is a position, not an emoji** — `"\(category)-\(index)"`,
-    /// where the index counts through a section padded out to whole columns. So
-    /// a rebuild at a different row count renumbers every cell after the first
-    /// short section, and a strip left open across one is owned by an id that now
-    /// names a different emoji or no cell at all. Both are worse than closing it:
-    /// the first inserts a tone of something nobody held, and the second is
-    /// unclosable, because the only code that clears `tonePicker` is the cell
-    /// whose id matches `owner`.
+    /// **The case this catches is Recents shrinking, and an earlier version of
+    /// this comment claimed something wider that is false.** It said a rebuild at
+    /// a different row count renumbers every cell. It does not: `section(_:)`
+    /// mints `"\(id)-\(offset)"` where `offset` is the position within that
+    /// category's own emoji array, which no row count touches. Only the padding
+    /// blanks are renumbered, since how many there are is `rowCount - remainder`,
+    /// and a blank has no emoji and therefore no `EmojiPickCell` and can never
+    /// own a strip. So rotation is safe by construction and was never the hazard.
+    ///
+    /// What does move is Recents. `settleRecentEmoji` rewrites the list, and a
+    /// list that shrinks takes its tail ids with it — hold the fourth clip in
+    /// Recents and `"Recent-3"` can stop existing under the open strip. Nothing
+    /// else can then clear `tonePicker`, because the only code that clears it is
+    /// the cell whose id matches `owner`, and `EmojiPanel.scrollDisabled` keeps
+    /// the grid frozen for the life of the panel.
     static func pickerSurviving(
         _ picker: EmojiTonePicker?, in sections: [Section]
     ) -> EmojiTonePicker? {
@@ -344,9 +351,18 @@ public struct EmojiPanel: View {
             // **Off while a tone strip is open, or the same finger does both.**
             // The strip is steered by sliding sideways, which is exactly the
             // gesture that scrolls this grid — without this the cells would run
-            // out from under the picker while the picker was being read. Set
-            // only once the strip is up, which is a moment the finger has by
-            // definition not moved, so there is no pan in flight to cut short.
+            // out from under the picker while the picker was being read.
+            //
+            // **This used to claim the strip only goes up at "a moment the finger
+            // has by definition not moved, so there is no pan in flight to cut
+            // short". The second half is false.** The hold fires after 200 ms and
+            // `hasSlid` cancels only past `KeyView.slideThreshold`, so the finger
+            // may have travelled a full 6 pt — about where `UIScrollView`'s pan
+            // begins, so the window straddles the start of the pan rather than
+            // sitting inside it, and this can land on a scroll view with a live
+            // touch. 6 pt over 200 ms is 30 pt/s, an ordinary slow scan across a
+            // grid of pictures. See `.claude/rules/emoji.md`; NIT-184 holds the
+            // device observation that decides whether it matters in practice.
             .scrollDisabled(tonePicker != nil)
             .coordinateSpace(name: scrollSpace)
             .onPreferenceChange(LeadingEmojiCategoryKey.self) { lead in

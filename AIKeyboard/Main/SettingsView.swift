@@ -309,7 +309,7 @@ struct SettingsView: View {
                 Divider.themed
                 InfoRow(
                     icon: "bolt.horizontal",
-                    tint: launch.loads > launch.presentations ? Theme.Semantic.warning : nil,
+                    tint: Self.launchGapIsEvidence(launch) ? Theme.Semantic.warning : nil,
                     title: "Keyboard launches",
                     detail: launchDetail(launch))
             }
@@ -321,6 +321,19 @@ struct SettingsView: View {
     /// report this was built for; the timing is what says whether the ones that
     /// did arrive were close to losing the same race. See `KeyboardLaunchRecord`
     /// for why one point of gap is noise and a ratio is evidence.
+    /// Whether the gap between the two counters has earned a warning tint.
+    ///
+    /// **Two, not one, and the record's own doc is why.** `KeyboardLaunchRecord`
+    /// concedes that iOS may build a controller it never presents for reasons of
+    /// its own, so it says in as many words that one point of gap is noise and
+    /// only a persistent ratio is evidence. Tinting at a gap of one would put a
+    /// warning colour on the case the instrument already calls noise, which
+    /// teaches the reader to ignore the colour. The detail line always prints the
+    /// real numbers either way, so nothing is hidden by waiting for the second.
+    private static func launchGapIsEvidence(_ launch: KeyboardLaunchRecord) -> Bool {
+        launch.loads - launch.presentations >= 2
+    }
+
     private func launchDetail(_ launch: KeyboardLaunchRecord) -> String {
         let missing = launch.loads - launch.presentations
         var parts = ["\(launch.loads) launch\(launch.loads == 1 ? "" : "es")"]
