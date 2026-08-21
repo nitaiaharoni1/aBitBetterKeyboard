@@ -889,9 +889,18 @@ final class EmojiModeTests: XCTestCase {
     /// The control the test above needs: a function that always answered nil
     /// would pass it, and would close every tone strip the instant a rebuild
     /// touched the grid.
+    ///
+    /// **The cell is found by looking for one that holds an emoji, not by taking
+    /// `sections.first?.cells.first`.** With `recent: []` the first section is
+    /// Recent with *zero* cells — `0 % rowCount` is 0, so it is not even padded —
+    /// and that spelling unwrapped nil and failed this test for a reason that had
+    /// nothing to do with what it is checking. A padding blank would be just as
+    /// wrong: it carries no emoji, so it never gets an `EmojiPickCell` and can
+    /// never own a strip.
     func testAStripWhoseCellIsStillThereSurvivesARebuild() throws {
         let sections = EmojiPanel.sections(recent: [], rowCount: 4)
-        let live = try XCTUnwrap(sections.first?.cells.first?.id)
+        let live = try XCTUnwrap(
+            sections.flatMap(\.cells).first(where: { $0.emoji != nil })?.id)
         let open = picker(owner: live)
 
         XCTAssertEqual(EmojiPanel.pickerSurviving(open, in: sections)?.owner, live)
