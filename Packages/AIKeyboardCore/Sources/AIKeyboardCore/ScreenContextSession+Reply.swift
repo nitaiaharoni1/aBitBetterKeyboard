@@ -19,6 +19,24 @@ extension ScreenContextSession {
     /// be indistinguishable from one answering "not secure", and the question
     /// would be unanswerable from the field. `refusedSecureUnknown` standing at
     /// the tap count after a device run is that question answered no.
+    ///
+    /// **Both counters are suspended for as long as `FeatureFlags
+    /// .screenCaptureReply` is false, and a zero read off a device is therefore
+    /// the question *not asked* rather than answered no.** `channel` is set by
+    /// `startConsuming` and by nothing else, and that call is now gated on the
+    /// flag in both processes, because it installs a 0.25s `RunLoop.main` timer
+    /// over a page nothing can write — see `.claude/rules/screen-context.md`. The
+    /// decision above is unaffected, since `SecureField.permitsRead` is pure, so
+    /// no user sees anything different; only the number stops moving.
+    ///
+    /// **It was never readable anyway, which is the sharper half.**
+    /// `countSecureDecision` lands in `CaptureIntent.refusedSecure` through
+    /// `CaptureChannelReader`, and **nothing in this repository reads those two
+    /// fields back** — not the app, not the broadcast extension, not Settings,
+    /// not `Bar/screen-context`. Inspecting them has always meant dumping the
+    /// shared page by hand. NIT-187 is the issue for giving the measurement a
+    /// home that outlives the capture channel, which is what it needs to answer
+    /// the question this comment says it answers.
     @discardableResult
     public func permitsRead(secure: Bool?, contentType: UITextContentType??) -> Bool {
         let permitted = SecureField.permitsRead(secure: secure, contentType: contentType)

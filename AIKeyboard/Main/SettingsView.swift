@@ -316,11 +316,6 @@ struct SettingsView: View {
         }
     }
 
-    /// **The gap between the two counters is the reading, so it is what leads.**
-    /// A launch that began and never reached the screen is the shape of the
-    /// report this was built for; the timing is what says whether the ones that
-    /// did arrive were close to losing the same race. See `KeyboardLaunchRecord`
-    /// for why one point of gap is noise and a ratio is evidence.
     /// Whether the gap between the two counters has earned a warning tint.
     ///
     /// **Two, not one, and the record's own doc is why.** `KeyboardLaunchRecord`
@@ -334,6 +329,10 @@ struct SettingsView: View {
         launch.loads - launch.presentations >= 2
     }
 
+    /// **The count leads and the gap follows it**, because a gap of two means
+    /// one thing over five launches and another over two hundred, and the reader
+    /// cannot weigh it without the denominator. The timing goes last: it only
+    /// matters once the counters have said there is something to explain.
     private func launchDetail(_ launch: KeyboardLaunchRecord) -> String {
         let missing = launch.loads - launch.presentations
         var parts = ["\(launch.loads) launch\(launch.loads == 1 ? "" : "es")"]

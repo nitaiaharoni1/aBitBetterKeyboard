@@ -186,6 +186,14 @@ extension KeyboardController {
         // `isSecureTextEntry` through a `UITextDocumentProxy` at all. A guard in
         // front of it silences that measurement.
         //
+        // **That last sentence is still the reason for the ordering and is no
+        // longer true of the shipping build.** Gating `startConsuming` on
+        // `FeatureFlags.screenCaptureReply` leaves the session's `channel` nil,
+        // so the count cannot move at all in v1 — and it was only ever written
+        // into a page nothing reads back. Keep the order: it costs nothing, and
+        // the measurement returns the day the flag flips. See `permitsRead` and
+        // NIT-187.
+        //
         // The no-source path above needs nothing from this: `screenContextPrompt`
         // already asks `canReachChannel` and `cloudConfigured` before it asks
         // about the clipboard, so "no clip and no Full Access" already says Full

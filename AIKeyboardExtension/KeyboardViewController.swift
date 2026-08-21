@@ -405,13 +405,27 @@ final class KeyboardViewController: UIInputViewController {
 
     /// The other end of the launch this instance began.
     ///
-    /// Silent when `loadedAt` is missing rather than reporting a zero: a
-    /// duration nobody measured is not a fast launch, and `slowestPresentMS`
-    /// would be the field it lied to.
+    /// **`>` and a plain subtraction, never `&-`.** The wrapping operator turns a
+    /// clock that appeared to run backwards into about 1.8e10 milliseconds, which
+    /// is positive, so it sails through `KeyboardLaunchRecord.merge`'s
+    /// `max(0, millis)` untouched and pins `slowestPresentMS` at 18446744073 for
+    /// the rest of the boot — Settings would render that as the slowest launch.
+    /// `CLOCK_MONOTONIC_RAW` does not run backwards, so this is a guard against
+    /// arithmetic rather than against the clock; the point is that the clamp
+    /// `merge` documents is only reachable if this hands it a real negative,
+    /// and with `&-` it never could.
+    ///
+    /// **`let loadedAt` cannot currently be nil**, since UIKit runs `viewDidLoad`
+    /// before `viewDidAppear` and `recordLaunch(.loaded)` is the first line of
+    /// it. Said plainly rather than dressed up as a real case, because this
+    /// repo's rule is that a guard should reject something. The optional is still
+    /// the right shape: the alternative is a sentinel, and a duration nobody
+    /// measured must never reach `slowestPresentMS` looking like a fast launch.
     private func recordFirstPresentation() {
         guard !hasRecordedPresentation, let loadedAt else { return }
         hasRecordedPresentation = true
-        let millis = Double(CaptureClock.now() &- loadedAt) / 1_000_000
+        let now = CaptureClock.now()
+        let millis = now > loadedAt ? Double(now - loadedAt) / 1_000_000 : 0
         recordLaunch(.presented(millis: millis))
     }
 

@@ -71,8 +71,13 @@ paths:
   pan begins, so the slop window straddles the start of the pan instead of sitting
   inside it. `scrollDisabled` can land on a scroll view with a live touch on it.
   6 pt over 200 ms is 30 pt/s, which is an ordinary slow scan across a grid of
-  pictures, and `translation` is cumulative from `startLocation`, so out-and-back
-  never cancels either. The one touch both
+  pictures. `translation` is displacement from `startLocation` rather than path
+  length, so an excursion that stays *under* 6 pt leaves no residue however
+  wiggly it was — but one that crosses 6 pt has already tripped `hasSlid` at its
+  peak, because `onChanged` fires continuously rather than only on lift. An
+  earlier version of this bullet said out-and-back never cancels, which
+  overstated the case in the direction that makes the hazard sound worse than it
+  is. The one touch both
   want is hold-then-lift-in-place, and **`pickerTookTouch` is deliberately not
   cleared when the strip commits**: SwiftUI does not say whether the button's
   action runs before or after the gesture's `onEnded`, so it is cleared at the

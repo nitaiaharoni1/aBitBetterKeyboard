@@ -213,9 +213,12 @@ struct RootView: View {
         // **The one place that sees a real capture session start, and it is
         // deliberately not a view that draws one.** `HomeScreenContextCard` was
         // the obvious site and `FeatureFlags.screenCaptureReply` has taken it out
-        // of the build; this app is a channel `.observer` from the `onAppear`
-        // above regardless, so the transition is still observable here whether or
-        // not anything renders it. That makes the event dormant rather than dead:
+        // of the build. **This used to add "the app is a channel `.observer` from
+        // the `onAppear` above regardless", and that is no longer so**: the same
+        // flag now gates that call too, so the app observes only when the flag is
+        // on. The conclusion survives the premise, because this subscribes to
+        // `$state` directly rather than to anything the channel owns, and both
+        // halves are behind one flag. That makes the event dormant rather than dead:
         // it cannot fire in v1 because no broadcast can be started, and it starts
         // reporting the day NIT-6 flips the flag, with no second edit.
         //
