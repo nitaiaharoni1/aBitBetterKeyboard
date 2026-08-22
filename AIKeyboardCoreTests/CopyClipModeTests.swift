@@ -406,4 +406,63 @@ final class CopyClipModeTests: XCTestCase {
             "a field the keyboard cannot see was treated as one it had just written")
         XCTAssertNil(edit.spanUndo(behind: "something else"))
     }
+
+    // MARK: Noticing a copy made while the panel is open
+
+    /// **The panel could not see a copy made while it was open, and nothing in
+    /// the ledger was at fault.**
+    ///
+    /// `copyclipCaptureState` is computed and reads `UIPasteboard.changeCount`
+    /// live, so it would have answered `.control` correctly at any moment it was
+    /// asked. It was never asked again: a copy made in the *host app* is another
+    /// process and publishes nothing here, so SwiftUI never re-ran the panel's
+    /// `body`. No Paste button, so no way to keep the clip.
+    ///
+    /// This asserts the watch's lifecycle rather than a pasteboard change,
+    /// because `PasteboardReader.changeCount` is `UIPasteboard.general` and there
+    /// is no seam to move it from a test. The lifecycle is the half that can be
+    /// wrong in the direction that matters: a build with no watch leaves the task
+    /// nil throughout and fails the first assertion.
+    @MainActor
+    func testOpeningCopyClipStartsWatchingThePasteboardAndClosingItStops() {
+        let controller = KeyboardController(target: MockTextTarget(text: ""))
+        XCTAssertNil(controller.copyclipWatchTask, "nothing should be polling before the panel opens")
+
+        controller.show(.copyclip)
+        XCTAssertNotNil(
+            controller.copyclipWatchTask,
+            "a copy made while the panel is open would never be offered")
+
+        controller.dismissOverlay()
+        XCTAssertNil(
+            controller.copyclipWatchTask,
+            "a poll on behalf of a panel nobody can see is battery spent to learn nothing")
+    }
+
+    /// Search is entered from the panel and is still the panel, so the watch has
+    /// to survive the move. `overlay.isCopyClip` covers both cases and this is
+    /// what fails a version that tested `== .copyclip`.
+    @MainActor
+    func testTheWatchSurvivesTheMoveIntoCopyClipSearch() {
+        let controller = KeyboardController(target: MockTextTarget(text: ""))
+        controller.show(.copyclip)
+        controller.show(.copyclipSearch)
+        XCTAssertNotNil(controller.copyclipWatchTask)
+    }
+
+    /// The keyboard going away is not an overlay change — `overlay` survives a
+    /// dismissal — so `viewWillDisappear` has to stop this by hand, the way it
+    /// already stops dictation.
+    @MainActor
+    func testTheWatchStopsWhenTheKeyboardGoesAway() {
+        let controller = KeyboardController(target: MockTextTarget(text: ""))
+        controller.show(.copyclip)
+        XCTAssertNotNil(controller.copyclipWatchTask)
+
+        controller.stopWatchingPasteboard()
+        XCTAssertNil(controller.copyclipWatchTask)
+        XCTAssertTrue(
+            controller.overlay.isCopyClip,
+            "the overlay deliberately survives, which is why this cannot be left to it")
+    }
 }

@@ -874,6 +874,11 @@ extension KeyboardController {
         if newOverlay == .copyclipSearch {
             setCopyclipQuery(copyclipQuery)
         }
+        // Starts on the way in and stops on the way out, both from here, because
+        // this is the one function that sees every overlay change. See
+        // `watchPasteboardWhileCopyClipIsOpen()` for what it is for; without it
+        // a copy made while the panel is open is never offered.
+        watchPasteboardWhileCopyClipIsOpen()
         // Arriving at the emoji surface from outside it, which is one of the two
         // moments the Recent order may move (`viewWillAppear` is the other).
         // `overlay.isEmoji` on the right is what makes the grid and its search box

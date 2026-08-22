@@ -257,6 +257,14 @@ final class KeyboardViewController: UIInputViewController {
         // deciding twice. See `KeyboardController.settleLanguage`.
         controller?.settleLanguage()
         controller?.refreshCopyClip()
+        // **Restarted here, because `overlay` outlives the keyboard.** Nothing
+        // resets it on the way out — the same fact `settleRecentEmoji()` below
+        // exists for — so an instance iOS kept alive comes back with the CopyClip
+        // panel still open, and `viewWillDisappear` stopped its pasteboard watch.
+        // Without this the panel would be standing there again, live to look at
+        // and blind to a copy, which is the whole defect this watch was written
+        // for. A no-op unless the panel really is open.
+        controller?.watchPasteboardWhileCopyClipIsOpen()
         // Re-read for exactly the reason above: the picker is in the companion
         // app, iOS keeps this process alive in the background, and the first
         // appearance after the user changed palette is the one that has to be
@@ -552,6 +560,11 @@ final class KeyboardViewController: UIInputViewController {
         // Withdraws the utterance and stops the poll. A no-op unless dictation
         // was actually up; see `KeyboardController.stopDictation`.
         controller?.stopDictation(insert: false)
+        // The CopyClip panel's pasteboard watch, for the same reason: a task
+        // polling on behalf of a panel nobody can see is spending battery to
+        // learn something nobody is looking at. `overlay` survives the keyboard
+        // being dismissed, so this cannot be left to the overlay changing.
+        controller?.stopWatchingPasteboard()
         // An answer that arrives after the keyboard has gone would land in whatever
         // document comes next, which is a different person's message.
         controller?.cancelRefinement()

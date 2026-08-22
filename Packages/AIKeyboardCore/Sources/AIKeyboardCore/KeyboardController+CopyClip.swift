@@ -128,6 +128,76 @@ extension KeyboardController {
             holdsText: true)
     }
 
+    // MARK: Noticing a copy made while the panel is open
+
+    /// How often the open panel asks whether the pasteboard has moved.
+    ///
+    /// **Half a second, and the thing being read is not the thing that costs.**
+    /// This reads `UIPasteboard.changeCount`, an integer that says a generation
+    /// happened and nothing about what is in it — the same free counter
+    /// `refreshCopyClip(_:)` already calls "one integer read, never an alert".
+    /// Reading the *contents* is what raises "Allow Paste?", and nothing here
+    /// does that: the whole point is to put `UIPasteControl` on screen so the
+    /// user's own tap is the read.
+    ///
+    /// Deliberately slower than `ScreenContextChannel.pollInterval`'s 0.25s, and
+    /// unlike that one it is not the same trade. That timer ran for as long as
+    /// the keyboard was up, woke a chain of `RunLoop.main` sinks, and cost a
+    /// containermanagerd query per tick to learn about a page nothing could
+    /// write. This runs only while a panel the user deliberately opened is on
+    /// screen, and the user is looking straight at the thing it updates.
+    static let copyclipWatchInterval = Duration.milliseconds(500)
+
+    /// Starts or stops the watch to match the overlay.
+    ///
+    /// **The panel could not see a copy made while it was open, and that is the
+    /// whole of both halves of the bug report it fixes.** The ordinary way to
+    /// copy something on iOS is to long-press it — which does not dismiss the
+    /// keyboard — so "copy the message, then look at CopyClip" leaves the panel
+    /// standing on the generation it was opened against. `copyclipCaptureState`
+    /// would have answered `.control` correctly at any moment it was asked; it
+    /// was never asked again, because nothing published. The clip was then never
+    /// offered and never kept, which reads as CopyClip not remembering.
+    ///
+    /// It reads as script-specific from the outside and is not: the ledger takes
+    /// Hebrew unchanged through `reconcile`, the JSON round trip, dedup and
+    /// search, verified end to end. What made it look like a Hebrew fault is that
+    /// long-press-to-copy is how you get a Hebrew message out of a chat app, and
+    /// that is exactly the gesture that leaves the keyboard up.
+    public func watchPasteboardWhileCopyClipIsOpen() {
+        copyclipWatchTask?.cancel()
+        copyclipWatchTask = nil
+        guard overlay.isCopyClip else { return }
+        noticedPasteboardGeneration = PasteboardReader.changeCount
+        copyclipWatchTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: KeyboardController.copyclipWatchInterval)
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled, let self, self.overlay.isCopyClip else { return }
+                let generation = PasteboardReader.changeCount
+                // Assigned only when it moved. `@Published` fires on assignment
+                // whether or not the value changed, so an unconditional write
+                // would re-run every observing `body` twice a second for as long
+                // as the panel is open — which is the cost this is supposed to be
+                // small enough to avoid.
+                guard generation != self.noticedPasteboardGeneration else { continue }
+                self.noticedPasteboardGeneration = generation
+            }
+        }
+    }
+
+    /// Stops the watch. Called when the keyboard goes away, because a task left
+    /// running in a keyboard the user has dismissed is the shape of defect
+    /// `viewWillDisappear` already stops dictation for — iOS keeps the process
+    /// alive after the keyboard goes, and how long for is not ours to decide.
+    public func stopWatchingPasteboard() {
+        copyclipWatchTask?.cancel()
+        copyclipWatchTask = nil
+    }
+
     /// The one route into the ledger that does not go through
     /// `PasteboardReader`. `CopyClipPasteControl` resolves the tap into a
     /// plain `String` via its own item providers — never

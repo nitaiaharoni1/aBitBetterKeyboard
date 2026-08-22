@@ -514,6 +514,22 @@ public final class KeyboardController: ObservableObject {
     /// Completes the bold word and/or inserts a space after a pause. Armed
     /// only from a key the user typed, so a caret tap or the keyboard coming
     /// on screen cannot spend the pause. See `noteTypedInput`.
+    /// The pasteboard generation this controller has most recently noticed.
+    ///
+    /// **It exists to make SwiftUI look again, and nothing reads its value.**
+    /// `copyclipCaptureState` is computed and reads `UIPasteboard.changeCount`
+    /// live, which is right — but a computed property cannot make a `body`
+    /// re-run, and a copy made in the *host app* is another process and
+    /// publishes nothing here. So a panel drawn before the copy stayed drawn:
+    /// no Paste button, therefore no way to keep the clip, which is
+    /// indistinguishable from CopyClip refusing to remember. See
+    /// `watchPasteboardWhileCopyClipIsOpen()`.
+    @Published var noticedPasteboardGeneration = 0
+
+    /// Polls `changeCount` for as long as the CopyClip panel is on screen. Nil
+    /// the rest of the time, which is most of the time.
+    var copyclipWatchTask: Task<Void, Never>?
+
     var idleTypingTask: Task<Void, Never>?
     /// The instant of the last typed character. `nil` until something is keyed
     /// in this field, and cleared when the word is no longer in progress.

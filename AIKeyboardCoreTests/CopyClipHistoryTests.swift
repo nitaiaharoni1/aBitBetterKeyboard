@@ -177,6 +177,60 @@ final class CopyClipHistoryTests: XCTestCase {
         XCTAssertEqual(decoded, .empty, "whitespace-only clip text was accepted")
     }
 
+    // MARK: Hebrew
+
+    /// **Reported from a phone as "CopyClip does not remember Hebrew", and the
+    /// ledger was never the reason.** The cause was that the panel could not see
+    /// a copy made while it was open (`CopyClipModeTests`), and long-press-to-copy
+    /// — which is how a Hebrew message leaves a chat app — is exactly the gesture
+    /// that leaves the keyboard up. This is here so the half that was *not* at
+    /// fault stays measured rather than remembered.
+    ///
+    /// The whole path in one test, because each stage could drop it on its own:
+    /// validation, the ledger, the JSON the store actually writes, dedup, and
+    /// search.
+    func testHebrewSurvivesTheWholePathFromPasteboardToStoredLedger() throws {
+        let hebrew = "שלום, מה נשמע?"
+        let sentence = "אני מגיע בעוד רבע שעה, נתראה"
+
+        let first = ClipboardHistory.reconcile(
+            clips: [], changeCount: 1, lastChangeCount: -1, rawText: hebrew, now: now)
+        XCTAssertEqual(
+            first.clips.first?.text.value, hebrew,
+            "Hebrew must reach the ledger with not one character changed")
+
+        let second = ClipboardHistory.reconcile(
+            clips: first.clips, changeCount: 2, lastChangeCount: 1, rawText: sentence, now: now)
+        XCTAssertEqual(second.clips.count, 2)
+
+        let record = CopyclipRecord(clips: second.clips, lastChangeCount: 2)
+        let data = try JSONEncoder().encode(record)
+        let back = try JSONDecoder().decode(CopyclipRecord.self, from: data)
+        XCTAssertEqual(
+            back.clips.map(\.text.value), [sentence, hebrew],
+            "the round trip the store performs on every write must not lose it")
+
+        let again = ClipboardHistory.reconcile(
+            clips: back.clips, changeCount: 3, lastChangeCount: 2, rawText: hebrew, now: now)
+        XCTAssertEqual(again.clips.count, 2, "re-copying Hebrew must not make a duplicate")
+        XCTAssertEqual(again.clips.first?.id, first.clips.first?.id, "and must keep its identity")
+
+        XCTAssertEqual(ClipboardHistory.matching(query: "נשמע", in: again.clips).count, 1)
+    }
+
+    /// A chat app can put its bubble's own bidi formatting on the board with the
+    /// text. Those marks are neither whitespace nor newlines, so the trim leaves
+    /// them and the clip is valid — asserted because the opposite would be a
+    /// silent, script-specific drop, which is precisely what the report sounded
+    /// like.
+    func testHebrewCarryingBidiMarksIsStillAValidClip() throws {
+        let plain = "שלום"
+        for wrapped in ["\u{2067}\(plain)\u{2069}", "\u{200F}\(plain)", "\(plain)\u{200E}"] {
+            let text = try XCTUnwrap(ClipText(raw: wrapped), "bidi-marked Hebrew was refused")
+            XCTAssertTrue(text.value.contains(plain))
+        }
+    }
+
     private func makeClip(
         _ raw: String, id: UUID = UUID(), at date: Date? = nil
     ) -> Clip {
