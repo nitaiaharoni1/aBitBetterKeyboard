@@ -125,8 +125,9 @@ final class KeyboardViewController: UIInputViewController {
         // compared only after that turn: every keystroke and every loudness tick
         // publishes, and the constraint must not move unless the strip actually
         // appeared.
-        // **One hop, not two.** This fires on every keystroke, every dictation
-        // level tick and every frame of the 60 Hz `workingPhase` sweep, and it
+        // **One hop, not two.** This fires on every keystroke and every
+        // dictation level tick — and, until the working orbit started keeping
+        // its own clock, on every frame of a 60 Hz phase sweep — and it
         // used to schedule a `RunLoop.main` turn *and then* a
         // `DispatchQueue.main.async` inside it, so the busiest publisher in the
         // process paid two main-queue round trips to compare one `Bool`. The

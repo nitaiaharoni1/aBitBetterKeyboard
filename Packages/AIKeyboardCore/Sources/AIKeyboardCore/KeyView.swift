@@ -66,7 +66,7 @@ public struct KeyView: View, Equatable {
     /// `KeySpec` is a value that can read none of that. See `DictationKeyState`.
     let dictationState: DictationKeyState
     /// Live work on this key, if it is the one that started it. `.idle` on
-    /// every other key so a 60 Hz phase tick does not rebuild the grid.
+    /// every other key so one key's call does not rebuild the grid.
     let activity: KeyActivity
 
     /// The accent this key was drawn with.
@@ -191,13 +191,15 @@ public struct KeyView: View, Equatable {
     /// **`KeyboardController` publishes on every keystroke and every key on the
     /// board redraws, because a `View` holding a closure can never compare equal
     /// to itself.** `KeyboardView` observes that one object, so `suggestions`,
-    /// `shift`, `documentHasText`, a dictation level tick or the 60 Hz
-    /// `workingPhase` sweep each rebuild the whole grid — and SwiftUI cannot skip
-    /// a body it cannot prove is unchanged, which for a struct carrying function
-    /// values it never can. Roughly forty keys, two shadows and a gradient each,
-    /// several times per letter. `KeyView+Keys` already went to the trouble of
-    /// handing letter keys `activity: .idle` "so a 60 Hz tick does not rebuild the
-    /// grid"; that intent could not work until this existed.
+    /// `shift`, `documentHasText` or a dictation level tick each rebuild the
+    /// whole grid — and SwiftUI cannot skip a body it cannot prove is unchanged,
+    /// which for a struct carrying function values it never can. Roughly forty
+    /// keys, two shadows and a gradient each, several times per letter. The worst
+    /// offender was the model call's 60 Hz `workingPhase` tick; the orbit keeps
+    /// its own clock now (`ControlOrbit`), but every published value above still
+    /// makes this conformance earn its place. `KeyView+Keys` already went to the
+    /// trouble of handing letter keys `activity: .idle` so one key's call cannot
+    /// rebuild the grid; that intent could not work until this existed.
     ///
     /// **Ignoring the closures is sound rather than convenient, and it rests on
     /// what they capture.** Every one of them captures `controller`, whose
@@ -392,8 +394,8 @@ public struct KeyView: View, Equatable {
         }
     }
 
-    /// Sweep under the label, clipped to the cap. Recording draws in the
-    /// icon slot instead — see `actionLabel`.
+    /// Orbit under the label, drawn to the cap's own shape. Recording draws
+    /// in the icon slot instead — see `actionLabel`.
     @ViewBuilder
     var activityChrome: some View {
         ControlActivityChrome(activity: activity, cornerRadius: Theme.Radius.key)

@@ -95,8 +95,8 @@ extension KeyboardController {
     /// and wait; and the newest clip may have been overtaken by a copy this
     /// keyboard is not allowed to read, which `ReplySource.fromClipboard` refuses on
     /// rather than answering the message before it. The wait, where there is one,
-    /// happens inside `beginWork`, so the key shimmers through it exactly as it
-    /// does through a model call.
+    /// happens inside `beginWork`, so the key wears the working orbit through
+    /// it exactly as it does through a model call.
     private func runReply() {
         // **Before the source is asked, because it is what makes the answer
         // current.** A copied image leaves a pasteboard generation the ledger has
@@ -277,7 +277,7 @@ extension KeyboardController {
     }
 
     /// Runs one model call. The latency here is the model's, not a sleep: the
-    /// shimmer runs until the answer lands, however long that takes.
+    /// orbit runs until the answer lands, however long that takes.
     ///
     /// A failure sets `aiError` rather than leaving the panel empty, because
     /// every one of these calls can fail for a reason the user can act on —
@@ -290,10 +290,12 @@ extension KeyboardController {
         apply: @MainActor @escaping (KeyboardController, Value) -> Void
     ) {
         workingTask?.cancel()
+        // A stale rim must not fade over a call that has already started again.
+        endArrival()
         isWorking = true
         aiError = nil
         // An action that actually starts clears the previous refusal. Without it a
-        // "type something first" from a moment ago sits under the new shimmer.
+        // "type something first" from a moment ago sits under the new orbit.
         block = nil
         aiProvenance = nil
         // Named here rather than at the four call sites, so an action that reports
@@ -313,14 +315,6 @@ extension KeyboardController {
 
         workingTask = Task { [weak self] in
             guard let self else { return }
-            let animation = Task { @MainActor [weak self] in
-                while !Task.isCancelled {
-                    self?.workingPhase += 0.03
-                    try? await Task.sleep(for: .milliseconds(16))
-                }
-            }
-            defer { animation.cancel() }
-
             do {
                 let output = try await work()
                 guard !Task.isCancelled else { return }
@@ -345,6 +339,7 @@ extension KeyboardController {
     /// that decision is taken and where the reasoning for it lives.
     public func applyResult(_ text: String) {
         Feedback.success()
+        beginArrival(for: runningAction)
         // **Before the insertion, not after.** A reply lands in a field that may
         // still be carrying a Fix's way back, and that way back replaces the *whole*
         // field with what was there before — so reverting after inserting a reply
@@ -448,13 +443,14 @@ extension KeyboardController {
         // the ordinary outcome of running Fix over a sentence that is already
         // right. Re-typing the same characters would move the cursor and leave a
         // revert button offering to change nothing. Telling the user "Nothing to
-        // change" is a 69pt strip for a tap that did its job. The sweep on the
+        // change" is a 69pt strip for a tap that did its job. The orbit on the
         // key ending is the signal; the field is already what they wanted.
         guard answer != previous else {
             clearBannerState()
             return
         }
         Feedback.success()
+        beginArrival(for: action)
         // **Before the insertion, not after.** A reply lands in a field that may
         // still be carrying a Fix's way back, and that way back replaces the
         // *whole* field with what was there before — so reverting after inserting a
@@ -576,12 +572,41 @@ extension KeyboardController {
     ///
     /// `clearBannerState()` alone is not enough: a cancelled `beginWork` returns at
     /// its own `Task.isCancelled` guard without ever reaching the line that clears
-    /// `isWorking`, so the sweep on the key would run for ever.
+    /// `isWorking`, so the orbit on the key would run for ever.
     func cancelAIWork() {
         workingTask?.cancel()
         workingTask = nil
+        endArrival()
         aiSourceText = ""
         clearBannerState()
+    }
+
+    /// How long the rim holds after an answer lands, a shade past
+    /// `ControlArrivalRim.fadeDuration` so the fade finishes before the state
+    /// that hosts it goes.
+    static let arrivalDwellMilliseconds = 500
+
+    /// Holds `.arriving` on the live control while the rim closes, then lets
+    /// go. Called beside `Feedback.success()` and nowhere else, so the eye
+    /// gets the beat the hand already does — and never on a failure, which
+    /// returns straight to idle while the banner explains.
+    func beginArrival(for action: AIAction?) {
+        guard let action else { return }
+        arrivalTask?.cancel()
+        arrivingAction = action
+        arrivalTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(Self.arrivalDwellMilliseconds))
+            guard !Task.isCancelled else { return }
+            self?.arrivingAction = nil
+        }
+    }
+
+    /// Drops the arrival state at once: a new call, a cancel, or a keyboard
+    /// being handed a new document must not wear the previous answer's rim.
+    func endArrival() {
+        arrivalTask?.cancel()
+        arrivalTask = nil
+        arrivingAction = nil
     }
 
     /// Drops the way back outright.

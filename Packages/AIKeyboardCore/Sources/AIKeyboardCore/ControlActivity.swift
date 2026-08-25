@@ -11,8 +11,12 @@ import SwiftUI
 /// flash Record.
 public enum KeyActivity: Equatable, Sendable {
     case idle
-    /// A model call. `phase` is `KeyboardController.workingPhase`.
-    case working(phase: Double)
+    /// A model call. The orbit keeps its own clock — see `ControlOrbit`.
+    case working
+    /// The half-second after an answer lands: the rim completes and lets go.
+    /// Success only; a failure returns straight to idle and the banner
+    /// explains, so the celebration can never sit on top of an error.
+    case arriving
     /// The microphone is open. Empty levels are still a recording that just
     /// started; finishing is `.idle` here even though the key stays red.
     case recording(levels: [Double])
@@ -20,9 +24,9 @@ public enum KeyActivity: Equatable, Sendable {
 
 extension KeyActivity {
 
-    /// Caps that wear the working sweep: the three text actions, not emoji
+    /// Caps that wear the working orbit: the three text actions, not emoji
     /// and not the microphone.
-    static func hostsWorkingSweep(_ cap: KeyCap) -> Bool {
+    static func hostsWorkingOrbit(_ cap: KeyCap) -> Bool {
         switch cap {
         case .aiFix, .aiReply, .quickTone: return true
         default: return false
@@ -30,26 +34,29 @@ extension KeyActivity {
     }
 
     /// Resolves activity for one cap. Callers pass this only to the live
-    /// control so a 60 Hz `workingPhase` tick does not rebuild every key.
+    /// control so the other keys never rebuild for another key's call.
     static func resolve(
         cap: KeyCap,
         isDictating: Bool,
         dictationLevels: [Double] = [],
         isActionActive: Bool,
         isWorking: Bool,
-        workingPhase: Double = 0
+        isArriving: Bool = false
     ) -> KeyActivity {
         if cap == .dictation {
             return isDictating ? .recording(levels: dictationLevels) : .idle
         }
-        if isActionActive, isWorking, hostsWorkingSweep(cap) {
-            return .working(phase: workingPhase)
-        }
+        guard isActionActive, hostsWorkingOrbit(cap) else { return .idle }
+        // Work outranks arrival: `beginWork` clears the arrival state, but a
+        // resolve racing that clear must not flash a finished rim over a call
+        // that has already started again.
+        if isWorking { return .working }
+        if isArriving { return .arriving }
         return .idle
     }
 
-    /// Same questions, read off the controller. `workingPhase` and
-    /// `dictationLevels` are touched only on the live branch.
+    /// Same questions, read off the controller. `dictationLevels` are touched
+    /// only on the live branch.
     @MainActor
     static func resolve(for cap: KeyCap, controller: KeyboardController) -> KeyActivity {
         resolve(
@@ -58,56 +65,139 @@ extension KeyActivity {
             dictationLevels: controller.isDictating ? controller.dictationLevels : [],
             isActionActive: controller.isActionKeyActive(cap),
             isWorking: controller.isWorking,
-            workingPhase: controller.isWorking ? controller.workingPhase : 0)
+            isArriving: controller.arrivingAction != nil)
     }
 
     /// The bar's rewrite button. Fix and Reply light their own keys; this
-    /// one used to spin for every call.
+    /// one used to spin for every call. The arrival is matched the same way:
+    /// only its own two actions close a rim here.
     static func resolveTone(
         runningAction: AIAction?,
         isWorking: Bool,
-        workingPhase: Double
+        arrivingAction: AIAction? = nil
     ) -> KeyActivity {
-        guard isWorking else { return .idle }
-        switch runningAction {
-        case .rewrite, .tone: return .working(phase: workingPhase)
+        if isWorking {
+            switch runningAction {
+            case .rewrite, .tone: return .working
+            default: return .idle
+            }
+        }
+        switch arrivingAction {
+        case .rewrite, .tone: return .arriving
         default: return .idle
         }
     }
 }
 
-// MARK: - Sweep
+// MARK: - Orbit
 
-/// The indeterminate segment a model call draws, clipped by the caller to
-/// the key or chip.
+/// The indeterminate signal a model call draws: a white highlight circling
+/// the cap's rim over a breathing interior wash.
 ///
-/// **The same math the reserved hairline used.** `workingPhase` grows without
-/// bound — `beginWork` drives it at 0.03 per 16 ms and never wraps it — so
-/// the wrap happens here. Pinned left-to-right: a language swipe mid-call
-/// must not reverse the sweep and read as the call having restarted.
-struct ControlSweep: View {
-    let phase: Double
+/// **It keeps its own clock.** The sweep this replaces was driven by a
+/// published `workingPhase` ticked every 16 ms in `beginWork`, which
+/// invalidated the controller for every observer for the length of every call
+/// — `KeyView`'s `Equatable` conformance exists to survive that.
+/// `TimelineView(.animation)` redraws this one small view instead. The phase
+/// is derived from the wall clock, so it is monotonic by construction and a
+/// language swipe mid-call cannot reverse it — the same rule the sweep's
+/// left-to-right pin enforced, inherited here as the layout-direction pin on
+/// the gradient's angle.
+///
+/// The rim rather than the interior, because the signal has to survive a
+/// resting thumb: the perimeter is the one part of a 39 pt cap a finger
+/// cannot fully cover.
+struct ControlOrbit: View {
+    let cornerRadius: CGFloat
 
-    static let segmentFraction: CGFloat = 0.32
-    /// White on a filled brand cap, not a second hue.
-    static let fillOpacity: Double = 0.4
+    /// One lap. Slower than the old 0.53 s sweep on purpose: a typical call
+    /// watched that band race past seven times, and fast repetition reads as
+    /// stuck rather than busy.
+    static let orbitPeriod: TimeInterval = 1.6
+    static let rimWidth: CGFloat = 2
+    /// White on a filled brand cap, not a second hue — the sweep's own rule.
+    static let headOpacity: Double = 0.95
+    static let tailOpacity: Double = 0.55
+    /// The interior wash at the deepest point of its breath.
+    static let breathOpacity: Double = 0.10
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        GeometryReader { geo in
-            let width = geo.size.width
-            let segment = width * Self.segmentFraction
-            // Reduced motion freezes a visible slice. Travel is the thing
-            // that reads as progress; a parked segment still says "this one".
-            let shown = reduceMotion ? 0.35 : phase.truncatingRemainder(dividingBy: 1)
-            Capsule(style: .continuous)
-                .fill(Theme.Text.onBrand.opacity(Self.fillOpacity))
-                .frame(width: segment)
-                .offset(x: CGFloat(shown) * (width + segment) - segment)
+        TimelineView(.animation(paused: reduceMotion)) { context in
+            // Reduced motion parks a visible arc and a faint wash. Presence is
+            // what reads as "this one is live"; travel is what Reduce Motion
+            // asks us not to do.
+            let lap = reduceMotion ? 0.42 : Self.phase(at: context.date)
+            let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            ZStack {
+                shape.fill(
+                    Theme.Text.onBrand.opacity(
+                        reduceMotion ? Self.breathOpacity * 0.6 : Self.breath(lap)))
+                shape.strokeBorder(
+                    AngularGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .clear, location: 0.69),
+                            .init(
+                                color: Theme.Text.onBrand.opacity(Self.tailOpacity),
+                                location: 0.85),
+                            .init(
+                                color: Theme.Text.onBrand.opacity(Self.headOpacity),
+                                location: 0.94),
+                            .init(color: .clear, location: 1)
+                        ]),
+                        center: .center,
+                        angle: .degrees(lap * 360)),
+                    lineWidth: Self.rimWidth)
+            }
         }
         .environment(\.layoutDirection, .leftToRight)
         .allowsHitTesting(false)
+    }
+
+    /// Where the highlight is in its lap, 0 to 1, monotonic across views: the
+    /// key and the chip derive it from the same clock, so two surfaces can
+    /// never disagree about the orbit.
+    static func phase(at date: Date) -> Double {
+        (date.timeIntervalSinceReferenceDate / orbitPeriod)
+            .truncatingRemainder(dividingBy: 1)
+    }
+
+    /// The interior wash, in step with the orbit so the cap inhales once per
+    /// lap rather than on a second rhythm.
+    static func breath(_ lap: Double) -> Double {
+        breathOpacity * (0.5 - 0.5 * cos(lap * 2 * .pi))
+    }
+}
+
+// MARK: - Arrival
+
+/// The one-shot close: the rim completes the moment the answer lands, then
+/// lets go. Paired with the `Feedback.success()` haptic at the call sites
+/// that enter `.arriving`, so the eye gets the beat the hand already does.
+///
+/// Opacity only, which is why Reduce Motion keeps it: a fade is not spatial
+/// motion, and the arrival is feedback that confirms an action.
+struct ControlArrivalRim: View {
+    let cornerRadius: CGFloat
+
+    static let fadeDuration: TimeInterval = 0.45
+    static let fullOpacity: Double = 0.9
+
+    @State private var faded = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .strokeBorder(
+                Theme.Text.onBrand.opacity(Self.fullOpacity),
+                lineWidth: ControlOrbit.rimWidth
+            )
+            .opacity(faded ? 0 : 1)
+            .onAppear {
+                withAnimation(.easeOut(duration: Self.fadeDuration)) { faded = true }
+            }
+            .allowsHitTesting(false)
     }
 }
 
@@ -178,17 +268,21 @@ struct ControlWaveform: View {
 
 // MARK: - Cap chrome
 
-/// The working sweep, clipped to a key or chip. Recording draws in the icon
-/// slot instead: a sweep under a waveform would be two progress languages.
+/// The working orbit and its arrival close, drawn on a key or chip.
+/// Recording draws in the icon slot instead: an orbit under a waveform would
+/// be two progress languages.
 struct ControlActivityChrome: View {
     let activity: KeyActivity
     let cornerRadius: CGFloat
 
     var body: some View {
-        if case .working(let phase) = activity {
-            ControlSweep(phase: phase)
-                .clipShape(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        switch activity {
+        case .working:
+            ControlOrbit(cornerRadius: cornerRadius)
+        case .arriving:
+            ControlArrivalRim(cornerRadius: cornerRadius)
+        case .idle, .recording:
+            EmptyView()
         }
     }
 }
@@ -200,7 +294,8 @@ struct ControlActivityChrome: View {
 private struct ControlActivityPreview: View {
     var body: some View {
         HStack(spacing: 12) {
-            previewCap(title: "Fix", activity: .working(phase: 0.35))
+            previewCap(title: "Fix", activity: .working)
+            previewCap(title: "Fix", activity: .arriving)
             previewCap(
                 title: "Pause",
                 activity: .recording(levels: [0.04, 0.09, 0.06, 0.11, 0.08]),

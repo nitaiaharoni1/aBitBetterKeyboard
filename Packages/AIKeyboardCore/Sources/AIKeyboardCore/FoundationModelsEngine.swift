@@ -103,7 +103,7 @@ public struct FoundationModelsEngine: TextIntelligence {
         // No simulator runtime ships model assets, and the framework does not
         // say so: `availability` reports `.available`, and the first
         // `respond` call then blocks rather than throwing. A blocked call
-        // takes the app down with it — the panel sits on its shimmer and iOS
+        // takes the app down with it — the keyboard sits on its orbit and iOS
         // kills the process — so the simulator is refused up front instead.
         // This is the reason on-device answers never appear in a simulator
         // run; measure the engine on macOS via Bar/ai-text/harness/run-real.sh.

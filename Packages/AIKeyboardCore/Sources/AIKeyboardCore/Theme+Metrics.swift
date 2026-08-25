@@ -14,7 +14,7 @@ extension Theme {
         /// answer when it has one. See `ActionBanner`.
         ///
         /// **Constant while shown, omitted for everything the keys can say
-        /// themselves.** A running call is a sweep on the key that started it; a
+        /// themselves.** A running call is an orbit on the key that started it; a
         /// live recording is a waveform on the microphone. What is left is a live
         /// screen reading, a refusal and a failure — sentences with nowhere else
         /// to go. See `BannerState.isPresented`. The fingerprint crop does not
@@ -214,7 +214,8 @@ extension Theme {
         /// the 14 Pro / 15 / 16 / 16e (393, 0.5 over). Over the cap
         /// `FrameReduction.bottomCrop(ownUI:)` clamps, and the rows it then
         /// refuses to crop are rows of **our own keyboard** — at 375 that reaches
-        /// the Reply chip, whose `ControlSweep` runs for the whole of a read, and
+        /// the Reply chip, whose working animation (now `ControlOrbit`, the
+        /// sweep when this was measured) runs for the whole of a read, and
         /// `Bar/screen-context/harness/run-fingerprint-landscape.sh` measured
         /// **30 of 30** frames taking a fresh identity from it. That is the same
         /// defect `FrameReduction` was rewritten to remove, arriving in an

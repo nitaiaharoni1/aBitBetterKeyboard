@@ -182,7 +182,8 @@ final class LandscapeGeometryTests: XCTestCase {
     /// 375 by 8.1 pt, 390 by 1.8 and 393 by 0.5. Over it,
     /// `FrameReduction.bottomCrop(ownUI:)` clamps and the rows it refuses to
     /// crop are rows of our own keyboard — at 375 that reaches the Reply chip,
-    /// whose `ControlSweep` runs for the whole of a read, and
+    /// whose working animation (now `ControlOrbit`, the sweep when this was
+    /// measured) runs for the whole of a read, and
     /// `Bar/screen-context/harness/run-fingerprint-landscape.sh` measured 30 of
     /// 30 frames taking a fresh identity from it. That is a screen reading the
     /// user paid a cloud call for, retired as stale by our own animation.

@@ -609,20 +609,31 @@ final class KeyActivityTests: XCTestCase {
     }
 
     /// The tone button used to treat every `isWorking` as its own. Fix and
-    /// Reply light their keys; this control only sweeps for rewrite or tone.
+    /// Reply light their keys; this control only orbits for rewrite or tone,
+    /// and its arrival is matched the same way.
     func testToneActivityIgnoresFixAndReply() {
         XCTAssertEqual(
-            KeyActivity.resolveTone(runningAction: .fix, isWorking: true, workingPhase: 0.2),
+            KeyActivity.resolveTone(runningAction: .fix, isWorking: true),
             .idle)
         XCTAssertEqual(
-            KeyActivity.resolveTone(runningAction: .reply, isWorking: true, workingPhase: 0.2),
+            KeyActivity.resolveTone(runningAction: .reply, isWorking: true),
             .idle)
         XCTAssertEqual(
-            KeyActivity.resolveTone(runningAction: .rewrite, isWorking: true, workingPhase: 0.2),
-            .working(phase: 0.2))
+            KeyActivity.resolveTone(runningAction: .rewrite, isWorking: true),
+            .working)
         XCTAssertEqual(
-            KeyActivity.resolveTone(runningAction: .tone, isWorking: true, workingPhase: 0.4),
-            .working(phase: 0.4))
+            KeyActivity.resolveTone(runningAction: .tone, isWorking: true),
+            .working)
+        XCTAssertEqual(
+            KeyActivity.resolveTone(
+                runningAction: .rewrite, isWorking: false, arrivingAction: .rewrite),
+            .arriving,
+            "the chip fails to close a rim for its own rewrite's answer")
+        XCTAssertEqual(
+            KeyActivity.resolveTone(
+                runningAction: .fix, isWorking: false, arrivingAction: .fix),
+            .idle,
+            "Fix's arrival belongs to the Fix key, not the chip")
     }
 
     /// The bar's Rewrite chip already goes dim for any call. The Rewrite key

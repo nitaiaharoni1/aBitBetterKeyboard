@@ -112,7 +112,7 @@ extension SuggestionBar {
     /// the action row fades to, and it takes no tap — the two are one control in
     /// two places and used to disagree about what an empty field means, which is
     /// D8's own defect. A rewrite or tone call in flight keeps the icon and
-    /// sweeps the filled cap; Fix and Reply leave this button alone and light
+    /// orbits the filled cap; Fix and Reply leave this button alone and light
     /// their own keys. A call that *failed* needs nothing here: `beginWork` puts
     /// the reason in `aiError` and `ActionBanner` is already showing it, one row
     /// up.
@@ -133,11 +133,15 @@ extension SuggestionBar {
         let activity = KeyActivity.resolveTone(
             runningAction: controller.runningAction,
             isWorking: isBusy,
-            workingPhase: controller.workingPhase)
-        let isToneWorking = activity != .idle
+            arrivingAction: controller.arrivingAction)
+        // Lit covers the arrival's fade as well as the call, so the cap does
+        // not flash pale under the closing rim. "Working" is the call alone:
+        // the accessibility label must not claim work that has finished.
+        let isToneLit = activity != .idle
+        let isToneWorking = activity == .working
 
         let tint: Color = {
-            if isToneWorking { return Theme.Text.onBrand }
+            if isToneLit { return Theme.Text.onBrand }
             if tap == .rewrite { return Theme.Brand.solid }
             return Theme.Keys.label.opacity(KeyView.disabledLabelOpacity)
         }()
@@ -155,10 +159,10 @@ extension SuggestionBar {
             ZStack {
                 RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                     .fill(Theme.Brand.action)
-                    .opacity(isToneWorking ? 1 : 0)
+                    .opacity(isToneLit ? 1 : 0)
                 RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
                     .fill(Theme.Brand.softGradient)
-                    .opacity(tap == .rewrite && !isToneWorking ? 1 : 0)
+                    .opacity(tap == .rewrite && !isToneLit ? 1 : 0)
                 ControlActivityChrome(activity: activity, cornerRadius: Theme.Radius.chip)
                 VStack(spacing: 1) {
                     Image(systemName: Self.toneButtonSymbol)

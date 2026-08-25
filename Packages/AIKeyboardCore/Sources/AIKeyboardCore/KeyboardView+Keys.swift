@@ -448,11 +448,11 @@ extension KeyboardView {
                 // above: state the `KeySpec` cannot reach on its own.
                 dictationState: key.cap == .dictation ? controller.dictationKeyState : .idle,
                 // Only the microphone and the three text actions. Letter keys
-                // stay `.idle` so a 60 Hz `workingPhase` tick cannot be the
-                // reason they rebuild.
+                // stay `.idle` so another key's call can never be the reason
+                // they rebuild.
                 activity: {
                     let cap = key.cap
-                    if cap == .dictation || KeyActivity.hostsWorkingSweep(cap) {
+                    if cap == .dictation || KeyActivity.hostsWorkingOrbit(cap) {
                         return KeyActivity.resolve(for: cap, controller: controller)
                     }
                     return .idle

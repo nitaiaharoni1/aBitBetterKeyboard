@@ -62,6 +62,11 @@ extension KeyboardController {
         if isDictationActive { return nil }
         if let block { return block.action }
         if isWorking { return runningAction }
+        // The half-second after the answer lands: the key stays lit while the
+        // rim closes, or the arrival would draw white on a cap that has
+        // already gone pale. Below work, because `beginWork` clears it and a
+        // read racing that clear must answer for the call, not the leftover.
+        if let arrivingAction { return arrivingAction }
         switch bannerState {
         case .options(let action, _, _), .failed(let action, _, _): return action
         default: return nil
@@ -127,7 +132,7 @@ extension KeyboardController {
         // A call in flight owns one key. The others must look off, or the bar's
         // Rewrite chip goes dim (it already ignores every `isWorking`) while the
         // Rewrite key stays lit — D8 on the two copies of one control.
-        if isWorking, KeyActivity.hostsWorkingSweep(cap), !isActionKeyActive(cap) {
+        if isWorking, KeyActivity.hostsWorkingOrbit(cap), !isActionKeyActive(cap) {
             return true
         }
         switch cap {

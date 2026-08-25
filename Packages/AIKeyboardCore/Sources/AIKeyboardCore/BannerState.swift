@@ -44,7 +44,7 @@ public struct BannerOption: Identifiable, Equatable, Sendable {
 /// somebody happened to write the `if`s in.
 ///
 /// **Two of the states it used to carry are no longer sentences.** A model call in
-/// flight is a sweep on the key that started it, and a live recording is a
+/// flight is an orbit on the key that started it, and a live recording is a
 /// waveform on the microphone — both say what they were saying without spending
 /// a 69pt row that appears and leaves. They are still *resolved* here, because
 /// the order these questions are asked in is the whole value of this type; they
@@ -189,7 +189,7 @@ public enum BannerState: Equatable {
         // dictation is first: that is a recording running in another process.
         if let block { return .blocked(block) }
 
-        // **A call in flight is a sweep on the key, and it is asked here for the
+        // **A call in flight is an orbit on the key, and it is asked here for the
         // same reason the recording above is.** `beginWork` clears `aiError` and
         // sets `isWorking` in the same breath, so a retry tested below this line
         // would flash the failure it is retrying.
@@ -203,7 +203,7 @@ public enum BannerState: Equatable {
 
         if let error {
             // An engine that cannot run is not a sentence the user can act on.
-            // The sweep on the key ending is the signal, same as a Fix that
+            // The orbit on the key ending is the signal, same as a Fix that
             // named no mistakes. "Still downloading" was the lie this rejects:
             // the simulator never has the on-device model, the cloud 401'd, and
             // the strip reported the first of those.
@@ -219,7 +219,7 @@ public enum BannerState: Equatable {
         // **An action that finished, raised no error and produced nothing.** The
         // banner used to fall through to the idle hint here, so a model answering
         // with an empty string left the strip reading "Type, or pick an action
-        // below" — the user taps Fix, waits through the shimmer, and the keyboard
+        // below" — the user taps Fix, waits through the orbit, and the keyboard
         // ends up looking exactly as it did before they touched it. An empty result
         // is the one outcome a user cannot act on or explain, which is the whole
         // reason `aiError` exists; this is the gap it does not cover, because

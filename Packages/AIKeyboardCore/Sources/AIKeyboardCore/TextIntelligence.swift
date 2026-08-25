@@ -187,7 +187,7 @@ public struct RoutedIntelligence: Sendable {
     ///
     /// This is not belt-and-braces. On a simulator the on-device call does not
     /// return an error when the model assets are missing — it blocks, the panel
-    /// sits on its shimmer, and iOS kills the app. A keyboard that stops
+    /// sits on its orbit, and iOS kills the app. A keyboard that stops
     /// responding is a worse failure than one that says it could not finish, so
     /// every call gets a deadline and a message.
     private func bounded<Value: Sendable>(

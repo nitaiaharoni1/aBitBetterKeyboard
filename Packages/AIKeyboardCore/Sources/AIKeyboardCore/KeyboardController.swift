@@ -79,7 +79,12 @@ public final class KeyboardController: ObservableObject {
 
     /// True while a mock AI call is in flight.
     @Published public var isWorking = false
-    @Published public var workingPhase: Double = 0
+    /// The action whose answer just landed, for the half-second the rim takes
+    /// to close (`ControlArrivalRim`). Set by `beginArrival` on success only —
+    /// failures never enter it — and read by `activeAIAction`, so the cap
+    /// stays lit while the rim fades rather than flashing white on a key that
+    /// has already gone pale.
+    @Published public var arrivingAction: AIAction?
 
     @Published public var aiSourceText = ""
     @Published public var aiResultText = ""
@@ -392,6 +397,8 @@ public final class KeyboardController: ObservableObject {
     let dictation: DictationSession
 
     var workingTask: Task<Void, Never>?
+    /// Clears `arrivingAction` when the rim has closed. See `beginArrival`.
+    var arrivalTask: Task<Void, Never>?
     var languageSwitchTask: Task<Void, Never>?
     /// The user tapped Stop and the words have not arrived yet. Insertion is
     /// deferred because the recording is transcribed in another process.
