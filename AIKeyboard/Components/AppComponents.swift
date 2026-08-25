@@ -103,40 +103,6 @@ struct ToggleRow: View {
     }
 }
 
-/// A quiet text control that reveals a paragraph in place. Used on settings
-/// that send data off-device or write a file, where a subtitle is not enough
-/// and a sheet would be too much.
-struct LearnMoreDisclosure: View {
-    let detail: String
-    @State private var isExpanded = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-            Button {
-                withAnimation(Theme.Motion.quick) {
-                    isExpanded.toggle()
-                }
-            } label: {
-                Text(isExpanded ? "Show less" : "Learn more")
-                    .font(Theme.Fonts.caption)
-                    .foregroundStyle(Theme.Text.secondary)
-                    .padding(.vertical, Theme.Space.xs)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isExpanded ? "Show less" : "Learn more")
-
-            if isExpanded {
-                Text(detail)
-                    .font(Theme.Fonts.caption)
-                    .foregroundStyle(Theme.Text.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-}
-
 struct NavigationRow<Destination: View>: View {
     let title: String
     var subtitle: String?

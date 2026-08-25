@@ -159,6 +159,20 @@ struct HomeView: View {
                     )
                 }
 
+                // The triage sentence for *why* the rows above are unticked. With no
+                // record at all the three causes are indistinguishable from here and
+                // the rows already say what to do, so only the two states that name a
+                // cause get the extra paragraph: Full Access measured off, and a
+                // record too old to still promise anything.
+                if let explanation = setup.unresolvedExplanation,
+                    setup.presence != nil
+                {
+                    Text(explanation)
+                        .font(Theme.Fonts.caption)
+                        .foregroundStyle(Theme.Text.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 PrimaryButton(title: "Open iOS Settings", icon: "gearshape") {
                     openSettings()
                 }

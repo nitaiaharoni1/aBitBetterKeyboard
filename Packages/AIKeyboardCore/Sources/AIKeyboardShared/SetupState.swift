@@ -237,9 +237,9 @@ public struct SetupState: Equatable, Sendable {
         }
         if presence != nil {
             return "It is a few days since the keyboard last checked in, or the phone has "
-                + "restarted since, so this is no longer something we can promise. Switch to AI "
-                + "Keyboard in any app once to check again — if it does not tick, the keyboard "
-                + "has been removed or Allow Full Access turned off."
+                + "restarted since, so this is no longer something we can promise. Switch to "
+                + "aBitBetterKeyboard in any app once to check again — if it does not tick, the "
+                + "keyboard has been removed or Allow Full Access turned off."
         }
         return "iOS never tells an app either of these. The keyboard has to be added and have "
             + "Allow Full Access turned on, both under Settings › General › Keyboard › "
