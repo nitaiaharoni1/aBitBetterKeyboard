@@ -1,22 +1,20 @@
 # Suggestion bar — handoff for the next agent
 
-Do this work in order. Do not start task 2 until task 1 is green. Read
-`.claude/rules/suggestion-bar.md` and `Bar/typing/README.md` before any edit.
-Keyboard UI lives in `Packages/AIKeyboardCore/`, not the extension.
+Read `.claude/rules/suggestion-bar.md` and `Bar/typing/README.md` before any
+edit. Keyboard UI lives in `Packages/AIKeyboardCore/`, not the extension.
 
-These two local-tier changes are on `main` and have **not** been run on a
-simulator:
-
-1. Space no longer finishes an unfinished English stem (`respon` is
-   `respond` / `response` / `responsible`). `schedule` / `scheduled` still
-   commits. Context can still pick (`the quick` → `response`).
-2. Ranking walks the whole field (`contextFollowers` /
-   `followers(mentionedIn:)`), not only the last two words. Next-word stays
-   inside the current sentence. A newline or full stop still closes the thought.
-   Learning pairs still use `previousWords` (limit 2).
-
-A Linux replica of the seed lookup passed 17/17 on those cases. That is not a
-simulator score. Task 1 is proving what is on `main`, not rewriting it.
+**Status 2026-08-25: tasks 1, 2 and 4 below are done; only task 3 remains.**
+The opening warning this file used to carry — two local-tier changes on `main`
+never run on a simulator — was retired on 2026-08-24 by NIT-11's proof:
+ContextAwareSuggestionTests 75/75 green including the five tests named under
+Task 1, and the harness at 73/76 twice with identical failing sets. Task 2
+(first backspace undoes autocorrect) shipped earlier and was hardened on
+2026-08-25: the claim check is an exact snapshot built locally from the
+pre-write context (never a post-write proxy read — see the rules file), plus a
+selection guard and a document-switch clear. Task 4's offer-only proximity
+re-rank ships too (`KeyProximity`, +50 on adjacent-key offers, commits
+untouched). The task texts below are kept for their reasoning and their
+do-not-do lists, which still bind.
 
 ## Task 1 — Prove what is on main
 

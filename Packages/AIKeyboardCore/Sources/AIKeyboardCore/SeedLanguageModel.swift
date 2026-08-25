@@ -216,6 +216,39 @@ enum SeedLanguageModel {
         return isOneEditApart(folded, other)
     }
 
+    /// What a same-length pair of words reduces to. `isOneEditApart` and
+    /// `isTransposition` used to walk the identical mismatch-and-swap check as two
+    /// byte-for-byte copies differing only in what they did with a lone
+    /// substitution at the end — one counted it as an edit, the other did not —
+    /// which is the one thing that actually separates them. Extracted so there is
+    /// one walk rather than two that can drift.
+    private enum SameLengthEdit: Equatable {
+        case identical
+        case substitution
+        case transposition
+        /// Two or more mismatches that are not a single adjacent swap.
+        case more
+    }
+
+    /// The walk itself, shared by `isOneEditApart` and `isTransposition`.
+    private static func sameLengthEdit(_ lhs: [Character], _ rhs: [Character]) -> SameLengthEdit {
+        var mismatch = -1
+        for index in lhs.indices where lhs[index] != rhs[index] {
+            if mismatch >= 0 {
+                // A second mismatch is allowed only when the two sit next to
+                // each other and swapping them reconciles both — and the rest
+                // of the word after them still has to match, or this would
+                // accept a transposition plus any number of later errors.
+                guard mismatch == index - 1, lhs[index] == rhs[mismatch],
+                    lhs[mismatch] == rhs[index]
+                else { return .more }
+                return lhs[(index + 1)...].elementsEqual(rhs[(index + 1)...]) ? .transposition : .more
+            }
+            mismatch = index
+        }
+        return mismatch >= 0 ? .substitution : .identical
+    }
+
     /// Whether two words are within one insertion, deletion, substitution or
     /// transposition of adjacent characters.
     ///
@@ -225,21 +258,10 @@ enum SeedLanguageModel {
     /// matrix would fill `n × m` cells to say the same thing.
     private static func isOneEditApart(_ lhs: [Character], _ rhs: [Character]) -> Bool {
         if lhs.count == rhs.count {
-            var mismatch = -1
-            for index in lhs.indices where lhs[index] != rhs[index] {
-                if mismatch >= 0 {
-                    // A second mismatch is allowed only when the two sit next to
-                    // each other and swapping them reconciles both — and the rest
-                    // of the word after them still has to match, or this would
-                    // accept a transposition plus any number of later errors.
-                    guard mismatch == index - 1, lhs[index] == rhs[mismatch],
-                        lhs[mismatch] == rhs[index]
-                    else { return false }
-                    return lhs[(index + 1)...].elementsEqual(rhs[(index + 1)...])
-                }
-                mismatch = index
+            switch sameLengthEdit(lhs, rhs) {
+            case .substitution, .transposition: return true
+            case .identical, .more: return false
             }
-            return mismatch >= 0
         }
         let (longer, shorter) = lhs.count > rhs.count ? (lhs, rhs) : (rhs, lhs)
         var offset = 0
@@ -263,17 +285,7 @@ enum SeedLanguageModel {
         let lhs = Array(shapeFolded(fold(word)))
         let rhs = Array(shapeFolded(fold(other)))
         guard lhs.count == rhs.count, lhs.count >= 2 else { return false }
-        var mismatch = -1
-        for index in lhs.indices where lhs[index] != rhs[index] {
-            if mismatch >= 0 {
-                guard mismatch == index - 1, lhs[index] == rhs[mismatch],
-                    lhs[mismatch] == rhs[index]
-                else { return false }
-                return lhs[(index + 1)...].elementsEqual(rhs[(index + 1)...])
-            }
-            mismatch = index
-        }
-        return false
+        return sameLengthEdit(lhs, rhs) == .transposition
     }
 
     // MARK: Loading

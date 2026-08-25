@@ -1,232 +1,210 @@
-# Gauntlet: first device run
+# Gauntlet — suggestion bar / autocomplete
 
-**Goal.** Every defect the phone found is gone, and a fresh critic holding
-`.claude/gauntlet-device-defects.md` cannot name a way the product still falls
-short of the stock iOS keyboard.
+Started 2026-08-24. Lead session: Claude Code (ultracode). User approved: run on main,
+targeted unit suites allowed (CandidateCommitTests, PersonalDictionaryTests,
+SuggestionEngineTests, ContextAwareSuggestionTests, IdleTypingTests; never the full suite).
 
-**Bar.** `.claude/gauntlet-device-defects.md` — ten defects observed on a real
-iPhone on 2026-08-09, each paired with what Apple's own keyboard does in the
-same moment. Critics open that file and the code; they never see the builder's
-report.
+## Goal
 
-**Test command.**
-`xcodebuild test -project AIKeyboard.xcodeproj -scheme AIKeyboard -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`
+Three complaints from daily use, plus a sweep:
+1. Hebrew slips ride through the space bar uncorrected (NIT-154 is the open ledger).
+2. Accepting a candidate can leave two spaces when a space already follows.
+3. A token typed every day (e.g. the owner's email address) is never learned or offered.
+   Generic mechanism, nothing keyed to a specific string. NIT-182 names the Full Access gate.
+4. Fresh-eyes bug/overengineering hunt across the suggestion area, adversarially verified.
 
----
+## The bar
+
+- `Bar/typing/typos/run.sh` — shipped baseline 85 committed / 19 held / 3 WRONG / 95 offered,
+  controls 21/21. WRONG and controls may never worsen.
+- `Bar/typing/harness/run.sh` + `score.py` — frozen 90, shipped 73/76, mustNotCorrect 12/12. May not drop.
+- `Bar/typing/sweep/run.sh` — 612 held / 50 on track / 2 diverged / 0 non-words. Non-words stay 0.
+- `Bar/typing/reference/manifest.json` — the stock keyboard's answers.
+- Two runs per side, per-entry diffs, never totals. Instruments are serialized (shared output files).
+- Controller-layer behavior (spacing, learning): macOS replica probes per `.claude/docs/testing.md`
+  (both directions), plus the allowed targeted suites.
+
+House rules: `.claude/rules/suggestion-bar.md` read in full before edits; the Do-not-do list in
+`.claude/docs/suggestion-bar-next.md`; no simulator driving; main only; no worktrees; the dirty
+files AppComponents.swift / HomeView.swift / SetupState.swift / IMPROVEMENTS-2026-08-22.md are
+another session's and are untouched.
 
 ## Pieces
 
-| # | Piece | Defects | State |
+| # | Piece | State | Rounds |
 |---|---|---|---|
-| P1 | Typing reaches the document | D1, D2 | round 3 done, 3 critic rounds, all gaps closed |
-| P3 | Setup status stops lying, playground copy | D4, D7 | round 3 done, 2 critic rounds |
-| P4 | Broadcast, keyboard start button, no frames | D5, D8, D9 | round 3 done, 2 critic rounds |
-| P5 | One-tap Rewrite in the suggestion row + custom tone | D6 | round 1 done, 1 critic round; engine half landed in P11 |
-| P9 | Every language (14 layouts) | D10 | round 2 done, 1 critic round |
-| P2 | Swipe the space bar to switch language | D3 | round 2 done, 1 critic round |
-| P10 | The cloud is not connected on a real install | — | `Settings › AI › Cloud model` ships; **deploy still needs the owner** |
-| F1 | The app stops over-promising what it cannot do | — | done, closed the final critic's gap |
-| P11 | Custom-tone engine, text replacement, 3 language gaps | D6, D10 | round 3 done, 2 critic rounds |
-| P12 | Privacy manifests (submission blocker, found mid-run) | — | done by lead, reason codes need verifying |
+| 1 | Hebrew misspelling commit quality (shipped level) | traced, build queued | scout ✓ |
+| 2 | Spacing on candidate accept (double-space) | traced, build queued | scout ✓ |
+| 3 | Generic learning of off-dictionary tokens (emails) | traced, build queued | scout ✓ |
+| 4 | Bug/overengineering sweep | 2 of 4 lenses done, 2 re-running | scout (partial) |
 
+## Scout results (2026-08-24)
 
-## Final state, 2026-08-09
+**Piece 2 root cause:** `apply(_:)`'s non-selection branch unconditionally `insertText(" ")`
+(KeyboardController+Suggestions.swift:486); nothing on the accept path reads `contextAfter`.
+Fix: skip the insert and `adjustTextPosition(byCharacterOffset: 1)` when the after-caret text
+starts with a plain space; shared helper also covers the grouped idle path (:376). Must NOT touch
+`insertSpace` (pendingAutocorrectUndo assumes "replacement + space"). Verified in source.
 
-**499 tests, 0 failures**, 2 skipped. All nine UI tests pass, including the three
-in `KeyboardTypesIntoHostTests` that press real keys on the real extension over a
-real `UITextField` — nothing in this repo did that before this run. All three
-`Scripts/prove-*.sh` pass. `swift-format lint --strict` silent. 54 files changed,
-+4675 / -754.
+**Piece 3 root cause:** `PersonalLanguageModel.record()` letters-only gate (line ~314) refuses
+`@`/digits/dots, so an email is never stored; the offer path (words(startingWith:), Source.learned)
+would already surface it. Fix: verbatim-token classifier admitting the email shape, skip bigram
+write, require 3 sightings to surface; companion commit-exclusion in `commitReason` so space can
+never auto-commit a non-letter token; matchCase guard. SecureField gate already wired. Verified.
 
-Every piece went through at least one fresh-context critic; five went through
-two or three. **Every single critic round found a real gap.** None returned
-"beats the bar" first time.
+**Piece 1 plan:** (a) pack (cost,count) lexicographically into TypoChannel's banded DP Int cells
+(cost*16+count; ties are real: 40+20=60 vs transposition 60; argmin-following count matrix is
+unsound) — zero behavior change alone; (b) split frequencyConfidence: count==2 && cost==110
+(two 55-tier slips = displaced-hand motor error) priced by reasons.sh measurement, predicted +3
+committed (דוגמטןת, thsnkd, wprkinh) with WRONG staying 3; (c) probe corpora for pricing width and
+the stacked-clitic exposure. reasons.sh baseline: 2 identical runs captured.
 
-### What the critics caught that the builders did not
+**Piece 4 confirmed findings (skeptic-verified):**
+- BUG high: adoptOpenWord learns word fragments on caret-only moves (Suggestions.swift:217).
+- BUG high: stale empty-prefix refinement lands over a selection, re-marks a bold default (:258).
+- BUG med: partial-word selection draws bold next-word predictions; space destroys the selection (:138).
+- BUG med: pendingAutocorrectUndo suffix test is position-blind (Typing.swift:546).
+- DEAD high: commitTrustsReading's .checker branch unreachable (Completions.swift:1426).
+- DEAD high: SuggestionBar.isEnabled zero readers; anyActionCouldRun keep-comment false.
+- DEAD high: refiner screen-context ternary not flag-gated (gate, do not delete: flags-not-deletions).
+- OVER med: applyRefinement's one-entry `held` dictionary is dead generality (:261).
+- DEAD med: TypoLexicon.Correction.rank written, never read.
+- OVER med: isTransposition duplicates isOneEditApart's equal-length walk (SeedLanguageModel).
+- REFUTED: final-form triplication (HebrewMorphology.finalForms is already the single source).
 
-- Nine separate tests that passed against the exact bug they were named after,
-  each for a different reason: a `weak` reference held alive by a method-scoped
-  local; `SuggestionEngine`'s hardcoded `["I","The","We"]` for an empty prefix;
-  its unconditional echo of the typed prefix; a stub that never implemented the
-  `@objc` optional it was asked about; `CaptureChannel.sweep` only removing
-  directories; a language list of one that the product cannot produce; a test
-  target with no `TEST_HOST`, where `store.userDefaults` *is* `.standard`; two
-  that called the channel by hand instead of the decision that changed.
-- A permanent, uncorrectable "Full Access ✓ On" after revocation — then, after
-  that was fixed with a 72h decay, the same lie **resurrected by every reboot**,
-  because `CLOCK_MONOTONIC_RAW` restarts at zero and an old stamp reads as fresh
-  again once uptime passes it.
-- A runaway backspace: fixing the typing bug armed a key-repeat loop that a
-  cancelled touch never cancels, deleting into whichever field the user focused
-  next at 22 presses a second.
-- Autocorrect corrupting the language the user chose: the suggestion engine was
-  never told which *layout* was on screen, so `dont` on a French keyboard became
-  `don't`, and Persian beside Arabic got Arabic's dictionary.
-- The custom tone splicing a Hebrew register into the English instruction set —
-  the merge this repo has measured as unsafe — and, on the on-device path,
-  rejecting the whole session.
-- **The unit mismatch.** `String.count` is graphemes, `UITextInput` offsets are
-  UTF-16, and `deleteBackward()` is neither: one press takes a whole flag or ZWJ
-  sequence but takes Hebrew niqqud one mark at a time. Measured, not reasoned.
-  Then the same bug found again in `replaceCurrentWord`, on the hotter path —
-  `hi שָׁלומ` + space gave `hi שָשָׁלום`, corrupting the correction this repo
-  built Hebrew final-form handling for.
+correctness + perf finders re-ran clean on resume (19 agents, 0 errors). Union across both runs:
+**20 skeptic-confirmed findings**, 14 unverified (medium), 1 refuted. The additional confirmed set:
+- BUG high: openWord survives a refused credential field, learned under the next field's permission.
+- BUG high: backspace over a selection fires the autocorrect undo (delete + resurrect elsewhere).
+- BUG high: pinningDefaultToTypedIfNeeded guard order leaves a bold, mislabelled default over a
+  selection with an empty scoring prefix (two variants confirmed).
+- BUG high: undoneAutocorrectSpellings is invisible to the bar, which bolds a correction the
+  space bar will refuse.
+- BUG high: KeyboardController.init runs a full refreshSuggestions (model call + possible lexicon
+  builds) before the first frame (NIT-191 confirmed).
+- PERF high: applyRefinement republishes suggestions unconditionally (4-6 full-keyboard publishes
+  per keystroke on a refiner cache hit).
+- DEAD high: PredictiveRefiner.tail(of:) is an identity shell; SuggestionEngine.script(of:among:)
+  is a one-caller alias; screen-context ternary not flag-gated; SuggestionBar.isEnabled dead.
+Unverified tail (perf mediums: contextFollowers whole-store scan, rank() score-in-comparator,
+neighbourWords duplication; bug mediums: geresh/ZWNJ words never learned, pendingAutocorrectUndo
+cross-document survival, complete-on-pause re-applies an undone swap; overengineering mediums).
 
-### Still owed
+## Build phase (sequential on the one tree)
 
-- **No backend is deployed.** The app can now be pointed at one from
-  `Settings › AI › Cloud model`, and that one string is what all four dead ends
-  print. Until a server exists, screen context and every Hebrew AI action are
-  inert — correctly and legibly so, but inert.
-- **`PrivacyInfo.xcprivacy` reason codes are unverified.** `35F9.1` and `1C8F.1`
-  are from knowledge; Apple's docs render client-side and could not be fetched,
-  and Xcode ships no searchable list. Check before submitting.
-- **`adjustTextPosition`'s unit is asserted by a double, not a host.** Nothing a
-  user can reach calls it without a model answer in hand, and no simulator can
-  produce one. A device with a backend configured closes it.
-- Ten device-only capture unknowns (R1, R2, R2c, R3, R7, R8/9, R11, R14, R16,
-  R17) remain unmeasured. The in-app diagnostics panel answers them from the
-  phone with no Mac attached.
-- The screen-context prompt still offers the model only "hebrew"/"english".
-  Widening it re-opens a corpus scored against `Bar/screen-context/`; the exact
-  artifacts owed are written into `ScreenPrompt`'s doc comment.
+Order: A double-space → D confirmed controller bugs → B verbatim-token learning → C Hebrew
+count+split → E confirmed cleanups. Fresh critic after each.
 
-## P10, found while fixing D5 and bigger than it
+**Piece 2 (double-space): BEATS THE BAR after 2 rounds.**
+Round 1: fix + 5 tests, but the critic caught the rewired else branch also serving range
+selections — SelectedWordSuggestionTests.testAMultiWordSelectionIsReplacedExactlyAsItStands
+went red (the hop fired over `say ⟦hello world.⟧ now`).
+Round 2: hop scoped to caret-only commits (hadSelection read before replaceCurrentWord; range
+selections keep the pinned unconditional space; whole-word branch and insertSpace byte-identical).
+34 tests green in one invocation (CommittalSpaceHopTests 6/6 incl. a rejector the round-1 build
+fails, CandidateCommitTests 17/17, SelectedWordSuggestionTests 11/11); rejectors destructively
+proven both rounds; grouped idle site safe by performIdleTyping's selection==nil guard.
+Known recorded follow-up (deliberate, separate change): caret strictly mid-word still orphans
+the after-caret tail ("The te|h quick" + tap → "The the h quick").
 
-`BackendTransport.configured()` reads `cloudBackendURL` from the shared store.
-Nothing in the app can set it, and it has never been set — grep finds it in
-`CloudTransport.swift:119` and in tests, nowhere else. So on the phone that
-reported these defects: screen-context reading is dead (cloud-only), every
-Hebrew AI action is dead (Foundation Models has no Hebrew), and only English
-Fix/Rewrite works, on device. `Backend/deploy.sh` has never been run.
+**Piece D (8 confirmed controller bugs): BEATS THE BAR after 2 rounds.**
+Round 1: all 8 fixed (two with justified redesigns: openWordPermitted captured at adoption
+instead of a blanket clear; init passes schedulingRefinement:false instead of a document-state-only
+refresh, since several tests read controller.suggestions straight after construction). 13 new
+tests across 5 files; 210/211 green (the 1 failure is the pre-recorded PersonalDictionaryTests
+UITextChecker variance, test-suite-state.md line 21). Critic accepted 7/8 and caught that the
+undo snapshot was a post-write proxy read — the exact staleness window the repo's own comments
+document — which would silently kill the shipped backspace-undo on real devices.
+Round 2: snapshot now BUILT locally (pre-write context minus original + replacement + " ");
+StaleEchoTarget fixture added; new rejector destructively proven both directions; critic verified
+the arithmetic through edge marks (restoringEdgeMarks symmetry) and Hebrew graphemes. 44/44 green.
+Known disclosed limits: local-tier engine work still runs pre-frame in init (refiner call is
+gone — the confirmed harm); a host whose proxy stays stale across several reads can still expire
+the undo early, byte-identical exposure to the shipped design.
+Process note: builder used git stash/pop once in round 1 (against standing rules); verified
+harmless — the three foreign dirty files and the untracked notes file kept their diffs, stash
+list empty. Explicitly forbidden in every later builder brief.
 
-This is very likely the whole of D5. Needs: a way to set the URL from the app,
-the setup checklist to count it, and a deployed service. The deploy bills the
-owner's Google Cloud account, so it waits for them.
+**Piece B (verbatim-token learning): BEATS THE BAR after 2 rounds.**
+Round 1: record() gains isVerbatimToken (email shape, no bigram write) + isLearnableOrdinaryWord
+(geresh/gershayim/interpunct/ZWNJ, mirrored into the bigram half); 3-sighting floor on all three
+read surfaces; commitReason winner guard; matchCaseUnlessVerbatim; staysInsideWord moved into
+SuggestionEngine (harness compiles no controller); 11 tests; instruments byte-stable. Builder
+measured that letter+ZWNJ merges into one grapheme (old gate never refused the attached form) and
+wrote the honest standalone-ZWNJ rejector instead. Critic confirmed classifier both directions,
+guard placement below every displacing rule, GroupedDecoder feed safe (no key codes for @/digits),
+paste needs a terminator + 3 sightings, Forget visible from sighting 1 — and found the gap:
+Complete-on-pause auto-pasted the learned address over its own local part (no tap, no guard, and
+recordCommittedWord counted the paste as a sighting), plus plain matchCase re-casing through the
+neighbour door.
+Round 2: one shared predicate SuggestionEngine.isAutomaticallyInsertable behind BOTH commitReason
+and idleCompletion (falls through to next legitimate candidate); neighbour mapping through
+matchCaseUnlessVerbatim; PII trade + both classifier decisions documented. Critic audited every
+replaceCurrentWord/insertText writer: no automatic door remains. 81/81 green; frozen90 73/76 same
+set; typos 85/19/3, controls 21/21.
 
----
+**Piece C (Hebrew edit-count + measured split): BEATS THE BAR (+ micro round for 2 doc/test nits).**
+Stage 1 (zero change, proven): packed lex (cost,count) DP — packed = cost·16+count, count ≤ 6 in
+any budget, collisions unreachable-by-construction, all cost comparisons unpacked, TypoLexicon
+sort stays cost-only. reasons.sh byte-identical to baseline; frozen90/typos/sweep unmoved; the
+critic also took the one reading nobody had: AUTOCORRECT_LEVEL=full still 90/7/10.
+Stage 2 (measured): reasons.sh extended with channelCost/editCount columns; the (110,2) cell reads
+3 right / 0 wrong in the corpus and 8/0 in a new 25-pair probe (Bar/typing/typos/probes-motor2/,
+adjacencies verified against the real Hebrew rows) — 11/11 across two independent corpora; priced
+87 (the singleEdit evidence class). **Shipped result: typos 88 committed / 16 held / 3 WRONG,
+controls 21/21, two runs a side; the three moved rows are exactly דוגמטןת→דוגמאות, thsnkd→thanks,
+wprkinh→working.** Frozen90 73/76 same set; sweep 0 non-words 0 moved. Structural bonus from the
+critic's enumeration: no (110,2) path can contain a wild 100-cost edit, so the class is two
+explainable slips by construction. NIT-154's traps all intact (verified by diff grep).
+Out-of-scope finding for the wrap-up: three mater-drop-double probe rows resolve WRONG through the
+pre-existing cost≤60 tier (untouched here). Micro round 2 closed both nits (doc corrected; the
+(120,2)-below-floor pin destructively proven against the sloppy signature).
 
-## P1 — Typing reaches the document
+**Piece E (8 confirmed cleanups): BEATS THE BAR, one round.**
+isEnabled + anyActionCouldRun deleted (D8 tests repointed at AIAction directly — the forwarding
+shell's own doc was false); tail(of:) deleted with its identity test replaced by an end-to-end
+whole-context rejector; the refiner's screen-context ternary flag-gated (not deleted); script alias
+inlined; the unreachable .checker fence deleted with docs corrected; Correction.rank dropped;
+applyRefinement's held dictionary replaced by a seeded loop (D's guards preserved, traced over
+three pool shapes); isTransposition/isOneEditApart share one classifier (decision-table traced).
+Critic re-greped every deletion, attributed every hunk in the shared files, re-ran instruments.
 
-**Round 1 (lead).** Root cause found by reading, not by running:
-`KeyboardController.target` was `weak`, and `KeyboardViewController` built its
-`ProxyTextTarget` in argument position, so nothing retained it. It was gone
-before the first keystroke and every `target?.insertText` was a no-op against
-nil. The in-app playground hid this for the whole of development because
-`KeyboardPreview` holds its `MockTextTarget` as a `@StateObject`.
+## Final state (2026-08-25)
 
-Three changes:
-- `KeyboardController.target` is strong. Nothing conforming to `TextTarget`
-  references the controller back, so no cycle.
-- `ProxyTextTarget` gained a resolving initialiser and asks
-  `UIInputViewController` for `textDocumentProxy` per call, so a host swapping
-  the focused field cannot leave the keyboard typing into the old one.
-- `KeyboardViewController` holds the target itself as well.
+- App build: ** BUILD SUCCEEDED **.
+- Mega suite (20 test classes, one invocation): 281 executed, 4 skipped (flag-gated, expected),
+  **1 failure = exactly the pre-recorded PersonalDictionaryTests UITextChecker variance**
+  (test-suite-state.md line 21). No Fatal error / Restarting lines.
+- Typos shipped: **88 committed / 16 held / 3 WRONG, controls 21/21** (baseline 85/19/3).
+- Typos full: 90/7/10, controls 21/21 — unmoved from the recorded baseline.
+- Frozen 90: 73/76, failing set {apos-09, typo-07, typo-12} — unmoved, many runs.
+- Sweep: 664 moments, 612 held / 50 on track / 2 diverged, **0 non-words**, 0 run-to-run movement.
+- Docs refreshed: README numbers (85→88 + the new price row), suggestion-bar-next.md status header
+  (tasks 1/2/4 done, task 3 = NIT-179 remains), rules file grew 12 bullets across the pieces.
+- Linear: NIT-11 proven + In Review; NIT-154, NIT-191, NIT-182 commented. Nothing committed to git.
 
-`AIKeyboardCoreTests/KeyboardControllerTargetTests.swift` is the regression, and
-its shape is the point: every existing test kept its target in a method-scoped
-local, which outlives the assertion, so the suite was green against a keyboard
-that could not type. These take the reference out of scope first.
+## Recorded, deliberately not done (candidates for new issues)
 
-**Round 1 critic: GAP.** The autocomplete regression passed against the exact bug
-it described. With a nil target `currentWordPrefix` is empty, `SuggestionEngine`
-takes its empty-prefix branch and returns the hardcoded `["I", "The", "We"]` —
-three items, so `XCTAssertFalse(suggestions.isEmpty)` was true of the broken
-keyboard too. `SuggestionEngineTests:107` pins that same triple, so the two files
-agreed with each other and with nothing on the phone. The critic also noted that
-the device symptom matches exactly: the bar never went blank, it sat on
-`I / The / We` while the document underneath was unreadable.
+1. Mid-word candidate tap orphans the after-caret tail ("The te|h quick" + tap → "The the h quick").
+2. mater-drop-double corrections resolve WRONG through the cost≤60 frequency tier (measured, probe).
+3. Keystroke-path perf trio, scouted but unverified: contextFollowers whole-bigram scan per token,
+   rank() score-in-comparator (~10x refolds), neighbourWords computed twice per unknown keystroke.
+4. A partial-word selection still keeps a live bar whose taps type over half a word (the default
+   and hint are fixed; the tap path remains).
+5. init's local-tier pre-frame work (the refiner half is fixed; NIT-191 stays open for this).
+6. Overengineering mediums unverified: commitReason's continuation predicate spelled three ways;
+   the idle-typing cancel+reset triple copied four times.
 
-Second finding, smaller: `[unowned self]` in the resolver was a new trap.
-`KeyView.startRepeatIfNeeded` is an unstructured `Task` cancelled only from
-`DragGesture.onEnded`, so a gesture interrupted by teardown calls back into a
-dead controller. Pre-fix a silent leak; post-fix a crash.
+## Log
 
-**Round 2 (lead).**
-- The autocomplete test asserts on content: a candidate must continue `"hel"`.
-- The resolver returns `UITextDocumentProxy?` and every accessor answers nil
-  rather than substituting a default; the extension uses `[weak self]`.
-- `AIKeyboardUITests/KeyboardTypesIntoHostTests.swift` is new and is the only
-  test in the repo that presses a key on the *real extension* over a real
-  `UITextField` and reads the field back. The two existing cross-process tests
-  already stood the extension over that field and asserted only that a key
-  *existed*; neither ever pressed one.
-- `SuggestionBar` candidates gained `suggestion-<slot>` identifiers so the bar is
-  addressable from a UI test.
-
-**Round 2 critic: GAP, the same defect one level deeper.** `SuggestionEngine`
-unconditionally offers the literal keystrokes as candidate zero
-(`SuggestionEngine.swift:240`) so the user can never be trapped in a word they
-did not type. So `hasPrefix("hel")` is true of *any* build that reads the
-document at all — including one whose `UITextChecker` lookup is broken and shows
-one chip reading `hel` beside two blanks. Both new assertions were true by
-construction. It also caught that D2's end-to-end test `XCTSkip`ped when the
-field stayed empty, which would turn D1's regression into a green skip on the one
-test covering D2 end to end, and that a repeating `Timer` firing into an
-`XCTestExpectation` with `assertForOverFulfill` set would raise.
-
-It confirmed by building that the UI test compiles, that the accessibility
-identifiers resolve, and that all five unit tests fail against the original code
-under Debug. It found no second cause for D1.
-
-**Round 3 (lead).** Both assertions now exclude the echo: only a word the engine
-had to *generate* counts. D2's test asserts the keystrokes arrived instead of
-skipping. `waitUntil` replaces the `Timer`/expectation pair.
-
-Status: re-judging.
-
----
-
-## P3 — Setup status stops lying (D4, D7)
-
-**Round 1.** The three ticks were hardcoded `@State` booleans; nothing checked
-anything. Replaced with a `KeyboardPresence` record the extension writes into the
-App Group from `viewDidAppear`. Its *existence* is the proof — iOS grants a
-keyboard the container only with Full Access — so one file answers "installed,
-permitted, and opened at least once" at once. Microphone read from
-`AVAudioApplication.recordPermission` and moved out of the score, because a
-keyboard extension can never reach the microphone and a checklist that cannot
-reach 3/3 is the same nag. Fake stats (`1,284 words fixed`, `37m time saved`)
-deleted. `KeyboardPreview` gained a hint shown only while the seed text is
-untouched.
-
-**Round 1 critic: GAP, and it is a worse lie than the defect.** `.confirmed`
-never expires. `recordedAt` is written but no reader consults it, and the writer
-needs the container, which *is* the permission — so the only process that can
-correct the record cannot run in the state needing correction. Revoke Full Access
-and Home says "Ready to type 2/2, Full Access ✓ On" forever, with no Settings
-button, while cloud rewrites and key clicks are dead. Terminal, uncorrectable.
-Also: the "added but no Full Access" branch never says the words "Full Access"
-and its advice cannot work; two tests cannot fail (`sweep` only removes
-directories, so the survives-sweep test asserts a property no implementation
-lacks); and `SetupState` lives in the app target, which the test target cannot
-import, so the `nil → .unknown` mapping that *is* the D4 fix has no test at all.
-
-**Round 2:** in progress — decay `.confirmed` against the monotonic stamp, name
-the permission in the ambiguous copy, make the two tests able to fail, move the
-decision function somewhere testable.
-
-## P4 — Screen context (D5, D8, D9)
-
-**Round 1.** Ruled out, by reading the built Mach-O: the extension is embedded,
-signed, entitled and correctly addressed. Ruled out: crash paths in
-`SampleHandler`, and a permanently stale `ended` (already capped at 10 minutes).
-Found instead three ways the pipeline runs and does nothing, none of which had a
-voice — no shared container (published nothing, keyboard showed no strip at all
-while iOS showed a recording indicator), no reader (`BackendTransport.configured`
-nil, the shipped default, while the strip promised "Reply can read this screen"),
-and `broadcastFinished` writing `.stopped` unconditionally so a session that never
-got a frame was indistinguishable from the user stopping it. Each now names
-itself, and a broadcast that cannot work refuses to start.
-
-D8: disassembled the simulator's ReplayKit. `-[RPSystemBroadcastPickerView
-buttonPressed:]` is two XPC calls and nothing else — no `UIApplication`, no
-presented view controller, and no ReplayKit header carries
-`NS_EXTENSION_UNAVAILABLE`. So the picker moved into `AIKeyboardCore` and the
-keyboard has a start button, with the open-the-app copy kept underneath because
-whether `replayd` answers a keyboard extension is unproven.
-
-D9: user-facing counters reframed; every raw row kept behind a collapsed
-developer disclosure so R1/R2/R3/R7/R11/R17 stay answerable from the phone.
-
-Status: critic running.
+- 2026-08-24: Run approved. Baselines being captured; scouts dispatched (read-only, no
+  instrument runs, no edits).
+- 2026-08-24: Baselines reproduce the recorded numbers exactly, two runs per side:
+  frozen 90 = 73/76 twice (identical failing sets: apos-09, typo-07, typo-12);
+  typos = 85/19/3 WRONG, 95 offered, controls 21/21, stable 128/128;
+  sweep = 664 moments, 612 held / 50 on track / 2 diverged, 0 non-words, 0 run-to-run movement.
+  Per-class holes for piece 1: he adjacent-2 (0/5 committed, 1/5 offered), he mater-drop (2/6),
+  12 corrections never offered by any source.
+- 2026-08-24: NIT-11 proven green: ContextAwareSuggestionTests 75/75 passed (real SUCCEEDED
+  banner, no Fatal error / Restarting lines), all five named tests passed, harness ≥ 72/76 twice,
+  en-comp-03 commits `response`. Logs in scratchpad/baseline/.

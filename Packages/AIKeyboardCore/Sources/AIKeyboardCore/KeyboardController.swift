@@ -444,7 +444,40 @@ public final class KeyboardController: ObservableObject {
     /// space did not replace anything, or once a later word, a caret jump,
     /// Return, a tap, or another space has moved on. Not `revertibleEdit`:
     /// that slot is Fix / Rewrite.
-    var pendingAutocorrectUndo: (original: String, replacement: String)?
+    ///
+    /// **`contextAfterSwap` is what the text in front of the swap must read
+    /// once it has genuinely landed, not merely `replacement`.** The claim used
+    /// to be `contextBefore.hasSuffix(replacement + " ")`, which is blind to
+    /// *where* — any earlier, unrelated sentence ending in the same word
+    /// satisfies it, and a caret tapped there resurrects `original` in the
+    /// wrong place. No keystroke can land between the swap and an undo (every
+    /// character key, Return and both cursor keys already clear this pair
+    /// outright), so nothing can legitimately have been typed since — an exact
+    /// match is therefore the whole claim check, not merely the closest one
+    /// that still allows typing on, the way `RevertibleEdit.spanUndo` needs.
+    ///
+    /// **It is built from the pre-swap `contextBefore` plus the replacement and
+    /// a space, never re-asked of the proxy after the swap or the space have
+    /// landed.** A build over 2026-08-24's shape did exactly that — read
+    /// `contextBefore` once more right after `target?.insertText(" ")` — and
+    /// `insertCommittalSpace`'s own doc comment already names the reason that
+    /// is unsound: "this keyboard's own delete-then-insert can leave the proxy
+    /// reporting stale context for a moment right after a write it just made."
+    /// A stale read there costs one skipped hop; a stale read here is worse,
+    /// because the wrong string becomes the permanent baseline every later,
+    /// honest read is compared against — so on a host whose proxy genuinely
+    /// echoes asynchronously, the very first backspace after a swap can find
+    /// the pair already unrecoverable, deleting only the space rather than
+    /// restoring the typed word. `insertSpace` already holds the fresh,
+    /// pre-write `contextBefore` it needs (`contextBeforeSwap`, captured before
+    /// `original` is replaced), so the snapshot is arithmetic on a string this
+    /// function already has — `contextBeforeSwap` with `original` dropped off
+    /// the end, then `replacement + " "` — not a second question to `target`.
+    /// Do not "simplify" this back to a post-write read: do the same arithmetic
+    /// locally, or reopen the regression `PendingAutocorrectClaimTests
+    /// .testTheUndoSnapshotSurvivesAProxyThatEchoesStaleContextRightAfterTheWrite`
+    /// exists to close.
+    var pendingAutocorrectUndo: (original: String, replacement: String, contextAfterSwap: String)?
 
     /// Spellings whose automatic swap the user already undid this session.
     /// Space must not put the same correction back. Folded, no timestamps.
@@ -460,6 +493,23 @@ public final class KeyboardController: ObservableObject {
     /// that empties the field never presses space, so `learnWordJustCommitted`
     /// would see nothing; this is what that send still has to count.
     var openWord: String = ""
+    /// Whether `openWord` was typed somewhere `SecureField.permitsRead` allowed,
+    /// captured the moment it was adopted rather than re-derived when it is
+    /// finally committed.
+    ///
+    /// **The controller outlives the field it is typing into, and `target` moves
+    /// on before any commit does.** iOS keeps one extension instance across
+    /// fields and across host apps, so a word left open in a credential field —
+    /// never finished with a space or a Return before the keyboard came up over
+    /// a *different*, permitting field — used to be judged by `target`'s
+    /// permission at commit time, which by then was the new field's. Recording
+    /// the answer at adoption time, while `target` still is the field the letters
+    /// were typed into, is what keeps a word typed under a refusing field from
+    /// being learned on the next one's say-so — and, the other way round, what
+    /// lets an ordinary word typed under a permitting field still be learned
+    /// after the keyboard moves on, which a blanket wipe on every field change
+    /// would have cost for no security reason at all.
+    var openWordPermitted = true
     private var cancellables = Set<AnyCancellable>()
 
     /// Names and shortcuts from `UILexicon`, read once by `KeyboardViewController`
@@ -699,7 +749,17 @@ public final class KeyboardController: ObservableObject {
         // CopyClip does not already do a moment later, so the subscription is
         // gone rather than reduced. See `refreshCopyClip(_:)`.
         apply(store.storedKeyboardLayout)
-        refreshSuggestions()
+        // **Not the plain call.** Over a non-empty document this used to arm
+        // `PredictiveRefiner` on every single construction — a paid model call
+        // 300ms after a keyboard extension is merely built, before the first
+        // frame has even drawn (NIT-191) — and iOS constructs one of these far
+        // more often than a user ever opens a keyboard. The local tier still
+        // runs, because dozens of call sites (production's own first frame, and
+        // most of this suite) read `suggestions` straight off a freshly built
+        // controller and a document-state-only refresh would leave it empty
+        // until the extension's next `textDidChange`. Scoring the document is
+        // not the expensive half of this call; asking a model about it is.
+        refreshSuggestions(schedulingRefinement: false)
     }
 
     // MARK: Layout
@@ -1032,6 +1092,14 @@ public final class KeyboardController: ObservableObject {
         // a character from the last app into this one. See
         // `discardPendingCharacter`.
         discardPendingCharacter()
+        // **The claim it protects belongs to the field it was made in.** The
+        // exact-context match `undoAutocorrectIfPending` now requires already
+        // refuses a coincidence inside one document; it says nothing about two
+        // different documents, and iOS reusing this instance across fields and
+        // across host apps means the very next backspace could otherwise land in
+        // one that merely ends the same way. `openWord` deliberately does not
+        // get the same blanket clear here — see `openWordPermitted`.
+        pendingAutocorrectUndo = nil
         // **The memo's other invalidator, and it is not the field.**
         // `KeyboardViewController.viewWillAppear` calls
         // `PersonalLanguageModel.shared.reload()` a few lines before this — Forget

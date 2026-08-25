@@ -156,15 +156,6 @@ extension SuggestionBar {
     /// can stay two-and-two around settings.
     public static let aiButtonName = "the action row above the keys"
 
-    /// Whether any AI action could run right now.
-    ///
-    /// **Kept after the sparkle it was named for was deleted**, because the question
-    /// was never about that button: the bar answering it differently from the
-    /// actions themselves is D8, and `AIAction` is now the one place that answers.
-    static func anyActionCouldRun(hasTextToWorkWith: Bool) -> Bool {
-        AIAction.hasRunnableAction(hasTextToWorkWith: hasTextToWorkWith)
-    }
-
     // MARK: Slot button
 
     /// One configured control.

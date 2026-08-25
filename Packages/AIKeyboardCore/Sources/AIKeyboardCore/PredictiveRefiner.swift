@@ -26,17 +26,6 @@ public final class PredictiveRefiner {
     /// it is the first thing to tune when there is data.
     public static let idleDelay = Duration.milliseconds(300)
 
-    /// The tail of the message handed to the model.
-    ///
-    /// **iOS already windows `documentContextBeforeInput`.** That window *is*
-    /// the full typed input a keyboard can see, and chopping it again to 40
-    /// words threw away the start of any message longer than a short paragraph
-    /// — the names, the question, the reason the current sentence exists.
-    /// Apple's on-device window is four thousand tokens; a chat field that has
-    /// already been truncated by the host will not fill it. A notes document
-    /// that somehow arrives whole is still a string already in memory.
-    static func tail(of text: String) -> String { text }
-
     private static let cacheLimit = 128
 
     private let predictor: (any TextPrediction)?
@@ -191,10 +180,12 @@ public final class PredictiveRefiner {
     /// anything here.
     private func ask(_ request: Request) async -> [String]? {
         guard let predictor, predictor.canPredict(in: request.language) else { return nil }
-        let text = Self.tail(of: request.textBefore + request.wordInProgress)
+        // The whole of `textBefore`, not a chopped tail: see `TextPrediction
+        // .continuations(after:)` for why iOS's own windowing already does that job.
         guard
             let words = try? await predictor.continuations(
-                after: text, replyingTo: request.screenContext, language: request.language)
+                after: request.textBefore + request.wordInProgress,
+                replyingTo: request.screenContext, language: request.language)
         else { return nil }
         let cleaned = Self.cleaned(words, continuing: request.wordInProgress)
         return cleaned.isEmpty ? nil : cleaned

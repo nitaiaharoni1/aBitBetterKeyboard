@@ -395,9 +395,14 @@ extension KeyboardController {
     ///
     /// Not private: `selectedWord` asks the same question of the character after
     /// a selection, and two lists of the marks that live inside a word is one
-    /// list that can disagree with itself about Hebrew's geresh.
+    /// list that can disagree with itself about Hebrew's geresh. The set itself
+    /// lives on `SuggestionEngine`, not here, because `Bar/typing/harness`
+    /// compiles `SuggestionEngine*.swift` and the models for a scoring run with
+    /// no `KeyboardController` in the build at all, and `commitReason` needs to
+    /// ask the identical question of a candidate before it ever reaches a
+    /// controller.
     static func staysInsideWord(_ character: Character) -> Bool {
-        "'’-\u{05BE}\u{05F3}\u{05F4}\u{00B7}\u{200C}".contains(character)
+        SuggestionEngine.staysInsideWord(character)
     }
 
     /// An item picked out of a character key's popup, replacing the letter that
@@ -477,6 +482,17 @@ extension KeyboardController {
         // `SuggestionEngine`, and the space bar should not be the thing that breaks
         // if it ever stops being one.
         let original = currentWordPrefix
+        // **Read now, before anything below writes to the document.** This is
+        // what `contextAfterSwap` is built from — never a proxy read taken
+        // after the swap or the space, which `insertCommittalSpace`'s own doc
+        // comment already records as unreliable: "this keyboard's own
+        // delete-then-insert can leave the proxy reporting stale context for a
+        // moment right after a write it just made." A stale post-write read
+        // there only cost a wasted hop; here it would poison the undo's claim
+        // forever, since every later, honest read would then disagree with a
+        // snapshot that was wrong from the moment it was taken. See the note on
+        // `pendingAutocorrectUndo`'s own declaration.
+        let contextBeforeSwap = contextBefore
         var swapped: (original: String, replacement: String)?
         if store.storedAutocorrectLevel != .off,
             !isCorrectingWordByHand,
@@ -500,8 +516,19 @@ extension KeyboardController {
         // correction yet.
         deletedWordPrefix = nil
         // A new space closes any earlier undo. Only this swap, if there was one,
-        // can be taken back by the next delete.
-        pendingAutocorrectUndo = swapped
+        // can be taken back by the next delete. **Built from `contextBeforeSwap`,
+        // never re-asked of the proxy**: the context right after the swap's own
+        // space landed is exactly the text in front of the word that was there
+        // before the swap, plus the replacement, plus that space — arithmetic on
+        // a string this function already holds, not a fact that needs asking
+        // `target` for a second time.
+        pendingAutocorrectUndo = swapped.map {
+            (
+                original: $0.original, replacement: $0.replacement,
+                contextAfterSwap: String(contextBeforeSwap.dropLast(original.count)) + $0.replacement
+                    + " "
+            )
+        }
         // The one case an ordinary space arms shift: a `.words` field
         // capitalises every word, not only the first letter of a sentence.
         if autocapitalizationMode == .words { armShiftAtBoundary() }
@@ -539,11 +566,19 @@ extension KeyboardController {
     /// space and leave the wrong word standing. Only the automatic replacement
     /// is undone; the bar still offers the correction. The same spelling is
     /// not swapped again this session.
+    ///
+    /// **Not over a selection.** A backspace with a range selected deletes the
+    /// selection, the way it does everywhere else on this keyboard — a selection
+    /// starting right after a fresh swap used to satisfy the claim check below
+    /// exactly the same as a plain caret, which deleted the selection *and*
+    /// resurrected `original` in front of it, destroying text the selection
+    /// never touched.
     @discardableResult
     func undoAutocorrectIfPending() -> Bool {
         guard let pending = pendingAutocorrectUndo,
             !pending.replacement.isEmpty,
-            contextBefore.hasSuffix(pending.replacement + " ")
+            selection == nil,
+            contextBefore == pending.contextAfterSwap
         else { return false }
         target?.deleteBackward()
         replaceCurrentWord(with: pending.original)
@@ -558,10 +593,11 @@ extension KeyboardController {
     /// A caret that is no longer sitting after the swapped word has moved on.
     /// Asked from `refreshSuggestions`, which is also what a host caret tap
     /// runs. Safe during our own insert: pending is assigned after the text
-    /// lands, so the first refresh still sees `replacement `.
+    /// lands, so the first refresh still sees the exact context that was
+    /// captured then.
     func expirePendingAutocorrectUndoIfCaretMoved() {
         guard let pending = pendingAutocorrectUndo else { return }
-        if pending.replacement.isEmpty || !contextBefore.hasSuffix(pending.replacement + " ") {
+        if pending.replacement.isEmpty || contextBefore != pending.contextAfterSwap {
             pendingAutocorrectUndo = nil
         }
     }

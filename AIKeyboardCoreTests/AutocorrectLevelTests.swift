@@ -100,17 +100,81 @@ final class AutocorrectLevelTests: XCTestCase {
     func testTheFrequencyCorrectorIsPricedByWhatTheChannelCanExplain() {
         let floor = AutocorrectLevel.confident.confidenceFloor
         XCTAssertGreaterThanOrEqual(
-            CommitReason.frequency(cost: 55, transposition: false).confidence, floor)
+            CommitReason.frequency(cost: 55, transposition: false, count: 1).confidence, floor)
         XCTAssertGreaterThanOrEqual(
-            CommitReason.frequency(cost: 60, transposition: false).confidence, floor)
+            CommitReason.frequency(cost: 60, transposition: false, count: 1).confidence, floor)
         XCTAssertLessThan(
-            CommitReason.frequency(cost: 70, transposition: false).confidence, floor,
+            CommitReason.frequency(cost: 70, transposition: false, count: 1).confidence, floor,
             "a substitution above one explainable slip is a coin flip and must not commit")
         XCTAssertLessThan(
-            CommitReason.frequency(cost: 100, transposition: false).confidence, floor)
+            CommitReason.frequency(cost: 100, transposition: false, count: 1).confidence, floor)
         XCTAssertGreaterThanOrEqual(
-            CommitReason.frequency(cost: 80, transposition: true).confidence, floor,
+            CommitReason.frequency(cost: 80, transposition: true, count: 1).confidence, floor,
             "the transposition exemption is gone and typo-11 goes with it")
+    }
+
+    /// **The motor-slip signature, split out of the coin-flip band above 60.**
+    /// `(cost: 110, count: 2)` is two adjacent-key slips — the shape
+    /// `דוגמטןת` → `דוגמאות` was reported for — measured 3 right, 0 wrong in
+    /// `Bar/typing/typos/` and 8 right, 0 wrong more in
+    /// `Bar/typing/typos/probes-motor2/`: 11 of 11 across two independent
+    /// corpora. A build that drops the `count == 2` clause and prices every
+    /// `cost > 60` row the same again fails this at the confident floor, which
+    /// is the whole reason `count` was threaded through the DP in the first
+    /// place.
+    func testTheMotorSlipSignatureCommitsAtConfident() {
+        let floor = AutocorrectLevel.confident.confidenceFloor
+        XCTAssertGreaterThanOrEqual(
+            CommitReason.frequency(cost: 110, transposition: false, count: 2).confidence, floor,
+            "two explainable slips summing to 110 is the shape this split exists to rescue")
+    }
+
+    /// **Three shapes that sit right beside the signature and are not it.** A
+    /// single wild substitution can land at a nearby cost with only one edit
+    /// (`נזעדה` → `נועדה`, 100, `count: 1`) — the whole reason `count` and not
+    /// `cost` is the test — and two edits can sum to something other than 110
+    /// (`בברדה` → `הורדה`, 40 + 55 = 95, `count: 2`), which
+    /// `Bar/typing/typos/probes-motor2/`'s `bedire` → `before` reproduces on a
+    /// pair this file did not design to fail. Both stay under the floor.
+    ///
+    /// **The third is what tells `cost == 110` apart from a sloppier
+    /// `cost >= 100 && count == 2`.** `(cost: 120, count: 2)` is a real
+    /// two-edit shape in the same region — a final-form substitution (20)
+    /// plus a wild one (100), affordable in a six-letter-or-longer word's
+    /// budget — and a signature written as a threshold rather than an exact
+    /// match would wrongly commit it alongside `(110, 2)`. Checked against a
+    /// deliberately sloppy build before this assertion was kept: swapping
+    /// `frequencyConfidence`'s `cost == 110` for `cost >= 100` turns this
+    /// assertion red while leaving every other test in this file green, which
+    /// is what makes it the one that actually pins the exact price rather
+    /// than a nearby one.
+    func testShapesNearTheSignatureButNotItStayHeld() {
+        let floor = AutocorrectLevel.confident.confidenceFloor
+        XCTAssertLessThan(
+            CommitReason.frequency(cost: 100, transposition: false, count: 1).confidence, floor,
+            "one wild substitution near the same cost must not borrow the two-slip price")
+        XCTAssertLessThan(
+            CommitReason.frequency(cost: 95, transposition: false, count: 2).confidence, floor,
+            "two edits that do not sum to 110 are not the measured shape")
+        XCTAssertLessThan(
+            CommitReason.frequency(cost: 120, transposition: false, count: 2).confidence, floor,
+            "a final-form (20) plus a wild substitution (100) is two edits near the signature's cost "
+                + "and must not commit on a sloppy cost >= 100 && count == 2 reading of it")
+    }
+
+    /// The signature changes nothing at `.full`: every shape above was already
+    /// committing before this split existed, and still does.
+    func testFullStillCommitsEveryFrequencyShapeRegardlessOfTheSignature() {
+        let floor = AutocorrectLevel.full.confidenceFloor
+        let shapes: [CommitReason] = [
+            .frequency(cost: 110, transposition: false, count: 2),
+            .frequency(cost: 100, transposition: false, count: 1),
+            .frequency(cost: 95, transposition: false, count: 2),
+            .frequency(cost: 55, transposition: false, count: 1)
+        ]
+        for reason in shapes {
+            XCTAssertGreaterThanOrEqual(reason.confidence, floor, "\(reason)")
+        }
     }
 
     /// The fallback's own split: the same gate, told apart by whether
@@ -132,9 +196,9 @@ final class AutocorrectLevelTests: XCTestCase {
         let every: [CommitReason] = [
             .contraction, .hebrewFinalForm, .transposition, .wrongLayout, .singleEdit,
             .sentenceFollower, .unknownWord(explainable: true), .unknownWord(explainable: false),
-            .frequency(cost: 20, transposition: false),
-            .frequency(cost: 200, transposition: false),
-            .frequency(cost: 200, transposition: true)
+            .frequency(cost: 20, transposition: false, count: 1),
+            .frequency(cost: 200, transposition: false, count: 2),
+            .frequency(cost: 200, transposition: true, count: 2)
         ]
         for reason in every {
             XCTAssertLessThan(reason.confidence, AutocorrectLevel.off.confidenceFloor, "\(reason)")

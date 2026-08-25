@@ -76,10 +76,16 @@ for line in io.open(sys.argv[1], encoding="utf-8"):
     parts = line.rstrip("\n").split("\t")
     if len(parts) < 6:
         continue
-    rid, typed, intended, winner, reason, confidence = parts
+    # Extra columns only: `channelCost` and `editCount` are columns 7 and 8,
+    # appended after the six this table has always read. Older output with
+    # only six columns still parses, with both reading as unset.
+    rid, typed, intended, winner, reason, confidence = parts[:6]
+    channel_cost = int(parts[6]) if len(parts) > 6 and parts[6] != "-" else None
+    edit_count = int(parts[7]) if len(parts) > 7 and parts[7] != "-" else None
     rows.append(
         dict(id=rid, typed=typed, intended=intended, winner=winner, reason=reason,
-             confidence=int(confidence) if confidence != "-" else None))
+             confidence=int(confidence) if confidence != "-" else None,
+             channel_cost=channel_cost, edit_count=edit_count))
 
 def verdict(row):
     if row["reason"] == "nil":
@@ -108,4 +114,19 @@ for key in sorted(table, key=lambda k: -(k[1] or 0)):
     print(f"  {key[0]:<18} {str(key[1]):>4} {counts['right']:>6} {counts['WRONG']:>6}")
 print("\n  A rule above the floor with a poor ratio is a price to revisit;")
 print("  see AutocorrectLevel.confidenceFloor.")
+
+# The frequency band above cost 60 split by (channel cost, edit count), so a
+# proposed split can be checked against the exact rows it would move rather
+# than against the tier's combined right/WRONG. `frequency` rows only:
+# `channel_cost`/`edit_count` are unset (None) for every other rule.
+freq_rows = [r for r in graded if r["reason"].startswith("frequency") and r["channel_cost"] is not None]
+if freq_rows:
+    by_shape = collections.defaultdict(collections.Counter)
+    for row in freq_rows:
+        by_shape[(row["channel_cost"], row["edit_count"])][verdict(row)] += 1
+    print(f"\n=== {len(freq_rows)} frequency rows above the floor's cost bound, by (cost, count) ===\n")
+    print(f"  {'cost':>5} {'count':>6} {'right':>6} {'WRONG':>6}")
+    for key in sorted(by_shape, key=lambda k: (k[0], k[1])):
+        counts = by_shape[key]
+        print(f"  {key[0]:>5} {key[1]:>6} {counts['right']:>6} {counts['WRONG']:>6}")
 PY

@@ -14,7 +14,21 @@
 /// the level allowed it.
 ///
 /// Output is one tab-separated row per entry:
-/// `id, typed, intended, winner, reason, confidence`.
+/// `id, typed, intended, winner, reason, confidence, channelCost, editCount`.
+///
+/// **The last two columns are additions; the first six are the exact text
+/// this file has always printed.** `channelCost` and `editCount` are
+/// `TypoChannel.EditCost`'s two halves for the winning candidate on a
+/// `.frequency` row, `-` on every other row — extra columns rather than a
+/// reshaped `reason`, which is what keeps every tool already reading the
+/// first six working unchanged. **The `reason` column itself is still the
+/// exact text this file printed before `count` existed, and `describe` below
+/// is why.** `CommitReason.frequency` now carries `count` as a third
+/// associated value, and a bare `"\(reason)"` would fold it straight into
+/// this column the moment the case gained it — moving every `frequency` row
+/// in what is meant to be an additive change. `describe` prints exactly
+/// `frequency(cost: N, transposition: B)`, the two fields this column has
+/// always carried.
 
 import Foundation
 import UIKit
@@ -27,6 +41,32 @@ struct ProbeEntry: Decodable {
     let intended: String?
 }
 struct ProbeFile: Decodable { let entries: [ProbeEntry] }
+
+/// The `reason` column, byte-for-byte what this file printed before
+/// `CommitReason.frequency` gained its `count` parameter. See the file's own
+/// doc comment for why this cannot be `"\(reason)"`.
+func describe(_ reason: CommitReason?) -> String {
+    guard let reason else { return "nil" }
+    switch reason {
+    case .frequency(let cost, let transposition, _):
+        return "frequency(cost: \(cost), transposition: \(transposition))"
+    default:
+        return "\(reason)"
+    }
+}
+
+/// `TypoChannel.EditCost.cost` for a `.frequency` commit, `-` otherwise. An
+/// extra column, appended after the six this file has always printed.
+func channelCost(_ reason: CommitReason?) -> String {
+    guard case .frequency(let cost, _, _) = reason else { return "-" }
+    return "\(cost)"
+}
+
+/// `TypoChannel.EditCost.count` for a `.frequency` commit, `-` otherwise.
+func editCount(_ reason: CommitReason?) -> String {
+    guard case .frequency(_, _, let count) = reason else { return "-" }
+    return "\(count)"
+}
 
 let probeFile = try JSONDecoder().decode(
     ProbeFile.self, from: Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1])))
@@ -65,8 +105,9 @@ MainActor.assumeIsolated {
         lines.append(
             [
                 entry.id, trimmed, entry.intended ?? "-", winner,
-                reason.map { "\($0)" } ?? "nil",
-                reason.map { "\($0.confidence)" } ?? "-"
+                describe(reason),
+                reason.map { "\($0.confidence)" } ?? "-",
+                channelCost(reason), editCount(reason)
             ].joined(separator: "\t"))
     }
     print(lines.joined(separator: "\n"))

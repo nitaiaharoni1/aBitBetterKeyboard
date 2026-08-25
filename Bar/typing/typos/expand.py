@@ -79,6 +79,9 @@ SLUGS = {
     "phonetic": "phon",
     "apostrophe": "apos",
     "must-not-correct": "nc",
+    # `Bar/typing/typos/probes-motor2/` only, see `check` for the shape.
+    "mater-drop-double": "matdrop2",
+    "homophone-final": "homofin",
 }
 
 
@@ -157,6 +160,25 @@ def deletions(longer, shorter):
     return [i for i in range(len(longer)) if longer[:i] + longer[i + 1:] == shorter]
 
 
+def double_deletions(longer, shorter):
+    """Every pair of indexes in `longer` whose joint removal yields `shorter`.
+
+    `deletions` one size up: `mater-drop-double`, in `Bar/typing/typos/probes-motor2/`,
+    is two matres lectionis dropped from the same word rather than one, and the
+    single-deletion helper above cannot see a length gap of two. Quadratic in the
+    length of `longer`, which is a handful of Hebrew letters, not a performance
+    question.
+    """
+    if len(longer) != len(shorter) + 2:
+        return []
+    out = []
+    for i in range(len(longer)):
+        for j in range(i + 1, len(longer)):
+            if longer[:i] + longer[i + 1:j] + longer[j + 1:] == shorter:
+                out.append((i, j))
+    return out
+
+
 def check(pair):
     """Why this row is not the class it claims, or None if it is.
 
@@ -232,6 +254,19 @@ def check(pair):
             )
         return None
 
+    if kind == "mater-drop-double":
+        # `Bar/typing/typos/probes-motor2/` only: two matres lectionis dropped
+        # from the same word, the double-slip counterpart of `mater-drop`
+        # above. `double_deletions` is the two-index version of `deletions`.
+        pairs = double_deletions(intended, typed)
+        valid = [p for p in pairs if intended[p[0]] in MATRES and intended[p[1]] in MATRES]
+        if not valid:
+            return (
+                f"mater-drop-double wants two of {''.join(sorted(MATRES))} removed from"
+                f" {intended!r} to reach {typed!r}"
+            )
+        return None
+
     if kind == "homophone":
         if not same_length or len(changed) != 1:
             return "homophone wants exactly one letter to differ"
@@ -239,6 +274,24 @@ def check(pair):
         pair_of = {typed[index], intended[index]}
         if not any(pair_of <= group for group in HOMOPHONES):
             return f"{typed[index]!r} and {intended[index]!r} are not one sound in Hebrew"
+        return None
+
+    if kind == "homophone-final":
+        # `Bar/typing/typos/probes-motor2/` only: a homophone substitution
+        # stacked with a final-form substitution in the same word, the two
+        # cheapest substitution rules `TypoChannel` has (40 and 20) landing on
+        # one pair of keystrokes rather than each on its own.
+        if not same_length or len(changed) != 2:
+            return "homophone-final wants exactly two letters to differ"
+        last = len(typed) - 1
+        if last not in changed:
+            return "homophone-final wants the last letter to be one of the two differences"
+        other = changed[0] if changed[1] == last else changed[1]
+        if FINALS.get(typed[last]) != intended[last]:
+            return f"{typed[last]!r} is not the ordinary shape of {intended[last]!r}"
+        pair_of = {typed[other], intended[other]}
+        if not any(pair_of <= group for group in HOMOPHONES):
+            return f"{typed[other]!r} and {intended[other]!r} are not one sound in Hebrew"
         return None
 
     if kind in ("omit", "double"):

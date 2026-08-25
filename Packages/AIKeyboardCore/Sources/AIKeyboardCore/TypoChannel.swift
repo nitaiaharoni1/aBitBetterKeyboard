@@ -60,6 +60,27 @@ enum TypoChannel {
         }
     }
 
+    /// `TypoChannel.cost`'s answer: the cheapest price and how many edits it
+    /// took to get there.
+    ///
+    /// **Why the DP needs both, not the cost alone.** Two of the WRONG rows in
+    /// `Bar/typing/typos/` are two adjacent-key slips onto a commoner word
+    /// beating one plain substitution onto the rarer, intended one at a lower
+    /// *edit count* but the same or a nearby cost — `נזעדה` prices `נועדה` at
+    /// 100 and `מסעדה` (the intended word) at 110, and cost alone cannot tell
+    /// "one wild guess" from "two explainable slips" apart when they land
+    /// close together. `count` is what a later split can key on without
+    /// touching the cost bound the budget already enforces.
+    struct EditCost: Equatable {
+        /// `TypoChannel.cost`'s price, in the same units every other cost in
+        /// this file is quoted in.
+        let cost: Int
+        /// How many of the edits along the cheapest path actually changed
+        /// something. A match costs 0 and is not one of them, so a candidate
+        /// equal to what was typed answers `(cost: 0, count: 0)`.
+        let count: Int
+    }
+
     /// The cost of the cheapest sequence of slips that turns `candidate` into
     /// `typed`, or `nil` when nothing that cheap exists.
     ///
@@ -85,10 +106,47 @@ enum TypoChannel {
     /// cell already exceeds `budget`: every remaining operation only adds
     /// non-negative cost, so once a row cannot afford the budget, no row after
     /// it can either.
+    ///
+    /// **Every cell carries `(cost, count)` packed into one `Int`, lexically
+    /// ordered, so the `min()` calls below already compute the lexicographic
+    /// minimum for free.** **No 60-cost tie actually exists under this file's
+    /// current price table, and that was proved rather than assumed** (an
+    /// exhaustive search over the substitution/insertion/deletion/transposition
+    /// prices this file hands out, plus a brute-force scan over generated word
+    /// pairs, found none): inside a swap window the two substitutions being
+    /// compared are the *same letter pair read both ways*, and
+    /// `substitutionCost` is symmetric, so the non-swap alternative always
+    /// costs exactly `2 × substitutionCost`, never a sum of two different
+    /// prices — and no price this file charges doubles to 60 (that needs 30,
+    /// which nothing costs) or to 80, the shape-folded transposition's own
+    /// price (`2 × 40 = 80` exists, but the swap condition that makes the
+    /// shape-folded path live forces that same letter-pair symmetry, so the
+    /// two are never candidates for the same cell). `שלמו`/`שלום`'s cheapest
+    /// path is the unique shape-folded transposition at `(cost: 80, count:
+    /// 1)` — one edit, not a tie with a two-edit alternative — which
+    /// `Bar/typing/typos/reasons.sh`'s extended output prints directly rather
+    /// than leaving to be inferred. **The packing is kept anyway, on the
+    /// strength of the pinned pairs in `TypoChannelTests` rather than on a
+    /// tie that has to be found first**: this file's prices are measured
+    /// constants, not a closed mathematical system, and a later price that
+    /// does produce a genuine cost tie would need the tie-break to already be
+    /// sound rather than retrofitted under pressure. A second matrix tracking
+    /// the edit count *alongside* the cost one and following whichever path
+    /// `min()` happened to keep would not be sound for that future case: at a
+    /// cost tie, the two candidate `best` expressions are evaluated in a
+    /// fixed order in the source, so a naive "keep the count of whichever
+    /// `best` value came out from the last assignment that changed it" reads
+    /// differently depending on which branch of the `if`/`else if` below
+    /// happens to run first for a given `(i, j)` — a change with no effect on
+    /// behaviour (reordering the deletion/insertion/substitution/transposition
+    /// checks) would then silently change which count a tied cost reports.
+    /// Packing removes the seam before it can matter: there is only one
+    /// number per cell, so there is nothing for evaluation order to disagree
+    /// about. `packEdit` below is what packs each edit before it is added.
     static func cost(
         typed rawTyped: [Character], candidate rawCandidate: [Character],
         language: KeyboardLanguage, budget: Int
-    ) -> Int? {
+    ) -> EditCost? {
         let typed = rawTyped.map(fold)
         let candidate = rawCandidate.map(fold)
         let typedCount = typed.count
@@ -100,19 +158,29 @@ enum TypoChannel {
         // Each letter's insertion or deletion cost depends only on its own
         // neighbours inside its own word, never on where the DP path happens
         // to cross it — so both tables are computed once, up front, rather
-        // than recomputed inside the O(band · n) loop below.
-        let insertionCostAt: [Int] = (0..<typedCount).map { index in
-            insertionCost(
-                typed[index], leftNeighbor: index >= 1 ? typed[index - 1] : nil,
-                rightNeighbor: index + 1 < typedCount ? typed[index + 1] : nil, language: language)
+        // than recomputed inside the O(band · n) loop below. Packed once here
+        // rather than at every one of the `O(band · n)` places a table entry
+        // is added into a running cell.
+        let packedInsertionCostAt: [Int] = (0..<typedCount).map { index in
+            packEdit(
+                insertionCost(
+                    typed[index], leftNeighbor: index >= 1 ? typed[index - 1] : nil,
+                    rightNeighbor: index + 1 < typedCount ? typed[index + 1] : nil, language: language))
         }
-        let deletionCostAt: [Int] = (0..<candidateCount).map { index in
-            deletionCost(
-                candidate[index], leftNeighbor: index >= 1 ? candidate[index - 1] : nil,
-                rightNeighbor: index + 1 < candidateCount ? candidate[index + 1] : nil,
-                isTrailing: index == candidateCount - 1, language: language)
+        let packedDeletionCostAt: [Int] = (0..<candidateCount).map { index in
+            packEdit(
+                deletionCost(
+                    candidate[index], leftNeighbor: index >= 1 ? candidate[index - 1] : nil,
+                    rightNeighbor: index + 1 < candidateCount ? candidate[index + 1] : nil,
+                    isTrailing: index == candidateCount - 1, language: language))
         }
 
+        // **A packed sentinel, not a raw-cost one.** Every cell below stores
+        // `cost * 16 + count`, so "unreachable" has to dominate that packed
+        // scale rather than the raw one — `Int.max / 2` still clears it by
+        // many orders of magnitude (the richest packed value this file ever
+        // produces is a few thousand), so no cell arithmetic can wrap round to
+        // looking reachable.
         let unreachable = Int.max / 2
         let width = 2 * band + 1
         // Row `i` is stored indexed by `d + band`, where `d = j - i`, so every
@@ -131,7 +199,7 @@ enum TypoChannel {
             if d == 0 {
                 previousRow[band] = 0
             } else {
-                running += insertionCostAt[d - 1]
+                running += packedInsertionCostAt[d - 1]
                 previousRow[d + band] = running
             }
         }
@@ -152,7 +220,7 @@ enum TypoChannel {
                     if deletionOffset <= band {
                         let candidateCost = previousRow[deletionOffset + band]
                         if candidateCost < unreachable {
-                            best = min(best, candidateCost + deletionCostAt[i - 1])
+                            best = min(best, candidateCost + packedDeletionCostAt[i - 1])
                         }
                     }
 
@@ -162,7 +230,7 @@ enum TypoChannel {
                         if insertionOffset >= -band {
                             let candidateCost = currentRow[insertionOffset + band]
                             if candidateCost < unreachable {
-                                best = min(best, candidateCost + insertionCostAt[j - 1])
+                                best = min(best, candidateCost + packedInsertionCostAt[j - 1])
                             }
                         }
 
@@ -173,7 +241,9 @@ enum TypoChannel {
                             best = min(
                                 best,
                                 diagonalCost
-                                    + substitutionCost(candidate[i - 1], typed[j - 1], language: language)
+                                    + packEdit(
+                                        substitutionCost(
+                                            candidate[i - 1], typed[j - 1], language: language))
                             )
                         }
                     }
@@ -196,16 +266,20 @@ enum TypoChannel {
                     // — the same 20 `substitutionCost` already charges for a
                     // final-form pair, because that is exactly the extra
                     // difference a shape change costs on top of the swap
-                    // itself.
+                    // itself. **One transition, priced and packed as one
+                    // edit**, not two: the shape correction rides along with
+                    // the swap rather than being a second edit stacked on it,
+                    // which is what keeps `שלמו` → `שלום` (cost 80) at
+                    // `count == 1` rather than 2.
                     if i >= 2, j >= 2 {
                         let candidateCost = rowBeforeLast[d + band]
                         if candidateCost < unreachable {
                             if candidate[i - 1] == typed[j - 2], candidate[i - 2] == typed[j - 1] {
-                                best = min(best, candidateCost + transpositionCost)
+                                best = min(best, candidateCost + packEdit(transpositionCost))
                             } else if shapeFold(candidate[i - 1]) == shapeFold(typed[j - 2]),
                                 shapeFold(candidate[i - 2]) == shapeFold(typed[j - 1])
                             {
-                                best = min(best, candidateCost + transpositionCost + 20)
+                                best = min(best, candidateCost + packEdit(transpositionCost + 20))
                             }
                         }
                     }
@@ -213,8 +287,13 @@ enum TypoChannel {
                     currentRow[d + band] = best
                 }
 
+                // **The cost half of the packed cell, not the packed value
+                // itself.** `rowMinimum >> 4` recovers the raw cost because
+                // `count` never reaches 16 (see `packEdit`), so this early
+                // exit fires on exactly the same rows it always did — the
+                // budget is a bound on cost, never on the packed number.
                 let rowMinimum = (dMin...dMax).map { currentRow[$0 + band] }.min() ?? unreachable
-                if rowMinimum > budget { return nil }
+                if (rowMinimum >> 4) > budget { return nil }
 
                 rowBeforeLast = previousRow
                 previousRow = currentRow
@@ -222,9 +301,28 @@ enum TypoChannel {
         }
 
         let finalOffset = typedCount - candidateCount
-        let result = previousRow[finalOffset + band]
-        guard result < unreachable, result <= budget else { return nil }
-        return result
+        let packedResult = previousRow[finalOffset + band]
+        guard packedResult < unreachable else { return nil }
+        let finalCost = packedResult >> 4
+        guard finalCost <= budget else { return nil }
+        return EditCost(cost: finalCost, count: packedResult & 0xF)
+    }
+
+    /// Packs one edit's cost and whether it counts as an edit into a single
+    /// comparable integer, `cost * 16 + (cost > 0 ? 1 : 0)`, so a plain `min()`
+    /// over packed cells already orders by `(cost, count)` lexicographically.
+    /// See `EditCost`'s and `cost(typed:candidate:language:budget:)`'s doc
+    /// comments for why a second, parallel count matrix cannot do this
+    /// soundly.
+    ///
+    /// **4 bits is enough headroom, measured rather than assumed.** The
+    /// cheapest edit this file ever charges is 20 (a Hebrew final-form
+    /// substitution), and the richest budget it ever hands out is 130, so no
+    /// reachable path inside any budget here can carry more than `130 / 20 =
+    /// 6` edits — comfortably inside the 15 four bits can hold before the
+    /// count digit would start bleeding into the cost one.
+    private static func packEdit(_ cost: Int) -> Int {
+        cost * 16 + (cost > 0 ? 1 : 0)
     }
 
     // MARK: Substitution

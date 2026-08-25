@@ -98,6 +98,74 @@ final class CursorTextTarget: TextTarget {
         after = newAfter
         selected = nil
     }
+
+    /// Selects a range without going through a gesture, the same way
+    /// `placeCaret` moves the caret without going through a key.
+    func select(_ text: String, before newBefore: String, after newAfter: String = "") {
+        before = newBefore
+        selected = text
+        after = newAfter
+    }
+}
+
+/// A document whose `documentContextBeforeInput` echoes the value from
+/// *before* an `insertText` call on the one read immediately following it,
+/// then answers honestly — modelling the staleness `insertCommittalSpace`'s
+/// own doc comment and `deleteBackward(utf16Units:)`'s re-read loop already
+/// record: "this keyboard's own delete-then-insert can leave the proxy
+/// reporting stale context for a moment right after a write it just made."
+/// Every other fixture in this file answers every read honestly, which is
+/// exactly why a snapshot built from a post-write proxy read can pass the
+/// whole suite while being wrong on a real, asynchronously echoing host.
+///
+/// **Deliberately scoped to `insertText` alone, not `deleteBackward`.**
+/// `deleteBackward(utf16Units:)` already reads *around* this exact staleness
+/// with its own before/after comparison (`unitsRemoved(from:to:)`), which
+/// depends on seeing the delete it just asked for; making `deleteBackward()`
+/// stale here would break that unrelated, already-correct loop rather than
+/// exercise anything this fixture exists to test.
+@MainActor
+final class StaleEchoTarget: TextTarget {
+    private var before: String
+    private var after: String
+    private var selected: String?
+    /// What the next `documentContextBeforeInput` read answers instead of
+    /// `before`, consumed on that one read and nil otherwise.
+    private var stale: String?
+
+    var document: String { before + (selected ?? "") + after }
+
+    init(before: String, after: String = "") {
+        self.before = before
+        self.after = after
+    }
+
+    var documentContextBeforeInput: String? {
+        guard let stale else { return before }
+        self.stale = nil
+        return stale
+    }
+    var documentContextAfterInput: String? { after }
+    var selectedText: String? { selected }
+    var isSecureTextEntry: Bool? { false }
+    var textContentType: UITextContentType?? { .some(.none) }
+    var keyboardType: UIKeyboardType? { .default }
+
+    func insertText(_ text: String) {
+        stale = before
+        selected = nil
+        before += text
+    }
+
+    func deleteBackward() {
+        if selected != nil {
+            selected = nil
+            return
+        }
+        if !before.isEmpty { before.removeLast() }
+    }
+
+    func adjustTextPosition(byCharacterOffset offset: Int) {}
 }
 
 /// The same protocol, over a real `UITextView`.

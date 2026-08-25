@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "name": "Motor-slip probe pairs",
+  "notes": "Probe, not exam, authored 2026-08-25. Widens the evidence behind CommitReason.frequency's (cost: 110, count: 2) split beyond the 3 corpus rows that motivated it, drawn from the same slip classes typos.json already has plus two new compound ones (mater-drop-double, homophone-final) that only this file uses. Every row names its two slips in `note`, in the same spirit as typos.json's own rule: a mistake nobody is sure Israelis or English typists actually make stays out. Reuses expand.py's validator unchanged except for the two new classes, which are added to expand.py's own SLUGS and check() rather than duplicated here.",
+
+  "taxonomy": {
+    "adjacent-2": "Two neighbouring-key substitutions in one word, usually the whole hand sitting one key over. Six letters or longer here on purpose: TypoChannel.budget only allows a 110-cost repair (two 55s) at length 6+, so a shorter pair could never reach the shape this probe is measuring.",
+    "mater-drop-double": "Two matres lectionis (י, ו, א) dropped from the same word rather than one — the double-slip counterpart of typos.json's mater-drop, at the same 55-per-drop price as an adjacent-key substitution, so a long enough word with two matres reaches the identical (cost: 110, count: 2) shape from a completely different kind of slip.",
+    "homophone-final": "A homophone substitution (א/ה/ע, ח/כ, ט/ת, כ/ק, ס/ש) stacked with a final-form substitution at the end of the same word — 40 plus 20, which lands inside the existing cost-60-or-under tier rather than the new one. Included to widen the evidence for that boundary too, not because it is expected to move.",
+    "must-not-correct": "A correctly spelled real word, several of them the corrected form of one of this file's own pairs typed the right way. Committing anything else is the failure."
+  },
+
+  "pairs": [
+    { "typed": "צבעדות", "intended": "מסעדות", "language": "he", "class": "adjacent-2", "context": "", "note": "Two slips: מ drifts one key right to צ (bottom row), and ס drifts one key right to ב (bottom row) — the whole hand one key over on 'restaurants', six letters so the two 55s (110) fit inside the six-letter budget of 130." },
+    { "typed": "כתובןץ", "intended": "כתובות", "language": "he", "class": "adjacent-2", "context": "", "note": "Two slips: the first ו drifts right to ן (top row) and the final ת drifts right to ץ (bottom row), leaving the recognisable stem כתוב ('wrote') and garbling only the plural ending of 'addresses'." },
+    { "typed": "תלמידחפ", "intended": "תלמידים", "language": "he", "class": "adjacent-2", "context": "", "note": "Two slips: the second י drifts right to ח and the final ם drifts right to פ, both on the middle and top rows, leaving תלמיד ('student') intact and garbling only the plural of 'students'." },
+    { "typed": "תוכנחץ", "intended": "תוכנית", "language": "he", "class": "adjacent-2", "context": "", "note": "Two slips: י drifts right to ח (middle row) and ת drifts right to ץ (bottom row), leaving תוכנ recognisable and garbling the end of 'plan'." },
+    { "typed": "חשבונחץ", "intended": "חשבונית", "language": "he", "class": "adjacent-2", "context": "", "note": "Two slips: י drifts right to ח and ת drifts right to ץ, the same pair of shifts as תוכנחץ above, this time on 'invoice' — leaving חשבונ ('account') recognisable." },
+    { "typed": "מחברןץ", "intended": "מחברות", "language": "he", "class": "adjacent-2", "context": "", "note": "Two slips: ו drifts right to ן (top row) and ת drifts right to ץ (bottom row), leaving מחבר ('author'/'connector') recognisable and garbling the plural of 'notebooks'." },
+    { "typed": "vpming", "intended": "coming", "language": "en", "class": "adjacent-2", "context": "", "note": "Two slips: c drifts right to v and o drifts right to p, both bottom-row-into-top-row neighbours, the same rightward hand drift shape as thsnkd/thanks and wprkinh/working already in typos.json." },
+    { "typed": "bedire", "intended": "before", "language": "en", "class": "adjacent-2", "context": "", "note": "Two slips: f drifts left to d and o drifts left to i, both home-row/top-row neighbours — the mirror direction of the other English rows here, so the split is not measured on one hand-drift direction alone." },
+    { "typed": "ftirnd", "intended": "friend", "language": "en", "class": "adjacent-2", "context": "", "note": "Two slips: r drifts right to t and e drifts right to r, both top-row neighbours." },
+    { "typed": "finmer", "intended": "dinner", "language": "en", "class": "adjacent-2", "context": "", "note": "Two slips: d drifts right to f (home row) and the second n drifts right to m (bottom row)." },
+    { "typed": "scjpol", "intended": "school", "language": "en", "class": "adjacent-2", "context": "", "note": "Two slips: h drifts right to j and the first o drifts right to p, both top/home-row neighbours." },
+
+    { "typed": "פשריות", "intended": "אפשרויות", "language": "he", "class": "mater-drop-double", "context": "", "note": "Two matres dropped: the leading א and one of the two vavs, on 'possibilities' — the same 55-per-drop price as an adjacent-key slip, from a completely different kind of mistake (Hebrew's own written-with-or-without-vowels convention rather than a fat finger)." },
+    { "typed": "משמעית", "intended": "משמעויות", "language": "he", "class": "mater-drop-double", "context": "", "note": "Two matres dropped: both vavs of the plural ending of 'meanings', leaving a string that reads like an adjective rather than the intended plural noun." },
+    { "typed": "הזדמנית", "intended": "הזדמנויות", "language": "he", "class": "mater-drop-double", "context": "", "note": "Two matres dropped: both vavs of 'opportunities', leaving something close to but not quite the real adjective הזדמנותית." },
+    { "typed": "התחיבת", "intended": "התחייבות", "language": "he", "class": "mater-drop-double", "context": "", "note": "Two matres dropped: one of the two yods and the vav of 'commitment', a word people write in emails and forget half its vowel letters under time pressure." },
+    { "typed": "התנהגית", "intended": "התנהגויות", "language": "he", "class": "mater-drop-double", "context": "", "note": "Two matres dropped: both vavs of 'behaviors', the same shape as משמעית above on a different, equally common abstract-noun plural." },
+
+    { "typed": "משמכ", "intended": "מסמך", "language": "he", "class": "homophone-final", "context": "", "note": "Two slips: ס heard as ש (both /s/, the ס/ש homophone pair) and the final ך written in its ordinary shape כ — 40 for the homophone plus 20 for the final form, on 'document'." },
+    { "typed": "חסבונ", "intended": "חשבון", "language": "he", "class": "homophone-final", "context": "", "note": "Two slips: ש heard as ס and the final ן written as ordinary נ, on 'account' — the same 60-cost stack as משמכ above, from the other direction of the same homophone pair." },
+    { "typed": "קספימ", "intended": "כספים", "language": "he", "class": "homophone-final", "context": "", "note": "Two slips: כ heard as ק (both /k/, the כ/ק homophone pair) and the final ם written as ordinary מ, on 'funds'." },
+    { "typed": "פטרונ", "intended": "פתרון", "language": "he", "class": "homophone-final", "context": "", "note": "Two slips: ת heard as ט (both /t/, the ט/ת homophone pair) and the final ן written as ordinary נ, on 'solution'." },
+    { "typed": "זחרונ", "intended": "זכרון", "language": "he", "class": "homophone-final", "context": "", "note": "Two slips: כ heard as ח (both /x/, the ח/כ homophone pair) and the final ן written as ordinary נ, on 'memory'." },
+
+    { "typed": "מסעדות", "intended": "מסעדות", "language": "he", "class": "must-not-correct", "context": "", "note": "The word behind צבעדות above, typed correctly. Committing any change to it is the failure." },
+    { "typed": "תלמידים", "intended": "תלמידים", "language": "he", "class": "must-not-correct", "context": "", "note": "The word behind תלמידחפ above, typed correctly." },
+    { "typed": "important", "intended": "important", "language": "en", "class": "must-not-correct", "context": "", "note": "A common, correctly spelled English word long enough (9 letters) to sit inside the same budget the adjacent-2 rows above use, so the control is measured under the same conditions as the corrections." },
+    { "typed": "beautiful", "intended": "beautiful", "language": "en", "class": "must-not-correct", "context": "", "note": "Same reasoning as important: common, correct, long enough to be a fair control for the six-letter-plus budget this probe exercises." }
+  ]
+}

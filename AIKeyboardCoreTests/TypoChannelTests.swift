@@ -11,18 +11,20 @@ final class TypoChannelTests: XCTestCase {
     // MARK: The motivating case
 
     func testTwoAdjacentSlipsCostOneHundredAndTen() {
-        let cost = TypoChannel.cost(
+        let priced = TypoChannel.cost(
             typed: Array("דוגמטןת"), candidate: Array("דוגמאות"), language: .hebrew, budget: 130)
-        XCTAssertEqual(cost, 110, "two adjacent-key substitutions, 55 apiece")
+        XCTAssertEqual(
+            priced, TypoChannel.EditCost(cost: 110, count: 2),
+            "two adjacent-key substitutions, 55 apiece, two edits")
     }
 
     func testTheSameTwoSlipsDoNotFitTheShorterWordsBudget() {
         // A pre-fix build with no budget gate at all would happily return 110
         // here too. What has to fail is the budget check itself: 110 must not
         // fit inside the 100 a four- or five-letter word is allowed to spend.
-        let cost = TypoChannel.cost(
+        let priced = TypoChannel.cost(
             typed: Array("דוגמטןת"), candidate: Array("דוגמאות"), language: .hebrew, budget: 100)
-        XCTAssertNil(cost, "110 must not fit a 100 budget, or the length gate is not doing anything")
+        XCTAssertNil(priced, "110 must not fit a 100 budget, or the length gate is not doing anything")
     }
 
     func testTheLengthGateHandsOutTheRightBudgets() {
@@ -41,9 +43,9 @@ final class TypoChannelTests: XCTestCase {
         // substitution alone is a plain, unweighted edit — 100 — so the pair
         // is 200, which the most generous budget this file ever hands out
         // (130, for a six-letter-or-longer word) cannot afford.
-        let cost = TypoChannel.cost(
+        let priced = TypoChannel.cost(
             typed: Array("qebrr"), candidate: Array("zebra"), language: .english, budget: 130)
-        XCTAssertNil(cost, "two unrelated substitutions must stay out of reach even at the top budget")
+        XCTAssertNil(priced, "two unrelated substitutions must stay out of reach even at the top budget")
     }
 
     // MARK: Transposition
@@ -51,21 +53,23 @@ final class TypoChannelTests: XCTestCase {
     func testAdjacentTranspositionCostsSixtyNotTwoSubstitutions() {
         // תדוה / תודה: the same slip `SeedLanguageModel.isTransposition`
         // already treats as one edit rather than two, priced here instead of
-        // merely detected.
+        // merely detected. One transition in the DP, so one edit.
         let transposed = TypoChannel.cost(
             typed: Array("תדוה"), candidate: Array("תודה"), language: .hebrew, budget: 100)
-        XCTAssertEqual(transposed, 60)
+        XCTAssertEqual(transposed, TypoChannel.EditCost(cost: 60, count: 1))
 
         let english = TypoChannel.cost(
             typed: Array("teh"), candidate: Array("the"), language: .english, budget: 100)
-        XCTAssertEqual(english, 60, "teh/the is the same adjacent swap in the other script")
+        XCTAssertEqual(
+            english, TypoChannel.EditCost(cost: 60, count: 1),
+            "teh/the is the same adjacent swap in the other script")
 
         // A build that only knew plain substitution would price this as two
         // changed letters. ת/ד and ו/ד are not a final-form pair, not in a
         // confusion class, and not adjacent on the Hebrew layout, so two
         // substitutions would cost 200 — nowhere near 60.
         XCTAssertNotEqual(
-            transposed, 200, "a broken build pricing this as two substitutions would not reach 60")
+            transposed?.cost, 200, "a broken build pricing this as two substitutions would not reach 60")
     }
 
     // MARK: Transposition across Hebrew's final-form boundary
@@ -77,11 +81,14 @@ final class TypoChannelTests: XCTestCase {
         // letter earlier — so the raw swap check never fires and this has
         // to fall through to the shape-folded one. Before this fix `cost`
         // fell back to two unrelated substitutions (100 apiece, 200 total)
-        // and returned nil against this budget.
+        // and returned nil against this budget. The shape correction rides
+        // along with the swap as *one* DP transition — see `packEdit`'s doc
+        // comment — so this is still `count: 1`, not 2.
         let cost = TypoChannel.cost(
             typed: Array("שלמו"), candidate: Array("שלום"), language: .hebrew, budget: 100)
         XCTAssertEqual(
-            cost, 80, "60 for the swap, 20 for the shape change, still inside the length-4 budget of 100"
+            cost, TypoChannel.EditCost(cost: 80, count: 1),
+            "60 for the swap, 20 for the shape change, one transition, still inside the length-4 budget of 100"
         )
     }
 
@@ -92,7 +99,7 @@ final class TypoChannelTests: XCTestCase {
         // fail this pair instead of the one the fix was written for.
         let cost = TypoChannel.cost(
             typed: Array("תדוה"), candidate: Array("תודה"), language: .hebrew, budget: 100)
-        XCTAssertEqual(cost, 60)
+        XCTAssertEqual(cost, TypoChannel.EditCost(cost: 60, count: 1))
     }
 
     func testTranspositionIntoFinalPositionCostsTheSameTwenty() {
@@ -103,7 +110,7 @@ final class TypoChannelTests: XCTestCase {
         // same price — this is what confirms the fix is not one-directional.
         let cost = TypoChannel.cost(
             typed: Array("שלום"), candidate: Array("שלמו"), language: .hebrew, budget: 100)
-        XCTAssertEqual(cost, 80)
+        XCTAssertEqual(cost, TypoChannel.EditCost(cost: 80, count: 1))
     }
 
     // MARK: Final-form substitution
@@ -111,10 +118,11 @@ final class TypoChannelTests: XCTestCase {
     func testFinalFormPairIsTwentyNotAPlainSubstitution() {
         let cost = TypoChannel.cost(
             typed: Array("שלומ"), candidate: Array("שלום"), language: .hebrew, budget: 100)
-        XCTAssertEqual(cost, 20, "מ/ם is an orthography slip, not a fat finger")
+        XCTAssertEqual(
+            cost, TypoChannel.EditCost(cost: 20, count: 1), "מ/ם is an orthography slip, not a fat finger")
         // A build with no final-form rule at all would still find this
         // substitution, just at the plain unweighted price.
-        XCTAssertNotEqual(cost, TypoChannel.plainEdit)
+        XCTAssertNotEqual(cost?.cost, TypoChannel.plainEdit)
     }
 
     // MARK: Deletion — mater lectionis beats an unrelated deletion
@@ -125,16 +133,17 @@ final class TypoChannelTests: XCTestCase {
         // there is.
         let materLectionis = TypoChannel.cost(
             typed: Array("דוגמות"), candidate: Array("דוגמאות"), language: .hebrew, budget: 130)
-        XCTAssertEqual(materLectionis, 55)
+        XCTAssertEqual(materLectionis, TypoChannel.EditCost(cost: 55, count: 1))
 
         // Same shape — a candidate one letter longer than what was typed —
         // but the missing letter (נ) is not a mater lectionis, is not
-        // doubled, and has nothing else cheap to say about it.
+        // doubled, and has nothing else cheap to say about it. Also one
+        // edit, just a costlier one.
         let unrelated = TypoChannel.cost(
             typed: Array("דוגמות"), candidate: Array("דוגמנות"), language: .hebrew, budget: 130)
-        XCTAssertEqual(unrelated, 100)
+        XCTAssertEqual(unrelated, TypoChannel.EditCost(cost: 100, count: 1))
 
-        XCTAssertLessThan(materLectionis!, unrelated!)
+        XCTAssertLessThan(materLectionis!.cost, unrelated!.cost)
     }
 
     // MARK: Deletion — a doubled letter typed once
@@ -143,7 +152,9 @@ final class TypoChannelTests: XCTestCase {
         let cost = TypoChannel.cost(
             typed: Array("acommodate"), candidate: Array("accommodate"), language: .english,
             budget: 130)
-        XCTAssertEqual(cost, 55, "the second c is a doubled letter dropped, not a wild guess")
+        XCTAssertEqual(
+            cost, TypoChannel.EditCost(cost: 55, count: 1),
+            "the second c is a doubled letter dropped, not a wild guess")
     }
 
     // MARK: Substitution — vowel confusion
@@ -151,8 +162,9 @@ final class TypoChannelTests: XCTestCase {
     func testVowelConfusionIsCheaperThanAPlainSubstitution() {
         let cost = TypoChannel.cost(
             typed: Array("seperate"), candidate: Array("separate"), language: .english, budget: 130)
-        XCTAssertEqual(cost, 40, "e for a is the English vowel-confusion class")
-        XCTAssertNotEqual(cost, TypoChannel.plainEdit)
+        XCTAssertEqual(
+            cost, TypoChannel.EditCost(cost: 40, count: 1), "e for a is the English vowel-confusion class")
+        XCTAssertNotEqual(cost?.cost, TypoChannel.plainEdit)
     }
 
     // MARK: Symmetry
@@ -169,7 +181,40 @@ final class TypoChannelTests: XCTestCase {
         let backward = TypoChannel.cost(
             typed: Array("שלום"), candidate: Array("שלומ"), language: .hebrew, budget: 100)
         XCTAssertEqual(forward, backward)
-        XCTAssertEqual(forward, 20)
+        XCTAssertEqual(forward, TypoChannel.EditCost(cost: 20, count: 1))
+    }
+
+    // MARK: The packed count travels with the cost
+
+    /// **The motivating case, pinned on both halves of `EditCost` at once.**
+    /// `דוגמטןת` for `דוגמאות` is two adjacent-key substitutions, 55 apiece —
+    /// two edits, not one, and that is the fact `Bar/typing/typos/`'s
+    /// `adjacent-2` class needs to tell apart from a single 100-cost guess
+    /// landing at a nearby price (see `testASingleSubstitutionCostsOneHundred
+    /// AndCountsAsOneEdit` below).
+    func testTwoAdjacentSlipsCountAsTwoEdits() {
+        let priced = TypoChannel.cost(
+            typed: Array("דוגמטןת"), candidate: Array("דוגמאות"), language: .hebrew, budget: 130)
+        XCTAssertEqual(priced, TypoChannel.EditCost(cost: 110, count: 2))
+    }
+
+    /// The control for the case above: one plain, unweighted substitution is
+    /// one edit, even though its cost (100) sits close to the two-adjacent
+    /// pair's 110. Cost alone cannot tell these apart; count can.
+    func testASingleSubstitutionCostsOneHundredAndCountsAsOneEdit() {
+        // z/q share no row, no confusion class, and no adjacency on QWERTY,
+        // so this is the plain, unweighted 100 — one substitution, one edit.
+        let priced = TypoChannel.cost(
+            typed: Array("qebra"), candidate: Array("zebra"), language: .english, budget: 130)
+        XCTAssertEqual(priced, TypoChannel.EditCost(cost: 100, count: 1))
+    }
+
+    /// A Hebrew mater lectionis drop, pinned on count as well as cost: one
+    /// letter missing, one edit, at the cheapest deletion price in the file.
+    func testHebrewMaterDropIsOneEditAtFiftyFive() {
+        let priced = TypoChannel.cost(
+            typed: Array("אמתי"), candidate: Array("אמיתי"), language: .hebrew, budget: 100)
+        XCTAssertEqual(priced, TypoChannel.EditCost(cost: 55, count: 1))
     }
 
     // MARK: Budget is a ceiling, never a floor
@@ -185,7 +230,7 @@ final class TypoChannelTests: XCTestCase {
         ]
         for entry in cases {
             guard
-                let cost = TypoChannel.cost(
+                let priced = TypoChannel.cost(
                     typed: Array(entry.typed), candidate: Array(entry.candidate),
                     language: entry.language, budget: entry.budget)
             else {
@@ -193,7 +238,8 @@ final class TypoChannelTests: XCTestCase {
                 continue
             }
             XCTAssertLessThanOrEqual(
-                cost, entry.budget, "\(entry.typed) → \(entry.candidate) reported a cost above its budget")
+                priced.cost, entry.budget,
+                "\(entry.typed) → \(entry.candidate) reported a cost above its budget")
         }
     }
 }

@@ -22,8 +22,12 @@ import XCTest
 ///
 /// The decision is asserted rather than the pixels because there is no way to read
 /// `.disabled()` back off a SwiftUI view. What makes these more than a tautology is
-/// that the bar no longer holds an opinion at all: it asks `AIAction`, so the two
-/// surfaces cannot disagree again.
+/// that no surface holds its own opinion any more: `AIAction` is the one place
+/// that answers, and the tone button and the action row both ask
+/// `KeyboardController.isActionKeyDisabled` rather than keep a second copy of the
+/// question — `SuggestionBar.anyActionCouldRun`, a bare forward to `AIAction` with
+/// nothing left calling it, is deleted, and the assertions below reach `AIAction`
+/// directly.
 ///
 /// **The sparkle itself is deleted, and the question outlived it.** The button
 /// opened `AIMenuPanel`; every action that panel listed has its own key now, so the
@@ -42,29 +46,33 @@ final class SparkleReachabilityTests: XCTestCase {
 
     /// The state the defect is about, and the one the old expression answered
     /// `false` for.
+    ///
+    /// **Asserted straight on `AIAction` now, not through `SuggestionBar`.**
+    /// `SuggestionBar.anyActionCouldRun` was a one-line forward to
+    /// `AIAction.hasRunnableAction` with no view left calling it — the sparkle it
+    /// was written for is deleted, and the tone button and the action row both ask
+    /// `KeyboardController.isActionKeyDisabled` instead, which answers from
+    /// `documentHasText` directly and never consults `AIAction` at all. Keeping the
+    /// forwarding wrapper around would have let a reader believe "the bar" still
+    /// holds this opinion; it does not, and `AIAction` is the one place that ever
+    /// did.
     func testAnEmptyFieldWithNoSessionStillLeavesAnActionRunnable() {
         XCTAssertTrue(
-            SuggestionBar.anyActionCouldRun(hasTextToWorkWith: false),
+            AIAction.hasRunnableAction(hasTextToWorkWith: false),
             "every route to the screen-context affordance is shut in the state it is for")
     }
 
-    /// The button is open exactly when at least one card inside is.
-    ///
-    /// **Read this for what it is.** Comparing `anyActionCouldRun` against
-    /// `hasRunnableAction` would be a tautology, because one is a call to the
-    /// other; the right-hand side here is rebuilt from `isAvailable`, which is what
-    /// each *action* is refused by, so it is the same question asked of the surface
-    /// that answers it rather than of the surface that delegates. That still only
-    /// catches a future re-divergence — the shipped bug lived in an expression
-    /// neither side now has, and `testAnEmptyFieldWithNoSessionStillOpensTheMenu`
-    /// is the one that rejects it.
+    /// `hasRunnableAction` is exactly `allCases.contains { isAvailable }`, so this
+    /// is checking the function against its own body — a future re-divergence is
+    /// what it can still catch, not the shipped bug, which lived in an expression
+    /// neither side has any more.
     func testTheBarIsOpenExactlyWhenACardInsideIs() {
         for hasText in [false, true] {
             let anyActionIsRunnable = AIAction.allCases.contains {
                 $0.isAvailable(hasTextToWorkWith: hasText)
             }
             XCTAssertEqual(
-                SuggestionBar.anyActionCouldRun(hasTextToWorkWith: hasText), anyActionIsRunnable,
+                AIAction.hasRunnableAction(hasTextToWorkWith: hasText), anyActionIsRunnable,
                 "the sparkle and the cards behind it disagree with hasTextToWorkWith = \(hasText)")
         }
     }

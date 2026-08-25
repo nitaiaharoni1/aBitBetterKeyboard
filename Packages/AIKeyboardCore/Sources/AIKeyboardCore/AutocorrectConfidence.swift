@@ -74,24 +74,41 @@ enum CommitReason: Equatable, Sendable {
     /// from 50,000 forms of real text and the winner is not, an explainable
     /// distance away.
     ///
-    /// **Both the cost and the transposition flag are measured splits, not
-    /// reasoned ones.** Over the 107 corrections in `Bar/typing/typos/` this rule
-    /// fires 43 times: at a cost of 60 or under it is right 30 times out of 31,
-    /// and above 60 it is right 6 times out of 12. A near certainty and a coin
+    /// **The cost, the transposition flag and the edit count are all measured
+    /// splits, not reasoned ones.** Over the 107 corrections in
+    /// `Bar/typing/typos/` this rule fires 43 times: at a cost of 60 or under
+    /// it is right 30 times out of 31, and above 60 — before the count split
+    /// below — it was right 5 times out of 11. A near certainty and a coin
     /// flip priced as one rule is what the middle setting exists to separate.
-    /// With the flag below the two buckets read 31 of 32 and 5 of 11.
     ///
     /// **The transposition flag rescues the one entry the cost bound gets
     /// wrong.** `שלמו` → `שלום` costs 80 — a transposition at 60 plus a final
     /// form at 20, two explainable edits — and it is `typo-11`, one of the two
-    /// entries NIT-153 shipped the frequency corrector to close. Every other row
-    /// above 60 that commits the right word is a wild guess that happened to land
-    /// (`משפה` → `משפחה`, `thsnkd` → `thanks`), and every row above 60 that
-    /// commits the wrong one is a substitution: `מצטעד` → `מצעד` at 70, `בברדה`
-    /// → `הורדה` at 95, `נזעדה` → `נועדה` at 100. None of those is a
-    /// transposition and `שלמו` is, so the flag keeps the measured win and drops
-    /// the coin flip.
-    case frequency(cost: Int, transposition: Bool)
+    /// entries NIT-153 shipped the frequency corrector to close. None of the
+    /// rows below is a transposition and `שלמו` is, so the flag keeps this
+    /// measured win out of the coin-flip band entirely.
+    ///
+    /// **`count` is `TypoChannel.EditCost.count`, carried alongside `cost`
+    /// rather than folded into it, and it is what splits the coin flip in
+    /// two.** Cost alone cannot tell `דוגמטןת` → `דוגמאות` and `thsnkd` →
+    /// `thanks` (both cost 110, two adjacent-key slips apiece) from `נזעדה`
+    /// → `נועדה` (cost 100, one plain substitution onto a commoner word) —
+    /// they sit a single cost quantum apart. Count can: the two-slip rows are
+    /// `count: 2`, the wild guesses are `count: 1`. Measured over
+    /// `Bar/typing/typos/reasons.sh`'s extended output, two runs,
+    /// byte-identical: `(cost: 110, count: 2)` is 3 right, 0 wrong —
+    /// `דוגמטןת` → `דוגמאות`, `thsnkd` → `thanks`, `wprkinh` → `working` —
+    /// and every measured wrong row in the coin-flip band lands outside it:
+    /// `מצטעד` → `מצעד` (70, count 1), `בברדה` → `הורדה` (95 = 40 + 55, count
+    /// 2 but not 110), `נזעדה` → `נועדה` and `מעומית` → `מקומית` (100, count
+    /// 1 each). The residual band — everything above 60, not a transposition,
+    /// not `(110, 2)` — is now 2 right, 6 wrong: `משפה` → `משפחה` and `בבקה`
+    /// → `בבקשה` (both cost 100) are the wild guesses that still land right;
+    /// the six wrong rows are `מצטעד` → `מצעד` and `עכדין` → `עדין` (70),
+    /// `בברדה` → `הורדה` (95), and `נזעדה` → `נועדה`, `מעומית` → `מקומית`,
+    /// `אמתי` → `אמרתי` (100). See
+    /// `frequencyConfidence(cost:transposition:count:)`.
+    case frequency(cost: Int, transposition: Bool, count: Int)
 
     /// The previous words are known to be followed by the winner, and what was
     /// keyed is absent from the common core: `בעוד רבה` → `בעוד רבע`.
@@ -144,8 +161,8 @@ enum CommitReason: Equatable, Sendable {
         case .transposition: return 92
         case .wrongLayout: return 88
         case .singleEdit: return 87
-        case .frequency(let cost, let transposition):
-            return Self.frequencyConfidence(cost: cost, transposition: transposition)
+        case .frequency(let cost, let transposition, let count):
+            return Self.frequencyConfidence(cost: cost, transposition: transposition, count: count)
         case .sentenceFollower: return 78
         // A slip the channel can price is the same claim `singleEdit` makes, and
         // it is measured at five right and none wrong. An unpriceable one is the
@@ -163,24 +180,43 @@ enum CommitReason: Equatable, Sendable {
     /// adjacent key or a dropped mater at 55, a transposition at 60. Measured at
     /// 30 right and 1 wrong.
     ///
-    /// **Above 60 the rule is a coin flip**, measured at 6 right and 6 wrong
-    /// before the transposition exemption and 5 and 6 after it, and it does not
-    /// improve further up: `נזעדה` → `נועדה` and `משפה` →
+    /// **Above 60 the rule used to be one coin flip**, measured at 6 right and
+    /// 6 wrong before the transposition exemption and 5 and 6 after it, and
+    /// `cost` alone could not improve on that: `נזעדה` → `נועדה` and `משפה` →
     /// `משפחה` both cost exactly 100, one a replacement nobody wanted and one
-    /// the right repair, and no property this file can read separates them.
-    /// `TypoChannel.cost` returns a cost and not an edit count — NIT-154 records
-    /// why the minimum-cost path is not the minimum-edit path and cannot be made
-    /// to yield one after the fact — so the two-adjacent-slip repair the
-    /// corrector was built for (`דוגמטןת` → `דוגמאות`, 110) falls with them.
-    /// That is the trade the middle setting makes, and `.full` is what keeps it.
+    /// the right repair, with nothing in `cost` to tell them apart.
     ///
     /// **A transposition is exempt at any cost**, because it is the one slip
     /// above 60 the corpus vouches for and because it is already the strongest
     /// evidence in this enum for the same reason `case transposition` is: every
     /// letter is right and only the order is not.
-    static func frequencyConfidence(cost: Int, transposition: Bool) -> Int {
+    ///
+    /// **`count` splits what was left into a second near-certainty and a
+    /// smaller coin flip.** `TypoChannel.EditCost.count` is how many of
+    /// `TypoChannel`'s edits the cheapest path actually took, and at
+    /// `(cost: 110, count: 2)` — two adjacent-key slips, the shape this
+    /// corrector was built for (`דוגמטןת` → `דוגמאות`, NIT-153's report) — it
+    /// is 3 right and 0 wrong, measured over `Bar/typing/typos/reasons.sh`'s
+    /// extended output, two runs, byte-identical. Every wrong row elsewhere in
+    /// the coin-flip band sits outside that exact shape: a wild single
+    /// substitution at `count: 1` (`נזעדה` → `נועדה`, `מעומית` → `מקומית`, both
+    /// 100; `מצטעד` → `מצעד`, `עכדין` → `עדין`, both 70), or two edits that do
+    /// not sum to 110 (`בברדה` → `הורדה`, 95 = a homophone substitution at 40
+    /// plus an adjacent-key one at 55). **87, matching `singleEdit` and an
+    /// explainable `unknownWord`** rather than the 92 a transposition or a
+    /// cost-60 slip earns: those two tiers are priced on a similar-sized,
+    /// similarly clean sample (`singleEdit` 28/2, `unknownWord(explainable:
+    /// true)` 5/0), and 3 of 3 here is that same class of evidence rather
+    /// than the larger, near-unanimous samples behind 92 — three rows is the
+    /// smallest sample priced anywhere in this file, and the probe corpus in
+    /// `Bar/typing/typos/probes-motor2/` is what widens it. The residual band
+    /// — everything else above 60 — is now 2 right, 6 wrong, worse than
+    /// before the split pulled its 3 best rows out, and stays at 72.
+    static func frequencyConfidence(cost: Int, transposition: Bool, count: Int) -> Int {
         if transposition { return 92 }
-        return cost <= 60 ? 92 : 72
+        if cost <= 60 { return 92 }
+        if cost == 110, count == 2 { return 87 }
+        return 72
     }
 }
 

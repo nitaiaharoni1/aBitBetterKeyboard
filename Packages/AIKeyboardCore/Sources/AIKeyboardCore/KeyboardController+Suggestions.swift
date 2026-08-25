@@ -18,7 +18,15 @@ extension KeyboardController {
         let vocabulary: Int
     }
 
-    public func refreshSuggestions() {
+    /// - Parameter schedulingRefinement: Whether a fresh answer may arm the
+    ///   async tier's 300ms clock. **Off only from `KeyboardController.init`**,
+    ///   which otherwise paid a model call before the first frame drew on every
+    ///   single construction — not every keystroke, construction — because
+    ///   `askForRefinement` cannot tell "the document already had a word in it"
+    ///   from "the user just paused mid-sentence". Every other caller wants the
+    ///   default: a keystroke that does not restart the clock is a keystroke the
+    ///   model never gets asked about.
+    public func refreshSuggestions(schedulingRefinement: Bool = true) {
         // **Above the Predictions guard, because it is not about predictions.**
         // Fix and Rewrite are drawn disabled on an empty field, and this is what
         // their keys redraw from; leaving it under the guard would freeze both keys
@@ -103,7 +111,22 @@ extension KeyboardController {
         // is about to type, and nobody is typing; `applyRefinement` would drop
         // the answer anyway, because the prefix it hands back is not
         // `currentWordPrefix`.
-        if selected == nil { askForRefinement(prefix: prefix, context: context) }
+        //
+        // **A request already in flight has to be cancelled here, not merely
+        // skipped.** A space arms the clock on an empty prefix, and a double tap
+        // that selects a word moments later takes this branch and used to leave
+        // the old request running: `applyRefinement`'s only staleness gate was
+        // `prefix == currentWordPrefix`, and an empty prefix asked before the
+        // selection still equals the empty prefix a selection reads, so the
+        // model's guess landed in the bar over a word the user had just pointed
+        // at. See the `selection == nil` guard on `applyRefinement` itself, which
+        // is what actually closes it — this cancel only stops paying for an
+        // answer nothing can use any more.
+        if selected == nil {
+            if schedulingRefinement { askForRefinement(prefix: prefix, context: context) }
+        } else {
+            refiner?.cancel()
+        }
         dropIdleTypingIfStale()
     }
 
@@ -130,16 +153,32 @@ extension KeyboardController {
     /// under any rule that draws the default it comes back at the user, bold, in
     /// the middle slot. The word is already in the field and highlighted in it;
     /// the bar's three slots are for the words that could take its place.
+    ///
+    /// **The selection strip runs before the empty-prefix guard, and it used to
+    /// run after it.** `prefix` is `selectedWord ?? currentWordPrefix`, and both
+    /// can be empty over a real selection — a partial-word selection, or a whole
+    /// word selected together with its trailing space — so the old order let a
+    /// live selection fall straight through the `!prefix.isEmpty` guard and keep
+    /// whatever bold default the empty-prefix (next-word) tier had drawn, hint
+    /// and all. Any selection loses every default; whether the *prefix* is empty
+    /// decides nothing about that.
     private func pinningDefaultToTypedIfNeeded(
         _ results: [Suggestion], prefix: String
     )
         -> [Suggestion]
     {
-        guard !prefix.isEmpty else { return results }
         if selection != nil {
             return results.map { Suggestion(text: $0.text, language: $0.language) }
         }
-        if store.storedAutocorrectLevel == .off || isCorrectingWordByHand {
+        guard !prefix.isEmpty else { return results }
+        // **The spelling the user already undid this session is a third reason,
+        // beside Autocorrect-off and a hand repair.** `insertSpace` refuses to
+        // put the same swap back (`undoneAutocorrectSpellings`), so a bar that
+        // still bolds the correction is advertising a commit space will not make.
+        // Folded, the same way the set itself is keyed.
+        if store.storedAutocorrectLevel == .off || isCorrectingWordByHand
+            || undoneAutocorrectSpellings.contains(SeedLanguageModel.fold(prefix))
+        {
             return SuggestionEngine.markDefault(results, at: 0)
         }
         return results
@@ -193,6 +232,15 @@ extension KeyboardController {
     ///
     /// A delete that erases the whole word is the other empty, and must not
     /// count: `deletedWordPrefix` is `""` then, not nil.
+    ///
+    /// **The document actually being empty is the trigger, not the prefix being
+    /// empty.** This runs on every keystroke and every caret move, and a caret
+    /// tapped to *any* word boundary in a non-empty document reads as an empty
+    /// prefix — `"hello| world"` no less than `""`. Committing `openWord` there
+    /// taught a word the user had only repositioned past, not finished; Send is
+    /// the one case this is actually for, and Send is the one case that leaves
+    /// `documentHasText` false. `refreshDocumentState` sets it just above this
+    /// call, so it is already the fresh answer.
     func adoptOpenWord() {
         // The field holds a decoder guess, not a word the user typed. Stashing
         // it here is how Chat Send and the space after `textDidChange` taught
@@ -204,8 +252,8 @@ extension KeyboardController {
         let raw = currentWordPrefix
         let word = SuggestionEngine.wordCore(raw)
         if word.isEmpty {
-            if !openWord.isEmpty, deletedWordPrefix == nil {
-                recordCommittedWord(openWord)
+            if !openWord.isEmpty, deletedWordPrefix == nil, !documentHasText {
+                recordCommittedWord(openWord, permittedOverride: openWordPermitted)
             }
             openWord = ""
             return
@@ -214,7 +262,24 @@ extension KeyboardController {
             openWord = ""
             return
         }
+        // **A caret parked inside a word is not the word being typed.**
+        // `currentWordPrefix` is only ever the run behind the caret, so
+        // `"wor|ld"` reaches here as `"wor"` — a fragment, not the word standing
+        // in the field. Adopting it would teach half a word the moment somebody
+        // taps back into one they already finished; refuse rather than overwrite,
+        // and whatever this slot already held (the word actually last finished
+        // being typed) stays. Same test `selectedWord` applies at its trailing
+        // end, `KeyboardController+TextEditing.swift`.
+        if let next = contextAfter.first,
+            next.isLetter || next.isNumber || KeyboardController.staysInsideWord(next)
+        {
+            return
+        }
         openWord = word
+        // Captured now, while `target` is still the field these letters were
+        // typed into — see `openWordPermitted`.
+        openWordPermitted = SecureField.permitsRead(
+            secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
     }
 
     /// Start the async tier's clock. Every keystroke restarts it, so it only ever
@@ -234,11 +299,18 @@ extension KeyboardController {
                 textBefore: context,
                 wordInProgress: prefix,
                 language: language,
-                // Only a live session. The scripted demo `MockScreenContext` plays
-                // when nothing is broadcasting is the right thing to show on a
-                // marketing screen and the wrong thing to predict a real reply
-                // from.
-                screenContext: ScreenContextSession.shared.isLive
+                // Only a live session, and only the real capture path — never the
+                // scripted demo `MockScreenContext` plays, which is the right thing
+                // to show on a marketing screen and the wrong thing to predict a
+                // real reply from. `FeatureFlags.screenCaptureReply` is what makes
+                // that a fact rather than a hope: with it off, `ScreenContextSession
+                // .shared.isLive` is unreachable here in a shipping build at all
+                // (`startConsuming` is gated on the same flag, so nothing ever
+                // writes `.watching` / `.ready` into this process's session), and
+                // this reads the flag explicitly so every reader of the held
+                // feature is gated alike rather than relying on that as an accident
+                // of what else is wired up.
+                screenContext: FeatureFlags.screenCaptureReply && ScreenContextSession.shared.isLive
                     ? ScreenContextSession.shared.state.context : nil,
                 permitted: SecureField.permitsRead(
                     secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)))
@@ -254,31 +326,47 @@ extension KeyboardController {
     ///
     /// It never applies to a document that has moved on. The prefix is the one
     /// handed back from the callback, not re-read here against itself.
+    ///
+    /// **`selection == nil` is its own guard, and `prefix == currentWordPrefix`
+    /// cannot stand in for it.** A next-word request is armed on an empty
+    /// prefix, `refreshSuggestions` skips asking again the moment a selection
+    /// exists but the request already in flight keeps running, and
+    /// `currentWordPrefix` is unaffected by a selection at all — so the answer
+    /// can arrive with `prefix` and `currentWordPrefix` both still `""` while a
+    /// word sits selected, and the staleness gate alone would wave it through
+    /// onto a selection's correction candidates.
     func applyRefinement(_ words: [String], for prefix: String) {
-        guard store.storedPredictions, prefix == currentWordPrefix,
+        guard store.storedPredictions, selection == nil, prefix == currentWordPrefix,
             let first = suggestions.first
         else { return }
-        let held = [0: first]
         let pool =
             words.map { Suggestion(text: $0, language: language) } + suggestions.dropFirst()
-        var merged: [Suggestion] = []
-        var seen = Set(held.values.map { SeedLanguageModel.fold($0.text) })
+        // Slot 0 is always the typed keystrokes, never anything from `pool`.
+        var merged: [Suggestion] = [first]
+        var seen = Set([SeedLanguageModel.fold(first.text)])
         // The same shape the local tier returns: the typed echo plus one offer per
         // drawn slot. Fixed at three here, this was the one path that could shrink
         // the bar back to two candidates the moment the refiner answered.
-        for slot in 0..<(SuggestionEngine.barSlots + 1) {
-            guard
-                let choice = held[slot]
-                    ?? pool.first(where: { !seen.contains(SeedLanguageModel.fold($0.text)) })
-            else { continue }
-            seen.insert(SeedLanguageModel.fold(choice.text))
-            merged.append(choice)
+        for candidate in pool {
+            guard merged.count < SuggestionEngine.barSlots + 1 else { break }
+            let folded = SeedLanguageModel.fold(candidate.text)
+            guard !seen.contains(folded) else { continue }
+            seen.insert(folded)
+            merged.append(candidate)
         }
         let modelFolds = Set(words.map(SeedLanguageModel.fold))
         let defaultIndex =
             merged.firstIndex { modelFolds.contains(SeedLanguageModel.fold($0.text)) } ?? 0
-        suggestions = pinningDefaultToTypedIfNeeded(
+        // **Guarded the same way `refreshSuggestions` guards its own publish.**
+        // A cache hit answers synchronously, so a keystroke that fires two or
+        // three refreshes could fire the refiner that many times too, and
+        // without this every one of them republished the bar — a rebuild of
+        // every key — even when the merge reproduced exactly what was already
+        // on screen. `Suggestion.==` is text, language and the bold flag, the
+        // same equality `refreshSuggestions` already trusts.
+        let bar = pinningDefaultToTypedIfNeeded(
             SuggestionEngine.markDefault(merged, at: defaultIndex), prefix: prefix)
+        if bar != suggestions { suggestions = bar }
     }
 
     /// Restart the pause that can finish a word or add a space.
@@ -358,6 +446,9 @@ extension KeyboardController {
                 completions: .afterExact)
             if let longer = decoded.idleCompletion {
                 let guess = grouped.cased(longer, in: language)
+                // Read before `writeGroupedGuess` mutates the field, for the
+                // reason `apply`'s own read is. See `insertCommittalSpace`.
+                let after = contextAfter
                 Feedback.keyPress()
                 Feedback.keyClick(.tock)
                 // **Grouped typing is the one writer that still clears the way
@@ -374,7 +465,7 @@ extension KeyboardController {
                     recordCommittedWord(SuggestionEngine.wordCore(guess))
                 }
                 if space {
-                    target?.insertText(" ")
+                    insertCommittalSpace(after: after)
                     lastLearnedFolded = nil
                 }
                 deletedWordPrefix = nil
@@ -389,7 +480,14 @@ extension KeyboardController {
             return
         }
 
+        // **The spelling the user already undid this session is refused here
+        // too, not only on the space bar.** `idleCompletion` picks the first
+        // offer that is not the literal keystrokes, with no idea that this exact
+        // prefix is the one `undoAutocorrectIfPending` was just asked to put
+        // back — so completing on pause could silently re-run the swap
+        // `insertSpace` already knows to refuse, from a different call site.
         if complete, !isCorrectingWordByHand, store.storedPredictions,
+            !undoneAutocorrectSpellings.contains(SeedLanguageModel.fold(prefix)),
             let candidate = idleCompletion(for: prefix)
         {
             if space {
@@ -420,10 +518,29 @@ extension KeyboardController {
     /// default unless it is sure they are a typo, and Autocorrect-off remakes
     /// default to slot 0 so space will not swap. The completion is still
     /// sitting in slot 1. Taking `isDefault` made this switch a no-op.
+    ///
+    /// **A candidate an automatic path may not write is skipped, not merely
+    /// refused.** This fires with no tap between the pause and
+    /// `replaceCurrentWord` — `performIdleTyping` calls it directly, or through
+    /// `apply`, which does the same insert — so it is a second automatic path
+    /// to the document and `commitReason`'s guard never runs in front of it. A
+    /// learned email at three sightings, typed as far as its local part, ranks
+    /// `.learned` — the second-highest tier a mid-word candidate reaches — so
+    /// without this it was exactly what "first suggestion that is not the
+    /// typed word" picked, pasted on a pause with nothing to undo. Falling
+    /// through to the next candidate, rather than refusing outright, is what
+    /// keeps an ordinary completion sitting behind it from being held back by
+    /// a personal token it has nothing to do with; a bar with nothing left
+    /// answers nil, same as an empty prefix. `SuggestionEngine.isAutomaticallyInsertable`
+    /// is the identical question `commitReason` asks of its own winner, so the
+    /// two doors read one definition rather than two that can drift.
     func idleCompletion(for prefix: String) -> Suggestion? {
         let typed = SuggestionEngine.comparable(prefix)
         guard !typed.isEmpty else { return nil }
-        return suggestions.first { SuggestionEngine.comparable($0.text) != typed }
+        return suggestions.first {
+            SuggestionEngine.comparable($0.text) != typed
+                && SuggestionEngine.isAutomaticallyInsertable($0.text)
+        }
     }
 
     /// A credential field, a recording, a selection, or the emoji panel: none
@@ -463,8 +580,16 @@ extension KeyboardController {
         Feedback.keyClick(.tock)
         endGroupedWord()
         // Read before the replacement, because it is the replacement that clears
-        // the selection.
+        // the selection — and, for `contextAfter`, because it is also the
+        // replacement that can leave the proxy reporting stale context for a
+        // moment. See `insertCommittalSpace`.
         let overSelectedWord = selectedWord != nil
+        // **Any range selection, not only one `selectedWord` recognises.** A
+        // multi-word or partial selection is neither a whole word (`selectedWord`
+        // is nil for both) nor a plain caret, and `insertCommittalSpace`'s hop
+        // is only safe for the caret — see the branch below.
+        let hadSelection = selection != nil
+        let after = contextAfter
         replaceCurrentWord(with: suggestion.text)
         // The candidate may already carry a mark (`hello,`). The space-bar path
         // skips a word that is already terminated so `hello.` + space does not
@@ -482,8 +607,22 @@ extension KeyboardController {
             // rather than taken from the candidate, because `replaceCurrentWord`
             // may have given it back a mark the candidate did not carry.
             deletedWordPrefix = currentWordPrefix
-        } else {
+        } else if hadSelection {
+            // **A multi-word or partial selection is repaired in place too, and
+            // the pin is the same as a selected word's: touch nothing outside
+            // it.** Byte-identical to what this branch always did — a range
+            // this shape gets an unconditional space, even when one already
+            // follows it (`say ⟦hello world.⟧ now` tapping `the` is pinned to
+            // `say the  now`, the second space and all). `insertCommittalSpace`'s
+            // hop does not apply here: the after-caret text belongs to whatever
+            // sits past the selection, not to a word this tap just finished, and
+            // whether a range selection may ever touch what is outside it is a
+            // design question this fix does not reopen.
             target?.insertText(" ")
+            lastLearnedFolded = nil
+            deletedWordPrefix = nil
+        } else {
+            insertCommittalSpace(after: after)
             lastLearnedFolded = nil
             // Committed on purpose, so the hand repair this word may have been
             // under is over — the same line `insertSpace` ends on, for the same
@@ -493,6 +632,40 @@ extension KeyboardController {
         pendingAutocorrectUndo = nil
         refreshSuggestions()
         reportInteraction(.suggestion)
+    }
+
+    /// Finish a word with a space, or step over one that is already sitting
+    /// in front of the caret.
+    ///
+    /// **A tap used to insert a second space beside one that was already
+    /// there.** `"The teh| quick"` (`|` the caret) committed as
+    /// `"The the  quick"` — stock iOS instead replaces the word and moves the
+    /// caret past the space already doing that job. `contextAfter` has to be
+    /// read by the caller *before* the replacement runs and handed in here,
+    /// because this keyboard's own delete-then-insert can leave a proxy
+    /// reporting stale context for a moment right after a write it just made
+    /// itself — the same staleness `deleteBackward(utf16Units:)` already
+    /// re-reads around.
+    ///
+    /// **Only a literal U+0020, never anything `isWhitespace` calls
+    /// equivalent.** A newline starts the next line rather than sitting in
+    /// the gap this word is finishing into, and hopping over it would leave
+    /// the caret a line down from where the user is looking. A non-breaking
+    /// space was placed on purpose by somebody else, not by this keyboard's
+    /// own spacing, so it is left standing and a plain space still goes in
+    /// beside it.
+    ///
+    /// **The space bar does not call this.** `insertSpace` always writes a
+    /// literal space: `pendingAutocorrectUndo` remembers "the replacement
+    /// plus the space that follows it", and a hop there would leave the undo
+    /// eating a space the user pressed themselves rather than the one a tap
+    /// would have inserted.
+    func insertCommittalSpace(after contextAfter: String) {
+        guard contextAfter.first == " " else {
+            target?.insertText(" ")
+            return
+        }
+        target?.adjustTextPosition(byCharacterOffset: 1)
     }
 
     /// Remember the word still under the cursor, and the pair it makes with the
@@ -523,11 +696,22 @@ extension KeyboardController {
         let word = SuggestionEngine.wordCore(raw)
         if word.isEmpty {
             if !openWord.isEmpty, deletedWordPrefix == nil {
-                recordCommittedWord(openWord)
+                recordCommittedWord(openWord, permittedOverride: openWordPermitted)
             }
             return
         }
         if Self.wordAlreadyTerminated(raw, core: word) { return }
+        // **The same continues-past-caret refusal `adoptOpenWord` needs.** Every
+        // caller here is about to insert a terminator (space, Return, a mark) at
+        // the caret, and the caret is not always at the true end of the word it
+        // sits in — Return or a punctuation key pressed inside existing text
+        // splits it, `"hel|lo"` reaching here as `"hel"`. Learning that fragment
+        // writes half a word into the personal dictionary as if it were whole.
+        if let next = contextAfter.first,
+            next.isLetter || next.isNumber || KeyboardController.staysInsideWord(next)
+        {
+            return
+        }
         recordCommittedWord(word)
     }
 
@@ -541,7 +725,18 @@ extension KeyboardController {
 
     /// The write itself. `learnWordJustCommitted` decides *whether* this word is
     /// still open; `apply` already knows it is committing.
-    func recordCommittedWord(_ word: String) {
+    ///
+    /// - Parameter permittedOverride: The permission decided when the word was
+    ///   adopted, for a caller committing `openWord` rather than the word just
+    ///   typed. **`target` may already be a different document by the time this
+    ///   runs** — iOS keeps one extension instance across fields and across host
+    ///   apps, and `openWord` can outlive the field it was typed in when it is
+    ///   never finished with a space or a Return there. Re-deriving permission
+    ///   from `target` at commit time would judge a word typed in a credential
+    ///   field by whatever field the keyboard has moved on to. Nil for every
+    ///   other caller, which is committing a word `target` still is the field
+    ///   for.
+    func recordCommittedWord(_ word: String, permittedOverride: Bool? = nil) {
         guard !word.isEmpty else { return }
         let folded = SeedLanguageModel.fold(word)
         guard folded != lastLearnedFolded else { return }
@@ -552,6 +747,10 @@ extension KeyboardController {
         } else {
             previous = words.last
         }
+        let permitted =
+            permittedOverride
+            ?? SecureField.permitsRead(
+                secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
         let wrote = personal.record(
             word: word,
             previous: previous,
@@ -566,12 +765,15 @@ extension KeyboardController {
             // again here because "may I keep this word" and "may I send this
             // screen" have the same answer for a password. Learning itself is
             // always on; the only refusal left is a credential field.
-            permitted: SecureField.permitsRead(
-                secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
+            permitted: permitted
         )
+        // **Cleared regardless of `wrote`.** A refusal is a decision, not a
+        // deferral: leaving `openWord` standing after a refused write is what let
+        // it be offered again under a later document's permission instead of the
+        // one it was actually typed under.
+        openWord = ""
         if wrote {
             lastLearnedFolded = folded
-            openWord = ""
             // The one thing that changes an answer without changing the question.
             // See `lastSuggestionQuery`.
             vocabularyVersion &+= 1

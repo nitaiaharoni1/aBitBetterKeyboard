@@ -179,12 +179,6 @@ public enum SuggestionEngine {
             ?? KeyboardLanguage.allCases.first { $0.script == script }
     }
 
-    private static func script(
-        of word: String, among candidates: [KeyboardLanguage]
-    ) -> KeyboardLanguage? {
-        dominantLanguage(in: word, among: candidates)
-    }
-
     /// Three candidates for the suggestion bar.
     ///
     /// - Parameters:
@@ -243,7 +237,7 @@ public enum SuggestionEngine {
             return markDefault(promoteToMiddle(results), at: min(1, results.count - 1))
         }
 
-        let typedLanguage = script(of: trimmedPrefix, among: languages) ?? contextLanguage
+        let typedLanguage = dominantLanguage(in: trimmedPrefix, among: languages) ?? contextLanguage
         let preceding = previousWords(in: context)
         let ranked = completions(
             for: trimmedPrefix,
@@ -433,6 +427,53 @@ public enum SuggestionEngine {
     ) -> String {
         guard let first = source.first, first.isUppercase else { return candidate }
         return language.uppercased(String(candidate.prefix(1))) + candidate.dropFirst()
+    }
+
+    /// Apostrophe, hyphen, maqaf, geresh, gershayim, Catalan interpunt, ZWNJ —
+    /// the marks that live *inside* a word rather than ending it.
+    ///
+    /// Lives here, and not on `KeyboardController` where every other caller of
+    /// it sits, because `Bar/typing/harness` and `Bar/typing/typos` compile
+    /// `SuggestionEngine*.swift` and the models for a scoring run with no
+    /// controller in the build at all, and `commitReason` needs to ask this
+    /// question of a candidate before it ever reaches one.
+    /// `KeyboardController.staysInsideWord` delegates here so the two never
+    /// carry their own copies of the same list.
+    static func staysInsideWord(_ character: Character) -> Bool {
+        "'’-\u{05BE}\u{05F3}\u{05F4}\u{00B7}\u{200C}".contains(character)
+    }
+
+    /// Whether an automatic path — space or complete-on-pause — may write this
+    /// text with no tap behind it: every character is a letter or a mark that
+    /// stays inside a word.
+    ///
+    /// **One spelling for two doors, because a second copy is how the second
+    /// door stayed open.** `commitReason`'s own guard against pasting a
+    /// verbatim token over an unrelated fragment was written first and asked
+    /// this question inline; `idleCompletion` is a second automatic path to the
+    /// same document — `performIdleTyping` calls `replaceCurrentWord` (or
+    /// `apply`, which does the same thing) with no tap in between — and it read
+    /// straight off `suggestions` with no character-class question at all. A
+    /// learned email at three sightings, typed as far as its own local part,
+    /// ranks as `.learned` — the second-highest tier a mid-word candidate ever
+    /// reaches — so `idleCompletion`'s "first suggestion that is not the typed
+    /// word" was exactly that address, inserted on a pause with nothing to
+    /// undo and no `commitReason` ever asked. Both doors call this one
+    /// function now, so they cannot drift apart the way they already had once.
+    static func isAutomaticallyInsertable(_ text: String) -> Bool {
+        text.allSatisfy { $0.isLetter || staysInsideWord($0) }
+    }
+
+    /// `matchCase`, except a verbatim token — today only an email —
+    /// is inserted exactly as it was stored. An address typed under shift is
+    /// still the same address, and `PersonalLanguageModel` folds every one of
+    /// them to lower case before it is kept, so re-casing it here would answer
+    /// with something that was never stored at all.
+    static func matchCaseUnlessVerbatim(
+        of source: String, applyingTo candidate: String, in language: KeyboardLanguage
+    ) -> String {
+        PersonalLanguageModel.isVerbatimToken(candidate)
+            ? candidate : matchCase(of: source, applyingTo: candidate, in: language)
     }
 
     static func markDefault(_ items: [Suggestion], at defaultIndex: Int) -> [Suggestion] {

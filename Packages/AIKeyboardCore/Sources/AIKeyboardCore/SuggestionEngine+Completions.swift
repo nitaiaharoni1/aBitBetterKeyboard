@@ -237,7 +237,7 @@ extension SuggestionEngine {
             .enumerated()
             .map {
                 Candidate(
-                    text: matchCase(of: core, applyingTo: $0.element, in: typedLanguage),
+                    text: matchCaseUnlessVerbatim(of: core, applyingTo: $0.element, in: typedLanguage),
                     language: typedLanguage, source: .learned, ordinal: $0.offset)
             }
 
@@ -721,7 +721,7 @@ extension SuggestionEngine {
             for (index, stem) in personalStems.enumerated() {
                 out.append(
                     Candidate(
-                        text: matchCase(
+                        text: matchCaseUnlessVerbatim(
                             of: prefix, applyingTo: reading.prefix + stem, in: typedLanguage),
                         language: typedLanguage, source: .learned, cliticDepth: depth,
                         ordinal: index))
@@ -838,7 +838,8 @@ extension SuggestionEngine {
                 .enumerated()
                 .map {
                     Candidate(
-                        text: matchCase(of: word, applyingTo: $0.element, in: typedLanguage),
+                        text: matchCaseUnlessVerbatim(
+                            of: word, applyingTo: $0.element, in: typedLanguage),
                         language: typedLanguage, source: .neighbour, ordinal: $0.offset,
                         keyAdjacent: KeyProximity.isAdjacentSubstitution(
                             word, $0.element, in: typedLanguage))
@@ -1059,6 +1060,19 @@ extension SuggestionEngine {
         if SeedLanguageModel.knows(word, in: typedLanguage) { return nil }
 
         guard let first = results.dropFirst().first else { return nil }
+        // **A verbatim token — today only an email — may fill a slot and be
+        // tapped, and space must never auto-commit one over keystrokes still
+        // being typed.** `.learned` outranks every correction source, so an
+        // address a few sightings old was exactly the kind of winner the
+        // four-letter unknown-word gate further down commits on sight, pasting
+        // a stored address over an unrelated fragment like `nita`. One check on
+        // the single winner, ahead of every rule that reads it from here on, is
+        // what keeps that from ever firing again. `idleCompletion` asks the
+        // identical question of the identical text — see
+        // `SuggestionEngine.isAutomaticallyInsertable` — because it is a second
+        // automatic path to the same document and a second spelling of this
+        // guard is how that door stayed open once already.
+        guard isAutomaticallyInsertable(first.text) else { return nil }
         // The reading has to be one the ranking trusts before any of the questions
         // below are worth asking. Everything above this line is about the typed
         // letters themselves; everything below is about the candidate.
@@ -1274,15 +1288,16 @@ extension SuggestionEngine {
             TypoLexicon.rank(of: first.text, in: typedLanguage) != nil,
             !TypoLexicon.isWord(word, in: typedLanguage),
             let budget = TypoChannel.budget(forTypedLength: word.count),
-            let cost = TypoChannel.cost(
+            let priced = TypoChannel.cost(
                 typed: Array(word), candidate: Array(first.text), language: typedLanguage,
                 budget: budget),
             !hebrewWordInProgress()
         {
-            // The cost is carried out of the guard rather than recomputed: this is
-            // the cheapest path the banded DP actually found, and asking a second
-            // time outside it would be a second answer to the same question.
-            return .frequency(cost: cost, transposition: transposed)
+            // The cost and count are carried out of the guard rather than
+            // recomputed: this is the cheapest path the banded DP actually
+            // found, and asking a second time outside it would be a second
+            // answer to the same question.
+            return .frequency(cost: priced.cost, transposition: transposed, count: priced.count)
         }
 
         // **An unfinished word with two different endings is not a typo.**
@@ -1398,18 +1413,6 @@ extension SuggestionEngine {
     /// as `ל` + `ה` + `תרופה` and the space bar inserted `להתרופה`, "to the
     /// medicine".
     ///
-    /// Two readings are distrusted, and neither of them is a count of the letters
-    /// a correction may add.
-    ///
-    /// **A `UITextChecker` completion of a stem the split invented.**
-    /// `seedCandidates` only asks the checker about a split reading when the seed
-    /// list had nothing to say about it (`seedStems.isEmpty`), so this is Apple's
-    /// unranked Hebrew completion list — the one the seed list exists to overrule,
-    /// which puts `הכתום` ahead of `הכתובת` — answering a question about a stem
-    /// this engine made up. It scores at half the checker's own tier, the weakest
-    /// thing in the bar that can still win one. `להתרא` reached `להתראיין` that
-    /// way, through `ל` + `התרא`.
-    ///
     /// **A reading that assumes more than it rests on.** Every clitic letter is a
     /// claim that a key the user pressed is a function word rather than part of
     /// the word being completed, so those letters are spent and not earned: `לה` +
@@ -1419,11 +1422,27 @@ extension SuggestionEngine {
     /// `בעבו` still commits `בעבודה` (one clitic, three letters of stem) and
     /// `מהעבו` still commits `מהעבודה` (two clitics, three letters of stem).
     ///
-    /// Both readings are still *offered*. Only the bold slot moves, and a
-    /// deliberate tap still commits either one.
+    /// **A second reading used to be distrusted here too, and it is gone because
+    /// nothing produces it any more.** `seedCandidates` used to ask
+    /// `UITextChecker` about a split reading when the seed list had nothing to say
+    /// about it (`seedStems.isEmpty`), so a candidate could arrive `source ==
+    /// .checker` at `cliticDepth > 0` — Apple's unranked Hebrew list answering a
+    /// question about a stem this engine made up — and this function refused it
+    /// outright. That call is deleted (see `seedCandidates`): every `.checker`
+    /// candidate is built with no `cliticDepth` argument now, which defaults to
+    /// zero, so the guard above already returns `true` for it before the source is
+    /// ever asked. **`להתרא` reaching `להתראיין` was believed to be this case and
+    /// measurement said otherwise**: read out of the engine, that winner is
+    /// `.checker` at `cliticDepth` **0** — Apple completing the glued form itself
+    /// — so it was never the reading this clause refused; what is actually
+    /// happening there is `להתראות` and `להתראיין` sharing a prefix, which
+    /// `hasDistinctHebrewLexemes` is the fix for. See
+    /// `testTwoHebrewWordsSharingAPrefixDoNotTakeTheSpaceBar`.
+    ///
+    /// This reading is still *offered*. Only the bold slot moves, and a
+    /// deliberate tap still commits it.
     static func commitTrustsReading(_ candidate: Candidate, typed: String) -> Bool {
         guard candidate.cliticDepth > 0 else { return true }
-        if candidate.source == .checker { return false }
         return candidate.cliticDepth < typed.count - candidate.cliticDepth
     }
 

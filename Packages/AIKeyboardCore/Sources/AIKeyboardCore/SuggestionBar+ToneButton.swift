@@ -202,10 +202,4 @@ extension SuggestionBar {
             return "The one-tap rewrite button. Rewrites what you typed in your default tone"
         }
     }
-
-    /// Kept although the sparkle that read it is gone: `SuggestionBar+Edges` still
-    /// asks the same question of `AIAction`, and the two must not drift apart again.
-    var isEnabled: Bool {
-        Self.anyActionCouldRun(hasTextToWorkWith: controller.hasTextToWorkWith)
-    }
 }

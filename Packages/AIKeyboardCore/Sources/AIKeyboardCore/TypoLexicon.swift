@@ -74,10 +74,16 @@ enum TypoLexicon {
 
     struct Correction {
         let word: String
-        /// Position in the frequency list, 0 commonest.
-        let rank: Int
         /// `TypoChannel.cost` for this word against the keystrokes asked about.
         let cost: Int
+        /// How many of `TypoChannel`'s edits it took to reach this word —
+        /// `TypoChannel.EditCost.count`, carried alongside `cost` rather than
+        /// folded into it. **The sort below does not read this field.** It
+        /// stays cost-only, `cost + 7 * log2(rank)`, exactly as it was before
+        /// `count` existed; a caller further up the cascade (`commitReason`'s
+        /// frequency guard) is what reads `editCount` to tell two explainable
+        /// slips apart from one wild guess landing at a similar price.
+        let editCount: Int
     }
 
     /// Rank among the commonest `depth` forms; `nil` for anything rarer or
@@ -152,7 +158,7 @@ enum TypoLexicon {
         let typedChars = Array(word)
         let typedMask = mask(of: typedFolded, using: block.letterBits)
 
-        var survivors: [(index: Int, cost: Int)] = []
+        var survivors: [(index: Int, cost: Int, count: Int)] = []
         survivors.reserveCapacity(limit)
         for index in block.originals.indices {
             let start = Int(block.offsets[index])
@@ -180,10 +186,10 @@ enum TypoLexicon {
 
             let candidateChars = characters(at: index, in: block)
             guard
-                let cost = TypoChannel.cost(
+                let priced = TypoChannel.cost(
                     typed: typedChars, candidate: candidateChars, language: language, budget: budget)
             else { continue }
-            survivors.append((index, cost))
+            survivors.append((index, priced.cost, priced.count))
         }
 
         // Lower wins, and the two terms are the two halves of a noisy channel:
@@ -220,7 +226,7 @@ enum TypoLexicon {
         }
 
         return survivors.prefix(limit).map {
-            Correction(word: block.originals[$0.index], rank: $0.index, cost: $0.cost)
+            Correction(word: block.originals[$0.index], cost: $0.cost, editCount: $0.count)
         }
     }
 

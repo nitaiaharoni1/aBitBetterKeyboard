@@ -29,6 +29,12 @@ for `לחשוב`, and `מהעבדה` → `מהעובדה` for `מהעבודה`; 
 ambiguous, one explainable edit in either direction. `Bar/typing/` charges two
 more entries for the same floor, which is recorded there.
 
+**Updated 2026-08-25: `confident` reads 88 / 16 / 3, WRONG unchanged.** The
+motor-slip split below rescued exactly the three rows it was measured to rescue
+— `דוגמטןת` → `דוגמאות`, `thsnkd` → `thanks`, `wprkinh` → `working`, all three
+previously held — and moved nothing else: `full` is still 90 / 7 / 10, controls
+still 21/21 both sides, two runs per side.
+
 It is the same invigilator as the frozen exam and the sweep next door: `expand.py`
 turns `typos.json` into `Bar/typing/corpus.json`'s own shape, `harness/run.sh`
 runs the shipping `SuggestionEngine` over it on the iOS Simulator, and `judge.py`
@@ -96,6 +102,25 @@ Everything above the floor of 86 is 93% right or better and everything below it
 45% or worse, which is what makes 86 a line rather than a guess. **Re-run this
 before moving any of those constants**, and note that it calls `commitReason`
 directly, so it reports what every rule claims regardless of the level in force.
+
+**The `frequency (>60)` row split again on 2026-08-25, once `TypoChannel.cost`
+started returning an edit count alongside its cost.** `reasons.sh`'s output
+grew two columns, `channelCost` and `editCount` — extra columns, the six this
+table has always sourced from are unchanged — and grouping the `frequency (>60)`
+rows by `(cost, count)` found `(110, 2)`, the two-adjacent-slip shape
+`דוגמטןת` → `דוגמאות` was reported for, at 3 right and 0 wrong, with every
+measured wrong row in the band landing at some other `(cost, count)`:
+
+| rule | price | right | WRONG |
+|---|---|---|---|
+| `frequency` (cost 110, two edits) | 87 | 3 | 0 |
+| `frequency` (>60, everything else) | 72 | 2 | 6 |
+
+`Bar/typing/typos/probes-motor2/` is 25 rows built to widen exactly this: 8
+more `(110, 2)` rows, all right, none wrong — 11 of 11 across the two corpora —
+plus a negative control (`bedire` → `before`, both slips genuinely adjacent-key
+but summing to 95, not 110) that stays held at 72 as designed. That probe is
+disposable and not re-run automatically; its own README has the rest.
 
 `offered` is the split between two different bugs with two different fixes: **the
 ranker put it second** and **no source ever generated it**. The judge prints both

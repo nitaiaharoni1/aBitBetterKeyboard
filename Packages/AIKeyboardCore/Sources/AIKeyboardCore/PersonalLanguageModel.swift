@@ -26,7 +26,19 @@ public struct LearnedWord: Identifiable, Equatable, Sendable {
 /// beyond the file's own. A word pair is the longest thing that exists in here,
 /// which is the line drawn when this was designed: pairs are what next-word
 /// prediction needs and are short enough that the store cannot be read back as
-/// anything the user wrote.
+/// anything the user wrote. **One shape is kept verbatim rather than as a run of
+/// letters: an email address** (`PersonalLanguageModel.isVerbatimToken`), because
+/// a keyboard that cannot learn the one string its owner retypes every day is not
+/// doing this file's job. It earns no pair — the bigram half is skipped outright
+/// for it, since an address commonly follows a sentence with nothing in common
+/// with what usually follows it — and it earns no ranking at all short of
+/// `protectThreshold` sightings, not `boostThreshold`: a pasted address seen once
+/// or twice must stay out of the bar. Ordinary words also carry a short, fixed
+/// list of marks that sit *inside* a word rather than ending it — Hebrew's geresh
+/// and gershayim, the Catalan interpunct, Persian's zero-width non-joiner — the
+/// same marks `KeyboardController.staysInsideWord` already answers for a typed
+/// character, so a word reached through the accents popup (`צ׳יפס`, `col·legi`)
+/// is one this store can keep too, on both sides of a pair.
 ///
 /// **Where it is not written.** Nothing is recorded while the focused field is a
 /// credential field — the same question `SecureField` already answers for screen
@@ -39,7 +51,9 @@ public struct LearnedWord: Identifiable, Equatable, Sendable {
 /// **Counts are thresholds, not truth.** A word seen once may be a typo, and a
 /// keyboard that learned typos and then defended them would be worse than one
 /// that learned nothing. So a word has to be seen twice before it changes any
-/// ranking and three times before it is protected from autocorrect.
+/// ranking and three times before it is protected from autocorrect. A verbatim
+/// token skips the first floor: it needs the three-sighting one from the start,
+/// because there is no ranking use for an address that has been typed once.
 @MainActor
 public final class PersonalLanguageModel {
 
@@ -122,7 +136,9 @@ public final class PersonalLanguageModel {
 
     /// Every stored word, including those seen once. Personal dictionary shows
     /// these so the user can see what the store holds before Forget. Ranking
-    /// still ignores count below `boostThreshold`; `allWords` stays gated.
+    /// still ignores count below `boostThreshold` — `protectThreshold` for a
+    /// verbatim token such as an email — and every other read surface stays
+    /// gated the same way.
     public func learnedWords() -> [LearnedWord] {
         var out: [LearnedWord] = []
         for (tag, counts) in store.unigrams {
@@ -194,22 +210,27 @@ public final class PersonalLanguageModel {
     /// Exists for `GroupedDecoder`, which has to *enumerate* a vocabulary rather
     /// than ask about one word or one prefix: a grouped keystroke is a set of
     /// possible prefixes, so the decoder indexes the whole list up front. Gated on
-    /// `boostThreshold` for the same reason `words(startingWith:)` is — one
+    /// `readThreshold` for the same reason `words(startingWith:)` is — one
     /// accidental typing of a non-word should not put it in the dictionary that
-    /// decides what other keystrokes mean.
+    /// decides what other keystrokes mean, and a paste seen once or twice should
+    /// not either.
     func allWords(in language: KeyboardLanguage) -> [String] {
         guard let counts = store.unigrams[language.languageTag] else { return [] }
-        return counts.filter { $0.value >= Self.boostThreshold }
+        return counts.filter { $0.value >= Self.readThreshold(for: $0.key) }
             .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
             .map(\.key)
     }
 
     /// Learned words starting with this prefix, most typed first.
+    ///
+    /// Gated on `boostThreshold`, except a verbatim token — today only an email
+    /// — which needs `protectThreshold` sightings before it is handed back: a
+    /// paste read once or twice must not reach the bar. See `readThreshold`.
     func words(startingWith prefix: String, in language: KeyboardLanguage, limit: Int) -> [String] {
         let folded = SeedLanguageModel.fold(prefix)
         guard !folded.isEmpty, let counts = store.unigrams[language.languageTag] else { return [] }
         let matches: [(String, Int)] = counts.filter {
-            $0.key.hasPrefix(folded) && $0.key != folded && $0.value >= Self.boostThreshold
+            $0.key.hasPrefix(folded) && $0.key != folded && $0.value >= Self.readThreshold(for: $0.key)
         }
         .map { ($0.key, $0.value) }
         return Self.mostFrequent(matches, limit: limit)
@@ -232,15 +253,16 @@ public final class PersonalLanguageModel {
     ///
     /// The seed neighbour list cannot see a name this person writes. Same
     /// distance and "never shorter" rules as `SeedLanguageModel.neighbours`,
-    /// and the same two-sighting floor as completions, so one slip does not
-    /// become a dictionary.
+    /// and the same floor `words(startingWith:)` reads by — two sightings for
+    /// an ordinary word, three for a verbatim one — so one slip does not become
+    /// a dictionary and a pasted address does not become a "did you mean".
     func neighbours(of word: String, in language: KeyboardLanguage, limit: Int) -> [String] {
         let folded = SeedLanguageModel.fold(word)
         guard folded.count >= 3, let counts = store.unigrams[language.languageTag] else {
             return []
         }
         let matches: [(String, Int)] = counts.compactMap { key, count in
-            guard count >= Self.boostThreshold else { return nil }
+            guard count >= Self.readThreshold(for: key) else { return nil }
             guard SeedLanguageModel.isOneEditAway(key, of: folded) else { return nil }
             return (key, count)
         }
@@ -285,6 +307,74 @@ public final class PersonalLanguageModel {
     /// `בלי־פרופ` ambiguous with a pair the moment the maqaf folded.
     private static let pairSeparator = "\u{1F}"
 
+    // MARK: Shape
+
+    /// Marks that live inside a word rather than ending it: Hebrew's geresh and
+    /// gershayim, the Catalan interpunct and Persian's zero-width non-joiner.
+    /// `KeyboardController.staysInsideWord` answers the identical question of a
+    /// single typed character; this asks it of a whole folded word instead, so
+    /// the marks are held here as `Character`s rather than re-derived.
+    private static let wordInternalMarks: Set<Character> = ["\u{05F3}", "\u{05F4}", "\u{00B7}", "\u{200C}"]
+
+    /// A folded string made only of letters, apostrophe, hyphen or a mark that
+    /// stays inside a word. What both halves of an ordinary unigram — the word
+    /// itself and the one committed before it — have to satisfy before either
+    /// is kept.
+    private static func isLearnableOrdinaryWord(_ folded: String) -> Bool {
+        folded.allSatisfy { $0.isLetter || $0 == "'" || $0 == "-" || wordInternalMarks.contains($0) }
+    }
+
+    /// Whether a folded token has the shape of an email address — the one
+    /// string this store learns verbatim rather than as a run of letters.
+    ///
+    /// Exactly one `@`; a non-empty local part of letters, digits, `.`, `_`,
+    /// `%`, `+` or `-`; a domain of one or more dot-separated labels of letters,
+    /// digits or `-`, the last of which is at least two letters. That last
+    /// clause is what keeps a half-typed `nitai@gmail` out — there is no dot yet
+    /// for a domain to end on — and it is what a pure digit string, a price and
+    /// a URL carrying a `/` all fail on their own terms, before this is even
+    /// asked: none of them has an `@` in it at all.
+    ///
+    /// **Two things this shape allows on purpose, named so a later reader does
+    /// not mistake them for gaps.** The local part is a character-class test
+    /// with no adjacency rule, so `nitai..name@gmail.com` passes — this is the
+    /// stated set, not RFC 5321's stricter grammar, because the only job here
+    /// is telling an address apart from a price or a code, not validating one
+    /// a mail server would accept. And a domain or TLD letter is anything
+    /// `Character.isLetter` calls a letter, so `café.fr` and a Hebrew domain
+    /// both pass — an IDN reading rather than the ASCII-only, punycode-encoded
+    /// domains DNS actually carries, chosen because folding non-Latin scripts
+    /// out of a shape test would refuse an address this keyboard's own Hebrew
+    /// typists are exactly the ones who might have.
+    ///
+    /// `nonisolated` because it touches no instance state and
+    /// `SuggestionEngine.matchCaseUnlessVerbatim` needs to ask it from outside
+    /// this actor's isolation, the same reason `defaultURL` above is.
+    nonisolated static func isVerbatimToken(_ folded: String) -> Bool {
+        let halves = folded.split(separator: "@", omittingEmptySubsequences: false)
+        guard halves.count == 2 else { return false }
+        let local = halves[0]
+        let localMarks: Set<Character> = [".", "_", "%", "+", "-"]
+        guard !local.isEmpty,
+            local.allSatisfy({ $0.isLetter || $0.isNumber || localMarks.contains($0) })
+        else { return false }
+
+        let labels = halves[1].split(separator: ".", omittingEmptySubsequences: false)
+        guard labels.count >= 2,
+            labels.allSatisfy({ !$0.isEmpty && $0.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) }),
+            let tld = labels.last, tld.count >= 2, tld.allSatisfy(\.isLetter)
+        else { return false }
+        return true
+    }
+
+    /// The sighting floor a stored word needs before a read surface may hand it
+    /// back. An ordinary word crosses at `boostThreshold`; a verbatim token
+    /// needs `protectThreshold` — the same floor autocorrect already asks of it
+    /// — so a paste seen once or twice stays out of every reader alike.
+    private static func readThreshold(for folded: String) -> Int {
+        isVerbatimToken(folded) ? protectThreshold : boostThreshold
+    }
+
     // MARK: Writing
 
     /// Remember a committed word, and the pair it makes with the one before it.
@@ -307,17 +397,41 @@ public final class PersonalLanguageModel {
         guard permitted else { return false }
         adoptClearIfNeeded()
         let folded = SeedLanguageModel.fold(word)
+
+        // **The one verbatim shape this store keeps, and the only one.** An
+        // email address is not a word by the character-class rule below — it
+        // carries a digit-bearing domain and an `@` no ordinary word has — so it
+        // takes a shape check instead, and it is stored on its own terms: no
+        // ranking floor below `protectThreshold`, and no bigram half at all. A
+        // word pair exists to teach next-word prediction, and an address
+        // commonly follows a sentence with nothing in particular in common with
+        // what usually follows it, so writing that pair would buy nothing and
+        // would be one more fragment of what the user typed sitting in the file.
+        if Self.isVerbatimToken(folded) {
+            store.unigrams[language.languageTag, default: [:]][folded, default: 0] += 1
+            prune()
+            pendingWrites += 1
+            if pendingWrites >= Self.flushInterval { save() }
+            return true
+        }
+
         // Two letters is the floor. Single characters carry no signal and every
-        // stray keystroke would land in the store; anything with a digit or a
-        // symbol in it is a code, a price or an address and is exactly the kind of
-        // thing this must not keep.
-        guard folded.count >= 2, folded.allSatisfy({ $0.isLetter || $0 == "'" || $0 == "-" })
+        // stray keystroke would land in the store. Letters, apostrophe and
+        // hyphen, plus the marks a word can carry *inside* it without ending —
+        // Hebrew's geresh and gershayim (`צ׳יפס`, `צה״ל`), the Catalan interpunct
+        // (`col·legi`) and Persian's zero-width non-joiner — the same marks
+        // `KeyboardController.staysInsideWord` already answers for, because a
+        // word reached through the accents popup is still a word. Anything else
+        // — a digit outside the email shape above, a slash, most other symbols —
+        // is a code, a price or a URL, and is exactly the kind of thing this
+        // must not keep.
+        guard folded.count >= 2, Self.isLearnableOrdinaryWord(folded)
         else { return false }
 
         store.unigrams[language.languageTag, default: [:]][folded, default: 0] += 1
         if let previous {
             let before = SeedLanguageModel.fold(previous)
-            if !before.isEmpty, before.allSatisfy({ $0.isLetter || $0 == "'" || $0 == "-" }) {
+            if !before.isEmpty, Self.isLearnableOrdinaryWord(before) {
                 let key = before + Self.pairSeparator + folded
                 store.bigrams[language.languageTag, default: [:]][key, default: 0] += 1
             }

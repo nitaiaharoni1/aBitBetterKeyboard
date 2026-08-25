@@ -742,10 +742,11 @@ final class ContextAwareSuggestionTests: XCTestCase {
     /// Hebrew answers moved cannot make this pass or fail for the wrong reason.
     ///
     /// Each row rejects a different cheaper rule: a gate that only refused stacked
-    /// clitics loses `מהעבודה`; one that only refused the split checker keeps
-    /// `להתרופה`; one that counted letters added has nothing to say about either.
-    /// The last row is the reason nothing outside Hebrew changed — `cliticDepth`
-    /// is zero everywhere else, so the whole rule is skipped.
+    /// clitics loses `מהעבודה`; one that counted letters added has nothing to say
+    /// about either. The last row is the reason nothing outside Hebrew changed —
+    /// `cliticDepth` is zero everywhere else, so the whole rule is skipped, which
+    /// is also why an unsplit `.checker` completion (no `cliticDepth` argument,
+    /// hence zero) is untouched — the gate no longer asks about source at all.
     func testTheCommitGateReadsTheReadingAndNotTheLength() {
         func trusts(
             _ text: String, _ source: SuggestionEngine.Source, depth: Int, typed: String
@@ -765,10 +766,6 @@ final class ContextAwareSuggestionTests: XCTestCase {
             trusts("להתרופה", .seed, depth: 2, typed: "להתר"),
             "two of the four typed letters were spent on the reading, so the noun "
                 + "rests on the other two")
-        XCTAssertFalse(
-            trusts("להתראיין", .checker, depth: 1, typed: "להתרא"),
-            "the checker is only asked about a split stem when the seed had nothing "
-                + "to say about that reading; it may be offered, never committed")
         XCTAssertTrue(
             SuggestionEngine.commitTrustsReading(
                 SuggestionEngine.Candidate(text: "hello", language: .english, source: .checker),
@@ -1685,10 +1682,27 @@ final class ContextAwareSuggestionTests: XCTestCase {
     /// names, the question, the reason the current sentence exists. The
     /// keyboard can only see what the host hands over; that *is* the full
     /// typed input, and the refiner has to send it.
-    func testRefinementKeepsTheWholeTypedField() {
+    ///
+    /// **`PredictiveRefiner.tail(of:)` used to be the thing this pinned, and it was
+    /// an identity function with one production call and one test asserting it
+    /// returned its own argument — deleted rather than kept as a shell.** What is
+    /// worth rejecting is not that some function returns its input unchanged, it is
+    /// that `ask(_:)` hands the predictor the *whole* context rather than a chopped
+    /// one, so this asks the predictor itself what it received.
+    func testRefinementSendsTheWholePausedContextToThePredictor() {
         let words = (1...50).map { "w\($0)" }.joined(separator: " ")
+        let capture = CapturingPredictor()
+        let arrived = expectation(description: "the predictor was asked")
+        let refiner = PredictiveRefiner(onDevice: capture) { _, _ in arrived.fulfill() }
+        let request = PredictiveRefiner.Request(
+            textBefore: words, wordInProgress: "", language: .english, screenContext: nil,
+            permitted: true)
+
+        refiner.refine(request)
+        wait(for: [arrived], timeout: 2)
+
         XCTAssertEqual(
-            PredictiveRefiner.tail(of: words), words,
+            capture.textReceived, words,
             "a 40-word tail would have dropped w1 through w10")
     }
 
@@ -1761,4 +1775,17 @@ private struct SpeaksOnly: TextPrediction {
     func continuations(
         after text: String, replyingTo context: ScreenContext?, language: KeyboardLanguage
     ) async throws -> [String] { ["one"] }
+}
+
+/// Records the `text` it was actually asked about, so a test can check what
+/// `PredictiveRefiner.ask(_:)` sends rather than assume it.
+private final class CapturingPredictor: TextPrediction, @unchecked Sendable {
+    private(set) var textReceived: String?
+    func canPredict(in language: KeyboardLanguage) -> Bool { true }
+    func continuations(
+        after text: String, replyingTo context: ScreenContext?, language: KeyboardLanguage
+    ) async throws -> [String] {
+        textReceived = text
+        return ["one"]
+    }
 }
