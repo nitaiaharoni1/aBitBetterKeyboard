@@ -109,6 +109,7 @@ extension KeyboardController {
             insertSpace()
         case .ret:
             Feedback.keyPress()
+            retirePendingAutocorrectUndo(.acceptLearning)
             // Before the newline: `previousWords` reads only the last line, so
             // learning after `\n` would see an empty line and skip the word
             // Return just finished. Chat Send is often this key.
@@ -118,7 +119,6 @@ extension KeyboardController {
             // The line is finished, so any word on it was finished with it — the
             // same close-out `insertSpace` does. See `isCorrectingWordByHand`.
             deletedWordPrefix = nil
-            pendingAutocorrectUndo = nil
             armShiftAtBoundary()
             refreshSuggestions()
         case .dictation:
@@ -181,13 +181,13 @@ extension KeyboardController {
         case .cursorLeft:
             Feedback.keyPress()
             deletedWordPrefix = nil
-            pendingAutocorrectUndo = nil
+            retirePendingAutocorrectUndo(.acceptLearning)
             target?.adjustTextPosition(byCharacterOffset: -1)
             refreshSuggestions()
         case .cursorRight:
             Feedback.keyPress()
             deletedWordPrefix = nil
-            pendingAutocorrectUndo = nil
+            retirePendingAutocorrectUndo(.acceptLearning)
             target?.adjustTextPosition(byCharacterOffset: 1)
             refreshSuggestions()
         case .deleteForward:
@@ -357,7 +357,7 @@ extension KeyboardController {
         // no longer true of one that finds its own span
         // (`RevertibleEdit.rebased(onto:)`), so the retirement moved to
         // `expireRevertibleEditIfUnusable`, which `refreshSuggestions` asks below.
-        pendingAutocorrectUndo = nil
+        retirePendingAutocorrectUndo(.acceptLearning)
         // **A cap never types a line break.** The only newline any cap carries is
         // the one a banded grouped cap uses to say where its second row of letters
         // starts, and `.ret` is the key that inserts a line. Reachable only in the
@@ -437,6 +437,7 @@ extension KeyboardController {
 
     func insertSpace() {
         Feedback.keyPress()
+        retirePendingAutocorrectUndo(.acceptLearning)
         // **The way back survives a space**, which is most of what NIT-154 asked
         // for: a wrong word is noticed in the sentence it landed in, and a space
         // is what finishes the word after it. `refreshSuggestions` at the end of
@@ -462,7 +463,6 @@ extension KeyboardController {
             lastSpaceTapAt = nil
             armShiftAtBoundary()
             _ = consumeGroupedSkipLearn()
-            pendingAutocorrectUndo = nil
             refreshSuggestions()
             return
         }
@@ -493,7 +493,10 @@ extension KeyboardController {
         // snapshot that was wrong from the moment it was taken. See the note on
         // `pendingAutocorrectUndo`'s own declaration.
         let contextBeforeSwap = contextBefore
-        var swapped: (original: String, replacement: String)?
+        let documentIdentifier = target?.documentIdentifier
+        let permitted = SecureField.permitsRead(
+            secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
+        var swapped: (original: String, replacement: String, learnedCommit: LearnedCommit)?
         if store.storedAutocorrectLevel != .off,
             !isCorrectingWordByHand,
             selection == nil,
@@ -502,14 +505,37 @@ extension KeyboardController {
             candidate.text.lowercased() != original.lowercased(),
             !undoneAutocorrectSpellings.contains(SeedLanguageModel.fold(original))
         {
+            let replacement = Self.restoringEdgeMarks(of: original, to: candidate.text)
+            let precedingContext = String(contextBeforeSwap.dropLast(original.count))
+            let previous = SuggestionEngine.previousWords(in: precedingContext).last
+            let wordLanguage =
+                SuggestionEngine.dominantLanguage(
+                    in: replacement,
+                    among: [language] + store.storedEnabledLanguages.filter { $0 != language })
+                ?? language
             replaceCurrentWord(with: candidate.text)
-            swapped = (original, Self.restoringEdgeMarks(of: original, to: candidate.text))
+            swapped = (
+                original,
+                replacement,
+                LearnedCommit(
+                    word: SuggestionEngine.wordCore(replacement), previous: previous,
+                    language: wordLanguage,
+                    permitted: permitted)
+            )
         }
 
         // After any correction, so what gets remembered is the word that ended up
         // in the field rather than the keystrokes that were replaced. A grouped
         // guess the user did not pin is not a word they typed.
-        if !consumeGroupedSkipLearn() { learnWordJustCommitted() }
+        let skipLearning = consumeGroupedSkipLearn()
+        if swapped == nil, !skipLearning {
+            learnWordJustCommitted()
+        } else if swapped != nil {
+            // `openWord` still names the replacement after the swap. The pending
+            // claim owns that one possible write now, so Send or a later refresh
+            // must not find a second route to the same count.
+            openWord = ""
+        }
         target?.insertText(" ")
         lastLearnedFolded = nil
         // The repair is over: this word is committed and the next one is nobody's
@@ -522,11 +548,15 @@ extension KeyboardController {
         // before the swap, plus the replacement, plus that space — arithmetic on
         // a string this function already holds, not a fact that needs asking
         // `target` for a second time.
-        pendingAutocorrectUndo = swapped.map {
-            (
-                original: $0.original, replacement: $0.replacement,
-                contextAfterSwap: String(contextBeforeSwap.dropLast(original.count)) + $0.replacement
-                    + " "
+        if let swapped {
+            pendingAutocorrectUndo = PendingAutocorrectUndo(
+                original: swapped.original, replacement: swapped.replacement,
+                contextAfterSwap: String(contextBeforeSwap.dropLast(original.count))
+                    + swapped.replacement
+                    + " ",
+                documentIdentifier: documentIdentifier,
+                learnedCommit: swapped.learnedCommit,
+                shouldLearn: !skipLearning
             )
         }
         // The one case an ordinary space arms shift: a `.words` field
@@ -549,6 +579,10 @@ extension KeyboardController {
         // press then decodes against a code that no longer matches the field.
         if deleteGroupedStroke() { return }
         if undoAutocorrectIfPending() { return }
+        // Any other delete has moved on from the one exact backspace that can
+        // restore the original. This includes deleting a selection that starts
+        // at the same context boundary as the pending claim.
+        retirePendingAutocorrectUndo(.acceptLearning)
         target?.deleteBackward()
         // **Read after the delete, because the word that matters is the one now
         // standing in the field.** This is the whole record of "the user is
@@ -575,15 +609,20 @@ extension KeyboardController {
     /// never touched.
     @discardableResult
     func undoAutocorrectIfPending() -> Bool {
-        guard let pending = pendingAutocorrectUndo,
+        guard let pending = pendingAutocorrectUndo else { return false }
+        guard pending.documentIdentifier == target?.documentIdentifier else {
+            retirePendingAutocorrectUndo(.acceptLearning)
+            return false
+        }
+        guard
             !pending.replacement.isEmpty,
             selection == nil,
             contextBefore == pending.contextAfterSwap
         else { return false }
+        retirePendingAutocorrectUndo(.discardLearningForUndo)
         target?.deleteBackward()
         replaceCurrentWord(with: pending.original)
         undoneAutocorrectSpellings.insert(SeedLanguageModel.fold(pending.original))
-        pendingAutocorrectUndo = nil
         deletedWordPrefix = pending.original
         refreshSuggestions()
         noteTypedInput()
@@ -597,9 +636,39 @@ extension KeyboardController {
     /// captured then.
     func expirePendingAutocorrectUndoIfCaretMoved() {
         guard let pending = pendingAutocorrectUndo else { return }
-        if pending.replacement.isEmpty || contextBefore != pending.contextAfterSwap {
-            pendingAutocorrectUndo = nil
+        guard pending.documentIdentifier == target?.documentIdentifier else {
+            retirePendingAutocorrectUndo(.acceptLearning)
+            return
         }
+        if pending.replacement.isEmpty {
+            retirePendingAutocorrectUndo(.acceptLearning)
+        } else if contextBefore != pending.contextAfterSwap {
+            retirePendingAutocorrectUndo(.acceptLearning)
+        }
+    }
+
+    func retirePendingAutocorrectUndoIfDocumentChanged() {
+        guard let pending = pendingAutocorrectUndo,
+            pending.documentIdentifier != target?.documentIdentifier
+        else { return }
+        retirePendingAutocorrectUndo(.acceptLearning)
+    }
+
+    func retirePendingAutocorrectUndo(_ retirement: PendingAutocorrectRetirement) {
+        guard let pending = pendingAutocorrectUndo else { return }
+        pendingAutocorrectUndo = nil
+        switch retirement {
+        case .discardLearningForUndo:
+            return
+        case .acceptLearning:
+            break
+        }
+        guard pending.shouldLearn else { return }
+        recordCommittedWord(pending.learnedCommit)
+        // The replacement's own space already crossed its word boundary. Keep
+        // the duplicate guard from leaking into the next word, including
+        // repeated text such as "hello hello".
+        lastLearnedFolded = nil
     }
 
     /// Held backspace. Each tick removes a word, including the spaces that

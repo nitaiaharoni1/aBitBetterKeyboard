@@ -47,6 +47,16 @@ extension SuggestionEngine {
         contextLanguage: KeyboardLanguage,
         personal: PersonalLanguageModel
     ) -> [Suggestion] {
+        nextWordTrace(context: context, contextLanguage: contextLanguage, personal: personal)
+            .ranked
+    }
+
+    @MainActor
+    static func nextWordTrace(
+        context: String,
+        contextLanguage: KeyboardLanguage,
+        personal: PersonalLanguageModel
+    ) -> (generated: [Candidate], ranked: [Suggestion]) {
         // Empty when the sentence ended: a full stop closes the thought, and
         // predicting `much` after `Thank you so much.` would read across a
         // boundary the writer just drew. The openers answer instead, which is
@@ -80,8 +90,10 @@ extension SuggestionEngine {
                         text: $0.element, language: contextLanguage, source: .document,
                         ordinal: $0.offset)
                 }
+            let seedFollowers = SeedLanguageModel.followers(
+                mentionedIn: sentence, in: contextLanguage)
             out +=
-                SeedLanguageModel.followers(mentionedIn: sentence, in: contextLanguage)
+                seedFollowers
                 .prefix(3)
                 .enumerated()
                 .map {
@@ -89,6 +101,16 @@ extension SuggestionEngine {
                         text: $0.element, language: contextLanguage, source: .seed,
                         ordinal: $0.offset)
                 }
+            if contextLanguage.script == .hebrew, seedFollowers.isEmpty {
+                out +=
+                    ConversationalHebrewModel.followers(after: sentence, limit: 3)
+                    .enumerated()
+                    .map {
+                        Candidate(
+                            text: $0.element, language: .hebrew, source: .conversational,
+                            ordinal: $0.offset)
+                    }
+            }
         }
         // Only when nothing above answered. An opener after a real word is not a
         // prediction, it is the bar giving up in a way that looks like an answer —
@@ -109,7 +131,7 @@ extension SuggestionEngine {
         stampPersonalCounts(&out, personal: personal)
         // Exactly what the bar draws, not one more: there is no typed word here
         // for `SuggestionBar.centeredSlots` to filter out.
-        return rank(out, limit: barSlots).map { candidate in
+        let ranked = rank(out, limit: barSlots).map { candidate -> Suggestion in
             guard atStart else {
                 return Suggestion(text: candidate.text, language: candidate.language)
             }
@@ -118,5 +140,6 @@ extension SuggestionEngine {
                     + candidate.text.dropFirst(),
                 language: candidate.language)
         }
+        return (out, ranked)
     }
 }

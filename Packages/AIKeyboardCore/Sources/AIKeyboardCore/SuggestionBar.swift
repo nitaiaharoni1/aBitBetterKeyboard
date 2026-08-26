@@ -292,36 +292,7 @@ public struct SuggestionBar: View {
     ///
     /// An empty prefix is next-word, so nothing is filtered.
     static func centeredSlots(_ items: [Suggestion], typed: String = "") -> [Suggestion?] {
-        var slots: [Suggestion?] = Array(repeating: nil, count: SuggestionEngine.barSlots)
-        let offers: [Suggestion]
-        if typed.isEmpty {
-            offers = items
-        } else {
-            let key = SuggestionEngine.comparable(typed)
-            // "" is a prefix of every word, which would make every offer a
-            // continuation as well as making equality meaningless — the same
-            // trap `comparable`'s other callers already guard. A
-            // punctuation-only echo is matched by the raw keystrokes instead.
-            let isEcho: (Suggestion) -> Bool
-            let continuesTyped: (Suggestion) -> Bool
-            if key.isEmpty {
-                isEcho = { $0.text == typed }
-                continuesTyped = { $0.text.hasPrefix(typed) }
-            } else {
-                isEcho = { SuggestionEngine.comparable($0.text) == key }
-                continuesTyped = { SuggestionEngine.comparable($0.text).hasPrefix(key) }
-            }
-            let offered = items.filter { !isEcho($0) }
-            let echoKeepsItsSlot = offered.isEmpty || offered.contains(where: continuesTyped)
-            offers = items.filter { !isEcho($0) || ($0.isDefault && echoKeepsItsSlot) }
-        }
-        guard !offers.isEmpty else { return slots }
-        let defaultIndex = offers.firstIndex(where: \.isDefault) ?? 0
-        slots[1] = offers[defaultIndex]
-        let others = offers.indices.filter { $0 != defaultIndex }.map { offers[$0] }
-        if others.count > 0 { slots[0] = others[0] }
-        if others.count > 1 { slots[2] = others[1] }
-        return slots
+        SuggestionSlotOrder.centeredSlots(items, typed: typed)
     }
 
     /// The three candidates are the bar's primary content, so they get real

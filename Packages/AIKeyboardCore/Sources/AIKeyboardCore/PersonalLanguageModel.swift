@@ -85,6 +85,10 @@ public final class PersonalLanguageModel {
     }
 
     private var store = Store()
+    /// Rebuilt from the Hebrew half of `store` on first use after a mutation.
+    /// Nil means "not built", not "empty".
+    private var hebrewIndex: HebrewPersonalIndex?
+    var hasCachedHebrewIndex: Bool { hebrewIndex != nil }
     private let url: URL?
     private var pendingWrites = 0
     private var loadedGeneration = 0
@@ -132,6 +136,16 @@ public final class PersonalLanguageModel {
     /// How often this user has committed this word. Zero for one they never have.
     public func count(of word: String, in language: KeyboardLanguage) -> Int {
         store.unigrams[language.languageTag]?[SeedLanguageModel.fold(word)] ?? 0
+    }
+
+    /// Exact count everywhere except Hebrew, where attested clitic variants of a
+    /// vouched stem add their counts together. Protection, Forget, and the
+    /// dictionary list still read `count(of:)`.
+    public func rankingCount(of word: String, in language: KeyboardLanguage) -> Int {
+        let folded = SeedLanguageModel.fold(word)
+        guard !folded.isEmpty else { return 0 }
+        guard language.script == .hebrew else { return count(of: folded, in: language) }
+        return currentHebrewIndex().rankingCount(of: folded)
     }
 
     /// Every stored word, including those seen once. Personal dictionary shows
@@ -186,12 +200,12 @@ public final class PersonalLanguageModel {
         guard let data = try? Data(contentsOf: url),
             let decoded = try? JSONDecoder().decode(Store.self, from: data)
         else {
-            store = Store()
+            replaceStore(with: Store())
             pendingWrites = 0
             loadedStamp = nil
             return
         }
-        store = decoded
+        replaceStore(with: decoded)
         loadedStamp = stamp
     }
 
@@ -272,7 +286,12 @@ public final class PersonalLanguageModel {
     /// Words this user tends to write after this one, most often first.
     func followers(after word: String, in language: KeyboardLanguage, limit: Int) -> [String] {
         let key = SeedLanguageModel.fold(word)
-        guard !key.isEmpty, let counts = store.bigrams[language.languageTag] else { return [] }
+        guard !key.isEmpty else { return [] }
+        if language.script == .hebrew {
+            return currentHebrewIndex().followers(
+                after: key, limit: limit, minimumCount: Self.boostThreshold)
+        }
+        guard let counts = store.bigrams[language.languageTag] else { return [] }
         let head = key + Self.pairSeparator
         let matches: [(String, Int)] = counts.filter {
             $0.key.hasPrefix(head) && $0.value >= Self.boostThreshold
@@ -306,6 +325,30 @@ public final class PersonalLanguageModel {
     /// because `record` accepts a hyphen inside a word and a space would make
     /// `בלי־פרופ` ambiguous with a pair the moment the maqaf folded.
     private static let pairSeparator = "\u{1F}"
+
+    private func currentHebrewIndex() -> HebrewPersonalIndex {
+        if let hebrewIndex { return hebrewIndex }
+        let tag = KeyboardLanguage.hebrew.languageTag
+        let built = HebrewPersonalIndex(
+            unigrams: store.unigrams[tag] ?? [:],
+            bigrams: store.bigrams[tag] ?? [:],
+            pairSeparator: Character(Self.pairSeparator))
+        hebrewIndex = built
+        return built
+    }
+
+    private func invalidateHebrewIndex() {
+        hebrewIndex = nil
+    }
+
+    private func replaceStore(with replacement: Store) {
+        let tag = KeyboardLanguage.hebrew.languageTag
+        let hebrewChanged =
+            store.unigrams[tag] != replacement.unigrams[tag]
+            || store.bigrams[tag] != replacement.bigrams[tag]
+        store = replacement
+        if hebrewChanged { invalidateHebrewIndex() }
+    }
 
     // MARK: Shape
 
@@ -409,7 +452,8 @@ public final class PersonalLanguageModel {
         // would be one more fragment of what the user typed sitting in the file.
         if Self.isVerbatimToken(folded) {
             store.unigrams[language.languageTag, default: [:]][folded, default: 0] += 1
-            prune()
+            let prunedHebrew = prune()
+            if language.script == .hebrew || prunedHebrew { invalidateHebrewIndex() }
             pendingWrites += 1
             if pendingWrites >= Self.flushInterval { save() }
             return true
@@ -437,7 +481,8 @@ public final class PersonalLanguageModel {
             }
         }
 
-        prune()
+        let prunedHebrew = prune()
+        if language.script == .hebrew || prunedHebrew { invalidateHebrewIndex() }
         pendingWrites += 1
         if pendingWrites >= Self.flushInterval { save() }
         return true
@@ -450,13 +495,18 @@ public final class PersonalLanguageModel {
     /// since fades out over a few prunes, and one they type every day survives
     /// every prune. Dropping the singletons is what actually reclaims the room —
     /// they are the long tail of typos and one-off names.
-    private func prune() {
+    private func prune() -> Bool {
+        let hebrewTag = KeyboardLanguage.hebrew.languageTag
+        var hebrewChanged = false
         for (tag, counts) in store.unigrams where counts.count > Self.unigramCap {
             store.unigrams[tag] = halved(counts)
+            if tag == hebrewTag { hebrewChanged = true }
         }
         for (tag, counts) in store.bigrams where counts.count > Self.bigramCap {
             store.bigrams[tag] = halved(counts)
+            if tag == hebrewTag { hebrewChanged = true }
         }
+        return hebrewChanged
     }
 
     private func halved(_ counts: [String: Int]) -> [String: Int] {
@@ -497,7 +547,7 @@ public final class PersonalLanguageModel {
         guard let url, let data = try? Data(contentsOf: url),
             let decoded = try? JSONDecoder().decode(Store.self, from: data)
         else { return }
-        store = decoded
+        replaceStore(with: decoded)
         loadedStamp = Self.stamp(of: url)
     }
 
@@ -519,22 +569,33 @@ public final class PersonalLanguageModel {
     public func forget(_ word: String, in language: KeyboardLanguage) {
         let folded = SeedLanguageModel.fold(word)
         guard !folded.isEmpty else { return }
-        store.unigrams[language.languageTag]?[folded] = nil
-        if store.unigrams[language.languageTag]?.isEmpty == true {
-            store.unigrams[language.languageTag] = nil
+        let tag = language.languageTag
+        let oldHebrewUnigrams =
+            language.script == .hebrew ? store.unigrams[tag] : nil
+        let oldHebrewBigrams =
+            language.script == .hebrew ? store.bigrams[tag] : nil
+        store.unigrams[tag]?[folded] = nil
+        if store.unigrams[tag]?.isEmpty == true {
+            store.unigrams[tag] = nil
         }
-        if var pairs = store.bigrams[language.languageTag] {
+        if var pairs = store.bigrams[tag] {
             let head = folded + Self.pairSeparator
             let tail = Self.pairSeparator + folded
             pairs = pairs.filter { !$0.key.hasPrefix(head) && !$0.key.hasSuffix(tail) }
-            store.bigrams[language.languageTag] = pairs.isEmpty ? nil : pairs
+            store.bigrams[tag] = pairs.isEmpty ? nil : pairs
+        }
+        if language.script == .hebrew,
+            oldHebrewUnigrams != store.unigrams[tag]
+                || oldHebrewBigrams != store.bigrams[tag]
+        {
+            invalidateHebrewIndex()
         }
         save()
     }
 
     /// Forget everything. Personal dictionary's Forget.
     public func clear() {
-        store = Store()
+        replaceStore(with: Store())
         pendingWrites = 0
         if let url { try? FileManager.default.removeItem(at: url) }
         // The file this stamp described is gone. Leaving it behind would let a
@@ -568,7 +629,7 @@ public final class PersonalLanguageModel {
     private func adoptClearIfNeeded() {
         let current = Self.generation
         guard current != loadedGeneration else { return }
-        store = Store()
+        replaceStore(with: Store())
         pendingWrites = 0
         loadedGeneration = current
     }

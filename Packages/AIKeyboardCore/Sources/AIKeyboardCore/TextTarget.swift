@@ -9,6 +9,13 @@ import UIKit
 /// has been installed.
 @MainActor
 public protocol TextTarget: AnyObject {
+    /// Stable identity for the document currently behind this target.
+    ///
+    /// Optional because older test and companion conformers cannot identify a
+    /// host document. The system proxy does, and that boundary is what prevents
+    /// an old undo from editing a new field after iOS reuses the keyboard with
+    /// identical text.
+    var documentIdentifier: UUID? { get }
     var documentContextBeforeInput: String? { get }
     var documentContextAfterInput: String? { get }
     var selectedText: String? { get }
@@ -72,6 +79,8 @@ public protocol TextTarget: AnyObject {
 }
 
 extension TextTarget {
+    public var documentIdentifier: UUID? { nil }
+
     /// The default for every conformer that predates this trait: the same nil
     /// a silent host answers for `keyboardType`.
     public var autocapitalizationType: UITextAutocapitalizationType? { nil }
@@ -117,6 +126,7 @@ public final class ProxyTextTarget: TextTarget {
         self.resolve = resolving
     }
 
+    public var documentIdentifier: UUID? { proxy?.documentIdentifier }
     public var documentContextBeforeInput: String? { proxy?.documentContextBeforeInput }
     public var documentContextAfterInput: String? { proxy?.documentContextAfterInput }
     public var selectedText: String? { proxy?.selectedText }
@@ -153,9 +163,11 @@ public final class ProxyTextTarget: TextTarget {
 @MainActor
 public final class MockTextTarget: TextTarget, ObservableObject {
     @Published public var text: String
+    public let documentIdentifier: UUID?
 
-    public init(text: String = "") {
+    public init(text: String = "", documentIdentifier: UUID? = UUID()) {
         self.text = text
+        self.documentIdentifier = documentIdentifier
     }
 
     public var documentContextBeforeInput: String? { text }

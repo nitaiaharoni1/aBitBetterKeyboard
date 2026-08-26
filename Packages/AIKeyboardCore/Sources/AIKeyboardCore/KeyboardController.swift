@@ -484,7 +484,28 @@ public final class KeyboardController: ObservableObject {
     /// locally, or reopen the regression `PendingAutocorrectClaimTests
     /// .testTheUndoSnapshotSurvivesAProxyThatEchoesStaleContextRightAfterTheWrite`
     /// exists to close.
-    var pendingAutocorrectUndo: (original: String, replacement: String, contextAfterSwap: String)?
+    struct LearnedCommit {
+        let word: String
+        let previous: String?
+        let language: KeyboardLanguage
+        let permitted: Bool
+    }
+
+    struct PendingAutocorrectUndo {
+        let original: String
+        let replacement: String
+        let contextAfterSwap: String
+        let documentIdentifier: UUID?
+        let learnedCommit: LearnedCommit
+        let shouldLearn: Bool
+    }
+
+    enum PendingAutocorrectRetirement {
+        case acceptLearning
+        case discardLearningForUndo
+    }
+
+    var pendingAutocorrectUndo: PendingAutocorrectUndo?
 
     /// Spellings whose automatic swap the user already undid this session.
     /// Space must not put the same correction back. Folded, no timestamps.
@@ -1099,14 +1120,10 @@ public final class KeyboardController: ObservableObject {
         // a character from the last app into this one. See
         // `discardPendingCharacter`.
         discardPendingCharacter()
-        // **The claim it protects belongs to the field it was made in.** The
-        // exact-context match `undoAutocorrectIfPending` now requires already
-        // refuses a coincidence inside one document; it says nothing about two
-        // different documents, and iOS reusing this instance across fields and
-        // across host apps means the very next backspace could otherwise land in
-        // one that merely ends the same way. `openWord` deliberately does not
-        // get the same blanket clear here — see `openWordPermitted`.
-        pendingAutocorrectUndo = nil
+        // The undo belongs to the old field, but its captured learning does not.
+        // Retire the undo before reading the new document and accept the complete
+        // observation captured when the replacement landed.
+        retirePendingAutocorrectUndo(.acceptLearning)
         // **The memo's other invalidator, and it is not the field.**
         // `KeyboardViewController.viewWillAppear` calls
         // `PersonalLanguageModel.shared.reload()` a few lines before this — Forget
@@ -1192,6 +1209,7 @@ public final class KeyboardController: ObservableObject {
         GroupedLexiconResource.purge()
         TypoLexicon.purge()
         MissingSpaces.purge()
+        ConversationalHebrewModel.purge()
     }
 
     /// Builds the same caches ahead of the first keystroke, off the main thread.
@@ -1226,6 +1244,9 @@ public final class KeyboardController: ObservableObject {
     /// all of it back.
     public static func warmRebuildableCaches(for languages: [KeyboardLanguage]) {
         Task.detached(priority: .userInitiated) {
+            if languages.contains(where: { $0.script == .hebrew }) {
+                ConversationalHebrewModel.warm()
+            }
             for language in languages {
                 // Any lookup builds the block; the word itself is never read.
                 _ = TypoLexicon.isWord("a", in: language)

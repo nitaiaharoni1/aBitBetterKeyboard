@@ -80,6 +80,10 @@ device="${SIMULATOR_DEVICE:-booted}"
 # switched off, which looks like a clean run rather than like a broken one.
 LANGUAGE_MODEL_JSON="$core/Resources/LanguageModel.json" \
     SIMCTL_CHILD_LANGUAGE_MODEL_JSON="$core/Resources/LanguageModel.json" \
+    CONVERSATIONAL_HEBREW_MODEL="$core/Resources/ConversationalHebrew.akn1" \
+    SIMCTL_CHILD_CONVERSATIONAL_HEBREW_MODEL="$core/Resources/ConversationalHebrew.akn1" \
+    DISABLE_CONVERSATIONAL_HEBREW="${DISABLE_CONVERSATIONAL_HEBREW:-}" \
+    SIMCTL_CHILD_DISABLE_CONVERSATIONAL_HEBREW="${DISABLE_CONVERSATIONAL_HEBREW:-}" \
     GROUPED_LEXICON_DIR="$core/Resources" \
     SIMCTL_CHILD_GROUPED_LEXICON_DIR="$core/Resources" \
     AUTOCORRECT_LEVEL="$level" \

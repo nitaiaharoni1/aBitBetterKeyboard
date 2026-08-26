@@ -96,6 +96,9 @@ extension SuggestionEngine {
         case frequency = 5
         /// `UITextChecker.completions` — a longer word starting with what was typed.
         case checker = 10
+        /// A corpus-observed Hebrew surface form. It outranks Apple's unranked
+        /// completion order and loses to every hand-ranked seed candidate.
+        case conversational = 15
         /// A word list this repo wrote for Latin words inside Hebrew sentences.
         ///
         /// **Above both the checker and the seed list, and that is the entire
@@ -202,6 +205,10 @@ extension SuggestionEngine {
         if let rank = SeedLanguageModel.rank(of: candidate.text, in: candidate.language) {
             // Rank 0 is worth the full 300 and it decays; the exact curve does not
             // matter, only that common beats rare inside a tier.
+            total += 300 / (1 + Double(rank) / 60)
+        } else if candidate.source == .conversational,
+            let rank = ConversationalHebrewModel.rank(of: candidate.text)
+        {
             total += 300 / (1 + Double(rank) / 60)
         }
         // The same 300 budget as the seed prior, for a word this person has

@@ -96,6 +96,8 @@ def judge(corpus, outputs):
         intended = score.norm(entry["intended"])
         commits = score.norm(record["commits"])
         slots = [score.norm(slot) for slot in record["slots"]]
+        visible = score.layer_set(record.get("visible"))
+        generated = score.layer_set(record.get("generated"))
         control = typed == intended
         rows[record["id"]] = {
             "id": record["id"],
@@ -106,13 +108,16 @@ def judge(corpus, outputs):
             "intended": entry["intended"],
             "commits": record["commits"],
             "slots": record["slots"],
+            "visible": record.get("visible"),
+            "generated": record.get("generated"),
             "verdict": verdict(typed, commits, intended),
             "control": control,
-            # Meaningless on a control row: the intended word is the typed word,
-            # so it is in slot zero by construction and counting it would inflate
-            # the column by however many controls the file happens to hold.
+            # Ranked array, including the fourth mid-word candidate. The drawn
+            # row is `visibleOffered`. Kept so existing totals stay comparable.
             "offered": None if control else (intended in slots),
             "offeredAt": None if control or intended not in slots else slots.index(intended),
+            "visibleOffered": None if control or visible is None else intended in visible,
+            "generatedOffered": None if control or generated is None else intended in generated,
             # None rather than [] when the run predates the column, so a missing
             # measurement cannot be read as a clean one.
             "misspelled": record.get("misspelled"),
@@ -263,9 +268,26 @@ def main():
         )
 
     never = [row for row in corrections if not row["offered"]]
-    print(f"\n  never offered — no source generated the intended word at all: {len(never)}")
+    print(f"\n  never ranked — intended word is absent from the engine array: {len(never)}")
     for row in never:
         print(f"    {row['id']:14s} typed {row['typed']!r} meant {row['intended']!r}   slots {row['slots']}")
+
+    not_drawn = [
+        row for row in corrections if row["offered"] and row["visibleOffered"] is False
+    ]
+    print(f"\n  ranked but not drawn — fourth candidate or echo filter: {len(not_drawn)}")
+    for row in not_drawn:
+        print(
+            f"    {row['id']:14s} typed {row['typed']!r} meant {row['intended']!r}"
+            f"   slots {row['slots']}  visible {row['visible']}"
+        )
+
+    ungenerated = [
+        row for row in corrections if row["generatedOffered"] is False
+    ]
+    print(f"\n  never generated — no source produced the intended word: {len(ungenerated)}")
+    for row in ungenerated:
+        print(f"    {row['id']:14s} typed {row['typed']!r} meant {row['intended']!r}")
 
     # Same agreement discipline, and the same reason `SlotRecord.misspelled`
     # exists: the bold slot is not the only column a user can feel, and a bar

@@ -216,30 +216,58 @@ public enum SuggestionEngine {
         context: String,
         languages: [KeyboardLanguage],
         supplementary: [String] = [],
+        personal personalOrNil: PersonalLanguageModel? = nil,
+        autocorrect: AutocorrectLevel = .full
+    ) -> [Suggestion] {
+        evaluate(
+            prefix: prefix, context: context, languages: languages,
+            supplementary: supplementary, personal: personalOrNil,
+            autocorrect: autocorrect
+        ).ranked
+    }
+
+    /// Same pass `suggestions` takes, with the layers the typing harness scores.
+    ///
+    /// `ranked` is byte-for-byte the old `suggestions` return. `generated` is
+    /// collected before `rank` cuts the list, so a word that lost the cut is
+    /// still recall. `visible` is `SuggestionSlotOrder.centeredSlots`, the
+    /// drawing order, not a second ranking. `commits` is the first `isDefault`
+    /// in `ranked`, which is what `insertSpace` reads. The middle drawn slot
+    /// is not that value when the echo is dropped and the default stays on
+    /// the keystrokes (`תדוה` / `תודה`).
+    @MainActor
+    public static func evaluate(
+        prefix: String,
+        context: String,
+        languages: [KeyboardLanguage],
+        supplementary: [String] = [],
         // Optional rather than defaulted to `.shared`, because a default argument
         // is evaluated in the *caller's* isolation and `.shared` is main-actor
         // isolated — which is a warning today and an error under Swift 6.
         personal personalOrNil: PersonalLanguageModel? = nil,
         autocorrect: AutocorrectLevel = .full
-    ) -> [Suggestion] {
+    ) -> SuggestionEvaluation {
         let personal = personalOrNil ?? .shared
         let trimmedPrefix = prefix.trimmingCharacters(in: .whitespacesAndNewlines)
         let contextLanguage =
             dominantLanguage(in: context, among: languages) ?? languages.first ?? .english
 
         if trimmedPrefix.isEmpty {
-            let results = nextWordSuggestions(
+            let next = nextWordTrace(
                 context: context, contextLanguage: contextLanguage, personal: personal)
+            let results = next.ranked
+            let generated = next.generated.map(\.text)
             // Nothing is being typed, so nothing is at risk of being replaced;
             // bold the middle candidate the way the system keyboard does. The best
             // guess *is* the middle one — `rank` returns best-first and this moves
             // it there, rather than boldening whatever landed in the middle.
-            return markDefault(promoteToMiddle(results), at: min(1, results.count - 1))
+            let ranked = markDefault(promoteToMiddle(results), at: min(1, results.count - 1))
+            return pack(ranked, generated: generated, typed: "")
         }
 
         let typedLanguage = dominantLanguage(in: trimmedPrefix, among: languages) ?? contextLanguage
         let preceding = previousWords(in: context)
-        let ranked = completions(
+        let generatedCandidates = generatedCompletions(
             for: trimmedPrefix,
             previousWords: preceding,
             context: context,
@@ -259,6 +287,7 @@ public enum SuggestionEngine {
         // same list still carries. Flattening before that question is asked is
         // what let a two-clitic reading take the space bar — see
         // `commitTrustsReading`.
+        let ranked = rank(generatedCandidates, limit: barSlots + 1)
         let reason = commitReason(
             trimmedPrefix, previousWords: preceding, context: context,
             typedLanguage: typedLanguage, results: ranked,
@@ -267,9 +296,22 @@ public enum SuggestionEngine {
         // `.full` floors at 0, so folding "no reason at all" into a number and
         // comparing would commit every word the cascade explicitly refused.
         let commits = reason.map { $0.confidence >= autocorrect.confidenceFloor } ?? false
-        return markDefault(
+        let suggestions = markDefault(
             ranked.map { Suggestion(text: $0.text, language: $0.language) },
             at: commits ? 1 : 0)
+        return pack(suggestions, generated: generatedCandidates.map(\.text), typed: trimmedPrefix)
+    }
+
+    private static func pack(
+        _ ranked: [Suggestion], generated: [String], typed: String
+    ) -> SuggestionEvaluation {
+        let defaultIndex = ranked.firstIndex(where: \.isDefault) ?? 0
+        return SuggestionEvaluation(
+            generated: generated,
+            ranked: ranked,
+            visible: SuggestionSlotOrder.centeredSlots(ranked, typed: typed).map { $0?.text },
+            defaultIndex: ranked.isEmpty ? -1 : defaultIndex,
+            commits: ranked.isEmpty ? typed : ranked[defaultIndex].text)
     }
 
     /// The committed words directly before the cursor, in order, at most `limit`

@@ -1,5 +1,5 @@
-// Runs the real SuggestionEngine over Bar/typing/corpus.json and writes what the
-// three slots would hold for each of the 90 entries.
+// Runs the real SuggestionEngine over Bar/typing/corpus.json and writes what
+// each scoring layer holds for every entry.
 //
 // **Runs on the iOS Simulator, not on macOS, and that is not a preference.**
 // `SuggestionEngine` is built on `UITextChecker`, which is UIKit and therefore
@@ -11,6 +11,17 @@
 // The output is deliberately dumb — ids and strings, no verdicts. `score.py`
 // decides what is good, because judging is a separate step that has to be
 // re-runnable against a frozen capture.
+//
+// Four layers, written from one `evaluate` pass so `UITextChecker` is asked
+// in the same order it always was:
+//
+//   generated  every source text before `rank` cuts the list
+//   slots      ranked engine candidates, the old column, mid-word one longer
+//              than the bar
+//   visible    the three drawn slots after `SuggestionSlotOrder.centeredSlots`
+//   commits    the first `isDefault` in the ranked array, which is what
+//              `insertSpace` inserts. Not `visible[1]`. When the echo is
+//              dropped the middle drawn word can be light.
 
 import Foundation
 import UIKit
@@ -41,8 +52,10 @@ struct CorpusFile: Decodable {
 struct SlotRecord: Encodable {
     let id: String
     let category: String
+    let generated: [String]
     let slots: [String]
-    /// Index of the bold slot — what the space bar commits.
+    let visible: [String?]
+    /// Index of the bold slot in `slots` — what the space bar commits.
     let defaultIndex: Int
     /// What the space bar would commit, spelled out, because "index 1" is not
     /// something a reader can check against `mustNotCorrect` at a glance.
@@ -58,6 +71,9 @@ struct SlotRecord: Encodable {
     /// `מנפגש` in the other two slots without ever moving a commit, so both
     /// committed instruments read clean while a fifth of Hebrew keystrokes drew
     /// words that do not exist (NIT-129).
+    ///
+    /// Asked of the ranked array, same as before this column existed, so a
+    /// misspelled fourth candidate still counts. The drawn row is `visible`.
     ///
     /// **"`UITextChecker` calls it misspelled" was the first version of this test
     /// and it was useless, which is worth keeping written down because it is the
@@ -90,10 +106,15 @@ struct SlotRecord: Encodable {
     /// Read the count, not the flag: it is a property of Apple's dictionary rather
     /// than of this engine, so it moves when iOS does and never when this repo
     /// does.
+    ///
+    /// Narrower than `generated`. This is Apple's list only. A seed or frequency
+    /// hit that Apple never offered is generated-true and reachable-false.
     let reachable: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case id, category, slots, defaultIndex = "default", commits, misspelled, reachable
+        case id, category, generated, slots, visible
+        case defaultIndex = "default"
+        case commits, misspelled, reachable
     }
 }
 
@@ -163,6 +184,19 @@ MainActor.assumeIsolated {
                 GroupedLexicon-\(language.languageTag).txt did not load: \
                 TypoLexicon does not know '\(control)'. Set GROUPED_LEXICON_DIR \
                 (and SIMCTL_CHILD_GROUPED_LEXICON_DIR) to the Resources directory.
+
+                """.utf8))
+        exit(3)
+    }
+    let conversationalDisabled =
+        ProcessInfo.processInfo.environment["DISABLE_CONVERSATIONAL_HEBREW"] == "1"
+    guard conversationalDisabled || ConversationalHebrewModel.knows("אני") else {
+        FileHandle.standardError.write(
+            Data(
+                """
+                ConversationalHebrew.akn1 did not load. Set \
+                CONVERSATIONAL_HEBREW_MODEL (and \
+                SIMCTL_CHILD_CONVERSATIONAL_HEBREW_MODEL) to the packed resource.
 
                 """.utf8))
         exit(3)
@@ -278,9 +312,9 @@ let records: [SlotRecord] = MainActor.assumeIsolated {
         FileHandle.standardError.write(
             Data("first \(label) call: \(String(format: "%.1f", cold)) ms\n".utf8))
     }
-    let answered = corpus.entries.map { entry -> (CorpusEntry, [Suggestion]) in
+    let answered = corpus.entries.map { entry -> (CorpusEntry, SuggestionEvaluation) in
         let started = DispatchTime.now().uptimeNanoseconds
-        let results = SuggestionEngine.suggestions(
+        let result = SuggestionEngine.evaluate(
             prefix: entry.prefix,
             context: entry.context,
             languages: languages(forKeyboard: entry.keyboard),
@@ -288,7 +322,7 @@ let records: [SlotRecord] = MainActor.assumeIsolated {
             personal: personal,
             autocorrect: autocorrectLevel)
         elapsed.append(Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000)
-        return (entry, results)
+        return (entry, result)
     }
 
     // **Spelling and reachability are asked in a second pass, after every entry has
@@ -299,18 +333,19 @@ let records: [SlotRecord] = MainActor.assumeIsolated {
     // about a slot in the middle of the measurement would put new calls into that
     // sequence and change the thing being measured. This way the completion calls
     // happen in exactly the order they did before this column existed.
-    return answered.map { entry, results in
-        let defaultIndex = results.firstIndex(where: \.isDefault) ?? 0
+    return answered.map { entry, result in
         return SlotRecord(
             id: entry.id,
             category: entry.category,
-            slots: results.map(\.text),
-            defaultIndex: results.isEmpty ? -1 : defaultIndex,
-            commits: results.isEmpty ? entry.prefix : results[defaultIndex].text,
+            generated: result.generated,
+            slots: result.ranked.map(\.text),
+            visible: result.visible,
+            defaultIndex: result.defaultIndex,
+            commits: result.ranked.isEmpty ? entry.prefix : result.commits,
             // The echo is matched by text rather than by index, because a
             // next-word entry has an empty prefix and no echo at all, and
             // dropping index 0 there would hide a real offer.
-            misspelled: results.filter { $0.text != entry.prefix }
+            misspelled: result.ranked.filter { $0.text != entry.prefix }
                 .filter { invented($0.text, in: $0.language, typed: entry.prefix) }
                 .map(\.text),
             reachable: reachable(entry, in: languages(forKeyboard: entry.keyboard)[0]))

@@ -1,0 +1,44 @@
+Conversational Hebrew prediction model
+=====================================
+
+This product contains a transformed model derived only from these two
+downloadable text corpora from the Leipzig Corpora Collection:
+
+1. heb_news_2020_1M
+   https://downloads.wortschatz-leipzig.de/corpora/heb_news_2020_1M.tar.gz
+   SHA-256 e81bb0b4f2f13bc343da8b732768582075257634600c359e55283774690b3213
+
+2. heb_newscrawl_2011_1M
+   https://downloads.wortschatz-leipzig.de/corpora/heb_newscrawl_2011_1M.tar.gz
+   SHA-256 ad78abb765890d4055bd5105b6ae0471c45c76ad0b0fcb54b55a4d8e193bac7b
+
+Source and attribution: Leipzig Corpora Collection, Leipzig University
+https://wortschatz.uni-leipzig.de/
+
+Licence source:
+https://wortschatz.uni-leipzig.de/en/usage
+
+The primary usage page states: "The text corpora offered for download are
+made available under the Creative Commons licence CC BY." The page does not
+state a Creative Commons licence version for this grant.
+
+Transformation:
+
+The source sentence rows were normalized to Unicode NFC. Bidirectional control
+characters and Hebrew niqqud were removed. Hebrew geresh, gershayim, maqaf, and
+curly apostrophes were normalized to keyboard-typeable equivalents. Only
+observed Hebrew surface tokens were retained. Exact unigram, bigram, and
+trigram counts were collected without joining across rejected tokens or
+sentence boundaries. The 20,000 highest-count surface forms were retained with
+minimum unigram, bigram, and trigram counts of 2, 5, and 5. Each context was
+capped at eight observed followers and packed into the AKN1 v1 binary format.
+No clitic form or other word form was manufactured.
+
+Shipped artifact:
+
+ConversationalHebrew.akn1
+2,516,844 bytes
+SHA-256 5a6f47557e891d113b50bf3ad41b0572ca49618b9e3554e184c2687818a7a6cc
+
+HCSH, HebDB, TED, Tatoeba, Mozilla Common Voice, and Leipzig Wikipedia
+contribute zero bytes to this artifact.

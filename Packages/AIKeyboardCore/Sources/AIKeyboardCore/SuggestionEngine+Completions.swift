@@ -104,7 +104,7 @@ extension SuggestionEngine {
     ///   - personal: what this user's own typing has taught the keyboard.
     ///   - codeSwitching: Latin letters inside a Hebrew sentence.
     @MainActor
-    static func completions(
+    static func generatedCompletions(
         for prefix: String,
         previousWords: [String],
         context: String,
@@ -327,19 +327,39 @@ extension SuggestionEngine {
         }
 
         stampPersonalCounts(&out, personal: personal)
-        // One more than the bar draws: slot zero is the typed echo and the bar
-        // does not draw it. See `SuggestionEngine.barSlots`.
-        return rank(out, limit: barSlots + 1)
+        return out
     }
 
-    /// How often this person has committed each candidate. Asked once, here,
-    /// so `score` can stay a pure function of the candidate.
+    /// Every candidate for the word in progress, ranked, one deeper than the bar.
+    @MainActor
+    static func completions(
+        for prefix: String,
+        previousWords: [String],
+        context: String,
+        typedLanguage: KeyboardLanguage,
+        otherLanguage: KeyboardLanguage?,
+        supplementary: [String],
+        personal: PersonalLanguageModel,
+        codeSwitching: Bool = false
+    ) -> [Candidate] {
+        rank(
+            generatedCompletions(
+                for: prefix, previousWords: previousWords, context: context,
+                typedLanguage: typedLanguage, otherLanguage: otherLanguage,
+                supplementary: supplementary, personal: personal,
+                codeSwitching: codeSwitching),
+            limit: barSlots + 1)
+    }
+
+    /// How often this person has committed each candidate. Hebrew sums attested
+    /// clitic variants of a vouched stem; other languages stay exact. Asked once,
+    /// here, so `score` can stay a pure function of the candidate.
     @MainActor
     static func stampPersonalCounts(
         _ candidates: inout [Candidate], personal: PersonalLanguageModel
     ) {
         for index in candidates.indices {
-            candidates[index].personalCount = personal.count(
+            candidates[index].personalCount = personal.rankingCount(
                 of: candidates[index].text, in: candidates[index].language)
         }
     }

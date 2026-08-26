@@ -101,6 +101,8 @@ def judge(corpus, outputs):
         target = score.norm(entry["intended"])
         kind, shape = verdict(typed, commits, target)
         offered = [s for s in record["slots"] if score.norm(s) != typed]
+        visible = score.layer_set(record.get("visible"))
+        generated = score.layer_set(record.get("generated"))
         rows[record["id"]] = {
             "id": record["id"],
             "word": entry["word"],
@@ -108,6 +110,8 @@ def judge(corpus, outputs):
             "typed": entry["prefix"],
             "commits": record["commits"],
             "slots": record["slots"],
+            "visible": record.get("visible"),
+            "generated": record.get("generated"),
             "letters": len(entry["prefix"]),
             "of": len(entry["word"]),
             "verdict": kind,
@@ -116,6 +120,8 @@ def judge(corpus, outputs):
             # measurement cannot be read as a clean one.
             "misspelled": record.get("misspelled"),
             "hasTarget": any(score.norm(s) == target for s in offered),
+            "hasTargetVisible": None if visible is None else target in visible,
+            "hasTargetGenerated": None if generated is None else target in generated,
             "reachable": record.get("reachable"),
         }
     return rows
@@ -138,10 +144,21 @@ def headline(rows, label):
     bad = sum(1 for row in graded if row["misspelled"])
     slots = sum(len(row["misspelled"]) for row in graded)
     missing = [row for row in rows.values() if not row["hasTarget"]]
+    missing_visible = [
+        row for row in rows.values() if row["hasTargetVisible"] is False
+    ]
+    missing_generated = [
+        row for row in rows.values() if row["hasTargetGenerated"] is False
+    ]
     print(
         f"  {'':24s}      offered slots: {bad:4d} moments hold a NON-WORD ({slots} slots)"
         f"   {len(missing):4d} without the target word"
     )
+    if any(row["hasTargetVisible"] is not None for row in rows.values()):
+        print(
+            f"  {'':24s}      visible miss: {len(missing_visible):4d}"
+            f"   generated miss: {len(missing_generated):4d}"
+        )
     # **Of those, the ones some ranking could have won.** The raw count above is
     # mostly not a defect — one letter into `להתראות` nothing should offer the
     # whole word, and nothing can offer a word no source generated. A moment where

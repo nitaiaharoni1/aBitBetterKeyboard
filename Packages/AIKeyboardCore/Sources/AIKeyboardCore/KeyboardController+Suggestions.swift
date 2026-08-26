@@ -27,6 +27,10 @@ extension KeyboardController {
     ///   default: a keystroke that does not restart the clock is a keystroke the
     ///   model never gets asked about.
     public func refreshSuggestions(schedulingRefinement: Bool = true) {
+        // Identity has first refusal for undo. A field switch may arrive here
+        // without an appearance callback, so retire the old field's undo before
+        // any new-document context is read. Its learning was captured at swap.
+        retirePendingAutocorrectUndoIfDocumentChanged()
         // **Above the Predictions guard, because it is not about predictions.**
         // Fix and Rewrite are drawn disabled on an empty field, and this is what
         // their keys redraw from; leaving it under the guard would freeze both keys
@@ -574,6 +578,7 @@ extension KeyboardController {
 
     public func apply(_ suggestion: Suggestion) {
         Feedback.keyPress()
+        retirePendingAutocorrectUndo(.acceptLearning)
         // Text in, so it sounds like text going in. Tapping a candidate is the
         // one insertion that reaches the document without a `KeyCap` behind it,
         // and `press(_:)` is where every other one gets its click.
@@ -629,7 +634,6 @@ extension KeyboardController {
             // reason.
             deletedWordPrefix = nil
         }
-        pendingAutocorrectUndo = nil
         refreshSuggestions()
         reportInteraction(.suggestion)
     }
@@ -738,10 +742,9 @@ extension KeyboardController {
     ///   for.
     func recordCommittedWord(_ word: String, permittedOverride: Bool? = nil) {
         guard !word.isEmpty else { return }
-        let folded = SeedLanguageModel.fold(word)
-        guard folded != lastLearnedFolded else { return }
         let words = SuggestionEngine.previousWords(in: contextBefore)
         let previous: String?
+        let folded = SeedLanguageModel.fold(word)
         if words.last.map({ SeedLanguageModel.fold($0) == folded }) == true {
             previous = words.count >= 2 ? words[words.count - 2] : nil
         } else {
@@ -751,27 +754,39 @@ extension KeyboardController {
             permittedOverride
             ?? SecureField.permitsRead(
                 secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
-        let wrote = personal.record(
-            word: word,
-            previous: previous,
-            // The word's own script, not the layout's. Somebody typing a Hebrew
-            // sentence has the Hebrew layout up, and the English words inside it
-            // belong in the English counters or `לעבודה` and `sprint` end up in one
-            // list where neither can be looked up.
-            language: SuggestionEngine.dominantLanguage(
-                in: word, among: [language] + store.storedEnabledLanguages.filter { $0 != language })
-                ?? language,
-            // The same question `SecureField` answers for a screen read, asked
-            // again here because "may I keep this word" and "may I send this
-            // screen" have the same answer for a password. Learning itself is
-            // always on; the only refusal left is a credential field.
-            permitted: permitted
+        recordCommittedWord(
+            LearnedCommit(
+                word: word,
+                previous: previous,
+                // The word's own script, not the layout's. Somebody typing a Hebrew
+                // sentence has the Hebrew layout up, and the English words inside it
+                // belong in the English counters or `לעבודה` and `sprint` end up in one
+                // list where neither can be looked up.
+                language: SuggestionEngine.dominantLanguage(
+                    in: word, among: [language] + store.storedEnabledLanguages.filter { $0 != language })
+                    ?? language,
+                // The same question `SecureField` answers for a screen read, asked
+                // again here because "may I keep this word" and "may I send this
+                // screen" have the same answer for a password. Learning itself is
+                // always on; the only refusal left is a credential field.
+                permitted: permitted
+            )
         )
-        // **Cleared regardless of `wrote`.** A refusal is a decision, not a
-        // deferral: leaving `openWord` standing after a refused write is what let
-        // it be offered again under a later document's permission instead of the
-        // one it was actually typed under.
+        // Cleared regardless of whether the store accepted the write. This
+        // overload commits `openWord`; a refusal is a decision, not a deferral.
         openWord = ""
+    }
+
+    func recordCommittedWord(_ commit: LearnedCommit) {
+        guard !commit.word.isEmpty else { return }
+        let folded = SeedLanguageModel.fold(commit.word)
+        guard folded != lastLearnedFolded else { return }
+        let wrote = personal.record(
+            word: commit.word,
+            previous: commit.previous,
+            language: commit.language,
+            permitted: commit.permitted
+        )
         if wrote {
             lastLearnedFolded = folded
             // The one thing that changes an answer without changing the question.
