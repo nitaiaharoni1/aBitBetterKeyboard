@@ -1,0 +1,15 @@
+No account or sign-in is required. The app is free and supports iPhone only.
+
+To review the custom keyboard:
+1. Open aBitBetterKeyboard and complete the short setup.
+2. In Settings > General > Keyboard > Keyboards > Add New Keyboard, add aBitBetterKeyboard.
+3. Open a text field, tap the globe key, and choose aBitBetterKeyboard.
+4. Typing, on-device suggestions, emoji, language switching, and layout controls work without cloud AI.
+
+Cloud AI is off by default and is available only to adults 18 or older. To test Fix, Rewrite, Tone, Reply, or cloud dictation, open the app, confirm that you are 18 or older, allow cloud AI, and enable Full Access for the keyboard. The app sends only the text or audio needed for the action after the reviewer taps that action.
+
+To test Reply, copy a synthetic message in another app, open CopyClip on the keyboard, tap Apple's Paste control, then tap Reply on the suggestion bar. The app does not read or record the screen.
+
+To test dictation, open the containing app, tap Start Dictation on the Home screen, allow microphone access, then switch to a text field and tap the keyboard microphone. Return to the app to stop the session.
+
+Screen recording and the subscription paywall are disabled in version 1.0. The broadcast extension is not included in the submitted IPA.

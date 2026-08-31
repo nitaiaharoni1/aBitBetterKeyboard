@@ -1,51 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!--
-  Privacy manifest for the containing app.
-
-  WHY THIS EXISTS. Apple requires a reason to be declared for a small set of
-  "required reason" APIs, and this project uses two of them, both from
-  `AIKeyboardShared`, which all three targets link:
-
-    * System boot time — `CaptureClock` (`CapturePages.swift`) is
-      `clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW)` everywhere, and
-      `KeyboardPresence.bootIdentity` reads `kern.boottime`. Both are used to
-      measure elapsed time between events inside the app, and boot time is used
-      for equality only, never arithmetic. A wall clock was rejected on purpose:
-      a clock the user can set is a clock that can make a stale reading look
-      fresh.
-    * User defaults — `SharedStore` and `SharedContainer` read and write the App
-      Group suite so the app, the keyboard extension and the broadcast upload
-      extension see one store.
-
-  There is no manifest anywhere in this project's history, so an App Store
-  submission would have been rejected for the boot-time call alone.
-
-  TWO THINGS TO CHECK BEFORE SUBMITTING, because neither could be verified here.
-
-  1. THE REASON CODES BELOW WERE NOT READ OFF APPLE'S DOCUMENTATION. Apple's doc
-     pages render client-side and could not be fetched from this machine, and
-     Xcode 26.2 does not ship the code list in any searchable resource. `35F9.1`
-     and `1C8F.1` are believed correct — `35F9.1` for measuring elapsed time
-     between in-app events, `1C8F.1` for user defaults shared across an App
-     Group — and they match this project's actual use, but check them against
-     "Describing use of required reason API" before you upload. A wrong code is
-     a rejection email, not a crash.
-
-  2. THE COLLECTED-DATA SECTION IS A CLAIM ABOUT THE PRODUCT, NOT ABOUT THE
-     CODE, AND IT NEEDS THE OWNER'S EYES. What the code does is unambiguous:
-     when a backend URL is configured, `BackendTransport` posts the text being
-     rewritten to `/v1/text`, and `CloudScreenReader` posts a JPEG of the screen
-     to `/v1/screen`. Both leave the device, so both are "collected" in Apple's
-     sense. They are declared below as other user content, used only for app
-     functionality, not linked to identity and not used for tracking — which is
-     what this code does today. If the backend ever logs, retains, or trains on
-     what it receives, this file becomes false and has to change with it.
-
-  Kept identical in all three targets. `AIKeyboard/`, `AIKeyboardExtension/` and
-  `AIKeyboardBroadcast/` are `PBXFileSystemSynchronizedRootGroup`s, so a file
-  dropped in each is bundled with no `.pbxproj` edit.
--->
+<!-- The containing app sends only user-triggered AI/dictation content and the
+     six content-free analytics events documented in analytics-policy.md. -->
 <plist version="1.0">
 <dict>
 	<key>NSPrivacyTracking</key>
@@ -58,32 +14,62 @@
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
-			<array>
-				<string>35F9.1</string>
-			</array>
+			<array><string>35F9.1</string></array>
 		</dict>
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
-			<array>
-				<string>1C8F.1</string>
-			</array>
+			<array><string>1C8F.1</string><string>CA92.1</string></array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array><string>C617.1</string></array>
 		</dict>
 	</array>
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
-			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
-			<key>NSPrivacyCollectedDataTypeLinked</key>
-			<false/>
-			<key>NSPrivacyCollectedDataTypeTracking</key>
-			<false/>
+			<string>NSPrivacyCollectedDataTypeEmailsOrTextMessages</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key><false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key><false/>
 			<key>NSPrivacyCollectedDataTypePurposes</key>
-			<array>
-				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
-			</array>
+			<array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key><false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key><false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeAudioData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key><false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key><false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array><string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string></array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeDeviceID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key><true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key><false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array><string>NSPrivacyCollectedDataTypePurposeAnalytics</string></array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key><true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key><false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array><string>NSPrivacyCollectedDataTypePurposeAnalytics</string></array>
 		</dict>
 	</array>
 </dict>

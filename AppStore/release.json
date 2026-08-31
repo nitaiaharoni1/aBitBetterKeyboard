@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "app": {
+    "id": "6799612123",
+    "bundleId": "com.nitai.aikeyboard",
+    "platform": "ios",
+    "version": "1.0",
+    "build": "61"
+  },
+  "release": {
+    "price": "free",
+    "availability": "worldwide",
+    "deviceFamilies": [
+      "iphone"
+    ],
+    "automaticRelease": true,
+    "primaryCategory": "Utilities",
+    "secondaryCategory": "Productivity",
+    "minimumAge": 18,
+    "copyright": "2026 Nitai Aharoni"
+  },
+  "urls": {
+    "privacy": "https://nitaiaharoni1.github.io/aBitBetterKeyboard/privacy/",
+    "support": "https://nitaiaharoni1.github.io/aBitBetterKeyboard/support/",
+    "marketing": "https://nitaiaharoni1.github.io/aBitBetterKeyboard/"
+  },
+  "locales": [
+    "en-US"
+  ],
+  "screenshots": {
+    "path": "fastlane/screenshots"
+  },
+  "tooling": {
+    "fastlane": "2.232.1"
+  }
+}

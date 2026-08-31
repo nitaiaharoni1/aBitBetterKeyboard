@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "appPrivacy": {
+    "tracking": false,
+    "dataTypes": [
+      {
+        "type": "Emails or Text Messages",
+        "purpose": "App Functionality",
+        "linkedToUser": false,
+        "tracking": false
+      },
+      {
+        "type": "Other User Content",
+        "purpose": "App Functionality",
+        "linkedToUser": false,
+        "tracking": false
+      },
+      {
+        "type": "Audio Data",
+        "purpose": "App Functionality",
+        "linkedToUser": false,
+        "tracking": false
+      },
+      {
+        "type": "Device ID",
+        "purpose": "Analytics",
+        "linkedToUser": true,
+        "tracking": false
+      },
+      {
+        "type": "Product Interaction",
+        "purpose": "Analytics",
+        "linkedToUser": true,
+        "tracking": false
+      }
+    ]
+  },
+  "ageRating": {
+    "override": "18+",
+    "reason": "Cloud AI is restricted to adults by the cloud provider terms.",
+    "contentFrequencies": "None",
+    "advertising": false,
+    "ageAssurance": true,
+    "gambling": false,
+    "healthOrWellness": false,
+    "lootBoxes": false,
+    "messagingOrChat": false,
+    "parentalControls": false,
+    "socialMedia": false,
+    "socialMediaDisabledForUsersUnder13": false,
+    "unrestrictedWebAccess": false,
+    "userGeneratedContent": false
+  },
+  "review": {
+    "signInRequired": false,
+    "usesAdvertisingIdentifier": false,
+    "exportComplianceUsesNonExemptEncryption": false
+  },
+  "ownerApprovalRequired": [
+    "content rights declaration",
+    "EU trader status",
+    "updated Apple Developer Program agreement",
+    "privacy answers and final attestation"
+  ]
+}

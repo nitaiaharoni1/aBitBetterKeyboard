@@ -1,0 +1,1 @@
+hebrew,english,typing,autocorrect,suggestions,emoji,dictation,rewrite,bilingual,עברית

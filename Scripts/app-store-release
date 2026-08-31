@@ -1,0 +1,296 @@
+#!/bin/bash
+set -uo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$root"
+
+if [ "${1:-plan}" != "plan" ] || [ "$#" -gt 1 ]; then
+    echo "Usage: Scripts/app-store-release [plan]" >&2
+    exit 2
+fi
+
+failures=0
+pass() { printf 'PASS  %s\n' "$1"; }
+fail() {
+    printf 'FAIL  %s\n' "$1" >&2
+    failures=$((failures + 1))
+}
+
+for command in curl fastlane git jq python3 sips xcodebuild; do
+    command -v "$command" >/dev/null 2>&1 || fail "$command is required"
+done
+[ "$failures" -eq 0 ] || exit 1
+
+config="AppStore/release.json"
+if [ ! -f "$config" ]; then
+    fail "$config is missing"
+else
+    if python3 - "$config" <<'PY'
+import json
+import sys
+from pathlib import Path
+from urllib.parse import urlparse
+
+path = Path(sys.argv[1])
+try:
+    release = json.loads(path.read_text())
+except (OSError, json.JSONDecodeError) as error:
+    print(f"FAIL  {path} is not valid JSON: {error}", file=sys.stderr)
+    raise SystemExit(1)
+
+expected = {
+    "schemaVersion": 1,
+    "app.id": "6799612123",
+    "app.bundleId": "com.nitai.aikeyboard",
+    "app.platform": "ios",
+    "app.version": "1.0",
+    "app.build": "61",
+    "release.price": "free",
+    "release.availability": "worldwide",
+    "release.deviceFamilies": ["iphone"],
+    "release.automaticRelease": True,
+    "release.primaryCategory": "Utilities",
+    "release.secondaryCategory": "Productivity",
+    "release.minimumAge": 18,
+    "release.copyright": "2026 Nitai Aharoni",
+    "locales": ["en-US"],
+    "screenshots.path": "fastlane/screenshots",
+}
+
+def value_at(key):
+    value = release
+    for part in key.split("."):
+        if not isinstance(value, dict) or part not in value:
+            return None
+        value = value[part]
+    return value
+
+errors = []
+for key, wanted in expected.items():
+    found = value_at(key)
+    if found != wanted:
+        errors.append(f"{key} must be {wanted!r}, found {found!r}")
+
+for name in ("privacy", "support", "marketing"):
+    raw = value_at(f"urls.{name}")
+    parsed = urlparse(raw) if isinstance(raw, str) else None
+    if not parsed or parsed.scheme != "https" or not parsed.hostname:
+        errors.append(f"urls.{name} must be an absolute HTTPS URL")
+    elif parsed.hostname == "invalid.example" or parsed.hostname.endswith(".invalid.example"):
+        errors.append(f"urls.{name} still uses the invalid placeholder")
+
+if errors:
+    for error in errors:
+        print(f"FAIL  {path}: {error}", file=sys.stderr)
+    raise SystemExit(1)
+
+print(f"PASS  {path} matches app 6799612123 version 1.0 build 61")
+PY
+    then
+        :
+    else
+        failures=$((failures + 1))
+    fi
+fi
+
+if rg -q 'example\.invalid|replace-before-release' Landing/app/site.ts; then
+    fail "the public support email is still a placeholder"
+else
+    pass "the public support email is resolved"
+fi
+
+if rg -n '[—–]' fastlane/metadata AppStore/review-notes.txt Landing/app; then
+    fail "public copy contains an em dash or en dash"
+else
+    pass "public copy contains no em dashes or en dashes"
+fi
+
+if [ -f "$config" ]; then
+    while IFS= read -r public_url; do
+        status="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' "$public_url" || true)"
+        [ "$status" = "200" ] \
+            && pass "$public_url is live" \
+            || fail "$public_url must return HTTP 200, found ${status:-unreachable}"
+    done < <(jq -r '.urls.privacy, .urls.support, .urls.marketing' "$config")
+fi
+
+if [ -f "$config" ] && [ -d fastlane/metadata/en-US ]; then
+    if python3 - "$config" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+release = json.loads(Path(sys.argv[1]).read_text())
+directory = Path("fastlane/metadata/en-US")
+limits = {
+    "name.txt": (1, 30),
+    "subtitle.txt": (1, 30),
+    "description.txt": (1, 4000),
+    "keywords.txt": (1, 100),
+    "promotional_text.txt": (0, 170),
+    "release_notes.txt": (1, 4000),
+    "privacy_url.txt": (1, 500),
+    "support_url.txt": (1, 500),
+    "marketing_url.txt": (1, 500),
+}
+errors = []
+contents = {}
+for name, (minimum, maximum) in limits.items():
+    path = directory / name
+    if not path.is_file():
+        errors.append(f"{path} is missing")
+        continue
+    text = path.read_text().rstrip("\n")
+    contents[name] = text
+    if not minimum <= len(text) <= maximum:
+        errors.append(f"{path} has {len(text)} characters, expected {minimum}...{maximum}")
+
+for name in ("privacy", "support", "marketing"):
+    metadata_value = contents.get(f"{name}_url.txt")
+    config_value = release.get("urls", {}).get(name)
+    if metadata_value != config_value:
+        errors.append(f"{name}_url.txt must equal urls.{name} in AppStore/release.json")
+
+public_copy = "\n".join(contents.values())
+if re.search(r"screen[ -]?(capture|recording)|paywall|subscription", public_copy, re.I):
+    errors.append("public metadata advertises screen capture or the disabled paywall")
+description = contents.get("description.txt", "")
+if not re.search(r"\b18\+|\b18 (?:(?:and|or) )?older\b", description, re.I):
+    errors.append("description.txt must state that cloud AI is for ages 18+")
+
+if errors:
+    for error in errors:
+        print(f"FAIL  {error}", file=sys.stderr)
+    raise SystemExit(1)
+
+print("PASS  English metadata is present and within App Store limits")
+PY
+    then
+        :
+    else
+        failures=$((failures + 1))
+    fi
+else
+    fail "fastlane/metadata/en-US is missing"
+fi
+
+if [ ! -f fastlane/Fastfile ]; then
+    fail "fastlane/Fastfile is required"
+else
+    if grep -Eq 'upload_to_app_store|upload_to_testflight|pilot|build_app|automatic_release|force:[[:space:]]*true|submit_for_review:[[:space:]]*true|skip_binary_upload:[[:space:]]*false' \
+        fastlane/Fastfile; then
+        fail "Fastlane may apply metadata and screenshots only"
+    elif grep -Eq 'skip_binary_upload:[[:space:]]*true' fastlane/Fastfile \
+        && grep -Eq 'submit_for_review:[[:space:]]*false' fastlane/Fastfile; then
+        pass "Fastlane cannot upload a binary or submit for review"
+    else
+        fail "Fastfile must disable binary upload and review submission"
+    fi
+fi
+
+expected_fastlane="$(jq -r '.tooling.fastlane // empty' "$config" 2>/dev/null || true)"
+installed_fastlane="$(fastlane --version 2>/dev/null | awk '/^fastlane [0-9]/{print $2; exit}')"
+[ -n "$expected_fastlane" ] && [ "$installed_fastlane" = "$expected_fastlane" ] \
+    && pass "fastlane is pinned at $expected_fastlane" \
+    || fail "fastlane must be $expected_fastlane, found ${installed_fastlane:-missing}"
+
+if jq -e . AppStore/form-answers.json >/dev/null 2>&1; then
+    pass "App Store privacy, age, and review answer checklist is valid JSON"
+else
+    fail "AppStore/form-answers.json is missing or invalid"
+fi
+
+[ -s AppStore/review-notes.txt ] \
+    && pass "App Review notes are present" \
+    || fail "AppStore/review-notes.txt is missing or empty"
+[ "$(tr -d '\n' < fastlane/metadata/copyright.txt 2>/dev/null)" = "2026 Nitai Aharoni" ] \
+    && pass "copyright is present" \
+    || fail "fastlane/metadata/copyright.txt is missing or unexpected"
+
+branch="$(git branch --show-current 2>/dev/null || true)"
+[ "$branch" = "main" ] && pass "git branch is main" || fail "git branch must be main, found ${branch:-detached}"
+dirty_count="$(git status --porcelain --untracked-files=all | wc -l | tr -d ' ')"
+[ "$dirty_count" -eq 0 ] && pass "working tree is clean" || fail "working tree has $dirty_count uncommitted paths"
+
+setting() {
+    local target="$1"
+    local key="$2"
+    xcodebuild -project AIKeyboard.xcodeproj -target "$target" -configuration Release \
+        -showBuildSettings 2>/dev/null \
+        | awk -v key="$key" '$1 == key && $2 == "=" { $1 = ""; $2 = ""; sub(/^  */, ""); print; exit }'
+}
+
+for target in AIKeyboard AIKeyboardExtension; do
+    version="$(setting "$target" MARKETING_VERSION)"
+    build="$(setting "$target" CURRENT_PROJECT_VERSION)"
+    family="$(setting "$target" TARGETED_DEVICE_FAMILY)"
+    [ "$version" = "1.0" ] && pass "$target marketing version is 1.0" || fail "$target MARKETING_VERSION must be 1.0, found ${version:-missing}"
+    [ "$build" = "61" ] && pass "$target build is 61" || fail "$target CURRENT_PROJECT_VERSION must be 61, found ${build:-missing}"
+    [ "$family" = "1" ] && pass "$target is iPhone-only" || fail "$target TARGETED_DEVICE_FAMILY must be 1, found ${family:-missing}"
+done
+
+if rg -q 'AIKeyboardBroadcast\.appex in Embed Foundation Extensions' AIKeyboard.xcodeproj/project.pbxproj; then
+    fail "the disabled broadcast extension is still embedded in the app"
+else
+    pass "the disabled broadcast extension is absent from the app embed graph"
+fi
+
+icon="AIKeyboard/Assets.xcassets/AppIcon.appiconset/icon-1024.png"
+if [ ! -f "$icon" ]; then
+    fail "$icon is missing"
+else
+    icon_info="$(sips -g pixelWidth -g pixelHeight -g hasAlpha "$icon" 2>/dev/null || true)"
+    icon_width="$(printf '%s\n' "$icon_info" | awk '/pixelWidth:/ {print $2}')"
+    icon_height="$(printf '%s\n' "$icon_info" | awk '/pixelHeight:/ {print $2}')"
+    icon_alpha="$(printf '%s\n' "$icon_info" | awk '/hasAlpha:/ {print $2}')"
+    [ "$icon_width" = "1024" ] && [ "$icon_height" = "1024" ] \
+        && pass "App Store icon is 1024x1024" \
+        || fail "App Store icon must be 1024x1024"
+    [ "$icon_alpha" = "no" ] \
+        && pass "App Store icon is opaque" \
+        || fail "App Store icon has transparency and must be flattened"
+fi
+
+screenshot_dir="fastlane/screenshots/en-US"
+screenshots=()
+if [ -d "$screenshot_dir" ]; then
+    while IFS= read -r screenshot; do screenshots+=("$screenshot"); done < <(
+        find "$screenshot_dir" -maxdepth 1 -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -print | sort
+    )
+fi
+
+if [ "${#screenshots[@]}" -eq 0 ]; then
+    fail "no English iPhone screenshots are present"
+else
+    screenshot_failures=0
+    for screenshot in "${screenshots[@]}"; do
+        info="$(sips -g pixelWidth -g pixelHeight -g hasAlpha "$screenshot" 2>/dev/null || true)"
+        width="$(printf '%s\n' "$info" | awk '/pixelWidth:/ {print $2}')"
+        height="$(printf '%s\n' "$info" | awk '/pixelHeight:/ {print $2}')"
+        alpha="$(printf '%s\n' "$info" | awk '/hasAlpha:/ {print $2}')"
+        dimensions="${width}x${height}"
+        case "$dimensions" in
+            1320x2868|2868x1320|1290x2796|2796x1290|1284x2778|2778x1284|1242x2688|2688x1242) ;;
+            *)
+                fail "$screenshot has unsupported iPhone dimensions $dimensions"
+                screenshot_failures=$((screenshot_failures + 1))
+                ;;
+        esac
+        if [ "$alpha" != "no" ]; then
+            fail "$screenshot has an alpha channel"
+            screenshot_failures=$((screenshot_failures + 1))
+        fi
+    done
+    [ "$screenshot_failures" -eq 0 ] && pass "${#screenshots[@]} English iPhone screenshot files have supported dimensions"
+fi
+
+if [ "$failures" -eq 0 ]; then
+    echo
+    echo "READY  Public App Store inputs pass the local release plan."
+    exit 0
+fi
+
+echo >&2
+echo "BLOCKED  $failures release checks failed. No state was changed." >&2
+exit 1

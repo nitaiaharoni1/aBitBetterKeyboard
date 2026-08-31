@@ -36,6 +36,9 @@ PROJECT="AIKeyboard.xcodeproj"
 here="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$here"
 
+Scripts/audit-release-security.sh
+Scripts/app-store-release plan
+
 issuer="$(security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEY_ID" -w 2>/dev/null || true)"
 if [ -z "$issuer" ]; then
     echo "No issuer ID in the keychain for key $KEY_ID." >&2
@@ -91,10 +94,36 @@ xcodebuild -exportArchive \
 }
 
 ipa="$build/export/$SCHEME.ipa"
+scan_dir="$build/security-scan"
+mkdir -p "$scan_dir"
+unzip -q "$ipa" -d "$scan_dir"
+Scripts/audit-release-security.sh "$scan_dir/Payload/$SCHEME.app"
+
+app_path="$scan_dir/Payload/$SCHEME.app"
+if [ ! -d "$app_path/PlugIns/AIKeyboardExtension.appex" ]; then
+    echo "The shipping keyboard extension is missing from the exported app." >&2
+    exit 1
+fi
+if [ -d "$app_path/PlugIns/AIKeyboardBroadcast.appex" ]; then
+    echo "The disabled broadcast extension is present in the exported app." >&2
+    exit 1
+fi
+device_families="$(plutil -extract UIDeviceFamily json -o - "$app_path/Info.plist")"
+if [ "$device_families" != '[1]' ]; then
+    echo "The exported app must be iPhone-only; UIDeviceFamily is $device_families." >&2
+    exit 1
+fi
+
 # Read from the *ipa*, never from the archive. They disagreed once and the
 # archive was the one that was wrong; this is the number that actually ships.
 shipped="$(unzip -p "$ipa" "Payload/$SCHEME.app/Info.plist" | plutil -extract CFBundleVersion raw -)"
 version="$(unzip -p "$ipa" "Payload/$SCHEME.app/Info.plist" | plutil -extract CFBundleShortVersionString raw -)"
+expected_build="$(jq -r '.app.build' AppStore/release.json)"
+expected_version="$(jq -r '.app.version' AppStore/release.json)"
+if [ "$shipped" != "$expected_build" ] || [ "$version" != "$expected_version" ]; then
+    echo "Exported $version ($shipped), expected $expected_version ($expected_build)." >&2
+    exit 1
+fi
 echo "==> Uploading version $version build $shipped"
 
 xcrun altool --upload-app -f "$ipa" -t ios \
