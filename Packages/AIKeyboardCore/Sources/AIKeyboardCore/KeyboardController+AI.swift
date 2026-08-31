@@ -338,20 +338,16 @@ extension KeyboardController {
     /// moved on while the model was thinking. See `applyDirectly`, which is where
     /// that decision is taken and where the reasoning for it lives.
     public func applyResult(_ text: String) {
-        Feedback.success()
-        beginArrival(for: runningAction)
-        // **Before the insertion, not after.** A reply lands in a field that may
-        // still be carrying a Fix's way back, and that way back replaces the *whole*
-        // field with what was there before — so reverting after inserting a reply
-        // would delete the reply along with the correction.
-        clearRevertibleEdit()
         let preferred =
             bannerOptions.indices.contains(bannerIndex)
             ? bannerOptions[bannerIndex].language : nil
         let answer = runningAction == .fix ? MissingSpaces.restored(text) : text
+        guard replaceTargetText(with: answer) else { return }
+        Feedback.success()
+        beginArrival(for: runningAction)
+        clearRevertibleEdit()
         announceHostLanguage(
             preferred ?? Self.languageForHost(reported: "", text: answer) ?? language)
-        replaceTargetText(with: answer)
         dismissOverlay()
     }
 
@@ -449,19 +445,20 @@ extension KeyboardController {
             clearBannerState()
             return
         }
+        let documentIdentifier = target?.documentIdentifier
+        guard replaceTargetText(with: answer) else { return }
         Feedback.success()
         beginArrival(for: action)
-        // **Before the insertion, not after.** A reply lands in a field that may
-        // still be carrying a Fix's way back, and that way back replaces the
-        // *whole* field with what was there before — so reverting after inserting a
-        // reply would delete the reply along with the correction.
         clearRevertibleEdit()
         announceHostLanguage(
             (action == .reply ? replyContext?.language : nil)
                 ?? Self.language(of: answer, fallback: language))
-        replaceTargetText(with: answer)
         revertibleEdit = RevertibleEdit(
-            origin: .ai(action), previous: undone, applied: answer, undo: undo)
+            origin: .ai(action),
+            previous: undone,
+            applied: answer,
+            undo: undo,
+            documentIdentifier: documentIdentifier)
         // **Emptied, because the next action must not inherit it.**
         // `selectTone(_:)` keeps whatever is already in `aiSourceText` — correct
         // when it is reached from an action that has just filled it, and wrong from
@@ -510,6 +507,10 @@ extension KeyboardController {
     /// control is never on screen over an undo that would do nothing or do harm.
     public func revertEdit() {
         guard let edit = revertibleEdit else { return }
+        guard edit.documentIdentifier == target?.documentIdentifier else {
+            revertibleEdit = nil
+            return
+        }
 
         guard edit.undo == .spanAtCursor else {
             // **A refusal takes the control away, and must, because the predicate
@@ -529,14 +530,14 @@ extension KeyboardController {
                 revertibleEdit = nil
                 return
             }
-            Feedback.modifierPress()
-            revertibleEdit = nil
             // `replaceTargetText` refuses on an empty source — that guard is what
             // makes an insertion an insertion — so it is told what is standing
             // there now, which is exactly what this is taking out.
             aiSourceText = wholeField
-            replaceTargetText(with: rebased)
+            let replaced = replaceTargetText(with: rebased)
             aiSourceText = ""
+            revertibleEdit = nil
+            if replaced { Feedback.modifierPress() }
             return
         }
 
@@ -545,13 +546,19 @@ extension KeyboardController {
             revertibleEdit = nil
             return
         }
-        Feedback.modifierPress()
-        revertibleEdit = nil
-        deleteBackward(utf16Units: step.delete)
+        let deletion = deleteBackwardReversibly(utf16Units: step.delete)
+        guard deletion.unitsRemoved == step.delete else {
+            if !deletion.deletedText.isEmpty { target?.insertText(deletion.deletedText) }
+            revertibleEdit = nil
+            refreshSuggestions()
+            return
+        }
         // Empty for a reply and for a clip taken back with nothing typed after
         // them, neither of which replaced anything: `insertText("")` is harmless
         // and the branch is here to say so rather than to guard against it.
         if !step.insert.isEmpty { target?.insertText(step.insert) }
+        Feedback.modifierPress()
+        revertibleEdit = nil
         refreshSuggestions()
     }
 
@@ -617,12 +624,11 @@ extension KeyboardController {
     /// `expireRevertibleEditIfUnusable`, asked once per document change, which
     /// drops it when what it wrote can no longer be found where it wrote it.
     ///
-    /// What is left are the three kinds of caller that are not ordinary typing:
-    /// an action about to record an edit of its own (`applyDirectly`,
-    /// `applyResult`, `insertClip`), a recording writing a transcript into the
-    /// field, and a caret key we moved ourselves. It is still deliberately *not*
-    /// called from `refreshSuggestions` — `replaceTargetText` refreshes the bar
-    /// itself, so the revert would be cleared by the very edit that created it.
+    /// What is left are callers that have successfully recorded another edit, a
+    /// recording writing a transcript into the field, and a caret key we moved
+    /// ourselves. It is still deliberately *not* called from
+    /// `refreshSuggestions` — `replaceTargetText` refreshes the bar itself, so the
+    /// revert would be cleared by the very edit that created it.
     func clearRevertibleEdit() {
         guard revertibleEdit != nil else { return }
         revertibleEdit = nil
@@ -649,6 +655,10 @@ extension KeyboardController {
     /// and this is what makes the fix load-bearing rather than optimistic.
     func expireRevertibleEditIfUnusable() {
         guard let edit = revertibleEdit else { return }
+        guard edit.documentIdentifier == target?.documentIdentifier else {
+            revertibleEdit = nil
+            return
+        }
         let usable =
             edit.undo == .spanAtCursor
             ? edit.spanUndo(behind: contextBefore, ahead: contextAfter) != nil

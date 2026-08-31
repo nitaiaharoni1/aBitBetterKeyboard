@@ -23,13 +23,12 @@ extension KeyboardController {
             return true
         }
 
+        let documentIdentifier = target?.documentIdentifier
         Feedback.keyClick(.tock)
         let requestedUnits = repair.source.utf16.count
-        let deletedUnits = deleteBackward(utf16Units: requestedUnits)
-        guard deletedUnits == requestedUnits else {
-            // Boundary repairs contain only Hebrew letters and U+0020, so every
-            // deleted UTF-16 unit is exactly one trailing Character.
-            target?.insertText(String(repair.source.suffix(deletedUnits)))
+        let deletion = deleteBackwardReversibly(utf16Units: requestedUnits)
+        guard deletion.unitsRemoved == requestedUnits else {
+            if !deletion.deletedText.isEmpty { target?.insertText(deletion.deletedText) }
             refreshSuggestions()
             return true
         }
@@ -42,7 +41,8 @@ extension KeyboardController {
             origin: .spacing,
             previous: repair.source,
             applied: repair.replacement,
-            undo: .spanAtCursor)
+            undo: .spanAtCursor,
+            documentIdentifier: documentIdentifier)
         reportInteraction(.suggestion)
         return true
     }

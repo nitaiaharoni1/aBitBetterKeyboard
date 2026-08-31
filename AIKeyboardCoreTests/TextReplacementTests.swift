@@ -191,6 +191,22 @@ final class TextReplacementTests: XCTestCase {
             document: "Hi. see you at six tomorrow", window: 500, replacement: "Running late.")
     }
 
+    /// A host that refuses the forward caret move may already end the visible
+    /// prefix with the same text as the tail. That coincidence must not be read
+    /// as a successful move, or rollback shifts the caret into the message.
+    func testARefusedForwardMoveWithARepeatedTailLeavesTheCaretAlone() {
+        let target = CursorTextTarget(before: "before tail", after: "tail")
+        target.refusesForwardMovement = true
+        let controller = KeyboardController(target: target)
+        controller.aiSourceText = controller.aiTargetText
+
+        controller.applyResult("replacement")
+
+        XCTAssertEqual(target.documentContextBeforeInput, "before tail")
+        XCTAssertEqual(target.documentContextAfterInput, "tail")
+        XCTAssertEqual(target.document, "before tailtail")
+    }
+
     /// **A selection is one backspace, not one per character.** Against a live
     /// selection `deleteBackward()` removes the selection itself, so the old
     /// character count ate `original.count - 1` more from in front of it: the

@@ -269,6 +269,7 @@ extension KeyboardController {
     /// standing over an empty field, and the field is only non-empty once the text
     /// has landed.
     public func insertClip(_ clip: Clip) {
+        let documentIdentifier = target?.documentIdentifier
         Feedback.keyPress()
         clearRevertibleEdit()
         Feedback.keyClick(.tock)
@@ -277,7 +278,11 @@ extension KeyboardController {
         target?.insertText(clip.text.value)
         refreshSuggestions()
         revertibleEdit = RevertibleEdit(
-            origin: .clip, previous: "", applied: clip.text.value, undo: .spanAtCursor)
+            origin: .clip,
+            previous: "",
+            applied: clip.text.value,
+            undo: .spanAtCursor,
+            documentIdentifier: documentIdentifier)
         reportInteraction(.copyclip)
     }
 

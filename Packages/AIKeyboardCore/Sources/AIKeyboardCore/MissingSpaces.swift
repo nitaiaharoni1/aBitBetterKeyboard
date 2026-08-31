@@ -136,8 +136,8 @@ enum MissingSpaces {
         guard word.count >= 2, let rank = TypoLexicon.rank(of: word, in: .hebrew) else {
             return false
         }
-        // Keep the splitter's existing policy for short Hebrew pieces: only
-        // exceptionally common two-letter function words are safe boundaries.
+        // Two-letter Hebrew pieces are safe boundaries only when their corpus
+        // rank marks them as exceptionally common function words.
         return word.count > 2 || rank < shortPieceRankLimit
     }
 

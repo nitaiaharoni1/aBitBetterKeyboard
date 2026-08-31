@@ -18,8 +18,12 @@ final class CursorTextTarget: TextTarget {
     private var before: String
     private var after: String
     private var selected: String?
+    var documentIdentifier: UUID?
     var afterContextIsAvailable = true
-    var backwardDeleteLimit: Int?
+    var refusesForwardMovement = false
+    var backwardDeleteLimit: Int? {
+        didSet { backwardDeleteCount = 0 }
+    }
     private var backwardDeleteCount = 0
 
     /// How much of the text before the cursor the host is willing to hand over.
@@ -33,11 +37,18 @@ final class CursorTextTarget: TextTarget {
     /// not see three fields, they see one line of text.
     var document: String { before + (selected ?? "") + after }
 
-    init(before: String, selecting: String? = nil, after: String = "", window: Int? = nil) {
+    init(
+        before: String,
+        selecting: String? = nil,
+        after: String = "",
+        window: Int? = nil,
+        documentIdentifier: UUID? = UUID()
+    ) {
         self.before = before
         self.selected = selecting
         self.after = after
         self.window = window
+        self.documentIdentifier = documentIdentifier
     }
 
     var documentContextBeforeInput: String? {
@@ -77,6 +88,7 @@ final class CursorTextTarget: TextTarget {
     func adjustTextPosition(byCharacterOffset offset: Int) {
         guard offset != 0 else { return }
         if offset > 0 {
+            guard !refusesForwardMovement else { return }
             var moved = ""
             for character in after {
                 guard moved.utf16.count < offset else { break }
@@ -125,7 +137,7 @@ final class CursorTextTarget: TextTarget {
 ///
 /// **Deliberately scoped to `insertText` alone, not `deleteBackward`.**
 /// `deleteBackward(utf16Units:)` already reads *around* this exact staleness
-/// with its own before/after comparison (`unitsRemoved(from:to:)`), which
+/// with its own before/after comparison (`unitsRemoved`), which
 /// depends on seeing the delete it just asked for; making `deleteBackward()`
 /// stale here would break that unrelated, already-correct loop rather than
 /// exercise anything this fixture exists to test.

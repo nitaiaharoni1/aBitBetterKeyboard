@@ -213,10 +213,17 @@ extension KeyboardController {
         return out
     }
 
-    func replaceTargetText(with replacement: String) {
+    /// Replaces the requested span only when every destructive step completed.
+    /// A partial delete is put back byte for byte and reports failure.
+    @discardableResult
+    func replaceTargetText(with replacement: String) -> Bool {
         endGroupedWord()
+        guard let target else {
+            refreshSuggestions()
+            return false
+        }
         guard !aiSourceText.isEmpty else {
-            target?.insertText(replacement)
+            target.insertText(replacement)
             // **The one branch here that used to skip this, and the only one that
             // changes the document without replacing anything.** It is how a Reply
             // lands — `runReply` empties `aiSourceText` on purpose, because a reply
@@ -226,25 +233,31 @@ extension KeyboardController {
             // their keys stayed dim over a field that now held a whole sentence,
             // until some unrelated keystroke happened to recompute it.
             refreshSuggestions()
-            return
+            return true
         }
         if selection != nil {
-            target?.deleteBackward()
-            target?.insertText(replacement)
+            target.deleteBackward()
+            target.insertText(replacement)
             refreshSuggestions()
-            return
+            return true
         }
         let head = editSpanBeforeCursor
         let tail = editSpanAfterCursor
         guard tail > 0 else {
-            deleteBackward(utf16Units: head)
-            target?.insertText(replacement)
+            let deletion = deleteBackwardReversibly(utf16Units: head)
+            guard deletion.unitsRemoved == head else {
+                if !deletion.deletedText.isEmpty { target.insertText(deletion.deletedText) }
+                refreshSuggestions()
+                return false
+            }
+            target.insertText(replacement)
             refreshSuggestions()
-            return
+            return true
         }
-        let tailText = editTail
+        let contextBeforeMove = contextBefore
+        let contextAfterMove = contextAfter
         let tailDeletes = editDeleteSpanAfterCursor
-        target?.adjustTextPosition(byCharacterOffset: tail)
+        target.adjustTextPosition(byCharacterOffset: tail)
         // **The insert used to happen whether or not the delete did, and that
         // duplicated the message.** If the caret did not land where this expects,
         // the delete was skipped and the replacement went in anyway, so the field
@@ -261,37 +274,102 @@ extension KeyboardController {
         // expiring at the next keystroke: `revertEdit`'s `.wholeField` branch
         // comes through here with the caret wherever the user left it, which was
         // a state the old one-keystroke lifetime made nearly unreachable.
-        guard contextBefore.hasSuffix(tailText) else {
-            // Put the caret back, so a refusal costs the user nothing at all.
-            target?.adjustTextPosition(byCharacterOffset: -tail)
+        let moved = Self.forwardMovement(
+            from: contextBeforeMove,
+            through: contextAfterMove,
+            to: contextBefore,
+            remaining: contextAfter)
+        guard moved == tail else {
+            if moved > 0 { target.adjustTextPosition(byCharacterOffset: -moved) }
             refreshSuggestions()
-            return
+            return false
         }
-        deleteBackward(utf16Units: head + tailDeletes)
-        target?.insertText(replacement)
+        let requestedUnits = head + tailDeletes
+        let deletion = deleteBackwardReversibly(utf16Units: requestedUnits)
+        guard deletion.unitsRemoved == requestedUnits else {
+            if !deletion.deletedText.isEmpty { target.insertText(deletion.deletedText) }
+            target.adjustTextPosition(byCharacterOffset: -tail)
+            refreshSuggestions()
+            return false
+        }
+        target.insertText(replacement)
         refreshSuggestions()
+        return true
+    }
+
+    /// What a backward-delete loop actually removed. `deletedText` is assembled
+    /// in document order so a refused or partial edit can put it straight back.
+    struct BackwardDeletion {
+        var unitsRemoved = 0
+        var deletedText = ""
     }
 
     @discardableResult
     func deleteBackward(utf16Units count: Int) -> Int {
-        var remaining = count
-        var presses = 0
-        while remaining > 0, presses < count + 8 {
-            let before = Array(contextBefore.utf16)
-            target?.deleteBackward()
-            presses += 1
-            let removed = Self.unitsRemoved(from: before, to: Array(contextBefore.utf16))
-            guard removed > 0 else { return count - remaining }
-            remaining -= removed
-        }
-        return count - remaining
+        deleteBackwardReversibly(utf16Units: count).unitsRemoved
     }
 
-    static func unitsRemoved(from before: [UInt16], to after: [UInt16]) -> Int {
-        for k in 0...16 where before.count >= k {
+    func deleteBackwardReversibly(utf16Units count: Int) -> BackwardDeletion {
+        var result = BackwardDeletion()
+        guard let target else { return result }
+        while result.unitsRemoved < count {
+            guard let beforeText = target.documentContextBeforeInput else { return result }
+            let before = Array(beforeText.utf16)
+            guard let trailingCharacter = beforeText.last else { return result }
+            target.deleteBackward()
+            guard let afterText = target.documentContextBeforeInput else { return result }
+            let removed = Self.unitsRemoved(
+                from: before,
+                to: Array(afterText.utf16),
+                expectedTrailingCharacterWidth: String(trailingCharacter).utf16.count)
+            guard removed > 0 else { return result }
+            let deleted = String(decoding: before.suffix(removed), as: UTF16.self)
+            result.unitsRemoved += removed
+            result.deletedText = deleted + result.deletedText
+        }
+        return result
+    }
+
+    static func unitsRemoved(
+        from before: [UInt16],
+        to after: [UInt16],
+        expectedTrailingCharacterWidth: Int
+    ) -> Int {
+        var candidates = Array(0...min(16, before.count))
+        if expectedTrailingCharacterWidth > 16,
+            expectedTrailingCharacterWidth <= before.count
+        {
+            candidates.append(expectedTrailingCharacterWidth)
+        }
+        for k in candidates {
             let kept = before.prefix(before.count - k)
             if after.count >= kept.count, after.suffix(kept.count).elementsEqual(kept) { return k }
         }
         return 0
+    }
+
+    /// How far a host moved through a tail when it honoured only part of a caret
+    /// request. The exact unchanged snapshot wins first so repeated text cannot
+    /// turn a refusal into a backwards move into the user's message.
+    static func forwardMovement(
+        from originalBefore: String,
+        through originalAfter: String,
+        to currentBefore: String,
+        remaining currentAfter: String
+    ) -> Int {
+        guard currentBefore != originalBefore || currentAfter != originalAfter else { return 0 }
+        var moved = ""
+        var index = originalAfter.startIndex
+        var best = 0
+        while index < originalAfter.endIndex {
+            let next = originalAfter.index(after: index)
+            moved += originalAfter[index..<next]
+            let remaining = originalAfter[next...]
+            if currentBefore.hasSuffix(moved), currentAfter.hasPrefix(remaining) {
+                best = moved.utf16.count
+            }
+            index = next
+        }
+        return best
     }
 }

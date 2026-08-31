@@ -133,7 +133,8 @@ public enum AIAction: String, CaseIterable, Identifiable, Hashable, Sendable {
 ///
 /// `applied` is held as well as `previous` because the revert has to find and
 /// delete exactly what was inserted, wherever in the field it has since ended
-/// up.
+/// up. `documentIdentifier` closes the other ambiguity: identical text in a new
+/// host field is still a different document and cannot satisfy this undo.
 public struct RevertibleEdit: Equatable, Sendable {
     /// Which key wrote it, and therefore what the undo control calls itself. The
     /// text actions carry their own `AIAction` rather than collapsing into one
@@ -148,6 +149,9 @@ public struct RevertibleEdit: Equatable, Sendable {
     public let previous: String
     /// What the edit put there.
     public let applied: String
+    /// The host document that received the edit. A matching string in another
+    /// field is not the same edit and must never be changed by this undo.
+    public let documentIdentifier: UUID?
 
     /// **How to put it back, and this is not bookkeeping.** The two undo
     /// differently and getting it wrong destroys the user's message: a Fix over
@@ -196,11 +200,18 @@ public struct RevertibleEdit: Equatable, Sendable {
         case spanAtCursor
     }
 
-    public init(origin: Origin, previous: String, applied: String, undo: Undo = .wholeField) {
+    public init(
+        origin: Origin,
+        previous: String,
+        applied: String,
+        undo: Undo = .wholeField,
+        documentIdentifier: UUID? = nil
+    ) {
         self.origin = origin
         self.previous = previous
         self.applied = applied
         self.undo = undo
+        self.documentIdentifier = documentIdentifier
     }
 
     // MARK: - How long the way back lasts

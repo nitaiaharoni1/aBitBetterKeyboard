@@ -175,6 +175,24 @@ final class AIDirectEditTests: XCTestCase {
         XCTAssertEqual(target.document, "hello there wrold friend")
     }
 
+    func testDirectEditRefusesAndRestoresAPartialWholeFieldDeletion() {
+        let target = CursorTextTarget(before: "i cant make the standup")
+        let controller = KeyboardController(target: target)
+        controller.aiSourceText = controller.aiTargetText
+        controller.applyDirectly("I can't make the standup.", for: .fix)
+        let existingUndo = controller.revertibleEdit
+
+        controller.aiSourceText = controller.aiTargetText
+        target.backwardDeleteLimit = 2
+        controller.applyDirectly("I cannot make the standup.", for: .fix)
+
+        XCTAssertEqual(target.document, "I can't make the standup.")
+        XCTAssertEqual(
+            controller.revertibleEdit,
+            existingUndo,
+            "a refused edit cleared the previous, still-usable undo")
+    }
+
     /// **A reply landing in an empty field lights the keys that need text.**
     ///
     /// Reply is the one action that runs on an empty field, so this is the ordinary

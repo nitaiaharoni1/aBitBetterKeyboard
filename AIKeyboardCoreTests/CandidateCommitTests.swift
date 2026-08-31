@@ -102,6 +102,20 @@ final class CandidateCommitTests: XCTestCase {
             bySpace: "ok party ", byTap: "ok party ")
     }
 
+    func testDeletionMeasuresACharacterWiderThanSixteenUTF16Units() {
+        let trailing = "a" + String(repeating: "\u{0301}", count: 20)
+        XCTAssertEqual(trailing.count, 1)
+        XCTAssertGreaterThan(trailing.utf16.count, 16)
+        let target = CursorTextTarget(before: "x" + trailing)
+        let controller = KeyboardController(target: target)
+
+        let deletion = controller.deleteBackwardReversibly(utf16Units: trailing.utf16.count)
+
+        XCTAssertEqual(deletion.unitsRemoved, trailing.utf16.count)
+        XCTAssertEqual(deletion.deletedText, trailing)
+        XCTAssertEqual(target.document, "x")
+    }
+
     /// **A live selection, which is the other half of the same bug.** The first
     /// backspace removes the selection and every press after it ate real text:
     /// `hello wor⟦ld mo⟧re` came back `hello wword re`, with the user's `or` gone.
@@ -490,6 +504,36 @@ final class CandidateCommitTests: XCTestCase {
         controller.apply(offer)
 
         XCTAssertEqual(target.document, "שלו ם")
+        XCTAssertNil(controller.revertibleEdit)
+    }
+
+    func testBoundaryRepairUndoRollsBackAPartialDeletion() throws {
+        let target = CursorTextTarget(before: "אמר שלו םלכולם")
+        let controller = KeyboardController(target: target, language: .hebrew)
+        controller.refreshSuggestions()
+        let offer = try XCTUnwrap(controller.suggestions.first)
+        controller.apply(offer)
+        XCTAssertEqual(target.document, "אמר שלום לכולם")
+
+        target.backwardDeleteLimit = 2
+        controller.revertEdit()
+
+        XCTAssertEqual(target.document, "אמר שלום לכולם")
+        XCTAssertNil(controller.revertibleEdit)
+    }
+
+    func testBoundaryRepairUndoRefusesADifferentDocument() throws {
+        let target = CursorTextTarget(before: "אמר שלו םלכולם")
+        let controller = KeyboardController(target: target, language: .hebrew)
+        controller.refreshSuggestions()
+        let offer = try XCTUnwrap(controller.suggestions.first)
+        controller.apply(offer)
+        XCTAssertEqual(target.document, "אמר שלום לכולם")
+
+        target.documentIdentifier = UUID()
+        controller.revertEdit()
+
+        XCTAssertEqual(target.document, "אמר שלום לכולם")
         XCTAssertNil(controller.revertibleEdit)
     }
 
