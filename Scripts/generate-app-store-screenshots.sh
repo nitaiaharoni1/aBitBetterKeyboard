@@ -2,64 +2,174 @@
 set -euo pipefail
 
 release_root="$(cd "$(dirname "$0")/.." && pwd)"
-site_port=48731
-site_origin="http://127.0.0.1:${site_port}"
-chrome_path="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+source_dir="$release_root/AppStore/screenshots-source"
 output_dir="$release_root/fastlane/screenshots/en-US"
-server_log_path="${TMPDIR:-/tmp}/aikeyboard-store-site.log"
+font="/System/Library/Fonts/SFNS.ttf"
+work_dir="$(mktemp -d "${TMPDIR:-/tmp}/aikeyboard-store-shots.XXXXXX")"
 
-if lsof -nP -iTCP:"$site_port" -sTCP:LISTEN >/dev/null 2>&1; then
-    echo "Port $site_port is already in use; no process was stopped." >&2
-    exit 1
-fi
-if [ ! -x "$chrome_path" ]; then
-    echo "Google Chrome is required at $chrome_path" >&2
-    exit 1
-fi
-
-cd "$release_root/Landing"
-npm run build
-
-ruby -run -e httpd out -p "$site_port" >"$server_log_path" 2>&1 &
-server_pid=$!
 cleanup() {
-    pkill -TERM -P "$server_pid" 2>/dev/null || true
-    kill -TERM "$server_pid" 2>/dev/null || true
-    wait "$server_pid" 2>/dev/null || true
+    rm -rf "$work_dir"
 }
 trap cleanup EXIT
 
-for _ in {1..40}; do
-    curl --silent --fail "$site_origin/store/hebrew/" >/dev/null && break
-    sleep 0.25
+for required in background.png home.png keyboard.png emoji.png settings.png palette.png privacy.png; do
+    if [ ! -f "$source_dir/$required" ]; then
+        echo "Missing screenshot source: $source_dir/$required" >&2
+        exit 1
+    fi
 done
-curl --silent --fail "$site_origin/store/hebrew/" >/dev/null
+if [ ! -f "$font" ]; then
+    echo "Required system font is missing: $font" >&2
+    exit 1
+fi
 
 mkdir -p "$output_dir"
-for shot_spec in \
-    "hebrew:01-hebrew.png" \
-    "bilingual:02-bilingual.png" \
-    "privacy:03-privacy.png"; do
-    shot="${shot_spec%%:*}"
-    filename="${shot_spec#*:}"
-    "$chrome_path" \
-        --headless=new \
-        --disable-gpu \
-        --force-device-scale-factor=3 \
-        --hide-scrollbars \
-        --window-size=428,926 \
-        --screenshot="$output_dir/$filename" \
-        "$site_origin/store/$shot/" >/dev/null 2>&1
-    magick "$output_dir/$filename" -alpha off "$output_dir/$filename"
+find "$output_dir" -maxdepth 1 -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -delete
 
-    image_info="$(sips -g pixelWidth -g pixelHeight -g hasAlpha "$output_dir/$filename")"
+magick "$source_dir/background.png" \
+    -resize '1284x2778^' \
+    -gravity center \
+    -extent 1284x2778 \
+    -alpha off \
+    "$work_dir/canvas.png"
+
+brand_canvas() {
+    local destination="$1"
+    magick "$work_dir/canvas.png" \
+        \( "$release_root/Landing/public/mark.png" -resize 48x48 \) \
+        -geometry +76+64 \
+        -composite \
+        -font "$font" \
+        -fill '#242728' \
+        -pointsize 38 \
+        -weight 700 \
+        -annotate +142+103 'aBitBetterKeyboard' \
+        "$destination"
+}
+
+compose_full_screen() {
+    local source="$1"
+    local destination="$2"
+    local title="$3"
+    local subtitle="$4"
+    local canvas="$work_dir/$(basename "$destination" .png)-canvas.png"
+    local screen="$work_dir/$(basename "$destination" .png)-screen.png"
+
+    brand_canvas "$canvas"
+    magick "$source" \
+        -resize '1020x2217!' \
+        -bordercolor white \
+        -border 4 \
+        "$screen"
+
+    magick "$canvas" \
+        -font "$font" \
+        -fill '#242728' \
+        -pointsize 82 \
+        -weight 800 \
+        -annotate +76+285 "$title" \
+        -fill '#646968' \
+        -pointsize 33 \
+        -weight 400 \
+        -annotate +78+382 "$subtitle" \
+        \( "$screen" -background '#242728' -shadow 45x12+0+16 \) \
+        -geometry +128+520 \
+        -composite \
+        "$screen" \
+        -geometry +128+520 \
+        -composite \
+        -alpha off \
+        "$destination"
+}
+
+compose_keyboard() {
+    local source="$1"
+    local destination="$2"
+    local title="$3"
+    local subtitle="$4"
+    local canvas="$work_dir/$(basename "$destination" .png)-canvas.png"
+    local keyboard="$work_dir/$(basename "$destination" .png)-keyboard.png"
+
+    brand_canvas "$canvas"
+    magick "$source" \
+        -crop '1206x1052+0+1570' \
+        +repage \
+        -resize '1150x1003!' \
+        -bordercolor white \
+        -border 4 \
+        "$keyboard"
+
+    magick "$canvas" \
+        -font "$font" \
+        -fill '#242728' \
+        -pointsize 104 \
+        -weight 800 \
+        -annotate +76+340 "$title" \
+        -fill '#646968' \
+        -pointsize 42 \
+        -weight 400 \
+        -annotate +80+520 "$subtitle" \
+        \( "$keyboard" -background '#242728' -shadow 50x14+0+18 \) \
+        -geometry +63+1670 \
+        -composite \
+        "$keyboard" \
+        -geometry +63+1670 \
+        -composite \
+        -alpha off \
+        "$destination"
+}
+
+compose_full_screen \
+    "$source_dir/home.png" \
+    "$output_dir/01-home.png" \
+    'Set up in minutes.' \
+    $'Clear steps, dictation, and a built-in place\nto try the keyboard.'
+
+compose_keyboard \
+    "$source_dir/keyboard.png" \
+    "$output_dir/02-keyboard.png" \
+    $'Your keyboard.\nYour way.' \
+    $'Real keys, suggestions, and quick actions\nin one place.'
+
+compose_keyboard \
+    "$source_dir/emoji.png" \
+    "$output_dir/03-emoji.png" \
+    $'Emoji without\nthe detour.' \
+    $'Pick one without leaving the keyboard\nor losing your place.'
+
+compose_full_screen \
+    "$source_dir/settings.png" \
+    "$output_dir/04-settings.png" \
+    'Control every detail.' \
+    $'Typing, AI, and keyboard feel stay\nin your hands.'
+
+compose_full_screen \
+    "$source_dir/palette.png" \
+    "$output_dir/05-customize.png" \
+    'Make it feel like yours.' \
+    $'Pick the accent you want and change it\nwhenever you like.'
+
+magick "$source_dir/privacy.png" \
+    -resize '1284x2778!' \
+    -alpha off \
+    "$output_dir/06-privacy.png"
+
+screenshot_count=0
+for screenshot in "$output_dir"/*.png; do
+    screenshot_count=$((screenshot_count + 1))
+    image_info="$(sips -g pixelWidth -g pixelHeight -g hasAlpha "$screenshot")"
     width="$(printf '%s\n' "$image_info" | awk '/pixelWidth:/ {print $2}')"
     height="$(printf '%s\n' "$image_info" | awk '/pixelHeight:/ {print $2}')"
     alpha="$(printf '%s\n' "$image_info" | awk '/hasAlpha:/ {print $2}')"
-    if [ "$width" != "1284" ] || [ "$height" != "2778" ] || [ "$alpha" != "no" ]; then
-        echo "$filename must be an opaque 1284x2778 image; found ${width}x${height}, alpha=$alpha" >&2
+    if [ "$width" != '1284' ] || [ "$height" != '2778' ] || [ "$alpha" != 'no' ]; then
+        echo "$(basename "$screenshot") must be an opaque 1284x2778 image; found ${width}x${height}, alpha=$alpha" >&2
         exit 1
     fi
 done
 
-echo "Generated three opaque 1284x2778 App Store screenshots in $output_dir."
+if [ "$screenshot_count" -ne 6 ]; then
+    echo "Expected six screenshots; found $screenshot_count" >&2
+    exit 1
+fi
+
+echo "Generated six opaque 1284x2778 App Store screenshots in $output_dir."
