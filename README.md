@@ -526,8 +526,8 @@ the `Scripts/prove-*.sh` scripts rather than judged by their own assertions; see
 - **iPad layouts.** Landscape iPhone and Dynamic Type both shipped and moved up
   to "What's built"; iPad did not, and it is a different question rather than a
   wider answer to the same one — a split or floating keyboard changes shape, not
-  aspect ratio. The targets still build for device family `1,2`, so an iPad user
-  today gets the iPhone geometry stretched (NIT-177)
+  aspect ratio. Version 1.0 therefore targets device family `1` and is iPhone-only.
+  iPad support returns only after that separate layout and device pass (NIT-177)
 - Real StoreKit or accounts. The **backend is real and deployed** (`Backend/`,
   Cloud Run, `Scripts/prove-cloud-backend.sh` exercises the shipping client
   against it); what is untested there is a shared-state rate limit and the token
@@ -542,3 +542,14 @@ the `Scripts/prove-*.sh` scripts rather than judged by their own assertions; see
   device. What that leaves unproven is the round trip, not the verifier: whether a
   real `attestKey` blob passes the checks a synthetic one passes. Prove it by
   running the app on a phone and watching `/v1/attest` return 200
+
+## License
+
+The source code is available under the
+[PolyForm Noncommercial License 1.0.0](LICENSE). You may read, modify, and share
+it for permitted noncommercial purposes. Commercial use is not licensed without
+a separate written agreement from the repository owner.
+
+This project is source-available, not open source under the Open Source
+Initiative definition. See [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a
+change.

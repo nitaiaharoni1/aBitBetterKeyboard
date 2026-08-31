@@ -2,6 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    "https://nitaiaharoni1.github.io/aBitBetterKeyboard/",
+  ),
   title: "aBitBetterKeyboard: Hebrew autocorrect that actually works",
   description:
     "An iOS keyboard built for Hebrew. It knows what glues onto the front of a word, keeps your English words in English, and lets you rebuild the keys. Hebrew and English, on the keys.",

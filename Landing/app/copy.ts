@@ -80,15 +80,16 @@ export const copy = {
     privacyTitle: "Your words stay yours.",
     privacyOnDevice: "On-device first",
     privacyOnDeviceBody:
-      "Suggestions and dictation run on your iPhone whenever they can.",
+      "Suggestions run on your iPhone. Dictation is recorded there, then its final transcript is made in the cloud when you ask.",
     privacyCloud: "Cloud, only when you ask",
-    privacyCloudBody: "Heavier AI actions call the cloud only when you tap them.",
+    privacyCloudBody:
+      "AI actions and final dictation call the cloud only when you tap them and after you allow cloud AI.",
     privacySold: "Never sold",
     privacySoldBody:
       "Your keystrokes and messages are never used for advertising.",
     privacyCount: "What we count",
     privacyCountBody:
-      "How far setup gets, and whether you come back to the app. Never a keystroke, a correction, or a dictated word. The keyboard itself sends nothing, and no other company's code is doing the counting.",
+      "How far setup gets, and whether you come back to the app. Never a keystroke, a correction, or a dictated word. The keyboard extension sends no analytics, and no other company's code is doing the counting.",
     downloadTitle: "Add it. Type anywhere.",
     downloadSub: "Free on iPhone. After you install the app, add the keyboard in Settings.",
     step1Title: "Install the app",
@@ -101,6 +102,7 @@ export const copy = {
       "The AI actions and cloud dictation need it, and in Hebrew that is all of them. Typing works without it, and your saved layout reaches the keyboard once it is on.",
     footerStore: "Get the keyboard",
     footerPrivacy: "Privacy",
+    footerSupport: "Support",
     footerCopy: "© 2026 aBitBetterKeyboard",
     privacyPageTitle: "Privacy",
     privacyPageLead:
@@ -180,14 +182,16 @@ export const copy = {
     languagesNote: "הפריסה והמילון האישי מגיעים איתך לכל שיחה.",
     privacyTitle: "המילים שלך נשארות שלך.",
     privacyOnDevice: "קודם על המכשיר",
-    privacyOnDeviceBody: "הצעות והכתבה רצות על האייפון בכל פעם שאפשר.",
+    privacyOnDeviceBody:
+      "הצעות רצות על האייפון. ההכתבה מוקלטת עליו, ואז התמלול הסופי נעשה בענן כשמבקשים.",
     privacyCloud: "ענן, רק כשמבקשים",
-    privacyCloudBody: "פעולות AI כבדות יותר קוראות לענן רק בלחיצה.",
+    privacyCloudBody:
+      "פעולות AI והתמלול הסופי של הכתבה קוראים לענן רק בלחיצה, ואחרי שאישרת עיבוד AI בענן.",
     privacySold: "לא נמכר",
     privacySoldBody: "ההקלדות וההודעות לא משמשות לפרסום.",
     privacyCount: "מה נספר",
     privacyCountBody:
-      "עד לאן הגיע תהליך ההתקנה, ואם חזרת לאפליקציה. אף פעם לא הקלדה, תיקון או מילה שהכתבת. המקלדת עצמה לא שולחת כלום, ואף חברה אחרת לא סופרת כאן.",
+      "עד לאן הגיע תהליך ההתקנה, ואם חזרת לאפליקציה. אף פעם לא הקלדה, תיקון או מילה שהכתבת. הרחבת המקלדת לא שולחת נתוני שימוש, ואף חברה אחרת לא סופרת כאן.",
     downloadTitle: "מוסיפים. כותבים מכל מקום.",
     downloadSub: "חינם באייפון. אחרי התקנת האפליקציה, מוסיפים את המקלדת בהגדרות.",
     step1Title: "מתקינים את האפליקציה",
@@ -199,6 +203,7 @@ export const copy = {
       "פעולות ה-AI וההכתבה בענן צריכות אותה, ובעברית אלה כולן. הקלדה עובדת גם בלעדיה, והפריסה שהגדרת מגיעה למקלדת כשהיא דלוקה.",
     footerStore: "להורדה",
     footerPrivacy: "פרטיות",
+    footerSupport: "תמיכה",
     footerCopy: "© 2026 aBitBetterKeyboard",
     privacyPageTitle: "פרטיות",
     privacyPageLead:
