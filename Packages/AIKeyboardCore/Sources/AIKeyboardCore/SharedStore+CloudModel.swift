@@ -4,6 +4,17 @@ extension SharedStore {
 
     // MARK: Cloud model
 
+    /// The user's explicit, revocable permission for cloud AI processing.
+    /// Computed from the App Group at use time because the containing app and
+    /// keyboard extension are separate processes.
+    public var allowsCloudAIProcessing: Bool {
+        get { BackendTransport.allowsCloudAIProcessing(defaults: defaults) }
+        set {
+            objectWillChange.send()
+            defaults.set(newValue, forKey: Key.cloudAIProcessingAllowed)
+        }
+    }
+
     /// The backend every cloud call goes to, exactly as typed.
     ///
     /// **One key, and it is the one the whole product turns on.** Three readers

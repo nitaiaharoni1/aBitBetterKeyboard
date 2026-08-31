@@ -4,15 +4,50 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { authorize, bearerToken, callerKey, createRateLimiter } from "../src/gate.js";
+import {
+  authorize,
+  bearerToken,
+  callerKey,
+  createAuthorizer,
+  createRateLimiter,
+  ServiceMode
+} from "../src/gate.js";
 
 test("a service with no token configured accepts everyone", async () => {
-  // The local `npm start` case. Opening this up is a decision `deploy.sh`
-  // refuses to make for you.
+  // The lower-level primitive used only by the explicit local-open policy.
   assert.deepEqual(await authorize({ expectedToken: null, headers: {} }), {
     ok: true,
     deviceId: null
   });
+});
+
+test("production refuses to exist without a session verifier", () => {
+  assert.throws(
+    () => createAuthorizer({ mode: ServiceMode.PRODUCTION }),
+    /requires session verification/
+  );
+});
+
+test("production refuses a shared developer-token fallback", () => {
+  assert.throws(
+    () =>
+      createAuthorizer({
+        mode: ServiceMode.PRODUCTION,
+        verifySession: acceptsOnly("good"),
+        developerToken: "shared"
+      }),
+    /forbids BACKEND_TOKEN/
+  );
+});
+
+test("production rejects a session verifier refusal instead of failing open", async () => {
+  const authorizeRequest = createAuthorizer({
+    mode: ServiceMode.PRODUCTION,
+    verifySession: acceptsOnly("good")
+  });
+  const result = await authorizeRequest({ authorization: "Bearer wrong" });
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 401);
 });
 
 test("a configured token accepts the matching bearer and nothing else", async () => {

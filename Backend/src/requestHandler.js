@@ -25,6 +25,15 @@ function validationError(message) {
   return { status: 400, body: { error: message } };
 }
 
+function unknownKey(value, allowed, path) {
+  const key = Object.keys(value).find((candidate) => !allowed.has(candidate));
+  return key === undefined ? null : `${path}.${key} is not allowed`;
+}
+
+const BODY_KEYS = new Set(["instructions", "prompt", "fields", "image", "audio"]);
+const FIELD_KEYS = new Set(["name", "description", "items"]);
+const MEDIA_KEYS = new Set(["mimeType", "data"]);
+
 // Recursive because `items` fields nest the same {name, description, items?}
 // shape one level down (only `messages` does this today, but the shape
 // itself is generic — see `schema.js`), and a malformed nested field is
@@ -33,7 +42,11 @@ function validateFields(fields, path = "fields") {
   if (!Array.isArray(fields)) return `${path} must be an array`;
   for (const [index, field] of fields.entries()) {
     const at = `${path}[${index}]`;
-    if (typeof field !== "object" || field === null) return `${at} must be an object`;
+    if (typeof field !== "object" || field === null || Array.isArray(field)) {
+      return `${at} must be an object`;
+    }
+    const extra = unknownKey(field, FIELD_KEYS, at);
+    if (extra) return extra;
     if (typeof field.name !== "string" || field.name.length === 0) return `${at}.name must be a non-empty string`;
     if (typeof field.description !== "string") return `${at}.description must be a string`;
     if (field.items !== undefined) {
@@ -49,34 +62,71 @@ function validateFields(fields, path = "fields") {
 // a picture of somebody's screen and a recording of their voice should be able
 // to have different retention rules, and one shared field is how they quietly
 // end up with one rule.
-function validateMedia(value, name) {
-  if (value === undefined) return null;
-  if (typeof value !== "object" || value === null) return `${name} must be an object`;
-  if (typeof value.mimeType !== "string") return `${name}.mimeType must be a string`;
-  if (typeof value.data !== "string") return `${name}.data must be a base64 string`;
-  return null;
-}
-
-function validateBody(body) {
-  if (typeof body !== "object" || body === null) return "request body must be a JSON object";
-  if (typeof body.instructions !== "string") return "instructions must be a string";
-  if (typeof body.prompt !== "string") return "prompt must be a string";
-  const fieldsError = validateFields(body.fields);
-  if (fieldsError) return fieldsError;
-  const imageError = validateMedia(body.image, "image");
-  if (imageError) return imageError;
-  const audioError = validateMedia(body.audio, "audio");
-  if (audioError) return audioError;
-  // One at a time. A body carrying both would be a caller mixing up two
-  // endpoints, and guessing which one it meant is worse than saying so.
-  if (body.image !== undefined && body.audio !== undefined) {
-    return "a request carries either image or audio, not both";
+function validateMedia(value, name, expectedMimeType, hasSignature) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return `${name} must be an object`;
+  }
+  const extra = unknownKey(value, MEDIA_KEYS, name);
+  if (extra) return extra;
+  if (value.mimeType !== expectedMimeType) return `${name}.mimeType must be ${expectedMimeType}`;
+  if (typeof value.data !== "string" || value.data.length === 0) {
+    return `${name}.data must be non-empty base64`;
+  }
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value.data)) {
+    return `${name}.data must be valid base64`;
+  }
+  const bytes = Buffer.from(value.data, "base64");
+  if (bytes.toString("base64") !== value.data || !hasSignature(bytes)) {
+    return `${name}.data does not contain ${expectedMimeType} bytes`;
   }
   return null;
 }
 
-export async function handleRequest(body, { vertexClient }) {
-  const validationMessage = validateBody(body);
+function isWAV(bytes) {
+  return bytes.length >= 12
+    && bytes.subarray(0, 4).toString("ascii") === "RIFF"
+    && bytes.subarray(8, 12).toString("ascii") === "WAVE";
+}
+
+function isJPEG(bytes) {
+  return bytes.length >= 4
+    && bytes[0] === 0xff
+    && bytes[1] === 0xd8
+    && bytes[2] === 0xff
+    && bytes[bytes.length - 2] === 0xff
+    && bytes[bytes.length - 1] === 0xd9;
+}
+
+function validateBody(route, body) {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return "request body must be a JSON object";
+  }
+  const extra = unknownKey(body, BODY_KEYS, "body");
+  if (extra) return extra;
+  if (typeof body.instructions !== "string") return "instructions must be a string";
+  if (typeof body.prompt !== "string") return "prompt must be a string";
+  const fieldsError = validateFields(body.fields);
+  if (fieldsError) return fieldsError;
+  if (route === "text") {
+    if (body.image !== undefined || body.audio !== undefined) {
+      return "text requests cannot carry media";
+    }
+  } else if (route === "audio") {
+    if (body.image !== undefined) return "audio requests cannot carry an image";
+    const audioError = validateMedia(body.audio, "audio", "audio/wav", isWAV);
+    if (audioError) return audioError;
+  } else if (route === "screen") {
+    if (body.audio !== undefined) return "screen requests cannot carry audio";
+    const imageError = validateMedia(body.image, "image", "image/jpeg", isJPEG);
+    if (imageError) return imageError;
+  } else {
+    return "unsupported request route";
+  }
+  return null;
+}
+
+export async function handleRequest(route, body, { vertexClient }) {
+  const validationMessage = validateBody(route, body);
   if (validationMessage) return validationError(validationMessage);
 
   const result = await vertexClient.call({

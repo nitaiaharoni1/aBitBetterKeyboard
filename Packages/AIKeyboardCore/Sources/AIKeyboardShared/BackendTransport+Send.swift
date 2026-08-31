@@ -5,17 +5,22 @@ import Foundation
 extension BackendTransport {
 
     public func send(_ request: CloudRequest) async throws -> [String: String] {
-        try await send(request, token: token, allowReattest: true)
+        if case .shared(let defaults) = credential,
+            !Self.allowsCloudAIProcessing(defaults: defaults)
+        {
+            throw AIEngineError.cloudPermissionRequired
+        }
+        return try await send(request, token: currentBearer(), allowCredentialRefresh: true)
     }
 
-    /// `token` is threaded through explicitly, rather than always read from
-    /// `self.token`, so the one retry NIT-87 asks for can run with a freshly
-    /// minted bearer without constructing a second `BackendTransport`.
-    /// `allowReattest` is what keeps the retry to exactly one: it is false on
+    /// `token` is threaded through explicitly so the one retry NIT-87 asks for
+    /// can run with a freshly minted bearer without constructing a second
+    /// `BackendTransport`.
+    /// `allowCredentialRefresh` is what keeps the retry to exactly one: it is false on
     /// the recursive call, so a second 401 falls straight through to
-    /// `mapped` instead of asking `SessionReattestation` again.
+    /// `mapped` instead of rereading App Group state or asking App Attest again.
     private func send(
-        _ request: CloudRequest, token: String?, allowReattest: Bool
+        _ request: CloudRequest, token: String?, allowCredentialRefresh: Bool
     ) async throws -> [String: String] {
         var body: [String: Any] = [
             "instructions": request.instructions,
@@ -23,46 +28,30 @@ extension BackendTransport {
             "fields": request.fields.map(Self.encoded)
         ]
 
-        // A frame goes to its own endpoint rather than being smuggled into the
-        // text one, so the backend can hold screen images to a different
-        // retention rule than text. Base64 because the body is already JSON and
-        // one frame is small next to the model call it pays for.
-        if let image = request.image {
+        let route: BackendEndpoint.Route
+        switch request.payload {
+        case .text:
+            route = .text
+        case .screenJPEG(let data):
+            route = .screen
             body["image"] = [
-                "mimeType": image.mimeType,
-                "data": image.data.base64EncodedString()
+                "mimeType": "image/jpeg",
+                "data": data.base64EncodedString()
             ]
-        }
-
-        // A recording goes to its own endpoint for the reason a frame does: the
-        // backend can hold somebody's voice to a different retention rule than
-        // their text, and it can only do that if the two arrive separately.
-        if let audio = request.audio {
+        case .audioWAV(let data):
+            route = .audio
             body["audio"] = [
-                "mimeType": audio.mimeType,
-                "data": audio.data.base64EncodedString()
+                "mimeType": "audio/wav",
+                "data": data.base64EncodedString()
             ]
         }
 
-        let path: String
-        if request.image != nil {
-            path = "v1/screen"
-        } else if request.audio != nil {
-            path = "v1/audio"
-        } else {
-            path = "v1/text"
-        }
-        var urlRequest = URLRequest(url: baseURL.appendingPathComponent(path))
+        var urlRequest = URLRequest(url: endpoint.url(for: route))
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
-        // The backend spends money per call, so an endpoint anyone can find is an
-        // endpoint anyone can bill. This is *not* a bundled secret — nothing here
-        // ships one, for the same reason no provider credential does: anything in
-        // the bundle is extractable. It is a value the person running the backend
-        // puts into settings alongside its URL, so it is exactly as private as
-        // they keep it. A shipping consumer build wants App Attest instead, which
-        // proves the caller is a genuine copy of this app rather than proving it
-        // knows a string; `Backend/README.md` says so under its known gaps.
+        // Release credentials are App Attest sessions read from the shared
+        // container at call time. A fixed bearer is available only to an
+        // explicitly constructed development transport.
         if let token {
             urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "authorization")
         }
@@ -84,11 +73,12 @@ extension BackendTransport {
         // `SessionReattestation` is the one thing that can tell the
         // difference without bothering the user — see its doc comment for why
         // this cannot stampede. Tried at most once per call, via
-        // `allowReattest`: a second 401 after a fresh token is a real
+        // `allowCredentialRefresh`: a second 401 after a fresh token is a real
         // refusal, not another round of the same guess.
-        if status == 401, allowReattest {
-            if let fresh = await SessionReattestation.shared.reattest() {
-                return try await send(request, token: fresh, allowReattest: false)
+        if status == 401, allowCredentialRefresh {
+            if let fresh = await replacementBearer(after: token) {
+                return try await send(
+                    request, token: fresh, allowCredentialRefresh: false)
             }
             // Re-attestation was not possible at all — nothing registered,
             // which today means this process is one of the two extensions —

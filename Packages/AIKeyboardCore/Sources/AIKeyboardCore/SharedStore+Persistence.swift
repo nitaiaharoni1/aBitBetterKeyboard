@@ -21,7 +21,7 @@ extension SharedStore {
             Key.recentEmoji, Key.emojiSkinTone, Key.copyclipHistory,
             Key.hasAcknowledgedKeyboardSwitch,
             Key.dictationHandoffRequest, Key.dictationActiveLanguage,
-            Key.brandPalette
+            Key.brandPalette, Key.cloudAIProcessingAllowed
             // Deliberately not `cloudBackendURL` or `cloudBackendToken`. A UI test
             // run would otherwise wipe the backend whoever is developing this
             // typed in, and it is the one setting here that cannot be recovered by
@@ -56,6 +56,7 @@ extension SharedStore {
         copyclipRecord = .empty
         isSubscribed = false
         screenContextAllowed = false
+        allowsCloudAIProcessing = false
         // Assigned as well as removed, for the reason `personalDictionary` is:
         // clearing the key and leaving the in-memory value alone is a reset that
         // does not reset, and the keyboard would keep drawing the old shape.

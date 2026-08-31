@@ -86,7 +86,9 @@ public enum AppAttestation {
         // attest at all. Without this line a working developer setup reports
         // "This device can't use App Attest" on the Cloud model screen for ever,
         // which is a true sentence about a keyboard that is answering fine.
-        guard store.cloudBackendToken.isEmpty else { return }
+        #if DEBUG
+        guard !BackendTransport.usesDeveloperCredential() else { return }
+        #endif
         if let last = store.attestationCheckedAt,
             Date().timeIntervalSince(last) < automaticCooldown
         {
@@ -168,17 +170,7 @@ public enum AppAttestation {
             finish(false, "This device can't use App Attest.", store: store)
             return
         }
-        // **Guarded, not force-unwrapped, and the difference is a launch
-        // crash.** `effectiveURL` returns the stored string as it was typed —
-        // only `configured()` ever asks whether it parses — and this runs at
-        // launch on a value written by a different process into a shared plist.
-        // A stored string with a space in it makes `URL(string:)` nil, and a
-        // `!` there takes the app down before it draws. Refused the same two
-        // ways `BackendTransport.configured` refuses, so a URL this accepts is
-        // one a call would actually go to.
-        guard let base = URL(string: BackendTransport.effectiveURL()),
-            base.scheme?.hasPrefix("http") == true
-        else {
+        guard let endpoint = BackendTransport.configuredEndpoint() else {
             finish(false, "The cloud model address isn't a web address.", store: store)
             return
         }
@@ -196,7 +188,7 @@ public enum AppAttestation {
 
         let challenge: String
         do {
-            challenge = try await fetchChallenge(base: base)
+            challenge = try await fetchChallenge(endpoint: endpoint)
         } catch {
             finish(false, "Couldn't reach the server: \(error.localizedDescription)", store: store)
             return
@@ -207,7 +199,7 @@ public enum AppAttestation {
 
         do {
             store.cloudSessionToken = try await exchange(
-                attestation, keyId: keyId, challenge: challenge, base: base)
+                attestation, keyId: keyId, challenge: challenge, endpoint: endpoint)
             finish(true, "Connected.", store: store)
         } catch {
             finish(false, error.localizedDescription, store: store)
@@ -302,8 +294,8 @@ public enum AppAttestation {
 
     // MARK: Talking to our own service
 
-    private static func fetchChallenge(base: URL) async throws -> String {
-        var request = URLRequest(url: base.appendingPathComponent("v1/challenge"))
+    private static func fetchChallenge(endpoint: BackendEndpoint) async throws -> String {
+        var request = URLRequest(url: endpoint.url(for: .challenge))
         request.httpMethod = "POST"
         let (data, _) = try await URLSession.shared.data(for: request)
         guard let body = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -320,9 +312,9 @@ public enum AppAttestation {
     /// problem, with a different fix, from a phone that is offline — and the two
     /// were the same silent `return`.
     private static func exchange(
-        _ attestation: Data, keyId: String, challenge: String, base: URL
+        _ attestation: Data, keyId: String, challenge: String, endpoint: BackendEndpoint
     ) async throws -> String {
-        var request = URLRequest(url: base.appendingPathComponent("v1/attest"))
+        var request = URLRequest(url: endpoint.url(for: .attest))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.httpBody = try JSONSerialization.data(withJSONObject: [

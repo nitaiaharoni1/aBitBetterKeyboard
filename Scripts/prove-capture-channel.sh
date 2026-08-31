@@ -190,7 +190,7 @@ pass "$IDENTITIES distinct frame identities observed by the reading process"
 # not. Condition 4 of the freshness gate is the only thing that catches the
 # second case and it is being exercised here on data the reader did not write.
 echo "==> 6. The freshness gate retired the reading when the conversation changed"
-echo "$WATCH" | grep -q 'verdict=offerable reading=Maya' \
+echo "$WATCH" | grep -q 'verdict=offerable reading=present' \
   || fail "the extension never found the reading offerable; the gate refused a fresh reading"
 pass "verdict=offerable while the reading matched the frame on screen"
 
@@ -198,7 +198,7 @@ pass "verdict=offerable while the reading matched the frame on screen"
 # `offerable reading=none` is an ordinary state — the gate is happy and there is
 # simply nothing published yet — and matching it here made the ordering check
 # pass or fail on which state the timeline happened to end in.
-OFFERABLE_LINE=$(echo "$WATCH" | grep -n 'verdict=offerable reading=[^n]' | tail -1 | cut -d: -f1)
+OFFERABLE_LINE=$(echo "$WATCH" | grep -n 'verdict=offerable reading=present' | tail -1 | cut -d: -f1)
 SUPERSEDED_LINE=$(echo "$WATCH" | grep -n 'verdict=superseded' | tail -1 | cut -d: -f1)
 [ -n "$SUPERSEDED_LINE" ] \
   || fail "the extension never retired the reading; a stale reply would have been offered"

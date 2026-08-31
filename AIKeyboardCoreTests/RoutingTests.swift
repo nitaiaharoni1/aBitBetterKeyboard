@@ -222,7 +222,8 @@ final class RoutedIntelligenceTests: XCTestCase {
         let all: [AIEngineError] = [
             .modelNotReady, .appleIntelligenceOff, .deviceNotSupported,
             .unsupportedLanguage(.hebrew), .refused, .inputTooLong, .needsFullAccess,
-            .cloudNotConfigured, .network(""), .empty, .timedOut, .failed("")
+            .cloudPermissionRequired, .cloudNotConfigured, .network(""), .empty, .timedOut,
+            .failed("")
         ]
         for error in all {
             XCTAssertFalse(error.title.isEmpty, "\(error) has no title")

@@ -108,6 +108,11 @@ final class BackendTransportTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         defaults.removePersistentDomain(forName: suiteName)
 
+        XCTAssertFalse(
+            BackendTransport.isReady(defaults: defaults),
+            "cloud processing is off until the user explicitly allows it")
+        defaults.set(true, forKey: BackendTransport.cloudAIProcessingAllowedKey)
+
         // A fresh install: the shipped address is in force and no token has been
         // pasted in. There is somewhere to send and nothing that would be accepted.
         XCTAssertNotNil(BackendTransport.configured(defaults: defaults))

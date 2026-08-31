@@ -183,6 +183,7 @@ public final class SharedStore: ObservableObject {
         static let cloudBackendURL = "cloudBackendURL"
         static let cloudBackendToken = "cloudBackendToken"
         static let cloudSessionToken = "cloudSessionToken"
+        static let cloudAIProcessingAllowed = BackendTransport.cloudAIProcessingAllowedKey
         static let attestKeyId = "attestKeyId"
         static let attestationReport = "attestationReport"
         static let attestationCheckedAt = "attestationCheckedAt"

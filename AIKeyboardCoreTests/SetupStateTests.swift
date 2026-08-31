@@ -17,10 +17,12 @@ final class SetupStateTests: XCTestCase {
         _ presence: KeyboardPresence?, age: UInt64 = 0,
         microphone: MicrophonePermission = .undetermined,
         cloudConfigured: Bool = false,
+        cloudAllowed: Bool = true,
         switchAcknowledged: Bool = false
     ) -> SetupState {
         SetupState(
             presence: presence, microphone: microphone, cloudConfigured: cloudConfigured,
+            cloudAllowed: cloudAllowed,
             switchAcknowledged: switchAcknowledged,
             now: start + age, bootIdentity: thisBoot)
     }
@@ -292,6 +294,12 @@ final class SetupStateTests: XCTestCase {
         XCTAssertTrue(
             withCloud.localizedCaseInsensitiveContains("cloud rewrites"),
             "a configured backend is no longer credited: \(withCloud)")
+    }
+
+    func testFullAccessNamesCloudAIAsOffUntilTheUserAllowsIt() {
+        let detail = state(confirmed(), cloudConfigured: false, cloudAllowed: false).fullAccessDetail
+        XCTAssertTrue(detail.localizedCaseInsensitiveContains("cloud AI is off"))
+        XCTAssertTrue(detail.localizedCaseInsensitiveContains("Settings"))
     }
 
     /// Unconfirmed Full Access says nothing about the cloud either way, because

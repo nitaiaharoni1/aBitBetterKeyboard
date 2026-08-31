@@ -1,117 +1,256 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Deploys the backend that `BackendTransport`
-# (Packages/AIKeyboardCore/Sources/AIKeyboardShared/CloudTransport.swift)
-# posts to. Nothing in the repo runs this automatically — whoever is
-# deploying runs it by hand, from this directory or anywhere:
-#   SESSION_SECRET=... BACKEND_TOKEN=... ./deploy.sh
+# Deploys the public Cloud Run endpoint used by the app. Production accepts
+# only App Attest sessions. Secret values stay in Secret Manager and are never
+# passed on this command line or stored in Cloud Run's plain environment.
 
-PROJECT="${PROJECT:-handi-project}"
-# **This has to match the region in `BackendTransport.bundledDefaultURL`, and
-# it did not.** The default used to be us-central1 while the only service that
-# has ever existed runs in europe-west1, which is the region baked into the
-# address every install posts to. Deploying with the default therefore did not
-# update the service the app talks to: it stood up a second, identical service
-# in another region that nothing pointed at, left the real one serving whatever
-# it was already serving, and reported success. Changing the address in the app
-# is a release; changing it here is a flag. Keep them equal.
+PROJECT="${PROJECT:-${HANDI_PROJECT:-}}"
+GCLOUD_ACCOUNT="${GCLOUD_ACCOUNT:-nitai@handi.co.il}"
 REGION="${REGION:-europe-west1}"
 SERVICE="${SERVICE:-aikeyboard-backend}"
 MODEL="${MODEL:-gemini-3.5-flash-lite}"
+APP_ID="${APP_ID:-9R8P28G4BJ.com.nitai.aikeyboard}"
+SESSION_SECRET_NAME="${SESSION_SECRET_NAME:-aikeyboard-session-secret}"
+SESSION_SECRET_VERSION="${SESSION_SECRET_VERSION:-}"
+SESSION_SECRET_PREVIOUS_VERSION="${SESSION_SECRET_PREVIOUS_VERSION:-}"
+LOG_EXCLUSION_NAME="${LOG_EXCLUSION_NAME:-aikeyboard-cloud-run-requests}"
+RUNTIME_SERVICE_ACCOUNT="aikeyboard-backend-runtime@${PROJECT}.iam.gserviceaccount.com"
 
-cd "$(dirname "$0")"
+if [ -z "$PROJECT" ]; then
+  echo "PROJECT or HANDI_PROJECT must name the Google Cloud project." >&2
+  exit 1
+fi
+if ! [[ "$SESSION_SECRET_VERSION" =~ ^[1-9][0-9]*$ ]]; then
+  echo "SESSION_SECRET_VERSION must be a numeric Secret Manager version." >&2
+  echo "Example: SESSION_SECRET_VERSION=3 ./deploy.sh" >&2
+  exit 1
+fi
+if [ -n "$SESSION_SECRET_PREVIOUS_VERSION" ] \
+  && ! [[ "$SESSION_SECRET_PREVIOUS_VERSION" =~ ^[1-9][0-9]*$ ]]; then
+  echo "SESSION_SECRET_PREVIOUS_VERSION must be empty or numeric." >&2
+  exit 1
+fi
 
-# Cloud Run's default runtime identity needs permission to call Vertex before
-# the service can do anything useful. Idempotent: re-running this against a
-# project that already has the binding is a no-op, not an error. If the
-# service is deployed with a custom `--service-account`, grant that account
-# the role instead and skip this block.
-RUNTIME_SA="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')-compute@developer.gserviceaccount.com"
+repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$repo_root"
+Scripts/audit-release-security.sh
+
+# Resolve every required secret reference before changing project settings.
+# Describing a version checks existence and state without reading its value.
+if ! current_secret_state="$(gcloud secrets versions describe "$SESSION_SECRET_VERSION" \
+  --secret="$SESSION_SECRET_NAME" \
+  --project="$PROJECT" \
+  --account="$GCLOUD_ACCOUNT" \
+  --format='value(state)' 2>/dev/null)" \
+  || [ "$current_secret_state" != "ENABLED" ]; then
+  echo "Secret Manager version is missing or not enabled: ${SESSION_SECRET_NAME}:${SESSION_SECRET_VERSION}" >&2
+  exit 1
+fi
+if [ -n "$SESSION_SECRET_PREVIOUS_VERSION" ]; then
+  if ! previous_secret_state="$(gcloud secrets versions describe "$SESSION_SECRET_PREVIOUS_VERSION" \
+    --secret="$SESSION_SECRET_NAME" \
+    --project="$PROJECT" \
+    --account="$GCLOUD_ACCOUNT" \
+    --format='value(state)' 2>/dev/null)" \
+    || [ "$previous_secret_state" != "ENABLED" ]; then
+    echo "Previous Secret Manager version is missing or not enabled: ${SESSION_SECRET_NAME}:${SESSION_SECRET_PREVIOUS_VERSION}" >&2
+    exit 1
+  fi
+fi
+
+# Google's published Gemini models cache inputs and outputs in memory for up to
+# 24 hours by default. This project needs request-time processing only, so make
+# that project-wide privacy setting explicit before deploying any revision. The
+# header file keeps the short-lived access token out of the curl process list.
+cache_headers="$(mktemp "${TMPDIR:-/tmp}/aikeyboard-vertex-headers.XXXXXX")"
+trap 'rm -f "$cache_headers"' EXIT
+access_token="$(gcloud auth print-access-token --account="$GCLOUD_ACCOUNT")"
+chmod 600 "$cache_headers"
+printf 'header = "Authorization: Bearer %s"\nheader = "Content-Type: application/json"\n' \
+  "$access_token" > "$cache_headers"
+unset access_token
+
+cache_endpoint="https://us-central1-aiplatform.googleapis.com/v1/projects/${PROJECT}/cacheConfig"
+curl --silent --show-error --fail-with-body \
+  --config "$cache_headers" \
+  --request PATCH \
+  --data "{\"name\":\"projects/${PROJECT}/cacheConfig\",\"disableCache\":true}" \
+  "$cache_endpoint" >/dev/null
+cache_status="$(curl --silent --show-error --fail-with-body \
+  --config "$cache_headers" \
+  "$cache_endpoint")"
+if ! printf '%s' "$cache_status" | tr -d '[:space:]' | grep -Fq '"disableCache":true'; then
+  echo "Vertex AI in-memory data caching is still enabled." >&2
+  exit 1
+fi
+
+# Cloud Run writes a request log automatically for every call. Those entries
+# can include the caller's IP address, user agent, URL, response size, and
+# latency. Keep the app's deliberately small analytics events, but prevent
+# automatic request metadata for this service from entering the _Default sink.
+# Create and patch use the same payload so rerunning this script repairs drift.
+logging_exclusion_filter="resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${SERVICE}\" AND logName=\"projects/${PROJECT}/logs/run.googleapis.com%2Frequests\""
+logging_exclusion_description="Exclude automatic Cloud Run request metadata for ${SERVICE}; application analytics logs remain enabled."
+logging_exclusion_payload="$(jq -cn \
+  --arg name "$LOG_EXCLUSION_NAME" \
+  --arg description "$logging_exclusion_description" \
+  --arg filter "$logging_exclusion_filter" \
+  '{name: $name, description: $description, filter: $filter, disabled: false}')"
+logging_exclusions_endpoint="https://logging.googleapis.com/v2/projects/${PROJECT}/exclusions"
+logging_exclusion_endpoint="${logging_exclusions_endpoint}/${LOG_EXCLUSION_NAME}"
+logging_exclusion_http_status="$(curl --silent --show-error \
+  --config "$cache_headers" \
+  --output /dev/null \
+  --write-out '%{http_code}' \
+  "$logging_exclusion_endpoint")"
+
+case "$logging_exclusion_http_status" in
+  200)
+    curl --silent --show-error --fail-with-body \
+      --config "$cache_headers" \
+      --request PATCH \
+      --data "$logging_exclusion_payload" \
+      "${logging_exclusion_endpoint}?updateMask=description%2Cfilter%2Cdisabled" >/dev/null
+    ;;
+  404)
+    curl --silent --show-error --fail-with-body \
+      --config "$cache_headers" \
+      --request POST \
+      --data "$logging_exclusion_payload" \
+      "$logging_exclusions_endpoint" >/dev/null
+    ;;
+  *)
+    echo "Could not inspect the Cloud Logging exclusion (HTTP ${logging_exclusion_http_status})." >&2
+    exit 1
+    ;;
+esac
+
+logging_exclusion_status="$(curl --silent --show-error --fail-with-body \
+  --config "$cache_headers" \
+  "$logging_exclusion_endpoint")"
+if ! printf '%s' "$logging_exclusion_status" | jq -e \
+  --arg description "$logging_exclusion_description" \
+  --arg filter "$logging_exclusion_filter" \
+  '.description == $description and .filter == $filter and .disabled != true' >/dev/null; then
+  echo "Cloud Run automatic request logging is not excluded as requested." >&2
+  exit 1
+fi
+
+if ! gcloud iam service-accounts describe "$RUNTIME_SERVICE_ACCOUNT" \
+  --project="$PROJECT" \
+  --account="$GCLOUD_ACCOUNT" >/dev/null 2>&1; then
+  gcloud iam service-accounts create aikeyboard-backend-runtime \
+    --project="$PROJECT" \
+    --account="$GCLOUD_ACCOUNT" \
+    --display-name="aBitBetterKeyboard backend runtime"
+fi
+
+# Refuse a reused identity that already has a direct project role broader than
+# this service needs. Inherited organization and group grants still need an IAM
+# review outside this script; this check makes the project's own bindings exact.
+direct_project_roles="$(gcloud projects get-iam-policy "$PROJECT" \
+  --project="$PROJECT" \
+  --account="$GCLOUD_ACCOUNT" \
+  --flatten='bindings[].members' \
+  --filter="bindings.members=serviceAccount:${RUNTIME_SERVICE_ACCOUNT}" \
+  --format='value(bindings.role)')"
+unexpected_roles="$(printf '%s\n' "$direct_project_roles" \
+  | awk 'NF && $0 != "roles/aiplatform.user" { print }')"
+if [ -n "$unexpected_roles" ]; then
+  echo "The backend runtime identity has unexpected direct project roles:" >&2
+  printf '%s\n' "$unexpected_roles" >&2
+  echo "Remove them after reviewing their users, then deploy again." >&2
+  exit 1
+fi
+
+# This script grants one project role and one secret-specific role. It never
+# creates or downloads a service-account key.
 gcloud projects add-iam-policy-binding "$PROJECT" \
-  --member="serviceAccount:${RUNTIME_SA}" \
+  --project="$PROJECT" \
+  --account="$GCLOUD_ACCOUNT" \
+  --member="serviceAccount:${RUNTIME_SERVICE_ACCOUNT}" \
   --role="roles/aiplatform.user" \
   --condition=None \
   --quiet
 
-# `--allow-unauthenticated` is unavoidable: the caller is a keyboard extension
-# making a plain URLSession request and it carries no Google identity, so IAM
-# cannot be the gate. That leaves an endpoint where every request costs money.
-#
-# Two gates close it, and they are not alternatives. SESSION_SECRET is the one a
-# shipping install passes: the app proves itself with App Attest, the service
-# signs it a ninety-day token, and nothing is ever typed in. BACKEND_TOKEN is the
-# door behind it, for a simulator (which has no Secure Enclave, so it cannot
-# attest at all) and for anyone running this backend themselves. Both are
-# required here because deploying with only one leaves either real users or every
-# developer locked out. See src/gate.js.
-if [ -z "${BACKEND_TOKEN:-}" ]; then
-  echo "BACKEND_TOKEN is not set." >&2
-  echo >&2
-  echo "This service proxies a paid model on a URL anyone can reach. It is the" >&2
-  echo "developer and self-hosting door; App Attest is what real installs use." >&2
-  echo >&2
-  echo "  SESSION_SECRET=\$(openssl rand -hex 32) BACKEND_TOKEN=\$(openssl rand -hex 32) ./deploy.sh" >&2
-  exit 1
+gcloud secrets add-iam-policy-binding "$SESSION_SECRET_NAME" \
+  --project="$PROJECT" \
+  --account="$GCLOUD_ACCOUNT" \
+  --member="serviceAccount:${RUNTIME_SERVICE_ACCOUNT}" \
+  --role="roles/secretmanager.secretAccessor" \
+  --condition=None \
+  --quiet
+
+secret_bindings="SESSION_SECRET=${SESSION_SECRET_NAME}:${SESSION_SECRET_VERSION}"
+if [ -n "$SESSION_SECRET_PREVIOUS_VERSION" ]; then
+  secret_bindings+=",SESSION_SECRET_PREVIOUS=${SESSION_SECRET_NAME}:${SESSION_SECRET_PREVIOUS_VERSION}"
 fi
 
-# Signs the session tokens attested devices are issued. Rotating it logs every
-# device out at once — they re-attest on their next app launch, so the blast
-# radius is "AI is unavailable in the keyboard until each user opens the app",
-# not a permanent break. It is also the only revocation there is: a session token
-# carries its own expiry and this service stores nothing, so there is no list to
-# remove one from.
-#
-# **Generate it once and keep it. Do not generate it per deploy.** The secret
-# signs every session token already sitting on every device, so a redeploy under
-# a fresh one invalidates all of them at that instant, and a device cannot tell
-# that from a forged token: it gets a flat 401 on the AI action the user just
-# pressed, then retries into the same wall. That is what the 2026-08-14 bursts in
-# NIT-87 look like, both of which follow revision 00004 by minutes. An earlier
-# version of this message printed `openssl rand -hex 32` as the example for every
-# run, which is how the habit started.
-#
-# Rotating on purpose is fine, but hand the old value over for one deploy:
-#
-#   SESSION_SECRET=<new> SESSION_SECRET_PREVIOUS=<old> ./deploy.sh
-#
-# Tokens signed under the old secret keep verifying until they expire on their
-# own, and nothing new is ever signed with it. Drop the variable on the deploy
-# after that.
-if [ -z "${SESSION_SECRET:-}" ]; then
-  echo "SESSION_SECRET is not set." >&2
-  echo >&2
-  echo "Without it /v1/challenge and /v1/attest are switched off, no device can" >&2
-  echo "attest, and every install falls back to a token nobody has typed in." >&2
-  echo >&2
-  echo "Generate it ONCE, keep it somewhere you can read back, and reuse it on" >&2
-  echo "every deploy. A fresh secret 401s every device that has already attested." >&2
-  echo >&2
-  echo "  SESSION_SECRET=\"\$(cat ~/.aikeyboard-session-secret)\" BACKEND_TOKEN=... ./deploy.sh" >&2
-  echo >&2
-  echo "First time only:" >&2
-  echo "  openssl rand -hex 32 > ~/.aikeyboard-session-secret" >&2
-  echo >&2
-  echo "Rotating on purpose? Pass the outgoing value as SESSION_SECRET_PREVIOUS" >&2
-  echo "for one deploy so live tokens keep working until they expire." >&2
-  exit 1
-fi
-
+cd "$repo_root/Backend"
 gcloud run deploy "$SERVICE" \
   --project="$PROJECT" \
+  --account="$GCLOUD_ACCOUNT" \
   --region="$REGION" \
   --source=. \
   --allow-unauthenticated \
-  --set-env-vars="PROJECT=${PROJECT},MODEL=${MODEL}" \
-  --set-env-vars="BACKEND_TOKEN=${BACKEND_TOKEN}" \
-  --set-env-vars="SESSION_SECRET=${SESSION_SECRET}" \
-  --set-env-vars="SESSION_SECRET_PREVIOUS=${SESSION_SECRET_PREVIOUS:-}" \
-  --set-env-vars="APP_ID=${APP_ID:-9R8P28G4BJ.com.nitai.aikeyboard}" \
-  --set-env-vars="ATTEST_ENV=${ATTEST_ENV:-production}" \
+  --service-account="$RUNTIME_SERVICE_ACCOUNT" \
+  --set-env-vars="PROJECT=${PROJECT},MODEL=${MODEL},SERVICE_MODE=production-app-attest,APP_ID=${APP_ID}" \
+  --set-secrets="$secret_bindings" \
   --memory=256Mi \
   --min-instances=0 \
   --max-instances=10
 
+service_description="$(gcloud run services describe "$SERVICE" \
+  --project="$PROJECT" \
+  --account="$GCLOUD_ACCOUNT" \
+  --region="$REGION" \
+  --format=json)"
+actual_service_account="$(jq -r '.spec.template.spec.serviceAccountName // empty' \
+  <<<"$service_description")"
+if [ "$actual_service_account" != "$RUNTIME_SERVICE_ACCOUNT" ]; then
+  echo "Deployment used the wrong runtime service account: $actual_service_account" >&2
+  exit 1
+fi
+
+env_names="$(jq -r '.spec.template.spec.containers[0].env[]?.name' \
+  <<<"$service_description")"
+if printf '%s\n' "$env_names" | grep -Fxq BACKEND_TOKEN; then
+  echo "Deployment still contains the retired BACKEND_TOKEN environment variable." >&2
+  exit 1
+fi
+
+service_mode="$(jq -r \
+  '[.spec.template.spec.containers[0].env[]? | select(.name == "SERVICE_MODE") | .value][0] // empty' \
+  <<<"$service_description")"
+if [ "$service_mode" != "production-app-attest" ]; then
+  echo "Deployment is not in production-app-attest mode." >&2
+  exit 1
+fi
+
+secret_refs="$(jq -r \
+  '.spec.template.spec.containers[0].env[]? | [.name, (.valueFrom.secretKeyRef.name // ""), (.valueFrom.secretKeyRef.key // "")] | join(",")' \
+  <<<"$service_description")"
+expected_current="SESSION_SECRET,${SESSION_SECRET_NAME},${SESSION_SECRET_VERSION}"
+if ! printf '%s\n' "$secret_refs" | grep -Fxq "$expected_current"; then
+  echo "SESSION_SECRET is not pinned to the requested Secret Manager version." >&2
+  exit 1
+fi
+if [ -n "$SESSION_SECRET_PREVIOUS_VERSION" ]; then
+  expected_previous="SESSION_SECRET_PREVIOUS,${SESSION_SECRET_NAME},${SESSION_SECRET_PREVIOUS_VERSION}"
+  if ! printf '%s\n' "$secret_refs" | grep -Fxq "$expected_previous"; then
+    echo "SESSION_SECRET_PREVIOUS is not pinned to the requested version." >&2
+    exit 1
+  fi
+elif printf '%s\n' "$env_names" | grep -Fxq SESSION_SECRET_PREVIOUS; then
+  echo "Deployment kept SESSION_SECRET_PREVIOUS even though no grace version was requested." >&2
+  exit 1
+fi
+
 echo
-echo "Deployed. Point the app's cloudBackendURL setting at:"
-gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" --format='value(status.url)'
+echo "Deployed with App Attest-only access, Secret Manager signing, Vertex caching disabled, and request-log storage excluded."
+gcloud run services describe "$SERVICE" \
+  --project="$PROJECT" \
+  --account="$GCLOUD_ACCOUNT" \
+  --region="$REGION" \
+  --format='value(status.url)'

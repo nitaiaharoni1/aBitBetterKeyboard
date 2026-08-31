@@ -45,10 +45,9 @@ DESTINATION="${1:-platform=iOS Simulator,name=iPhone 17 Pro}"
 PROJECT="AIKeyboard.xcodeproj"
 SCHEME="AIKeyboard"
 APP_ID="com.nitai.aikeyboard"
-# The reading the recorder publishes half a second in. A prefix of
-# `DictationChannelProbe.sentence`, and the keyboard truncates what it logs
-# to 24 characters — see `DictationSession.report()`.
-PARTIAL="בוא נעשה"
+# The fixed partial `DictationChannelProbe` publishes has eight characters.
+# The keyboard logs its presence and length, never the words themselves.
+PARTIAL_CHARS=8
 LOG="$(mktemp -t dictation)"
 
 pass() { printf '  \033[32mPASS\033[0m %s\n' "$1"; }
@@ -152,7 +151,7 @@ echo "$WATCH" | grep -q "availability=listening" \
 # asked for and must not be required here. A build where the partial never
 # crosses leaves the field empty on stop, which is the defect this check
 # exists to catch.
-echo "$WATCH" | grep -q "partial=$PARTIAL" \
+echo "$WATCH" | grep -q "partial=present partialChars=$PARTIAL_CHARS" \
   && pass "the extension received a partial transcript while the utterance was open" \
   || fail "no partial crossed the App Group, so dictation does not stream"
 

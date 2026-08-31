@@ -145,7 +145,8 @@ extension SampleHandler {
     /// nothing may key a decision off it.
     override func broadcastAnnotated(withApplicationInfo applicationInfo: [AnyHashable: Any]) {
         let bundleID = applicationInfo[RPApplicationInfoBundleIdentifierKey] as? String
-        Self.log.notice("broadcast annotated firstApp=\(bundleID ?? "unknown", privacy: .public)")
+        Self.log.notice(
+            "broadcast annotated firstApp=\(bundleID == nil ? "unknown" : "present", privacy: .public)")
     }
 
     /// The `NSError` handed to `finishBroadcastWithError:`.

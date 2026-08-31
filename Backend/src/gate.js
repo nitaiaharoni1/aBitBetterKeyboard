@@ -7,15 +7,8 @@
 // who learns the URL can make one. A model proxy with no gate is a bill with no
 // ceiling.
 //
-// Two layers, both deliberately modest about what they are:
-//
-// **A bearer token.** Set `BACKEND_TOKEN` on the service and the same value in
-// the app's `cloudBackendToken` setting. This is *not* a bundled secret — nothing
-// ships one, for exactly the reason the app holds no provider credential:
-// anything in an app bundle is extractable. It is a value whoever runs the
-// backend types in beside its URL, so it is as private as they keep it. It stops
-// a URL that leaks from becoming an open model endpoint. It does not stop a
-// determined user of the app itself, and it is not meant to.
+// Production accepts App Attest sessions only. A shared bearer remains a
+// separate developer/self-hosting mode, never a fallback beside production.
 //
 // **A per-IP rate limit.** Bounds the damage when a token does leak, and bounds
 // an honest bug looping on retry, which is the more likely of the two. A fixed
@@ -31,6 +24,12 @@
 
 const DEFAULT_WINDOW_MS = 60_000;
 const DEFAULT_MAX_PER_WINDOW = 60;
+
+export const ServiceMode = Object.freeze({
+  PRODUCTION: "production-app-attest",
+  DEVELOPER_TOKEN: "developer-token",
+  LOCAL_OPEN: "local-open"
+});
 
 /// Constant-time-ish comparison. Not because a timing attack on a self-hosted
 /// proxy is a realistic threat, but because writing `a === b` here is the habit
@@ -51,7 +50,43 @@ export function bearerToken(headers) {
   return match ? match[1] : null;
 }
 
-/// 401 unless the caller proved something. Two things count.
+/// Builds one complete authorization policy and rejects mixed or incomplete
+/// configurations before the HTTP server starts.
+export function createAuthorizer({ mode, verifySession = null, developerToken = null }) {
+  switch (mode) {
+    case ServiceMode.PRODUCTION:
+      if (typeof verifySession !== "function") {
+        throw new Error("production-app-attest requires session verification");
+      }
+      if (developerToken) {
+        throw new Error("production-app-attest forbids BACKEND_TOKEN");
+      }
+      return (headers) => authorize({ headers, verifySession });
+
+    case ServiceMode.DEVELOPER_TOKEN:
+      if (typeof developerToken !== "string" || developerToken.length === 0) {
+        throw new Error("developer-token requires BACKEND_TOKEN");
+      }
+      if (verifySession) {
+        throw new Error("developer-token cannot also verify App Attest sessions");
+      }
+      return (headers) => authorize({ expectedToken: developerToken, headers });
+
+    case ServiceMode.LOCAL_OPEN:
+      if (verifySession || developerToken) {
+        throw new Error("local-open cannot be combined with another authenticator");
+      }
+      return (headers) => authorize({ headers });
+
+    default:
+      throw new Error(
+        "SERVICE_MODE must be production-app-attest, developer-token, or local-open"
+      );
+  }
+}
+
+/// 401 unless the caller proved something, or no authenticator was configured
+/// by the explicit local-open policy.
 ///
 /// **A session token, first, because it is the shipping path.** It is what
 /// `/v1/attest` hands back once App Attest proved the caller is a genuine,
@@ -59,17 +94,6 @@ export function bearerToken(headers) {
 /// bearer an installed copy ever has. It carries the device it was issued to,
 /// which is what `callerKey` rate-limits on.
 ///
-/// **`BACKEND_TOKEN` behind it**, unchanged, as the developer and self-hosting
-/// door. A simulator has no Secure Enclave, so without this there is no way to
-/// exercise a cloud action anywhere but on a device; and a backend somebody runs
-/// themselves is their business. It carries no device, because it is shared by
-/// definition, so its callers fall back to being counted by address exactly as
-/// they were before.
-///
-/// Configured-and-absent is still the only rejection. A service with no
-/// `BACKEND_TOKEN` and no session token accepts everyone, which is what a local
-/// `npm start` wants; `deploy.sh` refuses to deploy without one, so the open
-/// case cannot reach Cloud Run by accident.
 export async function authorize({ expectedToken, headers, verifySession }) {
   const presented = bearerToken(headers);
   let sessionRejectReason;
@@ -84,8 +108,10 @@ export async function authorize({ expectedToken, headers, verifySession }) {
     sessionRejectReason = session.reason;
   }
 
-  if (!expectedToken) return { ok: true, deviceId: null };
-  if (tokensMatch(expectedToken, presented)) return { ok: true, deviceId: null };
+  if (expectedToken && tokensMatch(expectedToken, presented)) {
+    return { ok: true, deviceId: null };
+  }
+  if (!expectedToken && !verifySession) return { ok: true, deviceId: null };
   // 401 rather than 403: the client maps both to `cloudNotConfigured`, which is
   // the honest reading — from the app's side a backend it cannot authenticate
   // to is a backend it does not have.

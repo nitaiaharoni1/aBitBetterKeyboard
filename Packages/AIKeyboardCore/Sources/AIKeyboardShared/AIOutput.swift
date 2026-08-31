@@ -54,6 +54,9 @@ public enum AIEngineError: Error, Equatable, Sendable {
     /// A keyboard extension has no network at all until the user grants Full
     /// Access, so the cloud engine cannot even be attempted.
     case needsFullAccess
+    /// The user has not explicitly allowed their requested text or audio to be
+    /// processed by the cloud AI provider.
+    case cloudPermissionRequired
     case cloudNotConfigured
     case network(String)
     /// The model answered, but with nothing usable.
@@ -88,6 +91,7 @@ public enum AIEngineError: Error, Equatable, Sendable {
         case .refused: return "Can't rewrite this"
         case .inputTooLong: return "Text too long"
         case .needsFullAccess: return "Needs Full Access"
+        case .cloudPermissionRequired: return "Cloud AI is off"
         // **Names a state, not a component.** "Cloud model not ready" tells the
         // owner of a keyboard that there is a cloud model, that it is a thing
         // they might be expected to have set up, and that theirs is broken. None
@@ -126,6 +130,9 @@ public enum AIEngineError: Error, Equatable, Sendable {
         case .needsFullAccess:
             return
                 "This needs network access.\nTurn on Full Access in Settings › Keyboards."
+        case .cloudPermissionRequired:
+            return
+                "Nothing was sent. Allow cloud AI processing under aBitBetterKeyboard › Settings › Privacy first."
         case .cloudNotConfigured:
             // **The one error a fresh install actually hits.** At runtime there
             // is exactly one thing that produces this case:

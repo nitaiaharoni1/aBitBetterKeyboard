@@ -41,56 +41,31 @@ public struct CloudField: Sendable {
     }
 }
 
-/// An image travelling with a request. Screen reading is the only caller.
-public struct CloudImage: Sendable {
-    public let data: Data
-    public let mimeType: String
-
-    public init(data: Data, mimeType: String = "image/jpeg") {
-        self.data = data
-        self.mimeType = mimeType
-    }
-}
-
-/// A recording travelling with a request. Dictation is the only caller.
-///
-/// **Not folded into `CloudImage` as a general "media" type**, though the wire
-/// shape is identical and the temptation is real. They are separated because
-/// they go to different endpoints, and they go to different endpoints because a
-/// picture of somebody's screen and a recording of their voice deserve different
-/// retention rules on the backend. Collapsing them here is what would quietly
-/// make that one rule.
-public struct CloudAudio: Sendable {
-    public let data: Data
-    public let mimeType: String
-
-    /// 16 kHz mono LEI16 WAV by default, which is what `Bar/dictation/` is
-    /// recorded at and therefore what every published number was measured on.
-    public init(data: Data, mimeType: String = "audio/wav") {
-        self.data = data
-        self.mimeType = mimeType
-    }
-}
-
 public struct CloudRequest: Sendable {
+    /// The three valid request shapes. The endpoint and MIME type are derived
+    /// from this value, so the app cannot send audio to the screen route or
+    /// attach media to a text request.
+    public enum Payload: Sendable {
+        case text
+        case audioWAV(Data)
+        case screenJPEG(Data)
+    }
+
     public let instructions: String
     public let prompt: String
     public let fields: [CloudField]
-    public let image: CloudImage?
-    public let audio: CloudAudio?
+    public let payload: Payload
 
     public init(
         instructions: String,
         prompt: String,
         fields: [CloudField],
-        image: CloudImage? = nil,
-        audio: CloudAudio? = nil
+        payload: Payload = .text
     ) {
         self.instructions = instructions
         self.prompt = prompt
         self.fields = fields
-        self.image = image
-        self.audio = audio
+        self.payload = payload
     }
 }
 
@@ -163,6 +138,49 @@ public actor SessionReattestation {
 
 // MARK: - Backend transport
 
+/// A validated backend address and the only routes the client may call.
+///
+/// User text, audio, attestation material, analytics, and bearer credentials
+/// all cross this boundary. Requiring HTTPS here keeps those callers from
+/// drifting into separate URL policies.
+public struct BackendEndpoint: Equatable, Sendable {
+    public enum Route: String, Sendable {
+        case text = "v1/text"
+        case audio = "v1/audio"
+        case screen = "v1/screen"
+        case challenge = "v1/challenge"
+        case attest = "v1/attest"
+        case event = "v1/event"
+    }
+
+    public let baseURL: URL
+
+    public init?(_ value: String) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var components = URLComponents(string: trimmed),
+            components.scheme?.lowercased() == "https",
+            components.host?.isEmpty == false,
+            components.user == nil,
+            components.password == nil,
+            components.query == nil,
+            components.fragment == nil
+        else { return nil }
+
+        components.scheme = "https"
+        guard let url = components.url else { return nil }
+        baseURL = url
+    }
+
+    public func url(for route: Route) -> URL {
+        baseURL.appendingPathComponent(route.rawValue)
+    }
+}
+
+enum BackendCredential: Sendable {
+    case fixed(String?)
+    case shared(UserDefaults)
+}
+
 /// The shipping cloud path: the app talks to the product's own backend, and the
 /// backend talks to whichever model provider it is configured for.
 ///
@@ -172,15 +190,28 @@ public actor SessionReattestation {
 /// credential and exposes one narrow endpoint. That also makes the provider a
 /// backend decision: swapping Gemini for Claude changes nothing here.
 public struct BackendTransport: CloudTransport {
+    /// The App Group key that records the user's explicit permission to send
+    /// text or audio for cloud AI processing. It is public so the app and the
+    /// shared transport cannot drift onto two spellings of the same consent.
+    /// Versioned so a permission granted before the 18-or-older confirmation
+    /// cannot silently carry into the release that introduces that requirement.
+    public static let cloudAIProcessingAllowedKey = "cloudAIProcessingAdultConsentV1"
+
     /// Internal so `BackendTransport+Send` can reach them after the send path
     /// moved into its own file.
-    let baseURL: URL
-    let token: String?
+    let endpoint: BackendEndpoint
+    let credential: BackendCredential
     let session: URLSession
 
-    public init(baseURL: URL, token: String? = nil, session: URLSession = .shared) {
-        self.baseURL = baseURL
-        self.token = token
+    /// An explicit transport is closed over exactly the values passed here. It
+    /// never reads App Group state or asks the process-global reattestor.
+    public init(
+        endpoint: BackendEndpoint,
+        token: String? = nil,
+        session: URLSession = .shared
+    ) {
+        self.endpoint = endpoint
+        credential = .fixed(token)
         self.session = session
     }
 
@@ -190,10 +221,8 @@ public struct BackendTransport: CloudTransport {
     /// **A URL is not a credential, and that is the whole reason this can be here
     /// while `cloudBackendToken` cannot.** Everything in a bundle is extractable,
     /// so the rule this file is built around is that no *secret* ships. An address
-    /// is not one: the service behind it refuses every request that arrives without
-    /// the bearer token (`Backend/src/gate.js`), so a copy of this string buys an
-    /// attacker a 401 and nothing else. The token stays typed in, in
-    /// `CloudModelView`, exactly as before.
+    /// is not one. Production accepts only sessions issued after App Attest, so
+    /// copying this address does not grant access to the model.
     ///
     /// Deployed 2026-08-10 to Cloud Run in `handi-project`, `europe-west1`, from
     /// `Backend/deploy.sh`. Before that date this constant did not exist and
@@ -204,15 +233,9 @@ public struct BackendTransport: CloudTransport {
 
     /// The transport this process should use, or nil when there is nowhere to send.
     ///
-    /// **Nil is now much rarer than it was, and reaching it takes a deliberate
-    /// act.** A stored value wins; absent *or* empty falls back to
-    /// `bundledDefaultURL`. So clearing the field in `CloudModelView` means "put
-    /// the built-in server back", not "switch the cloud off" — there is no off
-    /// switch here and deliberately no dead state either, because the alternative
-    /// is a user who empties the box and can only recover by retyping a 52-character
-    /// URL they were never shown. What still returns nil is a stored value that is
-    /// not an http(s) URL, which is the case the screen refuses to save in the first
-    /// place.
+    /// Release always uses the bundled endpoint. A stored custom endpoint is a
+    /// Debug-only development tool, because a stale value in a shipping App
+    /// Group must not redirect typed text, audio, analytics, or attestation.
     ///
     /// Reads the **shared** store, not `.standard`. The app writes this setting
     /// and two extensions read it, and `.standard` in an extension is that
@@ -229,10 +252,14 @@ public struct BackendTransport: CloudTransport {
     public static func configured(
         defaults: UserDefaults = SharedContainer.userDefaults
     ) -> BackendTransport? {
-        guard let url = URL(string: effectiveURL(defaults: defaults)),
-            url.scheme?.hasPrefix("http") == true
-        else { return nil }
-        return BackendTransport(baseURL: url, token: storedToken(defaults))
+        guard let endpoint = configuredEndpoint(defaults: defaults) else { return nil }
+        return BackendTransport(endpoint: endpoint, credential: .shared(defaults))
+    }
+
+    public static func configuredEndpoint(
+        defaults: UserDefaults = SharedContainer.userDefaults
+    ) -> BackendEndpoint? {
+        BackendEndpoint(effectiveURL(defaults: defaults))
     }
 
     /// The address a call would actually go to: the one the user named, or the one
@@ -254,7 +281,11 @@ public struct BackendTransport: CloudTransport {
     /// nothing but whitespace — the three states that all mean "I have not named
     /// one", and which `CloudModelView` trims to the same thing before saving.
     private static func storedURL(_ defaults: UserDefaults) -> String? {
+        #if DEBUG
         nonBlank(defaults.string(forKey: "cloudBackendURL"))
+        #else
+        nil
+        #endif
     }
 
     /// The bearer to send, or nil when there is nothing to send.
@@ -269,12 +300,16 @@ public struct BackendTransport: CloudTransport {
     /// Separate keys rather than one, so the two lifecycles cannot collide: a
     /// refresh writing the session slot must never overwrite what a developer
     /// typed. Nil rather than "" or "   ", so a blank never becomes `Bearer    `.
-    private static func storedToken(_ defaults: UserDefaults) -> String? {
-        nonBlank(defaults.string(forKey: "cloudBackendToken"))
-            ?? nonBlank(defaults.string(forKey: "cloudSessionToken"))
+    static func storedToken(_ defaults: UserDefaults) -> String? {
+        #if DEBUG
+        if let developer = nonBlank(defaults.string(forKey: "cloudBackendToken")) {
+            return developer
+        }
+        #endif
+        return nonBlank(defaults.string(forKey: "cloudSessionToken"))
     }
 
-    private static func nonBlank(_ value: String?) -> String? {
+    static func nonBlank(_ value: String?) -> String? {
         guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
             !trimmed.isEmpty
         else { return nil }
@@ -293,12 +328,8 @@ public struct BackendTransport: CloudTransport {
     /// class of claim this project keeps having to unpick: an assertion that the
     /// cloud works, made by something that never measured it.
     ///
-    /// The rule is not "a token is required", because a backend somebody runs
-    /// themselves with no `BACKEND_TOKEN` accepts everyone and is a perfectly good
-    /// backend — `BackendTransportSuiteTests` pins that. It is: **the backend
-    /// this build ships gates on a bearer, so choosing it and not supplying one is
-    /// an incomplete setup.** A backend the user typed in is their business, and
-    /// this says yes to it either way.
+    /// The bundled backend requires an App Attest session. In Debug, a developer
+    /// may point at a separate backend and its explicit policy is their business.
     ///
     /// Still not a guarantee. A token can be wrong, revoked or pointed at the
     /// wrong service, and only a call finds that out — which is why the failure
@@ -313,13 +344,33 @@ public struct BackendTransport: CloudTransport {
     /// class of claim `isReady` exists to prevent. A typed token carries no
     /// expiry to read and is taken at face value.
     public static func isReady(defaults: UserDefaults = SharedContainer.userDefaults) -> Bool {
+        guard allowsCloudAIProcessing(defaults: defaults) else { return false }
         guard configured(defaults: defaults) != nil else { return false }
         guard usesBundledBackend(defaults: defaults) else { return true }
-        if nonBlank(defaults.string(forKey: "cloudBackendToken")) != nil { return true }
+        if usesDeveloperCredential(defaults: defaults) { return true }
         guard let session = nonBlank(defaults.string(forKey: "cloudSessionToken")),
             let expiry = SessionToken.expiry(of: session)
         else { return false }
         return expiry > Date()
+    }
+
+    /// False on a fresh install. Read at the moment of every send so revoking
+    /// permission in the containing app takes effect in the keyboard process
+    /// without rebuilding its controller.
+    public static func allowsCloudAIProcessing(
+        defaults: UserDefaults = SharedContainer.userDefaults
+    ) -> Bool {
+        defaults.bool(forKey: cloudAIProcessingAllowedKey)
+    }
+
+    public static func usesDeveloperCredential(
+        defaults: UserDefaults = SharedContainer.userDefaults
+    ) -> Bool {
+        #if DEBUG
+        return nonBlank(defaults.string(forKey: "cloudBackendToken")) != nil
+        #else
+        return false
+        #endif
     }
 
     /// Whether the address in force is the one that ships rather than one the user
@@ -366,4 +417,32 @@ public struct BackendTransport: CloudTransport {
     public static let setUpRecovery = "aBitBetterKeyboard is reconnecting. Try again in a moment."
 
     // send, encoded, mapped, and decode are in BackendTransport+Send.swift.
+
+    private init(
+        endpoint: BackendEndpoint,
+        credential: BackendCredential,
+        session: URLSession = .shared
+    ) {
+        self.endpoint = endpoint
+        self.credential = credential
+        self.session = session
+    }
+
+    func currentBearer() -> String? {
+        switch credential {
+        case .fixed(let token): token
+        case .shared(let defaults): Self.storedToken(defaults)
+        }
+    }
+
+    func replacementBearer(after rejected: String?) async -> String? {
+        guard case .shared(let defaults) = credential else { return nil }
+
+        if let current = Self.storedToken(defaults), current != rejected { return current }
+        if let minted = await SessionReattestation.shared.reattest(), minted != rejected {
+            return minted
+        }
+        if let current = Self.storedToken(defaults), current != rejected { return current }
+        return nil
+    }
 }

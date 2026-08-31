@@ -71,6 +71,11 @@ public struct SetupState: Equatable, Sendable {
     /// rather than read on demand for the reason `now` is.
     public var cloudConfigured: Bool
 
+    /// Whether the user has explicitly allowed cloud AI processing. Separate
+    /// from `cloudConfigured`: a valid session is permission to call the server,
+    /// not permission from the person to share their requested content.
+    public var cloudAllowed: Bool
+
     /// Whether the user has confirmed, in the app, that they switched to AI
     /// Keyboard with the globe key.
     ///
@@ -87,6 +92,7 @@ public struct SetupState: Equatable, Sendable {
         presence: KeyboardPresence? = nil,
         microphone: MicrophonePermission = .undetermined,
         cloudConfigured: Bool = false,
+        cloudAllowed: Bool = true,
         switchAcknowledged: Bool = false,
         now: UInt64 = CaptureClock.now(),
         bootIdentity: UInt64 = KeyboardPresence.bootIdentity
@@ -94,6 +100,7 @@ public struct SetupState: Equatable, Sendable {
         self.presence = presence
         self.microphone = microphone
         self.cloudConfigured = cloudConfigured
+        self.cloudAllowed = cloudAllowed
         self.switchAcknowledged = switchAcknowledged
         self.now = now
         self.bootIdentity = bootIdentity
@@ -175,6 +182,9 @@ public struct SetupState: Equatable, Sendable {
     /// says so.
     public var fullAccessDetail: String {
         guard fullAccess == .confirmed else { return "Typing and on-device AI work without it" }
+        guard cloudAllowed else {
+            return "On: key clicks work. Cloud AI is off until you allow it under Settings › Privacy."
+        }
         return cloudConfigured
             ? "On — cloud rewrites and key clicks work"
             : "On — key clicks work. aBitBetterKeyboard has not connected yet; it connects on its own "

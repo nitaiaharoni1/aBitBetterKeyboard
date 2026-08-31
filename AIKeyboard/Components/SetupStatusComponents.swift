@@ -22,7 +22,8 @@ extension SetupState {
             // `isReady`, not `configured() != nil`: a build ships an address, so
             // the second is true before the token has been pasted in and this
             // screen would tick off a setup step the keyboard then 401s on.
-            cloudConfigured: BackendTransport.isReady(),
+            cloudConfigured: BackendTransport.isReady(defaults: store.userDefaults),
+            cloudAllowed: store.allowsCloudAIProcessing,
             switchAcknowledged: store.hasAcknowledgedKeyboardSwitch)
         state.reportFirstConfirmations()
         return state

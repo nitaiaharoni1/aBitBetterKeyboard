@@ -1,8 +1,9 @@
 #!/bin/bash
 #
-# Proves the deployed backend answers the shipping client, in Hebrew.
+# Checks the deployed backend surface and, with a real session, runs the
+# shipping client through one Hebrew request.
 #
-#   BACKEND_TOKEN=... Scripts/prove-cloud-backend.sh [url]
+#   SESSION_TOKEN=... Scripts/prove-cloud-backend.sh [url]
 #
 # Four checks, each able to fail on its own:
 #
@@ -16,11 +17,11 @@
 #   4. The real `CloudIntelligence` + `BackendTransport`, compiled from the
 #      shipping sources, corrects a Hebrew message through the live service.
 #
-# Check 2 fails against a deployment that predates App Attest, and that is the
-# point: it is how you find out the service is behind the app. Redeploy with
-# `SESSION_SECRET` set and it passes.
+# Check 2 fails against a deployment that predates App Attest. Its success proves
+# only that the routes exist, not that an older shared credential is absent.
 #
-# Check 4 is the one that matters, and it is the only check in this repo that
+# Check 4 is the one that matters when a real App Attest session token is
+# supplied, and it is the only check in this repo that
 # runs the product's own cloud path end to end. Everything else about the cloud
 # is tested against a fake transport, which is exactly how a service could be
 # down, unreachable, mis-deployed or answering the wrong shape for a week
@@ -31,10 +32,9 @@
 # needs no app, no simulator and no Full Access. Nothing here touches
 # `FoundationModelsEngine`, so Apple Intelligence is not required either.
 #
-# The token is passed in, never stored here. It is the service's own bearer
-# (`Backend/src/gate.js`), the same value that goes into the app under
-# the Cloud Run service, and it is deliberately not in the repo for the
-# same reason it is not in the bundle.
+# The optional session token is passed in, never stored here. Production no
+# longer accepts one shared backend password. `BACKEND_TOKEN` remains accepted
+# by this script only for an explicitly separate developer-token service.
 
 set -uo pipefail
 
@@ -46,24 +46,44 @@ SHARED="Packages/AIKeyboardCore/Sources/AIKeyboardShared"
 # The address the app ships pointing at, read out of the source rather than
 # repeated here: a script that carries its own copy of the URL can pass against a
 # backend the app does not use.
-URL="${1:-$(sed -n 's/.*bundledDefaultURL = "\(.*\)".*/\1/p' "$SHARED/CloudTransport.swift")}"
+BUNDLED_URL="$(sed -n 's/.*bundledDefaultURL = "\(.*\)".*/\1/p' "$SHARED/CloudTransport.swift")"
+URL="${1:-$BUNDLED_URL}"
+CLIENT_TOKEN="${SESSION_TOKEN:-${BACKEND_TOKEN:-}}"
 
-if [ -z "$URL" ]; then
+# Canonical HTTPS origin for security comparisons. URL parsing lowercases the
+# host and removes the default :443 port; the explicit trailing-dot removal
+# covers the equivalent DNS spelling JavaScript preserves.
+normalized_origin() {
+    node -e '
+const value = new URL(process.argv[1]);
+if (value.protocol !== "https:" || value.username || value.password) process.exit(2);
+const host = value.hostname.toLowerCase().replace(/\.$/, "");
+const port = value.port ? `:${value.port}` : "";
+process.stdout.write(`https://${host}${port}`);
+' "$1"
+}
+
+if [ -z "$BUNDLED_URL" ]; then
     echo "FAIL: could not read bundledDefaultURL out of $SHARED/CloudTransport.swift" >&2
     exit 1
 fi
-
-if [ -z "${BACKEND_TOKEN:-}" ]; then
-    echo "BACKEND_TOKEN is not set." >&2
-    echo >&2
-    echo "This is the bearer the deployed service gates on, and the same value" >&2
-    echo "the app takes under 'Settings > AI > Cloud model'. Without it every" >&2
-    echo "check below would prove only that a 401 works." >&2
+BUNDLED_ORIGIN="$(normalized_origin "$BUNDLED_URL")" || {
+    echo "FAIL: bundledDefaultURL is not a safe HTTPS URL." >&2
+    exit 1
+}
+TARGET_ORIGIN="$(normalized_origin "$URL")" || {
+    echo "FAIL: target URL is not a safe HTTPS URL." >&2
+    exit 1
+}
+if [ -n "${BACKEND_TOKEN:-}" ] && [ "$TARGET_ORIGIN" = "$BUNDLED_ORIGIN" ]; then
+    echo "FAIL: BACKEND_TOKEN is a developer credential and cannot be used against the bundled production URL." >&2
+    echo "Use SESSION_TOKEN from App Attest, or pass an explicitly separate developer-token URL." >&2
     exit 1
 fi
 
 echo "Backend: $URL"
 FAILED=0
+SKIPPED_CLIENT=0
 
 note_failure() {
     echo "FAIL: $1" >&2
@@ -127,17 +147,17 @@ fi
 echo
 echo "3. The fallback"
 
-if [ "$(printf '%s' "$URL" | cut -c1-8)" = "https://" ]; then
-    echo "   bundledDefaultURL is an https address"
-else
-    note_failure "bundledDefaultURL is not https, so the keyboard would post the user's text in clear"
-fi
+echo "   bundledDefaultURL is a safe https address"
 
 # --- 4. The shipping client, against the live service ------------------------
 
 echo
 echo "4. The real client, in Hebrew"
 
+if [ -z "$CLIENT_TOKEN" ]; then
+    echo "   skipped: pass SESSION_TOKEN from a real App Attest session to run this paid check"
+    SKIPPED_CLIENT=1
+else
 BUILD="$(mktemp -d)"
 trap 'rm -rf "$BUILD"' EXIT
 
@@ -191,11 +211,11 @@ done
 cat > "$BUILD/main.swift" <<'SWIFT'
 import Foundation
 
-let url = URL(string: CommandLine.arguments[1])!
+let endpoint = BackendEndpoint(CommandLine.arguments[1])!
 let token = CommandLine.arguments[2]
 let message = "היי אפשר לקבל את הקבץ מאתמול בבקשא"
 
-let engine = CloudIntelligence(transport: BackendTransport(baseURL: url, token: token))
+let engine = CloudIntelligence(transport: BackendTransport(endpoint: endpoint, token: token))
 
 do {
     let corrected = try await engine.fix(message)
@@ -243,12 +263,18 @@ if ! xcrun -sdk macosx swiftc -O "$BUILD"/*.swift -o "$BUILD/prove" 2> "$BUILD/b
     note_failure "the shipping cloud sources did not compile"
     tail -20 "$BUILD/build.log" >&2
 else
-    "$BUILD/prove" "$URL" "$BACKEND_TOKEN" || note_failure "the live service did not correct a Hebrew message"
+    "$BUILD/prove" "$URL" "$CLIENT_TOKEN" || note_failure "the live service did not correct a Hebrew message"
+fi
 fi
 
 echo
 if [ "$FAILED" -eq 0 ]; then
-    echo "PASS: the backend the app ships pointing at is live, gated by attestation, and answers Hebrew."
+    if [ "$SKIPPED_CLIENT" -eq 0 ]; then
+        echo "PASS: the endpoint is live, has App Attest routes, and the supplied bearer answers Hebrew."
+    else
+        echo "PASS: the endpoint is live and has App Attest routes. The paid Hebrew call was skipped."
+    fi
+    echo "This black-box check does not prove that alternate credentials are absent; Backend/deploy.sh verifies the deployed authorization configuration."
 else
     echo "FAILED"
 fi

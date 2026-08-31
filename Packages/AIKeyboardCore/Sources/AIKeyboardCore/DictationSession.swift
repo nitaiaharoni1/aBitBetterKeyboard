@@ -301,17 +301,15 @@ public final class DictationSession: ObservableObject {
         // extension — which is both waste and a way to lose the lines that
         // matter. What is logged is the peak since the last line, so the level
         // still crosses into the log without deciding when to write one.
-        // **The partial is in the line for the same reason the transcript is.**
-        // Streaming crosses the App Group exactly as the final transcript does, and
-        // the only evidence that it does is what the *consuming* process says it
-        // saw — a log from the recorder would prove nothing about the two sharing a
-        // page. Without this, `Scripts/prove-dictation.sh` could prove that a
-        // transcript crosses and nothing at all about the readings before it.
+        // Presence and length prove that streaming crossed the App Group without
+        // putting dictated words in unified logs.
         let line =
             "dictation-watch storage=\(DictationChannel.isReachable ? "appGroup" : "processLocal") "
             + "availability=\(Self.name(of: availability)) utterance=\(utterance) "
-            + "partial=\(partialTranscript.isEmpty ? "none" : String(partialTranscript.prefix(24))) "
-            + "transcript=\(transcript.isEmpty ? "none" : String(transcript.prefix(24)))"
+            + "partial=\(partialTranscript.isEmpty ? "none" : "present") "
+            + "partialChars=\(partialTranscript.count) "
+            + "transcript=\(transcript.isEmpty ? "none" : "present") "
+            + "transcriptChars=\(transcript.count)"
         guard line != lastLogged else { return }
         lastLogged = line
         let peak = Int(peakSinceLogged * 100)

@@ -9,7 +9,8 @@ service-account key is written to disk, `GOOGLE_APPLICATION_CREDENTIALS` is
 never set, and locally it borrows whatever `gcloud auth login` already put in
 your shell.
 
-Node.js, zero runtime dependencies.
+Node.js. Runtime dependencies are pinned in `package-lock.json`; the app itself
+still has no third-party dependency.
 
 ## What it does
 
@@ -77,7 +78,7 @@ that promise with a closed enum; this service keeps it with two tables — the s
 event names with their exact property keys, and the envelope, whose four values
 are matched against *patterns* rather than merely typed as strings, because "it is
 a string" is the check that lets a sentence through. An install id that is not a
-UUID, an app version that is not `0.1 (46)`, a timestamp that is not an instant:
+UUID, an app version that is not `1.0 (61)`, a timestamp that is not an instant:
 all 400. Unknown event names and unknown property keys are 400. What is stored is
 rebuilt key by key from those tables rather than being the body that arrived.
 
@@ -91,6 +92,13 @@ than a query, there is no dedupe (`Analytics.send` never retries, which is now
 load-bearing on this side too), and a dropped log line is a lost event with
 nothing to reconcile against. Good enough for a setup funnel; anything needing
 joins over months needs a real sink, which is a new decision.
+
+Cloud Run's separate automatic request logs are excluded from the project's
+`_Default` sink for this service by `deploy.sh`. Those request entries can carry
+an IP address, user agent, URL, status, sizes and latency; none are needed for
+the setup funnel. The exclusion deliberately matches only
+`run.googleapis.com/requests`, so the six structured analytics events above and
+redacted application errors still use the documented 30-day retention.
 
 ## Error mapping
 
@@ -124,13 +132,15 @@ way: both decode to the identical `AIEngineError.refused`.
 
 ```bash
 cd Backend
-gcloud auth login                      # once — the token this borrows is yours
-PROJECT=handi-project node server.js   # PROJECT defaults to handi-project, MODEL to gemini-3.5-flash-lite
+gcloud auth login
+SERVICE_MODE=local-open PROJECT=handi-project node server.js
 ```
 
 Whichever account `gcloud auth print-access-token` resolves to needs
-`roles/aiplatform.user` (or broader) on that project. Then, from another
-terminal:
+`roles/aiplatform.user` on that project. `local-open` listens only on
+`127.0.0.1` and is rejected automatically on Cloud Run. To test from another
+device or test bearer authentication locally, use
+`SERVICE_MODE=developer-token BACKEND_TOKEN=<value>`. Then, from another terminal:
 
 ```bash
 curl localhost:8080/v1/text -X POST -H 'content-type: application/json' -d '{
@@ -159,7 +169,7 @@ port but always hand it a fake `vertexClient`.
 ## Deploying
 
 ```bash
-BACKEND_TOKEN=... PROJECT=handi-project REGION=europe-west1 ./deploy.sh
+SESSION_SECRET_VERSION=3 PROJECT=handi-project REGION=europe-west1 ./deploy.sh
 ```
 
 **Live since 2026-08-10** at
@@ -179,31 +189,48 @@ That deployment is also what retired this file's "the metadata-server token path
 has never run against a real metadata server" gap: every answered call through
 the Cloud Run service takes it, since there is no `gcloud` on that host.
 
-Not run automatically by anything — deploy by hand. The script grants the
-Cloud Run default runtime identity `roles/aiplatform.user` (idempotent, safe
-to re-run) and deploys with `--allow-unauthenticated`, because the caller is a
-keyboard extension with no Google identity and IAM cannot gate it. It refuses to
-run without both of this service's own gates:
+Deploy by hand. The script runs the release security scan, creates or reuses a
+dedicated runtime service account, grants it only Vertex access plus access to
+the named signing secret, disables Vertex AI's project-wide in-memory data
+cache, verifies that setting, and creates or repairs a service-specific Cloud
+Logging exclusion before deploying with `--allow-unauthenticated`. Cloud Run IAM
+cannot authenticate a keyboard extension, so App Attest is the production
+application gate. The account running the script needs
+`roles/aiplatform.admin` to change the cache setting and
+`logging.exclusions.create`, `logging.exclusions.get`, and
+`logging.exclusions.update` to manage the request-log exclusion.
+
+Create the Secret Manager secret once, then add versions without putting the
+value in a shell variable, source file, or command argument:
 
 ```bash
-SESSION_SECRET=$(openssl rand -hex 32) BACKEND_TOKEN=$(openssl rand -hex 32) \
-  PROJECT=handi-project ./deploy.sh
+openssl rand -hex 32 | gcloud secrets create akeyboard-session-secret \
+  --project=handi-project --data-file=-
+
+# Later rotations add a version to the same secret.
+openssl rand -hex 32 | gcloud secrets versions add akeyboard-session-secret \
+  --project=handi-project --data-file=-
 ```
 
-`SESSION_SECRET` is the gate a shipping install passes. The app proves itself
-with App Attest at `/v1/attest`, the service signs it a ninety-day token, and
-nothing is ever typed in by anybody.
+Pass the new numeric version to `deploy.sh`. During a planned rotation, also
+pass the outgoing numeric version for one deployment:
 
-`BACKEND_TOKEN` is the door behind it, and it is required too: a simulator has no
-Secure Enclave and cannot attest at all, so without it no cloud action can be
-exercised anywhere but on a device. Anyone running this backend themselves uses
-the same door. Put its value in the app's `cloudBackendToken` setting, which
-exists in Debug builds only.
+```bash
+SESSION_SECRET_VERSION=4 SESSION_SECRET_PREVIOUS_VERSION=3 ./deploy.sh
+```
 
-See "Known gaps" for what these are and are not.
+Secret references are pinned to numeric versions. Production refuses to start
+without session verification and refuses any `BACKEND_TOKEN`. The shared token
+exists only in the separate `developer-token` mode for local or self-hosted
+development.
 
 ## Known gaps
 
+- **Disabling Vertex's cache is not the same as a Google-approved zero-retention
+  exception.** Google may still log prompts for abuse monitoring under the
+  Google Cloud Platform Terms of Service. Request that exception from Google if
+  the product needs a zero-retention claim. Until it is granted, the public
+  privacy policy and App Store label disclose the content sent for AI features.
 - **The gate is App Attest now, and what it does not cover is a session token
   sitting on the device it was issued to.** `IAM` cannot be the gate here: the
   caller is a keyboard extension making a plain `URLSession` request with no
@@ -230,10 +257,11 @@ See "Known gaps" for what these are and are not.
   only way to kill a token early is rotating `SESSION_SECRET`, which kills every
   token at once and makes every app re-attest on its next launch.
 
-  **`BACKEND_TOKEN` is still here and still a shared secret**, because a
-  simulator has no Secure Enclave and cannot attest. It is a Debug-only field in
-  the app now, so no shipping install has one, but on the service it is exactly as
-  strong as whoever holds it keeps it.
+  **Simulator cloud calls use a separate development mode.** A simulator has no
+  Secure Enclave and cannot attest. `SERVICE_MODE=developer-token` accepts a
+  shared `BACKEND_TOKEN` for local or self-hosted development, but production
+  rejects that mode and token at startup. Release builds also ignore the Debug
+  token and custom backend URL.
 
   The rate limiter still counts **in one process**, and `deploy.sh` still sets
   `--max-instances=10`, so the real ceiling is up to ten times the per-instance

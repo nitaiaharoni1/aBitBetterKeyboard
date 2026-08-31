@@ -84,8 +84,11 @@ final class ScreenContextBarTests: XCTestCase {
                 XCTAssertEqual(request.prompt, ScreenPrompt.task)
                 XCTAssertEqual(
                     request.fields.map(\.name), ["messages", "sender", "message", "script", "language"])
-                XCTAssertEqual(request.image?.mimeType, "image/jpeg")
-                XCTAssertGreaterThan(request.image?.data.count ?? 0, 1000)
+                guard case .screenJPEG(let jpeg) = request.payload else {
+                    XCTFail("screen corpus must use the screen JPEG payload")
+                    continue
+                }
+                XCTAssertGreaterThan(jpeg.count, 1000)
             }
 
             let script = reading.map {

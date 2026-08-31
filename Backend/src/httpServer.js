@@ -4,7 +4,7 @@
 
 import { createServer as createHttpServer } from "node:http";
 import { handleEvent } from "./eventHandler.js";
-import { authorize, callerKey, createRateLimiter } from "./gate.js";
+import { callerKey, createRateLimiter } from "./gate.js";
 import { handleRequest } from "./requestHandler.js";
 
 // Generous headroom over anything this service should ever see: the
@@ -90,8 +90,8 @@ function readBody(req, maxBytes) {
 
 export function createServer({
   vertexClient,
+  authorizeRequest,
   maxBodyBytes = DEFAULT_MAX_BODY_BYTES,
-  expectedToken = null,
   rateLimiter = createRateLimiter(),
   // Both absent means no attestation route exists at all, which is what the
   // suites that only exercise the model path get. `server.js` always supplies
@@ -99,6 +99,10 @@ export function createServer({
   tokens = null,
   attestationVerifier = null
 } = {}) {
+  if (typeof authorizeRequest !== "function") {
+    throw new Error("authorizeRequest is required");
+  }
+
   return createHttpServer(async (req, res) => {
     // Deliberately before the gate: Cloud Run's own health checks carry no
     // bearer token and must not be rate-limited into failing the revision.
@@ -171,10 +175,9 @@ export function createServer({
         challenge
       });
       if (!verdict.ok) {
-        // One message for all ten checks. `verdict.reason` is for whoever reads
-        // the logs and stops at this line: a 401 that says which check fired is
-        // a tutorial for the person trying to get past it.
-        console.warn(`attestation refused: ${verdict.reason}`);
+        // One fixed message for all ten checks, both on the wire and in logs.
+        // Parsed attestation material must not be copied into Cloud Logging.
+        console.warn("attestation refused");
         sendJSONAndClose(req, res, 401, { error: "attestation refused" });
         return;
       }
@@ -230,11 +233,16 @@ export function createServer({
     // Both gates run before the body is read, so an unauthorised or
     // rate-limited caller cannot make this service buffer 8 MB on their behalf,
     // let alone pay for a model call.
-    const auth = await authorize({
-      expectedToken,
-      headers: req.headers,
-      verifySession: tokens?.verifySession
-    });
+    let auth;
+    try {
+      auth = await authorizeRequest(req.headers);
+    } catch (error) {
+      console.error("authorization failed", {
+        name: error instanceof Error ? error.name : "unknown"
+      });
+      sendJSONAndClose(req, res, 503, { error: "service unavailable" });
+      return;
+    }
     if (!auth.ok) {
       // Mirrors the attestation log above: the reason stays server-side and
       // the caller gets one message regardless of which of the four it was.
@@ -275,12 +283,16 @@ export function createServer({
     }
 
     try {
-      const { status, body: responseBody } = await handleRequest(body, { vertexClient });
+      const requestKind = route === "/v1/text" ? "text" : route === "/v1/audio" ? "audio" : "screen";
+      const { status, body: responseBody } = await handleRequest(requestKind, body, { vertexClient });
       sendJSON(res, status, responseBody);
     } catch (error) {
       // A bug in this service, not the request — still answer inside the
       // "5xx = unavailable" bucket rather than let the socket hang.
-      sendJSON(res, 500, { error: `internal error: ${error.message}` });
+      console.error("request handler failed", {
+        name: error instanceof Error ? error.name : "unknown"
+      });
+      sendJSON(res, 500, { error: "internal error" });
     }
   });
 }

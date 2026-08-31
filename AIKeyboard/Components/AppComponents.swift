@@ -103,6 +103,44 @@ struct ToggleRow: View {
     }
 }
 
+/// The same explicit cloud-processing permission wherever the user can grant
+/// or revoke it. The transport independently enforces this App Group value at
+/// send time; this row is the understandable front door, not the security gate.
+struct CloudAIConsentRow: View {
+    @Binding var isAllowed: Bool
+    @State private var isShowingAdultConfirmation = false
+
+    var body: some View {
+        ToggleRow(
+            title: "Allow cloud AI processing (18+)",
+            subtitle:
+                "Cloud AI is for adults 18 or older. Only when you tap Fix, Rewrite, Reply, Tone or Dictate, the needed text or audio is sent through our backend to Google Vertex AI. Nothing is sent while you type.",
+            icon: "cloud",
+            isOn: Binding(
+                get: { isAllowed },
+                set: { newValue in
+                    if newValue {
+                        isShowingAdultConfirmation = true
+                    } else {
+                        isAllowed = false
+                    }
+                }
+            )
+        )
+        .accessibilityIdentifier("allow-cloud-ai-processing")
+        .alert("Cloud AI is for adults", isPresented: $isShowingAdultConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("I am 18 or older and allow it") {
+                isAllowed = true
+            }
+        } message: {
+            Text(
+                "When you choose a cloud AI feature, the text or audio needed for that request is sent through our backend to Google Vertex AI."
+            )
+        }
+    }
+}
+
 struct NavigationRow<Destination: View>: View {
     let title: String
     var subtitle: String?

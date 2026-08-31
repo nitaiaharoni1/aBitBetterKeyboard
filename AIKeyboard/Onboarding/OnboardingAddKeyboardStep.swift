@@ -61,6 +61,14 @@ struct AddKeyboardStep: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            Card {
+                CloudAIConsentRow(
+                    isAllowed: Binding(
+                        get: { store.allowsCloudAIProcessing },
+                        set: { store.allowsCloudAIProcessing = $0 }
+                    ))
+            }
+
             if !instructions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(instructions.enumerated()), id: \.offset) { index, row in
@@ -147,12 +155,13 @@ struct AddKeyboardStep: View {
     /// unconfirmed, which is the only state in which any of it is news.
     private var fullAccessConsequence: String {
         if store.enabledLanguages.contains(.hebrew) {
-            return "Hebrew needs Full Access. Apple's on-device model does not speak it, so every "
-                + "Hebrew Fix, Rewrite and Reply goes over the network, and only Full Access gives "
-                + "the keyboard one. Typing, autocorrect and emoji work without it."
+            return "Hebrew cloud AI needs Full Access and the separate Allow cloud AI switch. "
+                + "Apple's on-device model does not speak Hebrew, so a Hebrew Fix, Rewrite or "
+                + "Reply uses the network only after you allow it. Typing, autocorrect and emoji "
+                + "work without either permission."
         }
-        return "Full Access is what lets the keyboard reach the network for the languages Apple's "
-            + "on-device model does not cover, and read the settings you choose in this app. "
-            + "Typing, autocorrect and emoji work without it."
+        return "Full Access lets the keyboard reach the network for languages Apple's on-device "
+            + "model does not cover. Cloud AI also stays off until you separately allow it. "
+            + "Typing, autocorrect and emoji work without either permission."
     }
 }

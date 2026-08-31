@@ -7,7 +7,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { APPLE_APP_ATTEST_ROOT_PEM } from "./src/appleRoot.js";
 import { createAttestationVerifier } from "./src/attestationVerifier.js";
-import { createRateLimiter } from "./src/gate.js";
+import { createAuthorizer, createRateLimiter, ServiceMode } from "./src/gate.js";
 import { createServer } from "./src/httpServer.js";
 import { createTokens } from "./src/sessionToken.js";
 import { createTokenProvider } from "./src/token.js";
@@ -24,50 +24,20 @@ const tokenProvider = createTokenProvider({
 });
 const vertexClient = createVertexClient({ project, model, tokenProvider });
 
-// Absent locally is fine and open; absent in the deployment is not, and
-// `deploy.sh` refuses to deploy without one rather than relying on this warning
-// being read. See `src/gate.js` for why a shared string is the ceiling of what
-// this can be, and what a shipping consumer build would use instead.
-const expectedToken = process.env.BACKEND_TOKEN || null;
-if (!expectedToken) {
-  console.warn(
-    "BACKEND_TOKEN is not set: every caller is accepted, and every call spends "
-      + "this project's Vertex budget. Fine on localhost, never on a public URL."
-  );
-}
-
-// App Attest, the gate a shipping install actually passes.
-//
-// **Absent `SESSION_SECRET` switches the two attestation routes off rather than
-// refusing to start**, and that is the same bargain `BACKEND_TOKEN` already
-// strikes: a bare `npm start` on a laptop keeps working with no environment at
-// all, and `deploy.sh` is what refuses to put either gap on a public URL.
-// `createTokens` throws on a secret too short to be one, so the failure mode
-// this leaves open is "no attestation locally", never "tokens signed with
-// undefined".
-//
-// `createTokens` is the session signer and has nothing to do with
-// `createTokenProvider` above it, which fetches Google access tokens for Vertex.
-// Two different tokens, two different jobs, named apart here because they were
-// briefly not.
-// `SESSION_SECRET_PREVIOUS` is the grace window across a rotation, and it exists
-// because rotating without one is silent. `deploy.sh` reads the secret from the
-// caller's shell on every run and its own printed example generates one inline
-// with `openssl rand -hex 32`, so a redeploy that does not reuse the old value
-// invalidates every session token already on every device at that instant. The
-// devices cannot tell that from a forged token: they get a flat 401 on the AI
-// action they just pressed. That is the shape of the 2026-08-14 bursts in
-// NIT-87, both of which follow revision 00004 by minutes.
-//
-// Set it to the outgoing secret for one deploy and outstanding tokens keep
-// verifying until they expire on their own schedule. Signing always uses the
-// current secret, so nothing is issued under the old one and the window closes
-// by itself. Unset is the ordinary state and means no grace at all.
+// The service has three deliberately separate modes. Production has one door:
+// an App Attest session. A shared developer token can never become a hidden
+// production fallback, and an open server can never start on Cloud Run.
+const serviceMode = process.env.SERVICE_MODE;
+const developerToken = process.env.BACKEND_TOKEN || null;
 const sessionSecret = process.env.SESSION_SECRET || null;
 const previousSessionSecret = process.env.SESSION_SECRET_PREVIOUS || null;
 let sessionTokens = null;
 let attestationVerifier = null;
-if (sessionSecret) {
+
+if (serviceMode === ServiceMode.PRODUCTION) {
+  if (!sessionSecret) {
+    throw new Error("production-app-attest requires SESSION_SECRET");
+  }
   sessionTokens = createTokens({
     secret: sessionSecret,
     previousSecrets: previousSessionSecret ? [previousSessionSecret] : []
@@ -75,24 +45,37 @@ if (sessionSecret) {
   attestationVerifier = createAttestationVerifier({
     rootCertificatePem: APPLE_APP_ATTEST_ROOT_PEM,
     appId: process.env.APP_ID || "9R8P28G4BJ.com.nitai.aikeyboard",
-    environment: process.env.ATTEST_ENV || "production"
+    environment: "production"
   });
-} else {
-  console.warn(
-    "SESSION_SECRET is not set: /v1/challenge and /v1/attest are switched off, so "
-      + "no device can attest and the shared BACKEND_TOKEN is the only way in."
-  );
+} else if (sessionSecret || previousSessionSecret) {
+  throw new Error("session secrets are only valid in production-app-attest mode");
 }
+
+if (serviceMode === ServiceMode.LOCAL_OPEN && process.env.K_SERVICE) {
+  throw new Error("local-open is forbidden on Cloud Run");
+}
+
+const authorizeRequest = createAuthorizer({
+  mode: serviceMode,
+  verifySession: sessionTokens?.verifySession,
+  developerToken
+});
 
 const server = createServer({
   vertexClient,
-  expectedToken,
+  authorizeRequest,
   tokens: sessionTokens,
   attestationVerifier,
   rateLimiter: createRateLimiter({
     maxPerWindow: Number(process.env.RATE_LIMIT_PER_MINUTE) || 60
   })
 });
-server.listen(port, () => {
-  console.log(`aikeyboard-backend listening on :${port} (project=${project} model=${model})`);
+// An unauthenticated development server is reachable only from this machine.
+// Testing from another device requires developer-token mode, so a laptop on a
+// shared network can never expose an open model proxy by accident.
+const bindHost = serviceMode === ServiceMode.LOCAL_OPEN ? "127.0.0.1" : undefined;
+server.listen(port, bindHost, () => {
+  console.log(
+    `aikeyboard-backend listening on ${bindHost ?? "all interfaces"}:${port} (project=${project} model=${model} mode=${serviceMode})`
+  );
 });

@@ -207,11 +207,10 @@ public final class ScreenContextChannel: ObservableObject {
         let session = status?.sessionID?.uuidString ?? "none"
         let identity = status.map { $0.currentFrameIdentity.hexString } ?? "none"
         let sampled = status?.framesSampled ?? 0
-        let sender = record?.sender ?? "none"
         let line =
             "channel-watch storage=\(storage) session=\(session) "
             + "identity=\(String(identity.prefix(16))) sampled=\(sampled) "
-            + "verdict=\(Self.name(of: verdict)) reading=\(sender)"
+            + "verdict=\(Self.name(of: verdict)) reading=\(record == nil ? "none" : "present")"
 
         guard line != lastLogged else { return }
         lastLogged = line

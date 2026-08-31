@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { authorize } from "../src/gate.js";
 import { createServer } from "../src/httpServer.js";
 import { createTokens, SESSION_TTL_MS } from "../src/sessionToken.js";
 import { createAttestationVerifier } from "../src/attestationVerifier.js";
@@ -14,7 +15,16 @@ function fakeVertexClient(call) {
 }
 
 async function withServer(vertexClient, run, opts = {}) {
-  const server = createServer({ vertexClient, ...opts });
+  const { expectedToken = null, authorizeRequest: suppliedAuthorizer, ...serverOptions } = opts;
+  const authorizeRequest =
+    suppliedAuthorizer ??
+    ((headers) =>
+      authorize({
+        expectedToken,
+        headers,
+        verifySession: serverOptions.tokens?.verifySession
+      }));
+  const server = createServer({ vertexClient, authorizeRequest, ...serverOptions });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
   try {
@@ -58,7 +68,7 @@ test("POST /v1/screen accepts an image field and forwards it to the vertex clien
           instructions: "read the screen",
           prompt: "who sent the last message",
           fields: [{ name: "sender", description: "sender" }],
-          image: { mimeType: "image/jpeg", data: "Zm9v" }
+          image: { mimeType: "image/jpeg", data: "/9j/2Q==" }
         })
       });
       assert.equal(response.status, 200);
@@ -311,7 +321,7 @@ test("POST /v1/audio round-trips a transcription to a 200", async () => {
           instructions: "transcribe",
           prompt: "what was said",
           fields: [{ name: "text", description: "the transcript" }],
-          audio: { mimeType: "audio/wav", data: "UklGRg==" }
+          audio: { mimeType: "audio/wav", data: "UklGRgAAAABXQVZF" }
         })
       });
       assert.equal(response.status, 200);

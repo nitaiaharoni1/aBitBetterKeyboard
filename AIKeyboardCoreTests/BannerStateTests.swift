@@ -235,6 +235,9 @@ final class BannerStateTests: XCTestCase {
         XCTAssertFalse(
             resolve(runningAction: .fix, error: .cloudNotConfigured).isPresented,
             "a 401 earned a row")
+        XCTAssertTrue(
+            resolve(runningAction: .fix, error: .cloudPermissionRequired).isPresented,
+            "the user's next step was hidden")
         XCTAssertTrue(resolve(block: noSession).isPresented)
         XCTAssertFalse(resolve(dictationIsLive: true).isPresented)
         let context = ScreenContext(

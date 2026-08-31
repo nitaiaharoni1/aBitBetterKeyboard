@@ -80,7 +80,7 @@ public struct CloudScreenReader: ScreenReader {
                 instructions: ScreenPrompt.instructions,
                 prompt: ScreenPrompt.task,
                 fields: ScreenPrompt.fields,
-                image: CloudImage(data: jpeg, mimeType: "image/jpeg")))
+                payload: .screenJPEG(jpeg)))
 
         return AIOutput(Self.parse(fields), provenance: .cloud)
     }

@@ -92,7 +92,7 @@ public struct CloudDictation: Sendable {
     /// `languages` is the user's enabled keyboards. Empty is allowed and drops
     /// the hint, which is the baseline configuration above.
     public func transcribe(
-        _ audio: Data, mimeType: String = "audio/wav", languages: [KeyboardLanguage] = []
+        _ audio: Data, languages: [KeyboardLanguage] = []
     ) async throws -> AIOutput<Transcription> {
         guard networkAllowed() else { throw AIEngineError.needsFullAccess }
 
@@ -100,7 +100,7 @@ public struct CloudDictation: Sendable {
             instructions: DictationPrompt.instructions,
             prompt: DictationPrompt.prompt(for: languages),
             fields: DictationPrompt.fields,
-            audio: CloudAudio(data: audio, mimeType: mimeType))
+            payload: .audioWAV(audio))
 
         let answer = try await transport.send(request)
         let text = (answer["text"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)

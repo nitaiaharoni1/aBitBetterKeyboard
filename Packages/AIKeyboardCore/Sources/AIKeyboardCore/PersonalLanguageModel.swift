@@ -560,7 +560,9 @@ public final class PersonalLanguageModel {
     public func save() {
         pendingWrites = 0
         guard let url, let data = try? JSONEncoder().encode(store) else { return }
-        try? data.write(to: url, options: .atomic)
+        try? data.write(
+            to: url,
+            options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         loadedStamp = Self.stamp(of: url)
     }
 

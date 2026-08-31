@@ -169,8 +169,11 @@ final class ScreenReadServiceTests: XCTestCase {
         // under the prompt `Bar/screen-context/` scores. The capture process gets
         // no second copy of either.
         let sent = try XCTUnwrap(transport.requests.first)
-        XCTAssertEqual(sent.image?.data, jpeg)
-        XCTAssertEqual(sent.image?.mimeType, "image/jpeg")
+        guard case .screenJPEG(let sentJPEG) = sent.payload else {
+            XCTFail("screen reading must use the screen JPEG payload")
+            return
+        }
+        XCTAssertEqual(sentJPEG, jpeg)
         XCTAssertEqual(sent.instructions, ScreenPrompt.instructions)
         XCTAssertEqual(sent.fields.map(\.name), ScreenPrompt.fields.map(\.name))
     }

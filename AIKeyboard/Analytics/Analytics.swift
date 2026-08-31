@@ -201,12 +201,13 @@ enum Analytics {
     /// setup funnel unmeasurable on exactly the installs where attestation is what
     /// failed.
     private static func send(_ payload: [String: AnalyticsValue]) async {
-        let base = BackendTransport.effectiveURL()
-        guard let url = URL(string: base.hasSuffix("/") ? base + "v1/event" : base + "/v1/event"),
+        // Analytics stays first-party even when a Debug build uses a custom
+        // model endpoint. That endpoint must not receive this install ID.
+        guard let endpoint = BackendEndpoint(BackendTransport.bundledDefaultURL),
             let body = try? JSONEncoder().encode(payload)
         else { return }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: endpoint.url(for: .event))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = body

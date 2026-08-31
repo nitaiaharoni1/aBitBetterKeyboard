@@ -288,6 +288,12 @@ extension DictationService {
         // `configured()` alone is true on a fresh install and this would upload the
         // recording before finding out there is no token to send with it. Failing
         // here costs the user a message instead of their audio.
+        guard BackendTransport.allowsCloudAIProcessing() else {
+            fail(
+                session: session, utterance: utterance, recordedAt: recordedAt, seconds: seconds,
+                detail: AIEngineError.cloudPermissionRequired.message)
+            return
+        }
         guard BackendTransport.isReady(), let transport = BackendTransport.configured() else {
             fail(
                 session: session, utterance: utterance, recordedAt: recordedAt, seconds: seconds,

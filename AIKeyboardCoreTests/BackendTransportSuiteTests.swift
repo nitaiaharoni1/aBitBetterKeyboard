@@ -73,21 +73,31 @@ final class BackendTransportSuiteTests: XCTestCase {
         configuration.protocolClasses = [RecordingProtocol.self]
         let session = URLSession(configuration: configuration)
         let url = URL(string: "https://backend.example.com")!
+        let endpoint = try XCTUnwrap(BackendEndpoint(url.absoluteString))
         let request = CloudRequest(
             instructions: "i", prompt: "p", fields: [CloudField("text", "d")])
 
         RecordingProtocol.reset()
-        _ = try? await BackendTransport(baseURL: url, token: "s3cret", session: session)
+        _ = try? await BackendTransport(endpoint: endpoint, token: "s3cret", session: session)
             .send(request)
         XCTAssertEqual(
             RecordingProtocol.lastHeaders?["Authorization"], "Bearer s3cret",
             "a configured token has to reach the wire, not just the settings store")
 
         RecordingProtocol.reset()
-        _ = try? await BackendTransport(baseURL: url, token: nil, session: session).send(request)
+        _ = try? await BackendTransport(endpoint: endpoint, token: nil, session: session)
+            .send(request)
         XCTAssertNil(
             RecordingProtocol.lastHeaders?["Authorization"],
             "no token means no header at all, not an empty bearer")
+    }
+
+    func testBackendEndpointRequiresExactHTTPSWithoutEmbeddedCredentials() {
+        XCTAssertNil(BackendEndpoint("http://backend.example.com"))
+        XCTAssertNil(BackendEndpoint("httpx://backend.example.com"))
+        XCTAssertNil(BackendEndpoint("https://user:secret@backend.example.com"))
+        XCTAssertNil(BackendEndpoint("https://backend.example.com?token=secret"))
+        XCTAssertNotNil(BackendEndpoint("https://backend.example.com"))
     }
 
     /// The regression itself: `BackendTransport.configured()`'s default store must

@@ -153,6 +153,22 @@ struct SettingsView: View {
     /// not something to be handed on the way past a permission dialog.
     private var privacySection: some View {
         section("Privacy") {
+            CloudAIConsentRow(
+                isAllowed: Binding(
+                    get: { store.allowsCloudAIProcessing },
+                    set: { store.allowsCloudAIProcessing = $0 }
+                ))
+            Divider.themed
+            Link(destination: Self.privacyPolicyURL) {
+                InfoRow(
+                    icon: "doc.text",
+                    title: "Privacy policy",
+                    detail: "Read what stays on your phone and what is sent only when you ask."
+                )
+            }
+            .buttonStyle(.plain)
+            .searchTarget(.privacy)
+            Divider.themed
             InfoRow(icon: "hand.raised", title: "What we count", detail: Self.whatWeCount)
                 .searchTarget(.privacy)
             Divider.themed
@@ -198,10 +214,14 @@ struct SettingsView: View {
         // landing page's "Never sold" section covers advertising rather than
         // SDKs, so neither surface carried it.
         return "The app counts \(counted). It never counts a keystroke, a correction, a dictated "
-            + "word, an AI answer, or anything read off your screen. The keyboard itself sends "
-            + "nothing, with or without Full Access. Nothing is sold, and no other company's "
+            + "word, an AI answer, or anything read off your screen. The keyboard extension sends "
+            + "no analytics. Nothing is sold, and no other company's "
             + "code is doing the counting."
     }
+
+    private static let privacyPolicyURL = URL(
+        string: "https://nitaiaharoni1.github.io/aBitBetterKeyboard/privacy/"
+    )!
 
     /// The switch the policy does not require, phrased as the thing being done
     /// rather than as the thing being refused.
@@ -416,7 +436,7 @@ struct SettingsView: View {
 
     private var footer: some View {
         VStack(spacing: Theme.Space.xxs) {
-            Text("aBitBetterKeyboard 0.1")
+            Text("aBitBetterKeyboard 1.0")
                 .font(Theme.Fonts.caption.weight(.medium))
                 .foregroundStyle(Theme.Text.secondary)
             // The keyboard still has no microphone. Dictation is real, and it

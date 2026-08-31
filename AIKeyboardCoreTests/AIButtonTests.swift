@@ -357,11 +357,14 @@ final class SparkleReachabilityTests: XCTestCase {
         let store = SharedStore.shared
         let token = store.cloudBackendToken
         let sessionToken = store.cloudSessionToken
+        let cloudAllowed = store.allowsCloudAIProcessing
         ScreenContextSession.shared.stop()
         if token.isEmpty { store.cloudBackendToken = "test-token" }
+        store.allowsCloudAIProcessing = true
         return {
             store.cloudBackendToken = token
             store.cloudSessionToken = sessionToken
+            store.allowsCloudAIProcessing = cloudAllowed
         }
     }
 

@@ -29,6 +29,7 @@ final class SessionTokenTests: XCTestCase {
     func testAnExpiredSessionTokenIsNotAReadyBackend() {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
+        defaults.set(true, forKey: BackendTransport.cloudAIProcessingAllowedKey)
         defaults.set(token(expiringAt: 1), forKey: "cloudSessionToken")
         XCTAssertFalse(BackendTransport.isReady(defaults: defaults))
     }
@@ -36,6 +37,7 @@ final class SessionTokenTests: XCTestCase {
     func testAnUnexpiredSessionTokenIsAReadyBackend() {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
+        defaults.set(true, forKey: BackendTransport.cloudAIProcessingAllowedKey)
         let future = Int(Date().addingTimeInterval(60 * 60 * 24).timeIntervalSince1970)
         defaults.set(token(expiringAt: future), forKey: "cloudSessionToken")
         XCTAssertTrue(BackendTransport.isReady(defaults: defaults))
@@ -44,6 +46,7 @@ final class SessionTokenTests: XCTestCase {
     func testATypedTokenWinsOverAnAttestedOne() {
         let defaults = UserDefaults(suiteName: #function)!
         defaults.removePersistentDomain(forName: #function)
+        defaults.set(true, forKey: BackendTransport.cloudAIProcessingAllowedKey)
         defaults.set("typed-by-a-developer", forKey: "cloudBackendToken")
         defaults.set(token(expiringAt: 1), forKey: "cloudSessionToken")
         // The expired session token must not be what goes on the wire, and the
