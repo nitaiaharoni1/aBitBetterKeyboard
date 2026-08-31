@@ -49,6 +49,7 @@ platform :ios do
       skip_metadata: false,
       skip_screenshots: false,
       sync_screenshots: true,
+      force: true,
       precheck_include_in_app_purchases: false
     )
   end
