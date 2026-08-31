@@ -36,16 +36,10 @@ final class LanguageMemoryTests: XCTestCase {
     /// The real keyboard, which is the only controller allowed to remember
     /// anything.
     ///
-    /// **These are the only `isSystemKeyboard: true` constructions in the suite,
-    /// and every document here is empty on purpose.** That flag also hands the
-    /// controller the shared `PersonalLanguageModel` and a live
-    /// `PredictiveRefiner`, which is why the other fifty-seven test constructions
-    /// leave it off — a suite that learns words teaches the store its own
-    /// fixtures, which `KeyboardController.personal` records happening. Nothing
-    /// here types, so nothing is learned, and `PredictiveRefiner.shouldRefine`
-    /// refuses a request whose `textBefore` is empty with no screen context, so
-    /// no model call is spent either. A test added to this file that types first
-    /// breaks both of those guarantees.
+    /// Every document here is empty on purpose. The flag selects the shared
+    /// `PersonalLanguageModel`, but both it and the refiner stay lazy while
+    /// suggestion work is suspended. Nothing here activates suggestions or types,
+    /// so the suite neither learns fixtures nor starts a model call.
     private func keyboard(language: KeyboardLanguage) -> KeyboardController {
         KeyboardController(target: MockTextTarget(), language: language, isSystemKeyboard: true)
     }

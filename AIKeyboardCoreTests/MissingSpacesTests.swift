@@ -70,6 +70,36 @@ final class MissingSpacesTests: XCTestCase {
             "היי מה אופי שלו מה קורה")
     }
 
+    func testAPrematureFinalFormMovesAcrossExactlyOneSpace() {
+        XCTAssertEqual(MissingSpaces.restored("שלו ם"), "שלו ם")
+        XCTAssertEqual(MissingSpaces.restored("שלו םלכולם"), "שלום לכולם")
+        XCTAssertEqual(
+            MissingSpaces.restored("לפני\tשלו ם\u{00A0}אחרי"),
+            "לפני\tשלום\u{00A0}אחרי")
+    }
+
+    func testBoundaryRepairRefusesAmbiguousOrNonLetterBoundaries() {
+        XCTAssertEqual(MissingSpaces.restored("האות ם"), "האות ם")
+        XCTAssertEqual(MissingSpaces.restored("שלו םשהו"), "שלו םשהו")
+        XCTAssertEqual(MissingSpaces.restored("שלו  ם"), "שלו  ם")
+        XCTAssertEqual(MissingSpaces.restored("שלו\tם"), "שלו\tם")
+        XCTAssertEqual(MissingSpaces.restored("שלו\nם"), "שלו\nם")
+        XCTAssertEqual(MissingSpaces.restored("שלו\u{00A0}ם"), "שלו\u{00A0}ם")
+        XCTAssertEqual(MissingSpaces.restored("שלו1 ם"), "שלו1 ם")
+        XCTAssertEqual(MissingSpaces.restored("שלו, ם"), "שלו, ם")
+        XCTAssertEqual(MissingSpaces.restored("שלו ם!"), "שלו ם!")
+    }
+
+    func testBoundaryRepairIsIdempotentAndNamesTheExactSuffix() {
+        let repaired = MissingSpaces.restored("אמר שלו םלכולם")
+        XCTAssertEqual(repaired, "אמר שלום לכולם")
+        XCTAssertEqual(MissingSpaces.restored(repaired), repaired)
+        XCTAssertEqual(
+            MissingSpaces.trailingBoundaryRepair(in: "אמר שלו םלכולם"),
+            MissingSpaces.BoundaryRepair(source: "שלו םלכולם", replacement: "שלום לכולם"))
+        XCTAssertNil(MissingSpaces.trailingBoundaryRepair(in: "אמר שלו םלכולם!"))
+    }
+
     /// `המקורן` as the whole field is a word with its prefix glued on, not two
     /// words. The same letters inside a longer jammed run can still be a piece.
     func testAPrefixedStemAloneIsNotSplitOffItsPrefix() {

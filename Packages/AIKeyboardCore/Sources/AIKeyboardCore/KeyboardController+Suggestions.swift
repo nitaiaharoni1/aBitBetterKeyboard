@@ -19,18 +19,13 @@ extension KeyboardController {
     }
 
     /// - Parameter schedulingRefinement: Whether a fresh answer may arm the
-    ///   async tier's 300ms clock. **Off only from `KeyboardController.init`**,
-    ///   which otherwise paid a model call before the first frame drew on every
-    ///   single construction — not every keystroke, construction — because
-    ///   `askForRefinement` cannot tell "the document already had a word in it"
-    ///   from "the user just paused mid-sentence". Every other caller wants the
-    ///   default: a keystroke that does not restart the clock is a keystroke the
-    ///   model never gets asked about.
+    ///   async tier's 300ms clock. Activation uses `false` because appearing over
+    ///   an existing word is not a user typing pause.
     public func refreshSuggestions(schedulingRefinement: Bool = true) {
         // Identity has first refusal for undo. A field switch may arrive here
         // without an appearance callback, so retire the old field's undo before
         // any new-document context is read. Its learning was captured at swap.
-        retirePendingAutocorrectUndoIfDocumentChanged()
+        if suggestionWorkIsActive { retirePendingAutocorrectUndoIfDocumentChanged() }
         // **Above the Predictions guard, because it is not about predictions.**
         // Fix and Rewrite are drawn disabled on an empty field, and this is what
         // their keys redraw from; leaving it under the guard would freeze both keys
@@ -50,9 +45,20 @@ extension KeyboardController {
         // *changed*, and a field being typed into reports the same one every time.
         // Ahead of the scoring below, so a language it switches is the language the
         // candidates come from rather than one refresh behind.
+        let previousInputModeTag = announcedInputModeTag(for: language)
         adoptFieldKeyboardType(force: false)
-        expirePendingAutocorrectUndoIfCaretMoved()
+        if announcedInputModeTag(for: language) != previousInputModeTag {
+            onInputModeLanguageChange?()
+        }
         stopDictationIfHostSent(hadText: hadText)
+        // UIKit can send text and selection callbacks before `viewDidAppear`.
+        // Keep this gate here so every early path performs only field bookkeeping
+        // and cannot cold-build UITextChecker, TypoLexicon or a model.
+        guard suggestionWorkIsActive else {
+            cancelRefinement()
+            return
+        }
+        expirePendingAutocorrectUndoIfCaretMoved()
         // The field already holds the decoder's guess. Scoring that as typed
         // text replaces the grouped bar and lets space commit a third word.
         if grouped.isTyping {
@@ -75,6 +81,24 @@ extension KeyboardController {
         // budget is about a millisecond.
         let typed = currentWordPrefix
         let selected = selectedWord
+        let availableAfter = target?.documentContextAfterInput
+        let after = availableAfter ?? ""
+        if selection == nil,
+            availableAfter != nil,
+            !Self.continuesWord(in: after),
+            let repair = MissingSpaces.trailingBoundaryRepair(in: before)
+        {
+            let bar = [
+                Suggestion(
+                    text: repair.replacement,
+                    language: .hebrew,
+                    commit: .replaceSuffix(expected: repair.source))
+            ]
+            if bar != suggestions { suggestions = bar }
+            cancelRefinement()
+            dropIdleTypingIfStale()
+            return
+        }
         let prefix = selected ?? typed
         // Everything in front of what is being scored. A selection is not part of
         // the before-context at all, and `selectedWord` refuses one with a word
@@ -105,7 +129,8 @@ extension KeyboardController {
         // memo above.** `@Published` emits on assignment and never on change, so
         // the second and third refresh of a keystroke each republished the same
         // three words and each rebuilt every key. `Suggestion`'s equality is
-        // deliberately text, language and the bold flag rather than its `id` —
+        // deliberately text, language, the bold flag and commit behavior rather
+        // than its `id` —
         // see `.claude/rules/suggestion-bar.md`, where that is what stops the bar
         // fading on every letter — so this asks exactly the question the bar
         // draws from.
@@ -172,7 +197,9 @@ extension KeyboardController {
         -> [Suggestion]
     {
         if selection != nil {
-            return results.map { Suggestion(text: $0.text, language: $0.language) }
+            return results.map {
+                Suggestion(text: $0.text, language: $0.language, commit: $0.commit)
+            }
         }
         guard !prefix.isEmpty else { return results }
         // **The spelling the user already undid this session is a third reason,
@@ -227,7 +254,9 @@ extension KeyboardController {
         // `insertText` then immediately reading the proxy can still look empty,
         // and resetting there would undo the Hebrew we just announced.
         if hadText, !documentHasText { announceHostLanguage(language) }
-        adoptOpenWord()
+        // Learning parses and may persist the open word. The extension defers all
+        // of that until it is visible; construction only mirrors document state.
+        if suggestionWorkIsActive { adoptOpenWord() }
     }
 
     /// Keep the word under the cursor, and commit it if the host just emptied
@@ -274,11 +303,7 @@ extension KeyboardController {
         // and whatever this slot already held (the word actually last finished
         // being typed) stays. Same test `selectedWord` applies at its trailing
         // end, `KeyboardController+TextEditing.swift`.
-        if let next = contextAfter.first,
-            next.isLetter || next.isNumber || KeyboardController.staysInsideWord(next)
-        {
-            return
-        }
+        if Self.continuesWord(in: contextAfter) { return }
         openWord = word
         // Captured now, while `target` is still the field these letters were
         // typed into — see `openWordPermitted`.
@@ -542,7 +567,8 @@ extension KeyboardController {
         let typed = SuggestionEngine.comparable(prefix)
         guard !typed.isEmpty else { return nil }
         return suggestions.first {
-            SuggestionEngine.comparable($0.text) != typed
+            $0.commit == .contextual
+                && SuggestionEngine.comparable($0.text) != typed
                 && SuggestionEngine.isAutomaticallyInsertable($0.text)
         }
     }
@@ -577,6 +603,7 @@ extension KeyboardController {
     }
 
     public func apply(_ suggestion: Suggestion) {
+        if applyBoundaryRepair(suggestion) { return }
         Feedback.keyPress()
         retirePendingAutocorrectUndo(.acceptLearning)
         // Text in, so it sounds like text going in. Tapping a candidate is the
@@ -711,11 +738,7 @@ extension KeyboardController {
         // sits in — Return or a punctuation key pressed inside existing text
         // splits it, `"hel|lo"` reaching here as `"hel"`. Learning that fragment
         // writes half a word into the personal dictionary as if it were whole.
-        if let next = contextAfter.first,
-            next.isLetter || next.isNumber || KeyboardController.staysInsideWord(next)
-        {
-            return
-        }
+        if Self.continuesWord(in: contextAfter) { return }
         recordCommittedWord(word)
     }
 

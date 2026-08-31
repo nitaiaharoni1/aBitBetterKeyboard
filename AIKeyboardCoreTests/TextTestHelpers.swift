@@ -18,6 +18,9 @@ final class CursorTextTarget: TextTarget {
     private var before: String
     private var after: String
     private var selected: String?
+    var afterContextIsAvailable = true
+    var backwardDeleteLimit: Int?
+    private var backwardDeleteCount = 0
 
     /// How much of the text before the cursor the host is willing to hand over.
     ///
@@ -41,7 +44,7 @@ final class CursorTextTarget: TextTarget {
         guard let window else { return before }
         return String(before.suffix(window))
     }
-    var documentContextAfterInput: String? { after }
+    var documentContextAfterInput: String? { afterContextIsAvailable ? after : nil }
     var selectedText: String? { selected }
     var isSecureTextEntry: Bool? { false }
     var textContentType: UITextContentType?? { .some(.none) }
@@ -55,6 +58,8 @@ final class CursorTextTarget: TextTarget {
     /// **One press removes the whole selection.** This is the behaviour the old
     /// `for _ in 0..<original.count { deleteBackward() }` loop was blind to.
     func deleteBackward() {
+        if let backwardDeleteLimit, backwardDeleteCount >= backwardDeleteLimit { return }
+        backwardDeleteCount += 1
         if selected != nil {
             selected = nil
             return

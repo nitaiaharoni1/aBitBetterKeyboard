@@ -349,6 +349,15 @@ public final class KeyboardController: ObservableObject {
     /// Called when the globe key is tapped inside the real extension.
     public var onAdvanceToNextKeyboard: (() -> Void)?
 
+    /// Called when a user choice, or a changed field trait, changes the input
+    /// mode identity the extension should publish to iOS.
+    ///
+    /// This is deliberately separate from `hostLanguage`. AI and dictation can
+    /// insert text in another language without changing which keyboard the user
+    /// selected, and publishing those results as a new input mode can make iOS
+    /// replace an already-visible extension.
+    public var onInputModeLanguageChange: (() -> Void)?
+
     /// Called when a Hide keyboard key is tapped inside the real extension.
     ///
     /// Nothing in this package can dismiss a keyboard: only
@@ -388,7 +397,14 @@ public final class KeyboardController: ObservableObject {
     /// holds the failing case.
     var target: TextTarget?
     let store: SharedStore
-    let engine: RoutedIntelligence
+    private let injectedEngine: RoutedIntelligence?
+    lazy var engine: RoutedIntelligence =
+        injectedEngine
+        ?? RoutedIntelligence.standard(
+            cloud: BackendTransport.configured().map {
+                CloudIntelligence(transport: $0, networkAllowed: { SharedContainer.url != nil })
+            }
+        )
 
     /// The keyboard's end of the dictation channel. Injectable for the same
     /// reason `engine` is: `AIKeyboardCoreTests` carries no App Group
@@ -624,7 +640,8 @@ public final class KeyboardController: ObservableObject {
     /// dictionary does anything — the words it was checking were being defended by
     /// a store the tests had filled themselves. Scripted demo words are not
     /// somebody's vocabulary either.
-    let personal: PersonalLanguageModel
+    lazy var personal: PersonalLanguageModel =
+        isSystemKeyboard ? .shared : PersonalLanguageModel(url: nil)
 
     /// The word being typed on grouped keys, when that feature is on. Empty and
     /// inert otherwise. See `KeyboardController+Grouped.swift`.
@@ -638,6 +655,11 @@ public final class KeyboardController: ObservableObject {
     /// scripted demo choosing what the real keyboard opens on tomorrow is the
     /// same defect `personal` records above, one setting over.
     let isSystemKeyboard: Bool
+
+    /// The real extension stays presentation-safe until its first frame is on
+    /// screen and its rebuildable dictionaries have warmed. App previews and
+    /// tests keep their existing eager behaviour.
+    var suggestionWorkIsActive: Bool
 
     public init(
         target: TextTarget?,
@@ -653,7 +675,8 @@ public final class KeyboardController: ObservableObject {
         self.hostLanguage = language
         self.dictation = dictation
         self.isSystemKeyboard = isSystemKeyboard
-        self.personal = isSystemKeyboard ? .shared : PersonalLanguageModel(url: nil)
+        self.injectedEngine = engine
+        self.suggestionWorkIsActive = !isSystemKeyboard
         // This build ships pointing at a deployed backend
         // (`BackendTransport.bundledDefaultURL`), so the cloud half is normally
         // present and Hebrew has somewhere to run. It was nil for the life of
@@ -663,10 +686,9 @@ public final class KeyboardController: ObservableObject {
         // could not save them either — Apple's model rejects a whole session whose
         // *instructions* are Hebrew. That is what "the AI does not work" was.
         //
-        // Resolved once, here, at construction. A URL typed into settings while the
-        // keyboard is already on screen is not picked up until the extension is
-        // rebuilt by iOS, which is the ordinary case anyway — the host app changing
-        // a field tears the keyboard down first.
+        // Resolved lazily on the first AI action, then held for this controller's
+        // lifetime. Construction stays off the launch path for Foundation Models
+        // and backend setup; a URL changed before that first action is picked up.
         // `networkAllowed` is what turns a 401 into a sentence the user can act
         // on. **It defaults to `{ true }` and for the whole of this type's life
         // nothing passed it**, so the `needsFullAccess` guard inside
@@ -689,23 +711,6 @@ public final class KeyboardController: ObservableObject {
         //
         // Read at the call rather than captured, because Full Access can be
         // granted while this controller is alive.
-        self.engine =
-            engine
-            ?? RoutedIntelligence.standard(
-                cloud: BackendTransport.configured().map {
-                    CloudIntelligence(transport: $0, networkAllowed: { SharedContainer.url != nil })
-                }
-            )
-
-        // On-device only. Cloud next-words in the bar mixed model guesses with
-        // the local dictionary, and Hebrew paid a network call for every pause.
-        // Fix, Rewrite and Reply still use `engine` above.
-        if isSystemKeyboard {
-            refiner = PredictiveRefiner.standard { [weak self] words, askedAbout in
-                self?.applyRefinement(words, for: askedAbout)
-            }
-        }
-
         // See `dictationAvailability`. Here rather than in `observeDictation()`
         // because a controller that has never opened an utterance still has to
         // report what the session can see, and because the sink is what makes a
@@ -777,17 +782,38 @@ public final class KeyboardController: ObservableObject {
         // CopyClip does not already do a moment later, so the subscription is
         // gone rather than reduced. See `refreshCopyClip(_:)`.
         apply(store.storedKeyboardLayout)
-        // **Not the plain call.** Over a non-empty document this used to arm
-        // `PredictiveRefiner` on every single construction — a paid model call
-        // 300ms after a keyboard extension is merely built, before the first
-        // frame has even drawn (NIT-191) — and iOS constructs one of these far
-        // more often than a user ever opens a keyboard. The local tier still
-        // runs, because dozens of call sites (production's own first frame, and
-        // most of this suite) read `suggestions` straight off a freshly built
-        // controller and a document-state-only refresh would leave it empty
-        // until the extension's next `textDidChange`. Scoring the document is
-        // not the expensive half of this call; asking a model about it is.
+        // The guard inside `refreshSuggestions` keeps the real extension's
+        // construction free of dictionary, model and engine work. In-app hosts
+        // and tests remain eager, including their first local suggestion bar.
         refreshSuggestions(schedulingRefinement: false)
+    }
+
+    /// Starts suggestion work only after the extension is visible. The cache-warm
+    /// completion is the normal caller; the first visible document callback is
+    /// the fallback when somebody types before it finishes. Safe to call again.
+    @discardableResult
+    public func activateSuggestionWorkAfterPresentation() -> Bool {
+        guard !suggestionWorkIsActive else { return false }
+        retirePendingAutocorrectUndo(.acceptLearning)
+        suggestionWorkIsActive = true
+        if refiner == nil {
+            refiner = PredictiveRefiner.standard { [weak self] words, askedAbout in
+                self?.applyRefinement(words, for: askedAbout)
+            }
+        }
+        refreshSuggestions(schedulingRefinement: false)
+        return true
+    }
+
+    /// Prevents callbacks from a disappearing field from rebuilding predictions
+    /// for a document the next appearance may no longer own.
+    public func suspendSuggestionWork() {
+        guard isSystemKeyboard else { return }
+        suggestionWorkIsActive = false
+        cancelRefinement()
+        lastSuggestionQuery = nil
+        lastSuggestionResults = []
+        if !suggestions.isEmpty { suggestions = [] }
     }
 
     // MARK: Layout
@@ -1123,14 +1149,12 @@ public final class KeyboardController: ObservableObject {
         // The undo belongs to the old field, but its captured learning does not.
         // Retire the undo before reading the new document and accept the complete
         // observation captured when the replacement landed.
-        retirePendingAutocorrectUndo(.acceptLearning)
+        if suggestionWorkIsActive { retirePendingAutocorrectUndo(.acceptLearning) }
         // **The memo's other invalidator, and it is not the field.**
-        // `KeyboardViewController.viewWillAppear` calls
-        // `PersonalLanguageModel.shared.reload()` a few lines before this — Forget
-        // lives in the app, this process stays alive, and the words behind an
-        // answer can therefore be wiped between two identical questions. Dropping
-        // it here is free: an appearance is not a keystroke, and the new field
-        // almost always changes the question anyway. See `lastSuggestionQuery`.
+        // `KeyboardViewController.viewDidAppear` reloads the personal model before
+        // suggestion work is activated. Forget lives in the app, this process
+        // stays alive, and the words behind an answer can therefore be wiped
+        // between two identical questions. See `lastSuggestionQuery`.
         lastSuggestionQuery = nil
         lastSuggestionResults = []
         // First, because the two answers are independent and this one feeds the
@@ -1242,7 +1266,10 @@ public final class KeyboardController: ObservableObject {
     /// the first space-bar slide. The memory that costs is exactly the memory a
     /// session was going to hold anyway, and `didReceiveMemoryWarning` still hands
     /// all of it back.
-    public static func warmRebuildableCaches(for languages: [KeyboardLanguage]) {
+    public static func warmRebuildableCaches(
+        for languages: [KeyboardLanguage],
+        completion: @escaping @MainActor @Sendable () -> Void
+    ) {
         Task.detached(priority: .userInitiated) {
             if languages.contains(where: { $0.script == .hebrew }) {
                 ConversationalHebrewModel.warm()
@@ -1261,7 +1288,14 @@ public final class KeyboardController: ObservableObject {
                         location: 0, length: (probe as NSString).length),
                     in: probe, language: locale)
             }
+            await completion()
         }
+    }
+
+    /// Preserves the original fire-and-forget API for package clients that do
+    /// not need to coordinate activation with the warm.
+    public static func warmRebuildableCaches(for languages: [KeyboardLanguage]) {
+        warmRebuildableCaches(for: languages, completion: {})
     }
 }
 

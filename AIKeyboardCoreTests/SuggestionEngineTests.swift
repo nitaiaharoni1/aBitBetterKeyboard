@@ -195,6 +195,24 @@ extension SuggestionEngineTests {
         XCTAssertEqual(results.first?.text, "שלומ", "the literal keystrokes stay available")
     }
 
+    @MainActor
+    func testAnInternalFinalFormTypoDefaultsToShalomAndCorrectShalomDoesNot() {
+        let typo = SuggestionEngine.suggestions(
+            prefix: "שלןם", context: "", languages: [.hebrew])
+        XCTAssertEqual(
+            typo.first(where: \.isDefault)?.text,
+            "שלום",
+            "the exact typo must default to שלום: \(typo.map(\.text))")
+
+        let correct = SuggestionEngine.suggestions(
+            prefix: "שלום", context: "", languages: [.hebrew])
+        XCTAssertEqual(correct.first?.text, "שלום")
+        XCTAssertEqual(
+            correct.first(where: \.isDefault)?.text,
+            "שלום",
+            "correct שלום must remain the text space commits")
+    }
+
     /// The other letters, so the rule is not a single hardcoded word.
     ///
     /// **The pair that used to sit here was `("איפ", "אף")`, behind a

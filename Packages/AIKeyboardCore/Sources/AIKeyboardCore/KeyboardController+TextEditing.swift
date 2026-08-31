@@ -29,6 +29,11 @@ extension KeyboardController {
     /// were being started in the middle of a sentence.
     public var wordUnderConsideration: String { selectedWord ?? currentWordPrefix }
 
+    static func continuesWord(in contextAfter: String) -> Bool {
+        guard let next = contextAfter.first else { return false }
+        return next.isLetter || next.isNumber || staysInsideWord(next)
+    }
+
     /// The selection, when it is exactly one whole word and nothing else.
     ///
     /// Three boundary tests, because a selection that is *part* of a word is a
@@ -51,11 +56,7 @@ extension KeyboardController {
         guard !selection.contains(where: { $0.isWhitespace || $0.isNewline }) else { return nil }
         guard !SuggestionEngine.wordCore(selection).isEmpty else { return nil }
         guard SuggestionEngine.wordCore(currentWordPrefix).isEmpty else { return nil }
-        if let next = contextAfter.first,
-            next.isLetter || next.isNumber || KeyboardController.staysInsideWord(next)
-        {
-            return nil
-        }
+        guard !Self.continuesWord(in: contextAfter) else { return nil }
         return selection
     }
 
@@ -271,7 +272,8 @@ extension KeyboardController {
         refreshSuggestions()
     }
 
-    func deleteBackward(utf16Units count: Int) {
+    @discardableResult
+    func deleteBackward(utf16Units count: Int) -> Int {
         var remaining = count
         var presses = 0
         while remaining > 0, presses < count + 8 {
@@ -279,9 +281,10 @@ extension KeyboardController {
             target?.deleteBackward()
             presses += 1
             let removed = Self.unitsRemoved(from: before, to: Array(contextBefore.utf16))
-            guard removed > 0 else { return }
+            guard removed > 0 else { return count - remaining }
             remaining -= removed
         }
+        return count - remaining
     }
 
     static func unitsRemoved(from before: [UInt16], to after: [UInt16]) -> Int {

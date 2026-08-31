@@ -16,12 +16,9 @@ extension KeyboardController {
     /// language the keys are on.
     ///
     /// **`primaryLanguage` is the only sentence this process ever says to iOS
-    /// about what keyboard it is, and a slide along the space bar is the only
-    /// thing that changes it mid-session.** iOS is free to re-decide whether a
-    /// third-party keyboard may serve the field it is standing over, and the
-    /// moment its identity changes is the moment that decision can be taken
-    /// again. So a field that declared it cannot hold another script keeps
-    /// hearing a Latin tag even after the user slides the keys to Hebrew.
+    /// about what keyboard it is.** Only an explicit user language choice or a
+    /// changed field trait may ask the extension to republish it. AI and
+    /// dictation output change `hostLanguage`, not input-mode identity.
     ///
     /// `latinFieldTypes` is the same set `adoptFieldKeyboardType` already moves
     /// the *keys* for, so this is that decision carried through to the host
@@ -106,6 +103,7 @@ extension KeyboardController {
             plane = .letters
         }
         if isSystemKeyboard { store.rememberLanguage(destination) }
+        onInputModeLanguageChange?()
         announceLanguage(destination, in: enabled, pending: false, step: places)
         endGroupedWord()
         refreshSuggestions()

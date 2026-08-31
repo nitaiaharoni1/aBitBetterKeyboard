@@ -396,4 +396,124 @@ final class CandidateCommitTests: XCTestCase {
             controller.suggestions.contains { $0.text.lowercased() == "hello" || $0.text == "hel" },
             "the bar is still scoring the word the caret left: \(controller.suggestions.map(\.text))")
     }
+
+    func testPrematureHebrewSpaceIsOfferedOnlyForATap() throws {
+        let target = CursorTextTarget(before: "שלו םלכולם")
+        let controller = KeyboardController(target: target, language: .hebrew)
+        controller.refreshSuggestions()
+
+        XCTAssertEqual(controller.suggestions.count, 1)
+        let offer = try XCTUnwrap(controller.suggestions.first)
+        XCTAssertEqual(offer.text, "שלום לכולם")
+        XCTAssertFalse(offer.isDefault, "space must never commit the boundary repair")
+        XCTAssertEqual(offer.commit, .replaceSuffix(expected: "שלו םלכולם"))
+        XCTAssertEqual(
+            SuggestionBar.candidateHint(offer, replacesSelection: false),
+            "Repairs a misplaced space")
+
+        controller.suggestions = [
+            Suggestion(
+                text: offer.text,
+                language: offer.language,
+                isDefault: true,
+                commit: offer.commit)
+        ]
+        controller.press(.space)
+        XCTAssertEqual(target.document, "שלו םלכולם ", "space applied a tap-only repair")
+    }
+
+    func testTappingBoundaryRepairCanBeUndoneBackToItsExactSource() throws {
+        let target = CursorTextTarget(before: "אמר שלו םלכולם")
+        let controller = KeyboardController(target: target, language: .hebrew)
+        controller.refreshSuggestions()
+        let offer = try XCTUnwrap(controller.suggestions.first)
+
+        controller.apply(offer)
+        XCTAssertEqual(target.document, "אמר שלום לכולם")
+        XCTAssertEqual(controller.revertibleEdit?.origin, .spacing)
+        XCTAssertEqual(controller.revertibleEdit?.origin.undoLabel, "Undo spacing")
+
+        controller.revertEdit()
+        XCTAssertEqual(target.document, "אמר שלו םלכולם")
+    }
+
+    func testAStaleBoundaryRepairDoesNotDeleteNewerText() throws {
+        let target = CursorTextTarget(before: "שלו ם")
+        let controller = KeyboardController(target: target, language: .hebrew)
+        controller.refreshSuggestions()
+        let stale = try XCTUnwrap(controller.suggestions.first)
+
+        target.placeCaret(before: "שלו םא")
+        controller.apply(stale)
+
+        XCTAssertEqual(target.document, "שלו םא")
+        XCTAssertNil(controller.revertibleEdit)
+    }
+
+    func testAStaleBoundaryRepairDoesNotDeleteIntoTextAfterTheCaret() throws {
+        let target = CursorTextTarget(before: "שלו ם")
+        let controller = KeyboardController(target: target, language: .hebrew)
+        controller.refreshSuggestions()
+        let stale = try XCTUnwrap(controller.suggestions.first)
+
+        target.placeCaret(before: "שלו ם", after: "א")
+        controller.apply(stale)
+
+        XCTAssertEqual(target.document, "שלו םא")
+        XCTAssertNil(controller.revertibleEdit)
+    }
+
+    func testBoundaryRepairRequiresAvailableAfterCaretContext() throws {
+        let target = CursorTextTarget(before: "שלו ם")
+        target.afterContextIsAvailable = false
+        let controller = KeyboardController(target: target, language: .hebrew)
+        controller.refreshSuggestions()
+        XCTAssertFalse(controller.suggestions.contains { $0.commit != .contextual })
+
+        target.afterContextIsAvailable = true
+        controller.refreshSuggestions()
+        let stale = try XCTUnwrap(controller.suggestions.first)
+        target.afterContextIsAvailable = false
+        controller.apply(stale)
+
+        XCTAssertEqual(target.document, "שלו ם")
+        XCTAssertNil(controller.revertibleEdit)
+    }
+
+    func testBoundaryRepairRollsBackAPartialDeletion() throws {
+        let target = CursorTextTarget(before: "שלו ם")
+        let controller = KeyboardController(target: target, language: .hebrew)
+        controller.refreshSuggestions()
+        let offer = try XCTUnwrap(controller.suggestions.first)
+        target.backwardDeleteLimit = 2
+
+        controller.apply(offer)
+
+        XCTAssertEqual(target.document, "שלו ם")
+        XCTAssertNil(controller.revertibleEdit)
+    }
+
+    func testBoundaryRepairIsNotOfferedAcrossASelectionOrIntoAWord() {
+        let continuing = KeyboardController(
+            target: CursorTextTarget(before: "שלו ם", after: "א"), language: .hebrew)
+        continuing.refreshSuggestions()
+        XCTAssertFalse(
+            continuing.suggestions.contains { $0.commit != .contextual },
+            "a repair was offered inside a continuing word")
+
+        let selected = KeyboardController(
+            target: CursorTextTarget(before: "שלו ם", selecting: "א"), language: .hebrew)
+        selected.refreshSuggestions()
+        XCTAssertFalse(
+            selected.suggestions.contains { $0.commit != .contextual },
+            "a repair was offered while text was selected")
+    }
+
+    func testBoundaryRepairRespectsThePredictionsSetting() {
+        SharedStore.shared.userDefaults.set(false, forKey: SharedStore.Key.predictions)
+        let controller = KeyboardController(
+            target: CursorTextTarget(before: "שלו ם"), language: .hebrew)
+        controller.refreshSuggestions()
+        XCTAssertTrue(controller.suggestions.isEmpty)
+    }
 }

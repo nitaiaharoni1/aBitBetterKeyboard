@@ -162,6 +162,8 @@ public struct RevertibleEdit: Equatable, Sendable {
         case ai(AIAction)
         /// A clip inserted from the CopyClip panel.
         case clip
+        /// A misplaced word boundary repaired from the suggestion bar.
+        case spacing
 
         /// What the undo control is called out loud. It names the action rather
         /// than saying "Undo", for the reason `SuggestionBar.revertButton` gives:
@@ -170,6 +172,7 @@ public struct RevertibleEdit: Equatable, Sendable {
             switch self {
             case .ai(let action): return "Undo \(action.title)"
             case .clip: return "Undo paste"
+            case .spacing: return "Undo spacing"
             }
         }
     }

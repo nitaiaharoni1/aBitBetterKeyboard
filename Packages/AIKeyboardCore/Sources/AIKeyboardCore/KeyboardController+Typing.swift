@@ -501,6 +501,7 @@ extension KeyboardController {
             !isCorrectingWordByHand,
             selection == nil,
             let candidate = suggestions.first(where: \.isDefault),
+            candidate.commit == .contextual,
             !original.isEmpty,
             candidate.text.lowercased() != original.lowercased(),
             !undoneAutocorrectSpellings.contains(SeedLanguageModel.fold(original))

@@ -141,8 +141,8 @@ screen shows up as a gap.
 | Keyboard memory | Keyboard launches | What it means |
 |---|---|---|
 | warnings above zero | anything | The jetsam kill. Work is footprint; `GroupedLexiconResource.load` first. |
-| zero warnings | launches above presentations | Not memory. Runs start and do not arrive. |
-| zero warnings | counters equal, slowest small | Both current hypotheses are wrong. What is left is the unconditional `primaryLanguage` write in `viewWillAppear`. |
+| zero warnings | launches above presentations | A run started but did not arrive. Since 2026-08-31 suggestion, personal-model and Foundation Models work is gated until after presentation; a persistent gap now needs a fresh launch trace rather than another startup deferral. |
+| zero warnings | counters equal, slowest small | Launch completed. Compare the `inputmode` log with the exact switch: appearance always publishes; while visible, only a real tag change from the keys, field trait, dictation or generated text publishes. Repeated equal tags are skipped. No nearby publication points away from this extension's identity path. |
 
 One point of gap is noise, because iOS may build a controller it never presents.
 A persistent ratio is the evidence. Use the keyboard normally until the bug has

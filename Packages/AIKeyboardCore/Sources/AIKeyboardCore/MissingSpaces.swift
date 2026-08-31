@@ -3,7 +3,10 @@ import Foundation
 import UIKit
 import os
 
-/// Inserts the spaces a jammed token is missing, from the bundled word list.
+/// Restores word boundaries from the bundled list.
+///
+/// Most repairs split a jammed token. The one exception moves a Hebrew boundary
+/// one letter later when a final-form letter proves the typed boundary impossible.
 ///
 /// **The model is not the recovery.** Fix on `מהאופישלומהקורה` came back
 /// unchanged: missing spaces were not in the corrections field, the model wrote
@@ -21,10 +24,17 @@ import os
 /// letters in the middle of a longer jammed run can be one piece via the stem.
 enum MissingSpaces {
 
-    /// `text` with jammed letter-runs split on word boundaries. Identity when
-    /// nothing in it can be covered by two or more list words.
+    /// An exact suffix the keyboard may replace without reinterpreting the rest
+    /// of the field.
+    struct BoundaryRepair: Equatable {
+        let source: String
+        let replacement: String
+    }
+
+    /// `text` with missing or provably premature boundaries repaired. Identity
+    /// when the bundled list cannot prove a safer boundary.
     static func restored(_ text: String) -> String {
-        let tokens = EditScope.split(text)
+        let tokens = EditScope.split(repairingBoundaries(in: text))
         guard !tokens.isEmpty else { return text }
         let updated = tokens.map { token -> EditScope.Token in
             let split = splitRuns(in: token.text)
@@ -33,6 +43,106 @@ enum MissingSpaces {
         }
         return EditScope.joined(updated)
     }
+
+    /// Repairs a final-form letter typed one position too early, but only when
+    /// the exact suffix ends at the caret. The controller re-runs this immediately
+    /// before writing so a stale suggestion cannot delete newer text.
+    static func trailingBoundaryRepair(in text: String) -> BoundaryRepair? {
+        guard let space = text.lastIndex(of: " "), space < text.index(before: text.endIndex)
+        else { return nil }
+
+        let rightStart = text.index(after: space)
+        let right = String(text[rightStart...])
+        guard right.allSatisfy(\.isLetter) else { return nil }
+
+        var leftStart = space
+        while leftStart > text.startIndex {
+            let previous = text.index(before: leftStart)
+            guard !text[previous].isWhitespace else { break }
+            leftStart = previous
+        }
+        let left = String(text[leftStart..<space])
+        guard !left.isEmpty else { return nil }
+        return boundaryRepair(left: left, right: right, allowingEmptyRemainder: true)
+    }
+
+    private static func repairingBoundaries(in text: String) -> String {
+        var result = ""
+        var cursor = text.startIndex
+
+        while let space = text[cursor...].firstIndex(of: " ") {
+            var leftStart = space
+            while leftStart > cursor {
+                let previous = text.index(before: leftStart)
+                guard !text[previous].isWhitespace else { break }
+                leftStart = previous
+            }
+
+            var rightEnd = text.index(after: space)
+            while rightEnd < text.endIndex, !text[rightEnd].isWhitespace {
+                rightEnd = text.index(after: rightEnd)
+            }
+
+            let left = String(text[leftStart..<space])
+            let right = String(text[text.index(after: space)..<rightEnd])
+            guard
+                let repair = boundaryRepair(
+                    left: left, right: right, allowingEmptyRemainder: false)
+            else {
+                result += text[cursor...space]
+                cursor = text.index(after: space)
+                continue
+            }
+
+            result += text[cursor..<leftStart]
+            result += repair.replacement
+            cursor = rightEnd
+        }
+
+        result += text[cursor...]
+        return result
+    }
+
+    private static func boundaryRepair(
+        left: String, right: String, allowingEmptyRemainder: Bool
+    ) -> BoundaryRepair? {
+        guard
+            left.allSatisfy(\.isLetter),
+            right.allSatisfy(\.isLetter),
+            lexiconLanguage(of: left) == .hebrew,
+            lexiconLanguage(of: right) == .hebrew,
+            let moved = right.first,
+            HebrewMorphology.finalForms.values.contains(moved)
+        else { return nil }
+
+        let remainder = String(right.dropFirst())
+        guard allowingEmptyRemainder || !remainder.isEmpty else { return nil }
+        let repairedLeft = left + String(moved)
+        guard boundaryWordIsCommon(repairedLeft) else { return nil }
+        guard remainder.isEmpty || boundaryWordIsCommon(remainder) else { return nil }
+
+        // The final form may itself be a typo for an ordinary first letter. Keep
+        // that reading when it makes a common word, but ignore one-letter entries such as מ.
+        guard let ordinary = ordinaryForms[moved] else { return nil }
+        let alternativeRight = String(ordinary) + remainder
+        if alternativeRight.count >= 2, boundaryWordIsCommon(alternativeRight) { return nil }
+
+        let source = left + " " + right
+        let replacement = repairedLeft + (remainder.isEmpty ? "" : " " + remainder)
+        return BoundaryRepair(source: source, replacement: replacement)
+    }
+
+    private static func boundaryWordIsCommon(_ word: String) -> Bool {
+        guard word.count >= 2, let rank = TypoLexicon.rank(of: word, in: .hebrew) else {
+            return false
+        }
+        // Keep the splitter's existing policy for short Hebrew pieces: only
+        // exceptionally common two-letter function words are safe boundaries.
+        return word.count > 2 || rank < shortPieceRankLimit
+    }
+
+    private static let ordinaryForms: [Character: Character] = HebrewMorphology.finalForms
+        .reduce(into: [:]) { $0[$1.value] = $1.key }
 
     // MARK: Runs
 
@@ -181,7 +291,7 @@ enum MissingSpaces {
             return ranks[key]
         }
         if piece.count == 2 {
-            guard let rank = ranks[key], rank < 250 else { return nil }
+            guard let rank = ranks[key], rank < shortPieceRankLimit else { return nil }
             return rank
         }
         if let rank = ranks[key] { return rank }
@@ -197,6 +307,7 @@ enum MissingSpaces {
         ranks.withLock { $0.removeAll() }
     }
 
+    private static let shortPieceRankLimit = 250
     private static let ranks = OSAllocatedUnfairLock(initialState: [String: [String: Int]]())
 
     /// **`uncachedWords` rather than `words(for:)`, which is the same call

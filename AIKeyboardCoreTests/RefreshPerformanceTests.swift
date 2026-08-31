@@ -22,17 +22,11 @@ final class RefreshPerformanceTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: Fix 7 — construction must not arm the refiner
+    // MARK: Fix 7 — real extension construction must stay inert
 
-    /// **`KeyboardController.init` calls `refreshSuggestions(schedulingRefinement:
-    /// false)` rather than the plain call**, precisely so a controller built
-    /// over a non-empty document does not start `PredictiveRefiner`'s 300ms
-    /// clock before the first frame has even drawn. This is not reachable as a
-    /// black-box "does construction avoid it" test, because `init` always
-    /// builds its own refiner internally with no injection seam — a refiner
-    /// swapped in afterwards cannot observe what happened during the call that
-    /// already returned. What is tested instead is the mechanism `init` relies
-    /// on: the parameter genuinely gates whether the refiner is ever asked.
+    /// Activation performs one local, non-refining refresh. A refiner injected
+    /// before that boundary must survive, and must remain idle until a later
+    /// ordinary refresh.
     func testSchedulingRefinementFalseNeverReachesTheRefiner() {
         let target = CursorTextTarget(before: "hello there")
         let controller = KeyboardController(
@@ -40,7 +34,7 @@ final class RefreshPerformanceTests: XCTestCase {
         let spy = CanPredictSpy()
         controller.refiner = PredictiveRefiner(onDevice: spy, apply: { _, _ in })
 
-        controller.refreshSuggestions(schedulingRefinement: false)
+        controller.activateSuggestionWorkAfterPresentation()
 
         XCTAssertEqual(
             spy.canPredictCallCount, 0,
@@ -53,13 +47,9 @@ final class RefreshPerformanceTests: XCTestCase {
             "the default must still ask, or the guard above proves nothing")
     }
 
-    /// The first frame still needs a populated bar: the playground and
-    /// onboarding (`MockTextTarget`) read `controller.suggestions` off a
-    /// freshly built controller with no explicit refresh of their own, and the
-    /// production extension's own `viewDidLoad` does the same before
-    /// `viewWillAppear` ever runs. `schedulingRefinement: false` only withholds
-    /// the async tier; the local tier still scores the document.
-    func testConstructionStillPopulatesTheBarWithoutTheRefiner() {
+    /// App previews remain eager because they are not under the extension's
+    /// launch deadline.
+    func testNonSystemConstructionStillPopulatesTheBar() {
         let target = MockTextTarget(text: "hel")
         let controller = KeyboardController(target: target, language: .english)
 
@@ -67,6 +57,40 @@ final class RefreshPerformanceTests: XCTestCase {
             controller.suggestions.isEmpty,
             "a freshly built controller over a non-empty document must still "
                 + "have scored it")
+    }
+
+    /// The real extension must draw before any local dictionary or model work.
+    /// Activation is the explicit boundary that fills the bar afterwards.
+    func testSystemConstructionWaitsForPresentationBeforeScoring() {
+        let target = MockTextTarget(text: "hel")
+        let controller = KeyboardController(
+            target: target, language: .english, isSystemKeyboard: true)
+
+        XCTAssertTrue(
+            controller.suggestions.isEmpty,
+            "a real keyboard must not score its document during construction")
+
+        controller.activateSuggestionWorkAfterPresentation()
+
+        XCTAssertFalse(
+            controller.suggestions.isEmpty,
+            "post-presentation activation must fill the local suggestion bar")
+    }
+
+    func testSystemSuggestionsStayInertWhileSuspendedAndReactivate() {
+        let target = MockTextTarget(text: "hel")
+        let controller = KeyboardController(
+            target: target, language: .english, isSystemKeyboard: true)
+        controller.activateSuggestionWorkAfterPresentation()
+        XCTAssertFalse(controller.suggestions.isEmpty)
+
+        controller.suspendSuggestionWork()
+        XCTAssertTrue(controller.suggestions.isEmpty)
+        controller.refreshSuggestions()
+        XCTAssertTrue(controller.suggestions.isEmpty)
+
+        controller.activateSuggestionWorkAfterPresentation()
+        XCTAssertFalse(controller.suggestions.isEmpty)
     }
 
     // MARK: Fix 8 — applyRefinement must not republish when nothing changed

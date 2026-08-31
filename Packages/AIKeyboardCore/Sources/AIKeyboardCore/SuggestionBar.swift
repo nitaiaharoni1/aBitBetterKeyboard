@@ -349,6 +349,7 @@ public struct SuggestionBar: View {
     }
 
     static func candidateHint(_ suggestion: Suggestion, replacesSelection: Bool) -> String {
+        if case .replaceSuffix = suggestion.commit { return "Repairs a misplaced space" }
         if replacesSelection { return "Replaces the selected word" }
         return suggestion.isDefault ? "Inserted when you press space" : ""
     }

@@ -14,14 +14,19 @@ extension KeyboardLanguage {
 
 // MARK: - Suggestions
 
-/// A word offered in the suggestion bar.
+/// An offer in the suggestion bar.
 public struct Suggestion: Identifiable, Sendable, Equatable {
+    public enum Commit: Sendable, Equatable {
+        case contextual
+        case replaceSuffix(expected: String)
+    }
+
     /// Fresh every time a list is built, so SwiftUI can tell two slots apart.
     /// **Not part of equality.** The synthesised `==` included it, so the bar
     /// saw a new array on every keystroke even when the three words had not
     /// moved, and faded them for 180ms — a beat behind the fingers. Two
-    /// suggestions are the same offer when the word, the language and the bold
-    /// slot agree.
+    /// suggestions are the same offer when the word, language, bold slot and
+    /// commit behavior agree.
     public let id = UUID()
     public let text: String
     /// Which language the candidate came from, which is not always the layout on
@@ -32,15 +37,23 @@ public struct Suggestion: Identifiable, Sendable, Equatable {
     public let language: KeyboardLanguage
     /// The middle slot is what a space press will commit, the way iOS marks it.
     public let isDefault: Bool
+    public let commit: Commit
 
-    public init(text: String, language: KeyboardLanguage, isDefault: Bool = false) {
+    public init(
+        text: String,
+        language: KeyboardLanguage,
+        isDefault: Bool = false,
+        commit: Commit = .contextual
+    ) {
         self.text = text
         self.language = language
         self.isDefault = isDefault
+        self.commit = commit
     }
 
     public static func == (lhs: Suggestion, rhs: Suggestion) -> Bool {
         lhs.text == rhs.text && lhs.language == rhs.language && lhs.isDefault == rhs.isDefault
+            && lhs.commit == rhs.commit
     }
 }
 

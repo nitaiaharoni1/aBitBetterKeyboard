@@ -41,6 +41,16 @@ final class KeyboardViewController: UIInputViewController {
     /// fields, and counting every appearance would leave the two counters
     /// measuring different things.
     private var hasRecordedPresentation = false
+    /// True only between `viewDidAppear` and `viewWillDisappear`. Input-mode
+    /// callbacks are ignored outside this window; the appearance path publishes
+    /// its settled value once, explicitly.
+    private var isKeyboardVisible = false
+    /// Distinguishes the current appearance from an older cache warm that may
+    /// finish after the keyboard has disappeared and come back over another field.
+    private var presentationGeneration = 0
+    /// `UILexicon` belongs to this controller instance and needs one request, but
+    /// asking the host for it before presentation adds work to the launch path.
+    private var hasRequestedSupplementaryLexicon = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -88,6 +98,19 @@ final class KeyboardViewController: UIInputViewController {
         controller.onAdvanceToNextKeyboard = { [weak self] in
             self?.advanceToNextInputMode()
         }
+        controller.onInputModeLanguageChange = { [weak self] in
+            guard let self, self.isKeyboardVisible else { return }
+            self.publishInputLanguage()
+        }
+        // Generated text may use another language without moving the keys.
+        // Publish that content direction only while this keyboard is visible;
+        // the equality guard below suppresses redundant identity writes.
+        controller.$hostLanguage
+            .sink { [weak self] language in
+                guard let self, self.isKeyboardVisible else { return }
+                self.publishInputLanguage(language)
+            }
+            .store(in: &cancellables)
         // Only a `UIInputViewController` can put the keyboard away, and the
         // package does not have one. Without this the Hide keyboard key a user
         // added in the layout editor would draw, animate, click and do nothing —
@@ -156,21 +179,14 @@ final class KeyboardViewController: UIInputViewController {
             }
             .store(in: &cancellables)
 
-        // The value in the sink is the new host language. `@Published` emits from
-        // `willSet`, so reading `controller.hostLanguage` here would still be the
-        // old one. Dictation and Reply write this without moving the keys.
-        // Synchronous on purpose: `.receive(on: RunLoop.main)` defers even when
-        // we are already on main, and the insert would land in a field that still
-        // thought it was English.
-        controller.$hostLanguage
-            .sink { [weak self] language in self?.publishInputLanguage(language) }
-            .store(in: &cancellables)
+    }
 
-        // Names and text replacements the user already has, so `SuggestionEngine`
-        // can offer "Nitai" without waiting for it to appear in a sentence
-        // first. "Will not provide a complete repository of a language's
-        // vocabulary" per Apple's own doc comment on this method — it is a
-        // supplement, not a dictionary, and on the Simulator it answers empty.
+    /// Adds the user's names and text replacements after the keyboard is visible.
+    /// The host callback may arrive later; the controller's presentation gate
+    /// decides whether that answer may trigger scoring then.
+    private func requestSupplementaryLexiconOnce() {
+        guard !hasRequestedSupplementaryLexicon else { return }
+        hasRequestedSupplementaryLexicon = true
         requestSupplementaryLexicon { [weak self] lexicon in
             let words = lexicon.entries.map(\.documentText)
             Task { @MainActor [weak self] in
@@ -239,9 +255,6 @@ final class KeyboardViewController: UIInputViewController {
         // `reloadCustomization` below then draws. Reading only the layout left
         // those two on the launch-time copy.
         SharedStore.shared.load()
-        // Forget lives in the app. This process stays alive, so without a
-        // re-read the bar would keep ranking words the user just wiped.
-        PersonalLanguageModel.shared.reload()
         // **Re-read before measuring, and both before the keyboard is on screen.**
         // The layout is edited in the companion app, and iOS keeps this process
         // alive in the background, so the first appearance after an edit is the
@@ -292,9 +305,7 @@ final class KeyboardViewController: UIInputViewController {
         // screen is a fresh visit, which is the moment that freeze is allowed to
         // lift. See `KeyboardController.visibleRecentEmoji`.
         controller?.settleRecentEmoji()
-        // The host on the other side of this appearance may never have heard the
-        // tag this instance is already holding. See `publishInputLanguage`.
-        publishInputLanguage(announcingAnyway: true)
+        publishInputLanguage(controller.hostLanguage, announcingAnyway: true)
         updateKeyboardHeight()
     }
 
@@ -304,6 +315,9 @@ final class KeyboardViewController: UIInputViewController {
     /// at, and `intent.keyboardVisible` would be a lie.
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        isKeyboardVisible = true
+        presentationGeneration &+= 1
+        let generation = presentationGeneration
         // **Gated on the flag, because with it off there is no producer and the
         // poll is pure cost.** `startConsuming` calls
         // `ScreenContextChannel.startWatching`, which mmaps the App Group pages,
@@ -326,6 +340,10 @@ final class KeyboardViewController: UIInputViewController {
         recordPresence()
         recordMemory()
         recordFirstPresentation()
+        // Forget lives in the app. Reload only after presentation so its file
+        // read cannot delay the first frame of the extension.
+        PersonalLanguageModel.shared.reload()
+        requestSupplementaryLexiconOnce()
         // Off the main thread, and from here rather than `viewDidLoad` for the
         // reason `recordPresence()` gives: this is the moment the keyboard is
         // genuinely in use, and it is off the path between the keyboard being
@@ -342,7 +360,14 @@ final class KeyboardViewController: UIInputViewController {
         // rather than under the next finger.
         let language = controller.language
         KeyboardController.warmRebuildableCaches(
-            for: [language] + controller.enabledLanguages.filter { $0 != language })
+            for: [language] + controller.enabledLanguages.filter { $0 != language }
+        ) { [weak self] in
+            guard let self,
+                self.isKeyboardVisible,
+                self.presentationGeneration == generation
+            else { return }
+            self.controller.activateSuggestionWorkAfterPresentation()
+        }
     }
 
     /// The one warning iOS sends before it starts killing.
@@ -553,6 +578,9 @@ final class KeyboardViewController: UIInputViewController {
     /// keyboard goes away, and how long for is not ours to decide.
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        let hadAppeared = isKeyboardVisible
+        isKeyboardVisible = false
+        controller?.suspendSuggestionWork()
         // Unconditional where the start is gated: `stopConsuming` is idempotent
         // and nils a channel that was never set, so it costs nothing here — and
         // gating it too would strand a live session if the flag were ever
@@ -566,20 +594,19 @@ final class KeyboardViewController: UIInputViewController {
         // learn something nobody is looking at. `overlay` survives the keyboard
         // being dismissed, so this cannot be left to the overlay changing.
         controller?.stopWatchingPasteboard()
-        // An answer that arrives after the keyboard has gone would land in whatever
-        // document comes next, which is a different person's message.
-        controller?.cancelRefinement()
         // A Send button that never presses space or Return still finishes the
         // word under the cursor. Learning here, before the save, is what makes
         // a one-word message count; a trailing space already learned it and
         // this is a no-op.
-        controller?.learnWordJustCommitted()
         // The only moment it is certain there is a keyboard to save from.
         // `PersonalLanguageModel` writes every twenty-fifth word on its own, so
         // this bounds the loss to the tail rather than being the whole mechanism —
         // iOS tears a keyboard extension down without warning and there is no
         // callback that reliably fires when it does.
-        PersonalLanguageModel.shared.save()
+        if hadAppeared {
+            controller?.learnWordJustCommitted()
+            PersonalLanguageModel.shared.save()
+        }
         // The end of a visit, which is the last moment the whole visit's peak is
         // certainly still readable. A kill lands between here and the next
         // appearance and takes its own ledger with it; see `KeyboardMemoryPeak`
@@ -596,9 +623,9 @@ final class KeyboardViewController: UIInputViewController {
     /// letters go into a left-aligned field: the host never learned the language
     /// moved.
     ///
-    /// Pass the language when you have it. `$hostLanguage` fires from `willSet`,
-    /// so the sink must use the emitted value. Appear calls
-    /// `prepareForNewDocument` first, then publishes `hostLanguage`.
+    /// Appearance passes `hostLanguage` after `prepareForNewDocument`. While
+    /// visible, generated content publishes its emitted language; an explicit
+    /// key-language choice or changed field trait publishes through the callback.
     ///
     /// **Mid-session it is written only when the tag actually moves, because this
     /// property is not ours.** Everything else in this file writes state this
@@ -611,21 +638,13 @@ final class KeyboardViewController: UIInputViewController {
     /// `KeyboardController.announcedInputModeTag(for:)` decides *what* is said;
     /// this decides whether it is worth saying.
     ///
-    /// **An appearance says it anyway, and that asymmetry is the point.** One
-    /// extension instance is reused across fields and across host apps, so the
-    /// same tag can be both already set and never heard by the app now holding
-    /// the field — and whether iOS re-reads the property when a host attaches or
-    /// only reacts to it changing is not something this repo can prove without a
-    /// device. Skipping it there would risk the defect `bbd3c6b7` fixed, a Hebrew
-    /// draft sitting on the left, to save a write at the one moment iOS is
-    /// re-deciding which keyboard serves the field anyway. The write worth
-    /// removing is the one that changes our identity *under* a host that has
-    /// already been told, which is the swipe.
+    /// Appearance is deliberately different: a reused controller can already
+    /// hold the right tag while the newly attached host has never heard it.
     private func publishInputLanguage(
         _ language: KeyboardLanguage? = nil, announcingAnyway: Bool = false
     ) {
         guard let controller else { return }
-        let tag = controller.announcedInputModeTag(for: language ?? controller.hostLanguage)
+        let tag = controller.announcedInputModeTag(for: language ?? controller.language)
         guard announcingAnyway || primaryLanguage != tag else { return }
         inputModeLogger.info(
             """
@@ -741,6 +760,7 @@ final class KeyboardViewController: UIInputViewController {
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
         guard let controller else { return }
+        if isKeyboardVisible, controller.activateSuggestionWorkAfterPresentation() { return }
         controller.refreshSuggestions()
     }
 
@@ -755,6 +775,7 @@ final class KeyboardViewController: UIInputViewController {
     override func selectionDidChange(_ textInput: UITextInput?) {
         super.selectionDidChange(textInput)
         guard let controller else { return }
+        if isKeyboardVisible, controller.activateSuggestionWorkAfterPresentation() { return }
         controller.refreshSuggestions()
     }
 }

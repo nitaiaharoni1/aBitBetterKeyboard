@@ -421,6 +421,18 @@ final class AIDirectEditTests: XCTestCase {
         XCTAssertFalse(controller.showsActionBanner)
     }
 
+    func testFixRepairsAPrematureHebrewBoundaryTheModelLeftAlone() async {
+        let engine = DirectEditEngine(fixed: "שלו םלכולם")
+        let controller = makeDirectEditController(text: "שלו םלכולם", engine: engine)
+
+        controller.run(.fix)
+        await settleToneController(controller)
+
+        XCTAssertEqual(controller.contextBefore, "שלום לכולם")
+        XCTAssertEqual(controller.revertibleEdit?.previous, "שלו םלכולם")
+        XCTAssertFalse(controller.showsActionBanner)
+    }
+
     /// The screenshot: Fix on the simulator, on-device refused up front, cloud
     /// 401'd, and the strip said "Model not ready / Still downloading".
     /// `isAvailabilityMiss` is what rejects that build — a version that still

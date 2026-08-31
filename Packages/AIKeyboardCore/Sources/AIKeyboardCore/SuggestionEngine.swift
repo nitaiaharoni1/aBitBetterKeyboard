@@ -522,7 +522,9 @@ public enum SuggestionEngine {
         guard !items.isEmpty else { return items }
         let index = max(0, min(defaultIndex, items.count - 1))
         return items.enumerated().map { position, item in
-            Suggestion(text: item.text, language: item.language, isDefault: position == index)
+            Suggestion(
+                text: item.text, language: item.language, isDefault: position == index,
+                commit: item.commit)
         }
     }
 

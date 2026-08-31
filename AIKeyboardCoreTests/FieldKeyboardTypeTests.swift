@@ -437,6 +437,49 @@ final class FieldKeyboardTypeTests: XCTestCase {
             "a search box lost its right-to-left layout")
     }
 
+    /// A deliberate key-language choice is one of the two events allowed to ask
+    /// the extension to republish its UIKit input-mode identity.
+    func testAUserLanguageChoiceRequestsInputModePublication() {
+        let (controller, target) = keyboard(language: .english)
+        target.keyboardType = .default
+        controller.prepareForNewDocument()
+        var publications = 0
+        controller.onInputModeLanguageChange = { publications += 1 }
+
+        controller.stepLanguage(by: 1)
+
+        XCTAssertEqual(publications, 1, "the explicit language choice never reached the host")
+    }
+
+    /// Generated content has its own direction channel. It must not also ask the
+    /// key-language callback to publish the same change a second time.
+    func testGeneratedContentLanguageDoesNotRequestKeyLanguagePublication() {
+        let (controller, _) = keyboard(language: .english)
+        var publications = 0
+        controller.onInputModeLanguageChange = { publications += 1 }
+
+        controller.announceHostLanguage(.hebrew)
+
+        XCTAssertEqual(publications, 0, "generated text tried to replace the active input mode")
+    }
+
+    /// The tag can change even when the keys cannot. A Hebrew-only keyboard stays
+    /// Hebrew in an email field, while the host identity still clamps to English.
+    func testAFieldTraitTagChangeRequestsInputModePublication() {
+        SharedStore.shared.enabledLanguages = [.hebrew]
+        let (controller, target) = keyboard(language: .hebrew)
+        target.keyboardType = .default
+        controller.prepareForNewDocument()
+        var publications = 0
+        controller.onInputModeLanguageChange = { publications += 1 }
+
+        target.keyboardType = .emailAddress
+        controller.refreshSuggestions()
+
+        XCTAssertEqual(controller.language, .hebrew)
+        XCTAssertEqual(publications, 1, "the ASCII clamp changed without notifying the host")
+    }
+
     // MARK: Controls
     //
     // Both pass against the unfixed build on purpose. What they reject is a fix
