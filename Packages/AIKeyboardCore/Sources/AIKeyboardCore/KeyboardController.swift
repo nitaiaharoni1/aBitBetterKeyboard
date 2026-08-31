@@ -36,9 +36,9 @@ public final class KeyboardController: ObservableObject {
     @Published public var language: KeyboardLanguage {
         didSet { hostLanguage = language }
     }
-    /// The language the host field is told. Usually the keys. Dictation and Reply
-    /// can insert Hebrew while the keys are still English, and WhatsApp follows
-    /// this, not the keys.
+    /// Content direction for the companion app's keyboard previews. Usually the
+    /// keys; generated text may temporarily use another language without changing
+    /// the runtime input-mode identity published by the real extension.
     @Published public private(set) var hostLanguage: KeyboardLanguage
     @Published public var plane: KeyboardPlane = .letters
     @Published public var shift: ShiftState = .on
@@ -198,8 +198,9 @@ public final class KeyboardController: ObservableObject {
     /// **Nothing draws this today, and it is kept on purpose rather than by
     /// oversight.** Its reader was the deleted strip, which laid a transcript out
     /// in its own direction while it sat above the keys; the words go straight into
-    /// the field now, and `hostLanguage` is what tells that field which way to
-    /// read. What stops it being deleted is the chain underneath: it is the only
+    /// the field now. `hostLanguage` still uses this evidence to lay generated
+    /// text out correctly in the companion app's previews. What stops it being
+    /// deleted is the chain underneath: it is the only
     /// consumer of
     /// `DictationSession.transcriptLanguages`, which is the only consumer of
     /// `DictationTranscriptRecord.languages` and `DictationPartialRecord.languages`
@@ -656,9 +657,9 @@ public final class KeyboardController: ObservableObject {
     /// same defect `personal` records above, one setting over.
     let isSystemKeyboard: Bool
 
-    /// The real extension stays presentation-safe until its first frame is on
-    /// screen and its rebuildable dictionaries have warmed. App previews and
-    /// tests keep their existing eager behaviour.
+    /// The real extension keeps suggestion work suspended until its rebuildable
+    /// caches are warm. Cache-warm completion is the sole activation boundary.
+    /// App previews and tests keep their existing eager behaviour.
     var suggestionWorkIsActive: Bool
 
     public init(
@@ -788,9 +789,9 @@ public final class KeyboardController: ObservableObject {
         refreshSuggestions(schedulingRefinement: false)
     }
 
-    /// Starts suggestion work only after the extension is visible. The cache-warm
-    /// completion is the normal caller; the first visible document callback is
-    /// the fallback when somebody types before it finishes. Safe to call again.
+    /// Starts suggestion work after the extension is visible and its rebuildable
+    /// caches are warm. Cache-warm completion is the extension caller. Safe to
+    /// call again.
     @discardableResult
     public func activateSuggestionWorkAfterPresentation() -> Bool {
         guard !suggestionWorkIsActive else { return false }
@@ -1134,10 +1135,9 @@ public final class KeyboardController: ObservableObject {
 
     /// Called when the keyboard comes up over a field.
     ///
-    /// An empty field follows the keys. A field that already contains Hebrew
-    /// (Arabic, …) keeps telling the host that, even if the keys are English —
-    /// resetting unconditionally is how dismissing and reopening flipped a
-    /// WhatsApp draft onto the left.
+    /// An empty companion-app preview follows the keys. A preview that already
+    /// contains right-to-left text keeps that content direction even when the keys
+    /// are English. The real extension's UIKit identity is separate.
     public func prepareForNewDocument() {
         // **Before anything reads the field.** A character key parks its letter
         // until the finger lifts, and a keyboard torn down mid-press gets no
@@ -1157,13 +1157,10 @@ public final class KeyboardController: ObservableObject {
         // between two identical questions. See `lastSuggestionQuery`.
         lastSuggestionQuery = nil
         lastSuggestionResults = []
-        // First, because the two answers are independent and this one feeds the
-        // other: which keys are drawn is the field's declared trait, which way the
-        // host lays the text out is what is already sitting in it. Switching to a
-        // Latin language publishes `hostLanguage` through `language`'s `didSet`,
-        // and the lines below then overrule that for a field holding Hebrew, which
-        // is the correct pair of answers for an ASCII field somebody has already
-        // typed Hebrew into.
+        // First, because the two answers are independent: the field trait decides
+        // which keys are drawn and which UIKit input identity the extension may
+        // publish. `hostLanguage` separately preserves the existing content
+        // direction for companion-app previews.
         //
         // The rescore is not free — `refreshSuggestions` starts
         // `PredictiveRefiner`'s clock, which is exactly what
@@ -1266,19 +1263,26 @@ public final class KeyboardController: ObservableObject {
     /// the first space-bar slide. The memory that costs is exactly the memory a
     /// session was going to hold anyway, and `didReceiveMemoryWarning` still hands
     /// all of it back.
+    @discardableResult
     public static func warmRebuildableCaches(
         for languages: [KeyboardLanguage],
         completion: @escaping @MainActor @Sendable () -> Void
-    ) {
+    ) -> Task<Void, Never> {
         Task.detached(priority: .userInitiated) {
+            guard !Task.isCancelled else { return }
             if languages.contains(where: { $0.script == .hebrew }) {
+                guard !Task.isCancelled else { return }
                 ConversationalHebrewModel.warm()
             }
             for language in languages {
+                guard !Task.isCancelled else { return }
                 // Any lookup builds the block; the word itself is never read.
+                guard !Task.isCancelled else { return }
                 _ = TypoLexicon.isWord("a", in: language)
+                guard !Task.isCancelled else { return }
                 _ = SeedLanguageModel.knows("a", in: language)
                 guard let locale = language.spellCheckerLocale else { continue }
+                guard !Task.isCancelled else { return }
                 // `nativeName` only has to be letters in this language's own
                 // script — the answer is thrown away, and asking the question is
                 // the whole of the work.
@@ -1288,13 +1292,16 @@ public final class KeyboardController: ObservableObject {
                         location: 0, length: (probe as NSString).length),
                     in: probe, language: locale)
             }
+            guard !Task.isCancelled else { return }
             await completion()
         }
     }
 
-    /// Preserves the original fire-and-forget API for package clients that do
-    /// not need to coordinate activation with the warm.
-    public static func warmRebuildableCaches(for languages: [KeyboardLanguage]) {
+    /// Warms caches without waiting for completion.
+    @discardableResult
+    public static func warmRebuildableCaches(
+        for languages: [KeyboardLanguage]
+    ) -> Task<Void, Never> {
         warmRebuildableCaches(for: languages, completion: {})
     }
 }

@@ -14,7 +14,7 @@ final class KeyboardViewController: UIInputViewController {
     /// tells iOS about its own identity. A keyboard that is replaced by the stock
     /// one leaves nothing behind — no crash log, no callback — so the trace of
     /// what we said to iOS just before it happened is the only evidence available
-    /// on the next report. See `publishInputLanguage(_:)`.
+    /// on the next report. See `publishInputLanguage()`.
     private let inputModeLogger = Logger(subsystem: "com.nitai.aikeyboard", category: "inputmode")
 
     private var controller: KeyboardController!
@@ -48,6 +48,8 @@ final class KeyboardViewController: UIInputViewController {
     /// Distinguishes the current appearance from an older cache warm that may
     /// finish after the keyboard has disappeared and come back over another field.
     private var presentationGeneration = 0
+    /// The only rebuildable-cache warm owned by this visible controller.
+    private var cacheWarmTask: Task<Void, Never>?
     /// `UILexicon` belongs to this controller instance and needs one request, but
     /// asking the host for it before presentation adds work to the launch path.
     private var hasRequestedSupplementaryLexicon = false
@@ -102,15 +104,6 @@ final class KeyboardViewController: UIInputViewController {
             guard let self, self.isKeyboardVisible else { return }
             self.publishInputLanguage()
         }
-        // Generated text may use another language without moving the keys.
-        // Publish that content direction only while this keyboard is visible;
-        // the equality guard below suppresses redundant identity writes.
-        controller.$hostLanguage
-            .sink { [weak self] language in
-                guard let self, self.isKeyboardVisible else { return }
-                self.publishInputLanguage(language)
-            }
-            .store(in: &cancellables)
         // Only a `UIInputViewController` can put the keyboard away, and the
         // package does not have one. Without this the Hide keyboard key a user
         // added in the layout editor would draw, animate, click and do nothing —
@@ -294,9 +287,9 @@ final class KeyboardViewController: UIInputViewController {
         // clock, and paying for a model call every time the keyboard appears, for
         // a word nobody has started typing, is not what this line is for.
         controller?.refreshDocumentState()
-        // Empty field: follow the keys, so Notes does not inherit Hebrew from
-        // a WhatsApp reply. Field that already has Hebrew: keep telling the
-        // host that — resetting here flipped an in-progress draft LTR.
+        // Refresh the package's content-direction state for companion-app
+        // previews. UIKit input identity remains the selected, field-shaped key
+        // language published below.
         controller?.prepareForNewDocument()
         // The Recent emoji order is frozen while the grid is open so it cannot
         // re-sort under the thumb that is picking from it, and nothing resets
@@ -305,7 +298,7 @@ final class KeyboardViewController: UIInputViewController {
         // screen is a fresh visit, which is the moment that freeze is allowed to
         // lift. See `KeyboardController.visibleRecentEmoji`.
         controller?.settleRecentEmoji()
-        publishInputLanguage(controller.hostLanguage, announcingAnyway: true)
+        publishInputLanguage()
         updateKeyboardHeight()
     }
 
@@ -315,6 +308,8 @@ final class KeyboardViewController: UIInputViewController {
     /// at, and `intent.keyboardVisible` would be a lie.
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        cacheWarmTask?.cancel()
+        cacheWarmTask = nil
         isKeyboardVisible = true
         presentationGeneration &+= 1
         let generation = presentationGeneration
@@ -359,13 +354,16 @@ final class KeyboardViewController: UIInputViewController {
         // — which is exactly the keyboard that should rebuild them off this thread
         // rather than under the next finger.
         let language = controller.language
-        KeyboardController.warmRebuildableCaches(
+        cacheWarmTask = KeyboardController.warmRebuildableCaches(
             for: [language] + controller.enabledLanguages.filter { $0 != language }
         ) { [weak self] in
-            guard let self,
+            guard !Task.isCancelled,
+                let self,
                 self.isKeyboardVisible,
                 self.presentationGeneration == generation
             else { return }
+            self.cacheWarmTask = nil
+            self.recordMemory()
             self.controller.activateSuggestionWorkAfterPresentation()
         }
     }
@@ -377,13 +375,19 @@ final class KeyboardViewController: UIInputViewController {
     /// keyboard that answers it by writing one number into a file has spent the
     /// only notice it gets. `dropRebuildableCaches()` hands back the word lists,
     /// which are the largest thing this process holds and the only large thing it
-    /// can build again from its own bundle.
+    /// can build again from its own bundle. The active warm is cancelled and
+    /// suggestion work stays suspended until the next appearance, so neither the
+    /// warm nor the next input callback immediately rebuilds what iOS asked us to
+    /// release.
     ///
     /// The reading is taken first, so the record describes the moment iOS was
     /// worried rather than the calmer one after the caches went.
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         recordMemory(warning: true)
+        cacheWarmTask?.cancel()
+        cacheWarmTask = nil
+        controller?.suspendSuggestionWork()
         KeyboardController.dropRebuildableCaches()
     }
 
@@ -398,10 +402,15 @@ final class KeyboardViewController: UIInputViewController {
     /// the keyboard goes away.
     private func recordMemory(warning: Bool = false) {
         guard let reading = MemoryReading.current() else { return }
-        DispatchQueue.global(qos: .utility).async {
+        Self.memoryQueue.async {
             KeyboardMemoryPeak.record(reading, warning: warning)
         }
     }
+
+    /// `KeyboardMemoryPeak.record` is read-modify-write. Its peak and warning
+    /// counter must be merged serially so two lifecycle callbacks cannot lose one.
+    private static let memoryQueue = DispatchQueue(
+        label: "com.nitai.aikeyboard.memory-record", qos: .utility)
 
     /// The one queue both ends of a launch are written on, and **serial for a
     /// reason the shape of the record forces.**
@@ -415,10 +424,6 @@ final class KeyboardViewController: UIInputViewController {
     /// are normally a whole layout pass apart and would almost always win the
     /// race anyway — "almost always" is not a property an instrument that counts
     /// should rest on.
-    ///
-    /// `KeyboardMemoryPeak` shares the hazard and not the consequence: its merge
-    /// takes a `max`, so a lost update loses one reading rather than corrupting
-    /// a running total. It is deliberately left where it is.
     private static let launchQueue = DispatchQueue(
         label: "com.nitai.aikeyboard.launch-record", qos: .utility)
 
@@ -580,6 +585,8 @@ final class KeyboardViewController: UIInputViewController {
         super.viewWillDisappear(animated)
         let hadAppeared = isKeyboardVisible
         isKeyboardVisible = false
+        cacheWarmTask?.cancel()
+        cacheWarmTask = nil
         controller?.suspendSuggestionWork()
         // Unconditional where the start is gated: `stopConsuming` is idempotent
         // and nils a channel that was never set, so it costs nothing here — and
@@ -623,34 +630,27 @@ final class KeyboardViewController: UIInputViewController {
     /// letters go into a left-aligned field: the host never learned the language
     /// moved.
     ///
-    /// Appearance passes `hostLanguage` after `prepareForNewDocument`. While
-    /// visible, generated content publishes its emitted language; an explicit
-    /// key-language choice or changed field trait publishes through the callback.
+    /// The tag is derived from the selected key language, adjusted for the field
+    /// trait. `hostLanguage` is content direction for companion-app surfaces;
+    /// generated AI, Reply and dictation text never changes UIKit input identity.
     ///
-    /// **Mid-session it is written only when the tag actually moves, because this
-    /// property is not ours.** Everything else in this file writes state this
+    /// It is written only when the tag actually moves, because this property is
+    /// not ours. Everything else in this file writes state this
     /// process owns, where a redundant assignment costs a comparison. This one
     /// hands iOS a new identity for a keyboard that is already on screen, and iOS
-    /// answers it however it likes — including by deciding the field is better
-    /// served by its own keyboard. Before this guard the same tag was
-    /// re-announced on every republish of `hostLanguage`, so a bilingual user
-    /// spent that risk for no change at all.
+    /// answers it however it likes, including by deciding the field is better
+    /// served by its own keyboard. Appearance and mid-session callbacks use the
+    /// same equality guard.
     /// `KeyboardController.announcedInputModeTag(for:)` decides *what* is said;
     /// this decides whether it is worth saying.
-    ///
-    /// Appearance is deliberately different: a reused controller can already
-    /// hold the right tag while the newly attached host has never heard it.
-    private func publishInputLanguage(
-        _ language: KeyboardLanguage? = nil, announcingAnyway: Bool = false
-    ) {
+    private func publishInputLanguage() {
         guard let controller else { return }
-        let tag = controller.announcedInputModeTag(for: language ?? controller.language)
-        guard announcingAnyway || primaryLanguage != tag else { return }
+        let tag = controller.announcedInputModeTag(for: controller.language)
+        guard primaryLanguage != tag else { return }
         inputModeLogger.info(
             """
             primaryLanguage \(self.primaryLanguage ?? "unset", privacy: .public) -> \
-            \(tag, privacy: .public) \
-            (\(announcingAnyway ? "appear" : "mid-session", privacy: .public))
+            \(tag, privacy: .public) (selected-or-field-shaped)
             """)
         primaryLanguage = tag
     }
@@ -760,7 +760,6 @@ final class KeyboardViewController: UIInputViewController {
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
         guard let controller else { return }
-        if isKeyboardVisible, controller.activateSuggestionWorkAfterPresentation() { return }
         controller.refreshSuggestions()
     }
 
@@ -775,7 +774,6 @@ final class KeyboardViewController: UIInputViewController {
     override func selectionDidChange(_ textInput: UITextInput?) {
         super.selectionDidChange(textInput)
         guard let controller else { return }
-        if isKeyboardVisible, controller.activateSuggestionWorkAfterPresentation() { return }
         controller.refreshSuggestions()
     }
 }

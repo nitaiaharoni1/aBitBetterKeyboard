@@ -358,8 +358,8 @@ final class FieldKeyboardTypeTests: XCTestCase {
     /// only hold ASCII invites iOS to decide the box is better served by the
     /// stock keyboard, which is the reported defect.
     ///
-    /// The build before this returns `he-IL` here, because it published
-    /// `hostLanguage.inputModeTag` and never looked at the field.
+    /// Input identity comes from the selected key language. Content direction in
+    /// `hostLanguage` is deliberately irrelevant to this decision.
     func testAnAsciiFieldIsToldEnglishEvenAfterTheUserSlidesToHebrew() {
         let (controller, target) = keyboard(language: .hebrew)
         target.keyboardType = .asciiCapable
@@ -369,7 +369,7 @@ final class FieldKeyboardTypeTests: XCTestCase {
         XCTAssertEqual(controller.language, .hebrew, "the slide is the user's and stands")
 
         XCTAssertEqual(
-            controller.announcedInputModeTag(for: controller.hostLanguage), "en-US",
+            controller.announcedInputModeTag(for: controller.language), "en-US",
             "an ASCII field was told the keyboard had become Hebrew")
     }
 
@@ -383,7 +383,7 @@ final class FieldKeyboardTypeTests: XCTestCase {
             controller.stepLanguage(by: 1)
 
             XCTAssertEqual(
-                controller.announcedInputModeTag(for: controller.hostLanguage), "en-US",
+                controller.announcedInputModeTag(for: controller.language), "en-US",
                 "\(type) was told the keyboard had become Hebrew")
         }
     }
@@ -401,7 +401,7 @@ final class FieldKeyboardTypeTests: XCTestCase {
         controller.stepLanguage(by: 1)
 
         XCTAssertEqual(
-            controller.announcedInputModeTag(for: controller.hostLanguage), "he-IL",
+            controller.announcedInputModeTag(for: controller.language), "he-IL",
             "a chat field was not told the keyboard had moved to Hebrew")
     }
 
@@ -418,7 +418,7 @@ final class FieldKeyboardTypeTests: XCTestCase {
 
         XCTAssertEqual(controller.language, .hebrew, "the only enabled language was taken away")
         XCTAssertEqual(
-            controller.announcedInputModeTag(for: controller.hostLanguage), "en-US",
+            controller.announcedInputModeTag(for: controller.language), "en-US",
             "an email box was told the keyboard had become Hebrew")
     }
 
@@ -433,7 +433,7 @@ final class FieldKeyboardTypeTests: XCTestCase {
         controller.stepLanguage(by: 1)
 
         XCTAssertEqual(
-            controller.announcedInputModeTag(for: controller.hostLanguage), "he-IL",
+            controller.announcedInputModeTag(for: controller.language), "he-IL",
             "a search box lost its right-to-left layout")
     }
 
@@ -451,9 +451,9 @@ final class FieldKeyboardTypeTests: XCTestCase {
         XCTAssertEqual(publications, 1, "the explicit language choice never reached the host")
     }
 
-    /// Generated content has its own direction channel. It must not also ask the
-    /// key-language callback to publish the same change a second time.
-    func testGeneratedContentLanguageDoesNotRequestKeyLanguagePublication() {
+    /// `hostLanguage` remains content-only state. Generated AI, Reply and dictation
+    /// text must not request a UIKit input-mode publication.
+    func testGeneratedContentLanguageDoesNotRequestInputModePublication() {
         let (controller, _) = keyboard(language: .english)
         var publications = 0
         controller.onInputModeLanguageChange = { publications += 1 }

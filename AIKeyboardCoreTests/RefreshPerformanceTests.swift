@@ -22,7 +22,7 @@ final class RefreshPerformanceTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: Fix 7 — real extension construction must stay inert
+    // MARK: Extension launch gating
 
     /// Activation performs one local, non-refining refresh. A refiner injected
     /// before that boundary must survive, and must remain idle until a later
@@ -59,16 +59,15 @@ final class RefreshPerformanceTests: XCTestCase {
                 + "have scored it")
     }
 
-    /// The real extension must draw before any local dictionary or model work.
-    /// Activation is the explicit boundary that fills the bar afterwards.
-    func testSystemConstructionWaitsForPresentationBeforeScoring() {
+    /// The real extension leaves its suggestion bar empty until activation.
+    func testSystemConstructionWaitsForActivationBeforePopulatingBar() {
         let target = MockTextTarget(text: "hel")
         let controller = KeyboardController(
             target: target, language: .english, isSystemKeyboard: true)
 
         XCTAssertTrue(
             controller.suggestions.isEmpty,
-            "a real keyboard must not score its document during construction")
+            "a real keyboard must not populate its bar during construction")
 
         controller.activateSuggestionWorkAfterPresentation()
 
