@@ -1,8 +1,8 @@
-aBitBetterKeyboard is an iPhone keyboard built for Hebrew and English.
+aBitBetterKeyboard is an AI-powered iPhone keyboard for 64 languages.
 
-Type in either language with on-device spelling suggestions, emoji, a personal dictionary, and a keyboard layout you can customize. Slide across the space bar or tap the globe key to change languages.
+Fix spelling and grammar, rewrite a sentence, choose a tone, create a reply to a message you copied, or dictate without leaving your workflow.
 
-Fix spelling and grammar, rewrite a sentence, choose a tone, or create a reply to a message you copied. Dictation starts in the containing app, because iOS does not let a keyboard extension open the microphone, and inserts the transcript where you are typing.
+Choose the languages you type in, then switch with a swipe across the space bar or the globe key. Where Apple provides a system dictionary, on-device spelling suggestions help as you type. Emoji, a personal dictionary, and customizable key layouts are built in.
 
 Cloud AI is off by default and is available only to adults 18 or older. Cloud features send only the text or audio needed for the action after you choose that action and allow cloud processing. Nothing is sent while you type.
 
