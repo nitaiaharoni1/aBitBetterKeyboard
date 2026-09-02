@@ -5,6 +5,21 @@ commit on it, so the next person can tell a new failure from one that was
 already there. **Re-run it and update this table rather than trusting it**: every
 number here is a reading, not a property of the code.
 
+## The run of 2026-09-03, at `e36ef52a` plus the suggestion-engine diff and the shift fix
+
+**`AIKeyboardCoreTests`: 1627 executed, 8 skipped, 7 failing tests.** Two of the
+nine below are fixed and nothing new is red. The 395 assertion lines are again
+mostly `LanguageCatalogueTests` looping over every language and width; **count
+tests, not lines** — the first read of this run said "396 failures" and meant 8.
+The five extra executed tests are the five added to `AutocapitalizationTests`.
+
+| Test | Verdict |
+|---|---|
+| `PendingAutocorrectClaimTests.testImmediateAutocorrectUndoDiscardsTheStagedLearning` | **Fixed.** Not an undo bug at all: `shift` starts `.on`, only a typed character lowers it, and the fixture's word was placed rather than typed, so the arm survived the swap and the undo. Both automatic arms now ask where the caret is. See `.claude/rules/keyboard-wiring.md`. |
+| `MissingSpacesTests.testAPrematureFinalFormMovesAcrossExactlyOneSpace` | **Fixed, fixture side.** Its third pair had an *empty* remainder (`\u{00A0}` closes the right-hand word after `ם`), which whole-text `restored` refuses by design — the same refusal the test's own first line asserts and `האות ם` is named after. The pair now carries a real remainder, and the empty one stays as the refusal it is. |
+| `KeyboardControllerTargetTests.testATargetBuiltInsideTheInitialiserCallSurvives` | **Was green, went red on the shift fix, fixed.** It seeded `"seed "` and asserted `seed X`; the capital was incidental to a test about target retention, and the seed coming back at all is what rejects a dropped target. |
+| `EmojiModeTests` (2), `PersonalDictionaryTests.testTheSameWordsPlusAMarkAreStillDestroyedWithNoList`, `CopyClipModeTests` (2), `LanguageCatalogueTests` (2) | **Still red, unchanged**, exactly as the table below records them. |
+
 ## The run of 2026-09-02, at `e36ef52a` plus the suggestion-engine diff
 
 **`AIKeyboardCoreTests`: 1622 executed, 8 skipped, 9 failing tests.** Run twice:
@@ -18,8 +33,8 @@ every language and width; count tests, not lines. UI tests were not run.
 |---|---|
 | `EmojiModeTests` (2) | **Pre-existing**, the two known ranking failures. Unchanged. |
 | `PersonalDictionaryTests.testTheSameWordsPlusAMarkAreStillDestroyedWithNoList` | **Pre-existing**, already listed below. |
-| `MissingSpacesTests.testAPrematureFinalFormMovesAcrossExactlyOneSpace` | **Pre-existing, unlisted until now.** Sits on the Hebrew final-form rule, which the diff touched, and fails identically on pristine HEAD. |
-| `PendingAutocorrectClaimTests.testImmediateAutocorrectUndoDiscardsTheStagedLearning` | **Pre-existing, unlisted until now.** `("heloW") is not equal to ("helow")`: the letter typed after an autocorrect undo arrives shifted. |
+| `MissingSpacesTests.testAPrematureFinalFormMovesAcrossExactlyOneSpace` | **Pre-existing, unlisted until now.** Sits on the Hebrew final-form rule, which the diff touched, and fails identically on pristine HEAD. **Fixed 2026-09-03**, fixture side; see the run above. |
+| `PendingAutocorrectClaimTests.testImmediateAutocorrectUndoDiscardsTheStagedLearning` | **Pre-existing, unlisted until now.** `("heloW") is not equal to ("helow")`: the letter typed after an autocorrect undo arrives shifted. **Fixed 2026-09-03**, in the autocapitalisation arm rather than the undo; see the run above. |
 | `CopyClipModeTests.testOpeningCopyClipStartsWatchingThePasteboardAndClosingItStops` | **Pre-existing, unlisted until now.** Not chased. |
 | `CopyClipModeTests.testTheWatchStopsWhenTheKeyboardGoesAway` | **Pre-existing, unlisted until now.** Not chased. |
 | `LanguageCatalogueTests.testDeleteKeepsTheSameWidthAndTrailingEdgeInEveryLanguageAndOnEveryPlane` | **Pre-existing, unlisted until now.** Not chased. |

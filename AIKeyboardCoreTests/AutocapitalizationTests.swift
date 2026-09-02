@@ -181,6 +181,89 @@ final class AutocapitalizationTests: XCTestCase {
         XCTAssertEqual(controller.shift, .locked, "Return cancelled a caps lock the user set by hand")
     }
 
+    // MARK: Where the caret is, not only what the field declared
+
+    /// **The measured defect.** Reopening a half-written message put the caret
+    /// mid-word, and the unfixed build armed shift there anyway — `shift` starts
+    /// `.on` and `adoptFieldAutocapitalization` re-armed it at focus without ever
+    /// asking where the caret was — so the very next letter came back capitalised:
+    /// `hey how are yoU`. Nothing but a typed character lowers the arm, so a word
+    /// the user did not type in this session keeps it standing indefinitely; that
+    /// is also the whole of `PendingAutocorrectClaimTests
+    /// .testImmediateAutocorrectUndoDiscardsTheStagedLearning`'s `heloW`.
+    func testAFieldFocusedMidWordDoesNotCapitaliseTheNextLetter() {
+        let (controller, target) = keyboard(text: "hey how are yo")
+        controller.prepareForNewDocument()
+
+        controller.press(.character("u"))
+
+        XCTAssertEqual(
+            target.text, "hey how are you",
+            "a caret sitting mid-word armed shift and capitalised the letter that "
+                + "finished the word")
+    }
+
+    /// **The control, and it is what a fix that simply stopped arming fails.**
+    /// The same field, the same focus, with the caret where a sentence genuinely
+    /// begins.
+    func testAFieldFocusedAfterAFullStopStillCapitalises() {
+        let (controller, target) = keyboard(text: "Hey. ")
+        controller.prepareForNewDocument()
+
+        controller.press(.character("h"))
+
+        XCTAssertEqual(
+            target.text, "Hey. H",
+            "a caret after a finished sentence stopped arming shift")
+    }
+
+    /// The second control: the ordinary case this keyboard has always got right.
+    func testAnEmptyFieldFocusedStillCapitalisesTheFirstLetter() {
+        let (controller, target) = keyboard()
+        controller.prepareForNewDocument()
+
+        controller.press(.character("h"))
+
+        XCTAssertEqual(target.text, "H", "an empty field stopped arming shift")
+    }
+
+    /// A `.words` field asks a different question of the same caret: every word
+    /// starts capitalised, so the boundary is a word rather than a sentence.
+    /// Mid-word is still mid-word, and the control is the space in front of the
+    /// next one.
+    func testAWordsFieldFocusedMidWordDoesNotCapitaliseButFocusedAtAGapDoes() {
+        let (controller, target) = keyboard(text: "Hey Yo")
+        target.autocapitalizationType = .words
+        controller.prepareForNewDocument()
+        controller.press(.character("u"))
+        XCTAssertEqual(
+            target.text, "Hey You",
+            "a words field capitalised a letter in the middle of a word")
+
+        let (other, otherTarget) = keyboard(text: "Hey ")
+        otherTarget.autocapitalizationType = .words
+        other.prepareForNewDocument()
+        other.press(.character("y"))
+        XCTAssertEqual(
+            otherTarget.text, "Hey Y",
+            "a words field stopped capitalising the word after a space")
+    }
+
+    /// **Construction is the second place that arms with no key pressed**, and it
+    /// is the one the autocorrect-undo defect came through: a controller built
+    /// over a document it did not type carries `shift == .on` until the first
+    /// character, whatever the caret is standing on. Both halves, so a build that
+    /// simply started `.off` fails the first.
+    func testAControllerBuiltOverADocumentDecidesShiftFromTheCaret() {
+        let (armed, _) = keyboard()
+        XCTAssertEqual(armed.shift, .on, "a controller built over an empty field did not arm shift")
+
+        let (unarmed, _) = keyboard(text: "helo")
+        XCTAssertEqual(
+            unarmed.shift, .off,
+            "a controller built with the caret mid-word armed shift for the next letter")
+    }
+
     // MARK: Decided once, and never taken back
 
     /// **The mode is read at focus and not re-read from a keystroke.** A host

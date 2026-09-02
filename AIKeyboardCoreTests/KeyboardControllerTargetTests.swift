@@ -58,12 +58,19 @@ final class KeyboardControllerTargetTests: XCTestCase {
 
     /// The same thing said the other way round: the extension's exact call shape.
     /// If this compiles and passes, an inline target survives its own statement.
+    ///
+    /// **The letter is lowercase and that is not this test's subject.** The seed
+    /// puts the caret in the middle of a sentence, and a controller built over a
+    /// document only arms shift where a sentence begins — see
+    /// `caretBeginsACapitalizedRun`. What rejects the dropped-target build is the
+    /// seed coming back at all: a released target reads an empty `contextBefore`,
+    /// so the answer there is `""`, not `"seed x"`.
     func testATargetBuiltInsideTheInitialiserCallSurvives() {
         let controller = KeyboardController(target: MockTextTarget(text: "seed "))
         controller.press(.character("x"))
 
         XCTAssertEqual(
-            controller.contextBefore, "seed X",
+            controller.contextBefore, "seed x",
             "A target constructed in argument position was released before the first keystroke")
     }
 

@@ -70,12 +70,27 @@ final class MissingSpacesTests: XCTestCase {
             "היי מה אופי שלו מה קורה")
     }
 
+    /// The repair reaches across one U+0020 and stops at whatever other
+    /// whitespace bounds the two words, which is what "exactly one space" means:
+    /// the tab bounds the left walk, so the left word is `שלו` and not
+    /// `לפני\tשלו`, and the non-breaking space bounds the right one, so the
+    /// right word is `םלכולם` and not `םלכולם\u{00A0}אחרי`. A build that walked
+    /// through either mark hands `boundaryRepair` a word with a non-letter in it
+    /// and offers nothing at all.
+    ///
+    /// **The last pair is the empty remainder, and whole-text `restored` refuses
+    /// it** — the same refusal the first line asserts and `האות ם` is named
+    /// after. Only a deliberate tap gets the join, through
+    /// `trailingBoundaryRepair`'s `allowingEmptyRemainder`.
     func testAPrematureFinalFormMovesAcrossExactlyOneSpace() {
         XCTAssertEqual(MissingSpaces.restored("שלו ם"), "שלו ם")
         XCTAssertEqual(MissingSpaces.restored("שלו םלכולם"), "שלום לכולם")
         XCTAssertEqual(
+            MissingSpaces.restored("לפני\tשלו םלכולם\u{00A0}אחרי"),
+            "לפני\tשלום לכולם\u{00A0}אחרי")
+        XCTAssertEqual(
             MissingSpaces.restored("לפני\tשלו ם\u{00A0}אחרי"),
-            "לפני\tשלום\u{00A0}אחרי")
+            "לפני\tשלו ם\u{00A0}אחרי")
     }
 
     func testBoundaryRepairRefusesAmbiguousOrNonLetterBoundaries() {

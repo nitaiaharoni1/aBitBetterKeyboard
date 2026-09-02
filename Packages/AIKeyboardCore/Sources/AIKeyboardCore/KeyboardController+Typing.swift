@@ -845,6 +845,59 @@ extension KeyboardController {
         }
     }
 
+    /// Whether the caret sits where automatic capitalisation may arm at all.
+    ///
+    /// **`shift` started `.on` at construction and `adoptFieldAutocapitalization`
+    /// re-armed it at focus with the same unconditional answer**, so a keyboard
+    /// coming up over a field that already held text capitalised whatever letter
+    /// was typed next, wherever the caret sat: a half-written message reopened at
+    /// `hey how are yo` typed `yoU`. The first letter after an autocorrect undo
+    /// came back `heloW` the same way, and *nothing on the undo path arms shift* —
+    /// the arm had been standing since construction, `insertSpace` and
+    /// `undoAutocorrectIfPending` never touch it, and only `insertCharacter`'s
+    /// one-shot ever lowers it, so a document whose word was placed rather than
+    /// typed carries the arm all the way to the letter after the undo. A
+    /// `.sentences` field capitalises the start of a *sentence*, not the next key
+    /// pressed.
+    ///
+    /// **Only the automatic arm asks this.** A `.on` the user set by hand comes
+    /// from `toggleShift()` and is never re-decided — the same "decide at focus,
+    /// do not fight them mid-field" rule `armShiftAtBoundary` guards `.locked`
+    /// under. `armShiftAtBoundary`'s own three call sites, Return, the
+    /// double-space full stop and a `.words` space, are boundaries by
+    /// construction and so do not ask; this is for the two places that arm with
+    /// no key having been pressed at all.
+    func caretBeginsACapitalizedRun(mode: UITextAutocapitalizationType) -> Bool {
+        let before = contextBefore
+        if mode == .words {
+            // Every position that is not inside a word starts the next one.
+            guard let last = before.last else { return true }
+            return !(last.isLetter || last.isNumber || Self.staysInsideWord(last))
+        }
+        // `.sentences`, and the nil fallback that reads as it: the start of the
+        // document, a fresh line, or the mark that ended the sentence before.
+        // Trailing closers are stepped over, so `He said "Hi." ` still arms.
+        var run = Substring(before)
+        while let last = run.last,
+            (last.isWhitespace && !last.isNewline) || Self.sentenceClosers.contains(last)
+        {
+            run = run.dropLast()
+        }
+        guard let last = run.last else { return true }
+        return last.isNewline || Self.sentenceTerminators.contains(last)
+    }
+
+    /// The marks that end a sentence.
+    static let sentenceTerminators: Set<Character> = [
+        ".", "!", "?", "\u{2026}", "\u{3002}", "\u{FF01}", "\u{FF1F}", "\u{061F}"
+    ]
+
+    /// Quotes and brackets that may stand between the mark that ended a sentence
+    /// and the caret.
+    static let sentenceClosers: Set<Character> = [
+        "\"", "'", ")", "]", "}", "\u{00BB}", "\u{201D}", "\u{2019}"
+    ]
+
     // MARK: Emoji
 
     public func insertEmoji(_ emoji: String) {

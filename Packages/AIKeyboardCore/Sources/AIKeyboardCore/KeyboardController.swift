@@ -789,6 +789,16 @@ public final class KeyboardController: ObservableObject {
         // passive refresh, which has no user-visible effect that opening
         // CopyClip does not already do a moment later, so the subscription is
         // gone rather than reduced. See `refreshCopyClip(_:)`.
+
+        // **The arm at construction is a claim about the document, not a
+        // constant.** `shift` starts `.on` because the common case is an empty
+        // field whose first letter opens a sentence; a controller built over a
+        // field that already holds text has to answer the same question that
+        // field's own focus would, or the arm stands until a character is typed
+        // and capitalises it. See `caretBeginsACapitalizedRun`.
+        if shift == .on, !caretBeginsACapitalizedRun(mode: autocapitalizationMode) {
+            shift = .off
+        }
         apply(store.storedKeyboardLayout)
         // The guard inside `refreshSuggestions` keeps the real extension's
         // construction free of dictionary, model and engine work. In-app hosts
@@ -1125,12 +1135,21 @@ public final class KeyboardController: ObservableObject {
         let ownedBySearch = overlay.isSearch
         let current = ownedBySearch ? (shiftBeforeSearch ?? shift) : shift
         guard current != .locked else { return true }
+        // **Where the caret is, not merely which mode the field declared.** A
+        // field the keyboard comes up over already holds text, and arming here
+        // unconditionally is what capitalised the next letter mid-word. See
+        // `caretBeginsACapitalizedRun` in `KeyboardController+Typing`.
+        let armsAtFocus =
+            store.storedAutocapitalise
+            && caretBeginsACapitalizedRun(mode: autocapitalizationMode)
         let decided: ShiftState
         switch autocapitalizationMode {
         case .none: decided = .off
         case .allCharacters: decided = .locked
-        case .words, .sentences: decided = store.storedAutocapitalise ? .on : .off
-        @unknown default: decided = store.storedAutocapitalise ? .on : .off
+        case .words, .sentences:
+            decided = armsAtFocus ? .on : .off
+        @unknown default:
+            decided = armsAtFocus ? .on : .off
         }
         if ownedBySearch {
             shiftBeforeSearch = decided
