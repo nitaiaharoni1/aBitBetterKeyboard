@@ -178,7 +178,11 @@ fi
 if [ ! -f fastlane/Fastfile ]; then
     fail "fastlane/Fastfile is required"
 else
-    if grep -Eq 'upload_to_app_store|upload_to_testflight|pilot|build_app|automatic_release|force:[[:space:]]*true|submit_for_review:[[:space:]]*true|skip_binary_upload:[[:space:]]*false' \
+    # `force: true` only skips Deliver's local HTML confirmation. It is safe
+    # here because the required guards below still forbid binary upload and
+    # review submission; treating it as an upload capability made the release
+    # plan reject the repository's deliberately noninteractive listing lane.
+    if grep -Eq 'upload_to_app_store|upload_to_testflight|pilot|build_app|automatic_release|submit_for_review:[[:space:]]*true|skip_binary_upload:[[:space:]]*false' \
         fastlane/Fastfile; then
         fail "Fastlane may apply metadata and screenshots only"
     elif grep -Eq 'skip_binary_upload:[[:space:]]*true' fastlane/Fastfile \
