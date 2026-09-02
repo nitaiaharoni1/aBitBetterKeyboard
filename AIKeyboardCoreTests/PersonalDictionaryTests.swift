@@ -518,4 +518,83 @@ final class PersonalDictionaryTests: XCTestCase {
             committed("recieve", in: .english), "receive ",
             "ordinary autocorrect stopped working once the dictionary had a word in it")
     }
+
+    // MARK: The learned store's follower index
+
+    /// Empty and in memory, so a run cannot inherit whatever this machine has
+    /// been typing.
+    private func learnedStore() -> PersonalLanguageModel {
+        PersonalLanguageModel(url: nil)
+    }
+
+    private func learn(
+        _ word: String, after previous: String? = nil, times: Int,
+        on store: PersonalLanguageModel
+    ) {
+        for _ in 0..<times {
+            store.record(word: word, previous: previous, language: .english, permitted: true)
+        }
+    }
+
+    /// **What this person writes after a word is a lookup now in every language,
+    /// and the order it hands back is the contract.**
+    ///
+    /// `SuggestionEngine.contextFollowers` asks this once per word of the whole
+    /// document on every keystroke, and the non-Hebrew path was a linear `filter`
+    /// over every stored pair in the language — up to 12,000 of them — so the cost
+    /// was the field's length times the store's size, per letter. Hebrew has read
+    /// `HebrewPersonalIndex.followersByPrevious` since it was written; the other
+    /// languages have the same shape now.
+    ///
+    /// Two things the index has to keep, both asserted rather than assumed. The
+    /// order is `mostFrequent`'s — count descending, then the word itself, because
+    /// a dictionary has no order to inherit and `sorted(by:)` is not stable, so
+    /// without the second half the bar shuffles under the user with nothing having
+    /// changed. And `boostThreshold` still applies: a follower seen once is a
+    /// guess, not a habit.
+    func testEnglishFollowersComeBackMostTypedFirstWithTiesBrokenByTheWord() {
+        let store = learnedStore()
+        learn("you", after: "see", times: 3, on: store)
+        learn("him", after: "see", times: 2, on: store)
+        learn("her", after: "see", times: 2, on: store)
+        learn("them", after: "see", times: 1, on: store)
+
+        XCTAssertEqual(
+            store.followers(after: "see", in: .english, limit: 5), ["you", "her", "him"],
+            "the count order, the alphabetical tie-break between her and him, and the "
+                + "single sighting of them being below boostThreshold are all in this "
+                + "one answer")
+        XCTAssertEqual(
+            store.followers(after: "see", in: .english, limit: 2), ["you", "her"],
+            "the limit is applied after the order, not before it")
+        XCTAssertEqual(
+            store.followers(after: "meet", in: .english, limit: 5), [],
+            "a word with no stored pairs must answer nothing rather than everything")
+    }
+
+    /// **A cache that is not retired is a dictionary that cannot be forgotten.**
+    ///
+    /// Forget lives in the app and the keyboard process stays alive, so an index
+    /// built once and never invalidated would keep serving a word the user has
+    /// just deleted — and would never see one they have just typed. Both
+    /// directions are asserted here because they fail separately: a missing
+    /// invalidation on `forget` leaves `her` in the answer, and a missing one on
+    /// `record` keeps it out after it is earned back.
+    func testForgettingAndRelearningAFollowerAreBothVisible() {
+        let store = learnedStore()
+        learn("you", after: "see", times: 3, on: store)
+        learn("him", after: "see", times: 2, on: store)
+        learn("her", after: "see", times: 2, on: store)
+        XCTAssertEqual(store.followers(after: "see", in: .english, limit: 5), ["you", "her", "him"])
+
+        store.forget("her", in: .english)
+        XCTAssertEqual(
+            store.followers(after: "see", in: .english, limit: 5), ["you", "him"],
+            "a forgotten word was still being served out of the index")
+
+        learn("her", after: "see", times: 2, on: store)
+        XCTAssertEqual(
+            store.followers(after: "see", in: .english, limit: 5), ["you", "her", "him"],
+            "a word typed again after Forget never came back")
+    }
 }

@@ -89,6 +89,11 @@ public final class PersonalLanguageModel {
     /// Nil means "not built", not "empty".
     private var hebrewIndex: HebrewPersonalIndex?
     var hasCachedHebrewIndex: Bool { hebrewIndex != nil }
+    /// The same shape `HebrewPersonalIndex.followersByPrevious` has, for every
+    /// other language, built per language tag on first use after a mutation. A
+    /// tag with no entry here is "not built", not "empty".
+    private var followerIndexes: [String: [String: [(String, Int)]]] = [:]
+    var hasCachedFollowerIndex: Bool { !followerIndexes.isEmpty }
     private let url: URL?
     private var pendingWrites = 0
     private var loadedGeneration = 0
@@ -284,6 +289,15 @@ public final class PersonalLanguageModel {
     }
 
     /// Words this user tends to write after this one, most often first.
+    ///
+    /// **Indexed rather than scanned, in every language, because this is asked
+    /// once per word of the field on every keystroke.**
+    /// `SuggestionEngine.contextFollowers` hands `followers(mentionedIn:)` every
+    /// word in the document, so a linear `filter` over the stored bigrams — up to
+    /// `bigramCap`, 12,000 pairs — was paid once per field word per letter typed.
+    /// Hebrew has been reading `HebrewPersonalIndex.followersByPrevious`, a
+    /// dictionary keyed by the previous word, since it was written; this gives the
+    /// other languages the identical shape rather than a second mechanism.
     func followers(after word: String, in language: KeyboardLanguage, limit: Int) -> [String] {
         let key = SeedLanguageModel.fold(word)
         guard !key.isEmpty else { return [] }
@@ -291,13 +305,8 @@ public final class PersonalLanguageModel {
             return currentHebrewIndex().followers(
                 after: key, limit: limit, minimumCount: Self.boostThreshold)
         }
-        guard let counts = store.bigrams[language.languageTag] else { return [] }
-        let head = key + Self.pairSeparator
-        let matches: [(String, Int)] = counts.filter {
-            $0.key.hasPrefix(head) && $0.value >= Self.boostThreshold
-        }
-        .map { (String($0.key.dropFirst(head.count)), $0.value) }
-        return Self.mostFrequent(matches, limit: limit)
+        let matches = currentFollowerIndex(for: language)[key] ?? []
+        return matches.prefix(limit).map(\.0)
     }
 
     /// What this person writes after any of these words, later tokens first.
@@ -337,8 +346,40 @@ public final class PersonalLanguageModel {
         return built
     }
 
+    /// One language's bigrams as a lookup from the previous word to what follows
+    /// it, already in `mostFrequent`'s order — count descending, then the word
+    /// itself, because `sorted(by:)` is not stable and a dictionary has no order
+    /// to inherit. The `boostThreshold` floor is applied while building, since it
+    /// is a constant and every reader asks with it.
+    private func currentFollowerIndex(for language: KeyboardLanguage) -> [String: [(String, Int)]] {
+        let tag = language.languageTag
+        if let cached = followerIndexes[tag] { return cached }
+        let separator = Character(Self.pairSeparator)
+        var built: [String: [(String, Int)]] = [:]
+        for (pair, count) in store.bigrams[tag] ?? [:] where count >= Self.boostThreshold {
+            let halves = pair.split(
+                separator: separator, maxSplits: 1, omittingEmptySubsequences: false)
+            guard halves.count == 2 else { continue }
+            built[String(halves[0]), default: []].append((String(halves[1]), count))
+        }
+        for previous in built.keys {
+            built[previous]?.sort { $0.1 == $1.1 ? $0.0 < $1.0 : $0.1 > $1.1 }
+        }
+        followerIndexes[tag] = built
+        return built
+    }
+
     private func invalidateHebrewIndex() {
         hebrewIndex = nil
+    }
+
+    /// Every language's, unconditionally, at each seam the Hebrew index is
+    /// retired at. Which tags a write touched is knowable — `prune` alone can
+    /// halve any of them — but keeping a second, finer answer to that question
+    /// beside the Hebrew one is how two invalidation rules drift apart, and the
+    /// whole cost of being wrong here is one rebuild.
+    private func invalidateFollowerIndexes() {
+        followerIndexes.removeAll()
     }
 
     private func replaceStore(with replacement: Store) {
@@ -348,6 +389,7 @@ public final class PersonalLanguageModel {
             || store.bigrams[tag] != replacement.bigrams[tag]
         store = replacement
         if hebrewChanged { invalidateHebrewIndex() }
+        invalidateFollowerIndexes()
     }
 
     // MARK: Shape
@@ -454,6 +496,7 @@ public final class PersonalLanguageModel {
             store.unigrams[language.languageTag, default: [:]][folded, default: 0] += 1
             let prunedHebrew = prune()
             if language.script == .hebrew || prunedHebrew { invalidateHebrewIndex() }
+            invalidateFollowerIndexes()
             pendingWrites += 1
             if pendingWrites >= Self.flushInterval { save() }
             return true
@@ -483,6 +526,7 @@ public final class PersonalLanguageModel {
 
         let prunedHebrew = prune()
         if language.script == .hebrew || prunedHebrew { invalidateHebrewIndex() }
+        invalidateFollowerIndexes()
         pendingWrites += 1
         if pendingWrites >= Self.flushInterval { save() }
         return true
@@ -592,6 +636,10 @@ public final class PersonalLanguageModel {
         {
             invalidateHebrewIndex()
         }
+        // Unconditional, unlike the Hebrew index above: a follower list for any
+        // language may have named this word, and a rebuild is cheaper than the
+        // comparison that would decide whether one did.
+        invalidateFollowerIndexes()
         save()
     }
 

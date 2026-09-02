@@ -317,6 +317,91 @@ final class IdleTypingTests: XCTestCase {
             target.text, "he",
             "complete on pause rewrote a word delete was changing")
     }
+
+    /// **Complete on pause is a completion switch, and it was applying
+    /// corrections the commit cascade had explicitly declined.**
+    ///
+    /// The engine order is `[typed, best, ...]` and "best" is not always a
+    /// completion: `restaraunt` offers `restaurant`, which the space bar refuses
+    /// at `AutocorrectLevel.confident` because `TypoChannel` cannot price a
+    /// rotation inside a ten-letter budget. `idleCompletion` took the first offer
+    /// that was not the typed word, so a 300ms pause wrote in the very correction
+    /// the autocorrect setting had just held — and it reads no level of its own,
+    /// so the Autocorrect-off case is worse: the bold slot is pinned back to slot
+    /// 0 there and this path ignores `isDefault`, which is how `תדוה` became
+    /// `תודה` for somebody who had turned autocorrect off altogether.
+    ///
+    /// The suggestions are set by hand, as everywhere else in this file, so the
+    /// assertion is about the rule rather than about whichever word Apple's
+    /// checker ranks first today. Both arrays are the engine's own shape: the
+    /// literal keystrokes at slot 0, a correction that disagrees with a key that
+    /// was pressed at slot 1.
+    func testCompleteOnPauseDoesNotApplyACorrectionThatDisagreesWithTheKeystrokes() {
+        SharedStore.shared.completeOnIdle = true
+        SharedStore.shared.autocorrectLevel = .confident
+        let held = MockTextTarget(text: "restaraunt")
+        let heldController = KeyboardController(target: held, language: .english)
+        heldController.suggestions = [
+            Suggestion(text: "restaraunt", language: .english, isDefault: true),
+            Suggestion(text: "restaurant", language: .english)
+        ]
+
+        heldController.performIdleTyping()
+
+        XCTAssertEqual(
+            held.text, "restaraunt",
+            "the pause pasted in a correction the space bar refuses at .confident")
+
+        SharedStore.shared.autocorrectLevel = .off
+        let hebrew = MockTextTarget(text: "תדוה")
+        let hebrewController = KeyboardController(target: hebrew, language: .hebrew)
+        hebrewController.suggestions = [
+            Suggestion(text: "תדוה", language: .hebrew, isDefault: true),
+            Suggestion(text: "תודה", language: .hebrew)
+        ]
+
+        hebrewController.performIdleTyping()
+
+        XCTAssertEqual(
+            hebrew.text, "תדוה",
+            "and it rewrote a word for somebody who had switched autocorrect off")
+    }
+
+    /// The other half: a genuine completion still lands, and it lands through a
+    /// trailing mark.
+    ///
+    /// `hel,` is the control that rejects a fix written as `hasPrefix` on the raw
+    /// keystrokes — a comma is not a letter of the word, `hello` does not begin
+    /// with `hel,`, and the whole switch would go silent the moment anybody typed
+    /// a mark. `SuggestionEngine.comparable` is what both sides are compared on,
+    /// the same reduction the bar already uses to decide whether to draw the echo.
+    func testCompleteOnPauseStillFinishesAWordThroughATrailingMark() {
+        SharedStore.shared.completeOnIdle = true
+        let plain = MockTextTarget(text: "hel")
+        let plainController = KeyboardController(target: plain, language: .english)
+        plainController.suggestions = [
+            Suggestion(text: "hel", language: .english, isDefault: true),
+            Suggestion(text: "hello", language: .english)
+        ]
+
+        plainController.performIdleTyping()
+
+        XCTAssertEqual(plain.text, "hello", "the ordinary completion stopped firing")
+
+        let marked = MockTextTarget(text: "hel,")
+        let markedController = KeyboardController(target: marked, language: .english)
+        markedController.suggestions = [
+            Suggestion(text: "hel,", language: .english, isDefault: true),
+            Suggestion(text: "hello", language: .english)
+        ]
+
+        markedController.performIdleTyping()
+
+        XCTAssertEqual(
+            marked.text, "hello,",
+            "a comma turned the completion off, which means the prefix test is reading "
+                + "the keystrokes instead of the word")
+    }
 }
 
 /// A field that says it is a password. Local to this file: `MockTextTarget`

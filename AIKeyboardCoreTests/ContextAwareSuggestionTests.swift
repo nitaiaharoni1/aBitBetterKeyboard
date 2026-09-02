@@ -846,6 +846,105 @@ final class ContextAwareSuggestionTests: XCTestCase {
             "and a word that completes to nothing is still fixed: \(finished.map(\.text))")
     }
 
+    /// **A reason named about the typed word does not entitle the space bar to
+    /// insert a different candidate, and the final-form rule was doing exactly
+    /// that.**
+    ///
+    /// `SuggestionEngine.evaluate` marks the default at slot 1 whenever
+    /// `commitReason` answers, so the reason decides *whether* to swap and the
+    /// ranking decides *what* to swap in. `Source.personal` is 8000 and
+    /// `.orthography` 7000, so a contact or a hand-typed entry that merely
+    /// extends the keystrokes wins the ranking outright — and `שלומ` with a
+    /// contact `שלומית` handed the space bar that name at confidence 96, which is
+    /// above the shipped floor, on a rule that had asked one question about the
+    /// letters and none about the winner.
+    ///
+    /// **Asked of `commitReason` directly, because the end-to-end route cannot
+    /// reject the old build on its own.** Apple's checker lists completions of
+    /// `שלומ` (`שלומדים` and friends), which makes the entry *contested* and trips
+    /// the guard one block above this one, so the whole-engine answer is already
+    /// nil today for a second reason. A two-candidate results array is the case
+    /// that guard cannot see: nothing else continues the keystrokes, so only the
+    /// rule under test can answer.
+    ///
+    /// The control is the same call with the orthography candidate winning, which
+    /// still commits — a build that answered nil to everything here would fail it.
+    func testAContactExtendingTheKeystrokesDoesNotCommitThroughTheHebrewFinalForm() {
+        XCTAssertEqual(
+            SuggestionEngine.hebrewFinalFormCorrection(of: "שלומ"), "שלום",
+            "the rule under test has to fire at all for either half to mean anything")
+
+        let personal = emptyPersonal()
+        let contactWins = [
+            SuggestionEngine.Candidate(text: "שלומ", language: .hebrew, source: .typed),
+            SuggestionEngine.Candidate(text: "שלומית", language: .hebrew, source: .personal)
+        ]
+        XCTAssertNil(
+            SuggestionEngine.commitReason(
+                "שלומ", previousWords: [], typedLanguage: .hebrew,
+                results: contactWins, supplementary: ["שלומית"], personal: personal),
+            "the final-form rule armed the space bar with שלומית, a name it never "
+                + "asked a question about, at confidence 96")
+
+        let correctionWins = [
+            SuggestionEngine.Candidate(text: "שלומ", language: .hebrew, source: .typed),
+            SuggestionEngine.Candidate(text: "שלום", language: .hebrew, source: .orthography)
+        ]
+        XCTAssertEqual(
+            SuggestionEngine.commitReason(
+                "שלומ", previousWords: [], typedLanguage: .hebrew,
+                results: correctionWins, supplementary: [], personal: personal),
+            CommitReason.hebrewFinalForm,
+            "and the rule still fires when the orthography candidate is the winner")
+    }
+
+    /// The same defect through the contraction table, where the whole engine can
+    /// see it: `dont` is uncontested, because `don't` does not continue `dont`
+    /// once the apostrophe is in it and Apple lists no completion that does.
+    ///
+    /// So the old build ran the table's rule, marked slot 1 as the default, and
+    /// space inserted the contact `Dontrell` at confidence 98 — the highest price
+    /// anywhere in `CommitReason`, paid for a candidate the table had never heard
+    /// of. The control types the same four letters with an empty list and still
+    /// gets `don't`.
+    func testAContactExtendingTheKeystrokesDoesNotCommitThroughTheContractionTable() {
+        XCTAssertEqual(
+            SuggestionEngine.contractions["dont"], "don't",
+            "the table is what makes this word correctable at all")
+
+        // Asked of the rule first, with a results array nothing else contests, so
+        // this half cannot be carried by Apple's completion list happening to
+        // trip the contested guard one block above it.
+        let contactWins = [
+            SuggestionEngine.Candidate(text: "dont", language: .english, source: .typed),
+            SuggestionEngine.Candidate(text: "Dontrell", language: .english, source: .personal)
+        ]
+        XCTAssertNil(
+            SuggestionEngine.commitReason(
+                "dont", previousWords: ["I"], typedLanguage: .english,
+                results: contactWins, supplementary: ["Dontrell"], personal: emptyPersonal()),
+            "the contraction table armed the space bar with Dontrell at confidence 98")
+
+        let withContact = SuggestionEngine.suggestions(
+            prefix: "dont", context: "I ", languages: [.english],
+            supplementary: ["Dontrell"], personal: emptyPersonal())
+        XCTAssertEqual(
+            withContact.first(where: \.isDefault)?.text, "dont",
+            "space committed \(withContact.first(where: \.isDefault)?.text ?? "nothing") "
+                + "on a rule about the apostrophe: \(withContact.map(\.text))")
+        XCTAssertTrue(
+            withContact.contains { $0.text == "Dontrell" },
+            "the entry must still be offered — a build that simply dropped it from the "
+                + "bar would pass the assertion above for the wrong reason")
+
+        let withoutContact = SuggestionEngine.suggestions(
+            prefix: "dont", context: "I ", languages: [.english], personal: emptyPersonal())
+        XCTAssertEqual(
+            withoutContact.first(where: \.isDefault)?.text, "don't",
+            "and the table still commits with nothing outranking it: "
+                + "\(withoutContact.map(\.text))")
+    }
+
     /// The five letters, and nothing else. A rule generalised to right-to-left
     /// scripts would fire on correctly spelled Arabic, which changes letter shape
     /// in the font rather than in the code point.

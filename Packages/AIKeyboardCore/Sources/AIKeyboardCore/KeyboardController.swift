@@ -1158,6 +1158,16 @@ public final class KeyboardController: ObservableObject {
         // Retire the undo before reading the new document and accept the complete
         // observation captured when the replacement landed.
         if suggestionWorkIsActive { retirePendingAutocorrectUndo(.acceptLearning) }
+        // **And the refusal the undo left behind belongs to the old field too.**
+        // `undoneAutocorrectSpellings` is what stops the space bar putting a swap
+        // back after the user has taken it off once, and nothing has ever removed
+        // from it: one instance is reused across fields and across host apps, so a
+        // spelling refused in a search box stayed refused in every message the
+        // user wrote afterwards, for the life of the process. "This session" is
+        // what the rule was always written to mean, and this is the seam that
+        // decides where a session ends — the same one `pendingAutocorrectUndo` and
+        // `discardPendingCharacter` are retired at.
+        undoneAutocorrectSpellings.removeAll()
         // **The memo's other invalidator, and it is not the field.**
         // `KeyboardViewController.viewDidAppear` reloads the personal model before
         // suggestion work is activated. Forget lives in the app, this process

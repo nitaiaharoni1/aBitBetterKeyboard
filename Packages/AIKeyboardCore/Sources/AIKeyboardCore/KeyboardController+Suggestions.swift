@@ -555,11 +555,27 @@ extension KeyboardController {
         if space { insertSpace() }
     }
 
-    /// Complete on pause writes the first suggestion that is not the typed
+    /// Complete on pause writes the first suggestion that **continues** the typed
     /// word, not the bold slot. Mid-word the engine leaves the keystrokes as
     /// default unless it is sure they are a typo, and Autocorrect-off remakes
-    /// default to slot 0 so space will not swap. The completion is still
-    /// sitting in slot 1. Taking `isDefault` made this switch a no-op.
+    /// default to slot 0 so space will not swap. Taking `isDefault` made this
+    /// switch a no-op.
+    ///
+    /// **Slot 1 is the best *candidate*, which is not the same as the best
+    /// completion, and reading it as one gave this switch a second job nobody
+    /// asked it for.** The engine order is `[typed, best, ...]` and "best" is
+    /// frequently a correction the commit cascade deliberately held: at
+    /// `AutocorrectLevel.confident` the space bar refuses `restaraunt` →
+    /// `restaurant` because the channel cannot price a rotation inside a
+    /// ten-letter budget, and a 300ms pause pasted it in anyway — the setting
+    /// says "finish the word I am typing", not "apply the corrections the
+    /// autocorrect setting just declined". Autocorrect-off is the sharper case,
+    /// since this path never reads `isDefault`: `תדוה` + a pause wrote `תודה`
+    /// into a field belonging to somebody who had switched autocorrect off.
+    /// A completion agrees with every key that was pressed and a correction
+    /// disagrees with one, which is the same question `SuggestionBar` asks to
+    /// decide whether to draw the echo, so this is `hasPrefix` on `comparable`
+    /// and not a second definition of it.
     ///
     /// **A candidate an automatic path may not write is skipped, not merely
     /// refused.** This fires with no tap between the pause and
@@ -580,8 +596,10 @@ extension KeyboardController {
         let typed = SuggestionEngine.comparable(prefix)
         guard !typed.isEmpty else { return nil }
         return suggestions.first {
-            $0.commit == .contextual
-                && SuggestionEngine.comparable($0.text) != typed
+            let candidate = SuggestionEngine.comparable($0.text)
+            return $0.commit == .contextual
+                && candidate != typed
+                && candidate.hasPrefix(typed)
                 && SuggestionEngine.isAutomaticallyInsertable($0.text)
         }
     }

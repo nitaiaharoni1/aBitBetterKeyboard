@@ -5,6 +5,30 @@ commit on it, so the next person can tell a new failure from one that was
 already there. **Re-run it and update this table rather than trusting it**: every
 number here is a reading, not a property of the code.
 
+## The run of 2026-09-02, at `e36ef52a` plus the suggestion-engine diff
+
+**`AIKeyboardCoreTests`: 1622 executed, 8 skipped, 9 failing tests.** Run twice:
+once on the working tree and once on a pristine `git archive HEAD` export, and
+the nine failures are identical name for name, so the diff (four engine fixes,
+eight new tests) broke nothing and the eight-test gap is exactly the eight
+added. The 397 assertion lines are mostly `LanguageCatalogueTests` looping over
+every language and width; count tests, not lines. UI tests were not run.
+
+| Test | Verdict |
+|---|---|
+| `EmojiModeTests` (2) | **Pre-existing**, the two known ranking failures. Unchanged. |
+| `PersonalDictionaryTests.testTheSameWordsPlusAMarkAreStillDestroyedWithNoList` | **Pre-existing**, already listed below. |
+| `MissingSpacesTests.testAPrematureFinalFormMovesAcrossExactlyOneSpace` | **Pre-existing, unlisted until now.** Sits on the Hebrew final-form rule, which the diff touched, and fails identically on pristine HEAD. |
+| `PendingAutocorrectClaimTests.testImmediateAutocorrectUndoDiscardsTheStagedLearning` | **Pre-existing, unlisted until now.** `("heloW") is not equal to ("helow")`: the letter typed after an autocorrect undo arrives shifted. |
+| `CopyClipModeTests.testOpeningCopyClipStartsWatchingThePasteboardAndClosingItStops` | **Pre-existing, unlisted until now.** Not chased. |
+| `CopyClipModeTests.testTheWatchStopsWhenTheKeyboardGoesAway` | **Pre-existing, unlisted until now.** Not chased. |
+| `LanguageCatalogueTests.testDeleteKeepsTheSameWidthAndTrailingEdgeInEveryLanguageAndOnEveryPlane` | **Pre-existing, unlisted until now.** Not chased. |
+| `LanguageCatalogueTests.testTheBottomRowsFunctionKeysCountAgainstTheColumnBudget` | **Pre-existing, unlisted until now.** Not chased. |
+
+The three corpora read the same day: frozen 90 at 73/76, typos 88 / 16 / 3 with
+24 controls (21 intact, the 3 new `its` / `ill` / `lets` rows WRONG on purpose),
+sweep 612 / 50 / 2. See `.claude/rules/suggestion-bar.md`.
+
 ## The run of 2026-08-18, at `76b322fd`
 
 **Whole suite: 1473 passed, 25 failed.** Six core, nineteen UI, and the split
