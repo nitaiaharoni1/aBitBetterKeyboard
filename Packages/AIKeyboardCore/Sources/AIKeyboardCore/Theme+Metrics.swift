@@ -129,11 +129,11 @@ extension Theme {
         }
 
         public static let rowSpacing: CGFloat = 12
-        /// Gap between keys in a row. Raised from 5 so the caps breathe. Do not
-        /// raise further without re-checking
+        /// Gap between keys in a row. Narrow enough to keep neighbouring letters
+        /// close without joining their caps. Do not raise without re-checking
         /// `LanguageCatalogueTests.testNoRowOverflowsTheKeyboard` on 320pt —
         /// Bulgarian's thirteen columns are the ones that run out first.
-        public static let keySpacing: CGFloat = 6
+        public static let keySpacing: CGFloat = 4
         public static let sideInset: CGFloat = 3
         public static let topInset: CGFloat = 4
         public static let bottomInset: CGFloat = 4
@@ -222,13 +222,13 @@ extension Theme {
         /// orientation nobody had swept.
         ///
         /// **The 12 pt came out of the row gap, and out of nothing else, because
-        /// the row gap is the only vertical dimension in landscape that is not a
-        /// touch target.** A landscape key is about 81 × 26, so every mistap risk
-        /// is vertical and the key height is the whole of it; `KeyView` puts
-        /// `.contentShape(Rectangle())` on the cap's own frame, so the gap
-        /// between two rows is dead space a touch lands in and nothing happens.
-        /// Cutting 8 → 4 therefore pays the entire overspend without shrinking a
-        /// single target by a point, and it keeps the cap idiom: the crisp part
+        /// the row gap is visual space rather than key face.** A landscape key is
+        /// about 81 × 26, so every mistap risk is vertical and the key height is
+        /// the whole visible target. `KeyView` now expands each hit shape by half
+        /// the gap so the two targets meet at its midpoint; the gap costs no
+        /// reachable area, but it still costs layout height. Cutting 8 → 4
+        /// therefore pays the entire overspend without shrinking a single key by
+        /// a point, and it keeps the cap idiom: the crisp part
         /// of `KeyView`'s depth recipe is a 2 pt contact line (`restContactY`),
         /// which still clears, and what is lost is part of an ambient lift its
         /// own comment calls "barely there" (6% black). The other candidates all

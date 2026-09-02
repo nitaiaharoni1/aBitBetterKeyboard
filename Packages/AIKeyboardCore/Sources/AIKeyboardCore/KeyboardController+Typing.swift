@@ -19,6 +19,15 @@ extension KeyboardController {
     /// It is two open touches now rather than one — a character key defers to its
     /// lift as well — and `payOpenTouches(before:)` is where both are settled.
     public func press(_ cap: KeyCap, at unitPoint: CGPoint? = nil, playsFeedback: Bool = true) {
+        press(
+            cap, at: unitPoint, touchEvidence: nil,
+            playsFeedback: playsFeedback)
+    }
+
+    func press(
+        _ cap: KeyCap, at unitPoint: CGPoint?, touchEvidence: KeyTouchEvidence?,
+        playsFeedback: Bool
+    ) {
         payOpenTouches(before: cap)
 
         // **One click for this key, here, and nowhere else.** Which sound is the
@@ -62,7 +71,9 @@ extension KeyboardController {
 
         switch cap {
         case .character(let value):
-            insertCharacter(value, at: unitPoint, playsFeedback: playsFeedback)
+            insertCharacter(
+                value, at: unitPoint, touchEvidence: touchEvidence,
+                playsFeedback: playsFeedback)
         case .shift:
             toggleShift()
         case .backspace:
@@ -221,6 +232,33 @@ extension KeyboardController {
         }
     }
 
+    /// Adds the UIKit contact sample to the character already waiting for its
+    /// lift. An older rollover touch cannot overwrite a newer pending key.
+    func characterTouchEvidence(_ evidence: KeyTouchEvidence, for cap: KeyCap) {
+        guard var pending = pendingCharacter, pending.cap == cap else { return }
+        if let currentID = pending.touchEvidence?.sequenceID,
+            let nextID = evidence.sequenceID,
+            currentID != nextID
+        {
+            return
+        }
+        pending.touchEvidence = evidence
+        pendingCharacter = pending
+    }
+
+    /// Ends only the character owned by this finger. In a rollover, lifting the
+    /// older key must not commit the newer key while that finger is still down.
+    func endCharacterTouch(for cap: KeyCap, sequenceID: UUID?) {
+        guard pendingCharacter?.cap == cap else { return }
+        if let pendingID = pendingCharacter?.touchEvidence?.sequenceID,
+            let sequenceID,
+            pendingID != sequenceID
+        {
+            return
+        }
+        commitCharacterTouch()
+    }
+
     /// A finger landed on a character key. Nothing is typed yet.
     ///
     /// **The letter waits for the lift so a long press can replace it**, which is
@@ -244,10 +282,16 @@ extension KeyboardController {
     /// because one tap buzzing twice is the Emoji key's defect recorded in
     /// `.claude/rules/keyboard-layout.md`.
     public func beginCharacterTouch(_ cap: KeyCap, at unitPoint: CGPoint? = nil) {
+        beginCharacterTouch(cap, at: unitPoint, touchEvidence: nil)
+    }
+
+    func beginCharacterTouch(
+        _ cap: KeyCap, at unitPoint: CGPoint?, touchEvidence: KeyTouchEvidence?
+    ) {
         payOpenTouches(before: cap)
         Feedback.keyClick(cap.clickSound)
         Feedback.keyPress()
-        pendingCharacter = (cap, unitPoint)
+        pendingCharacter = (cap, unitPoint, touchEvidence)
     }
 
     /// Types the character a finger has been holding, if one is waiting.
@@ -262,7 +306,9 @@ extension KeyboardController {
         // Cleared first: `press` pays open touches of its own, and a slot still
         // holding this character would send it straight back in here.
         pendingCharacter = nil
-        press(pending.cap, at: pending.unitPoint, playsFeedback: false)
+        press(
+            pending.cap, at: pending.unitPoint, touchEvidence: pending.touchEvidence,
+            playsFeedback: false)
         return true
     }
 
@@ -322,7 +368,8 @@ extension KeyboardController {
     /// callout and the long-press popup go through the same call, or the key
     /// shows one letter and types another.
     func insertCharacter(
-        _ value: String, at unitPoint: CGPoint? = nil, playsFeedback: Bool = true
+        _ value: String, at unitPoint: CGPoint? = nil,
+        touchEvidence: KeyTouchEvidence? = nil, playsFeedback: Bool = true
     ) {
         if playsFeedback { Feedback.keyPress() }
         // A key carrying several letters types no letter of its own: it adds one
@@ -376,6 +423,15 @@ extension KeyboardController {
         }
         let inserted = output.replacingOccurrences(of: "\n", with: "")
         target?.insertText(inserted)
+        let word = currentWordPrefix
+        if word.isEmpty {
+            typingTouchTrace.clear()
+        } else {
+            let touchContext = String(contextBefore.dropLast(word.count))
+            typingTouchTrace.record(
+                inserted: inserted, evidence: touchEvidence, language: language, word: word,
+                context: touchContext)
+        }
         if shift == .on { shift = .off }
         refreshSuggestions()
         noteTypedInput()

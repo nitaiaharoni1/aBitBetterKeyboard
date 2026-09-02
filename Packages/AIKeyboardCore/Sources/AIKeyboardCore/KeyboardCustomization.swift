@@ -95,7 +95,7 @@ public struct KeyboardCustomization: Codable, Equatable, Sendable {
             SlotSpec(action: .emoji, width: .units(1.0)),
             SlotSpec(action: .space, width: .fill),
             SlotSpec(action: .punctuation, width: .units(1.0)),
-            SlotSpec(action: .ret, width: .units(KeyboardLayout.functionKeyUnits))
+            SlotSpec(action: .ret, width: .units(KeyboardLayout.trailingFunctionKeyUnits))
         ],
         cursorRow: Self.actionRow
     )

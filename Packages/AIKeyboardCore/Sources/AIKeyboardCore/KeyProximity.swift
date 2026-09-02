@@ -1,5 +1,171 @@
 import Foundation
 
+/// Where one finger landed inside a key, including the conservative part of
+/// the contact radius the hardware says is definitely present.
+///
+/// The four values are normalised to the key's own box: `x == 0` is its left
+/// edge, `x == 1` its right edge, and a horizontal radius of `0.5` is half a
+/// key wide. Keeping this independent of UIKit lets the suggestion harness use
+/// the exact production scorer without pretending it has real fingers.
+struct KeyTouchEvidence: Equatable, Sendable {
+    let x: Double
+    let y: Double
+    let horizontalRadius: Double
+    let verticalRadius: Double
+    let sequenceID: UUID?
+
+    init(
+        x: Double, y: Double, horizontalRadius: Double = 0, verticalRadius: Double = 0,
+        sequenceID: UUID? = nil
+    ) {
+        self.x = x
+        self.y = y
+        self.horizontalRadius = max(0, horizontalRadius)
+        self.verticalRadius = max(0, verticalRadius)
+        self.sequenceID = sequenceID
+    }
+
+    /// How strongly this touch points toward a neighbouring key at this offset.
+    /// Zero is a centred touch; one is a centre at or beyond the shared edge.
+    func support(toward offset: KeyProximity.Offset) -> Double {
+        let horizontal =
+            offset.dx < 0
+            ? edgeSupport(distance: x, radius: horizontalRadius)
+            : offset.dx > 0
+                ? edgeSupport(distance: 1 - x, radius: horizontalRadius) : 0
+        let vertical =
+            offset.dy < 0
+            ? edgeSupport(distance: y, radius: verticalRadius)
+            : offset.dy > 0
+                ? edgeSupport(distance: 1 - y, radius: verticalRadius) : 0
+        let horizontalWeight = abs(offset.dx)
+        let verticalWeight = abs(offset.dy)
+        let totalWeight = horizontalWeight + verticalWeight
+        guard totalWeight > 0 else { return 0 }
+        return min(
+            1,
+            (horizontal * horizontalWeight + vertical * verticalWeight) / totalWeight)
+    }
+
+    private func edgeSupport(distance rawDistance: Double, radius: Double) -> Double {
+        let distance = max(0, rawDistance)
+        // The centre alone is already useful: it rises smoothly from zero at
+        // the middle of the key to one at the edge. The radius adds evidence
+        // only for the part of the finger that certainly crossed that edge.
+        let centreSupport = min(1, max(0, 1 - distance * 2))
+        guard radius > 0 else { return centreSupport }
+        let contactSupport = min(1, max(0, (radius - distance) / radius))
+        return max(centreSupport, contactSupport)
+    }
+}
+
+/// The touch evidence that belongs to the word currently under the caret.
+///
+/// It is deliberately ephemeral. The controller drops it when the surrounding
+/// text changes, so geometry from one field or one occurrence of a word can
+/// never influence another.
+struct TypingTouchTrace: Equatable, Sendable {
+    struct Sample: Equatable, Sendable {
+        let evidence: KeyTouchEvidence
+        let language: KeyboardLanguage
+    }
+
+    var spelling = ""
+    var context = ""
+    var touches: [Sample?] = []
+
+    init() {}
+
+    mutating func record(
+        inserted: String, evidence: KeyTouchEvidence?, language: KeyboardLanguage,
+        word: String, context newContext: String
+    ) {
+        let insertedCount = inserted.count
+        if context == newContext, word == spelling + inserted {
+            spelling = word
+            touches.append(
+                contentsOf: evidenceForInsertion(
+                    count: insertedCount, evidence: evidence, language: language))
+            return
+        }
+
+        spelling = word
+        context = newContext
+        touches = Array(repeating: nil, count: word.count)
+        guard insertedCount == 1, word.hasSuffix(inserted), !touches.isEmpty else { return }
+        if let evidence {
+            touches[touches.count - 1] = Sample(evidence: evidence, language: language)
+        }
+    }
+
+    mutating func evidence(matching word: String, context newContext: String) -> TypingTouchTrace? {
+        guard context == newContext else {
+            clear()
+            return nil
+        }
+        if spelling != word {
+            guard spelling.hasPrefix(word), word.count < spelling.count else {
+                clear()
+                return nil
+            }
+            spelling = word
+            touches.removeLast(touches.count - word.count)
+        }
+        guard spelling == word, touches.count == word.count, touches.contains(where: { $0 != nil })
+        else { return nil }
+        return self
+    }
+
+    /// Aligns the physical slots with the word dictionaries score after leading
+    /// and trailing punctuation has been removed. The stored trace stays raw so
+    /// another typed character can still extend it normally.
+    func aligned(to core: String) -> TypingTouchTrace? {
+        guard !core.isEmpty, let range = spelling.range(of: core) else { return nil }
+        let start = spelling.distance(from: spelling.startIndex, to: range.lowerBound)
+        let count = core.count
+        guard start + count <= touches.count else { return nil }
+        var aligned = self
+        aligned.spelling = core
+        aligned.touches = Array(touches[start..<(start + count)])
+        return aligned
+    }
+
+    mutating func clear() {
+        spelling = ""
+        context = ""
+        touches.removeAll(keepingCapacity: true)
+    }
+
+    /// Directional support for same-length neighbouring-key substitutions.
+    /// Insertions, deletions and phonetic corrections carry no touch claim.
+    func support(for candidate: String) -> Double {
+        let typed = Array(spelling.lowercased())
+        let proposed = Array(candidate.lowercased())
+        guard typed.count == proposed.count, typed.count == touches.count else { return 0 }
+
+        var support = 0.0
+        var changes = 0
+        for index in typed.indices where typed[index] != proposed[index] {
+            guard let sample = touches[index],
+                KeyProximity.hasExactTouchGeometry(for: sample.language),
+                let offset = KeyProximity.offset(
+                    from: typed[index], to: proposed[index], in: sample.language)
+            else { return 0 }
+            support += sample.evidence.support(toward: offset)
+            changes += 1
+        }
+        guard changes > 0 else { return 0 }
+        return support / Double(changes)
+    }
+
+    private func evidenceForInsertion(
+        count: Int, evidence: KeyTouchEvidence?, language: KeyboardLanguage
+    ) -> [Sample?] {
+        guard count == 1 else { return Array(repeating: nil, count: count) }
+        return [evidence.map { Sample(evidence: $0, language: language) }]
+    }
+}
+
 /// Whether two letters sit next to each other on the letter plane.
 ///
 /// **Offers only.** A fat-finger substitution may climb inside the neighbour
@@ -44,6 +210,18 @@ import Foundation
 /// is close enough under the new one to have been in danger.
 enum KeyProximity {
 
+    struct Offset {
+        let dx: Double
+        let dy: Double
+    }
+
+    /// Touch direction is used only where this file mirrors the shipped layout
+    /// exactly. Other languages keep text-only ranking rather than borrowing
+    /// QWERTY geometry that may point at a different physical key.
+    static func hasExactTouchGeometry(for language: KeyboardLanguage) -> Bool {
+        language == .english || language == .hebrew
+    }
+
     static func rows(for language: KeyboardLanguage) -> [String] {
         if language == .hebrew {
             return ["קראטוןםפ", "שדגכעיחלךף", "זסבהנמצתץ"]
@@ -55,16 +233,29 @@ enum KeyProximity {
     /// centres sit within one key width of each other (below). Never a
     /// transposition, never two rows apart.
     static func areAdjacent(_ a: Character, _ b: Character, in language: KeyboardLanguage) -> Bool {
+        offset(from: a, to: b, in: language) != nil
+    }
+
+    /// The neighbouring key's screen-space offset from the key that was typed.
+    /// Kept beside `areAdjacent` so ranking and directional touch evidence use
+    /// one geometry and cannot disagree about which pairs are reachable.
+    static func offset(
+        from a: Character, to b: Character, in language: KeyboardLanguage
+    ) -> Offset? {
         let letters = rows(for: language)
         guard let first = position(of: a, in: letters), let second = position(of: b, in: letters)
-        else { return false }
+        else { return nil }
         let rowGap = abs(first.row - second.row)
-        if rowGap == 0 { return abs(first.col - second.col) == 1 }
-        guard rowGap == 1 else { return false }
+        if rowGap == 0 {
+            guard abs(first.col - second.col) == 1 else { return nil }
+            return Offset(dx: Double(second.col - first.col), dy: 0)
+        }
+        guard rowGap == 1 else { return nil }
         let shapes = rowShapes(for: language, letters: letters)
         let centerA = normalizedCenter(row: first.row, col: first.col, letters: letters, shapes: shapes)
         let centerB = normalizedCenter(row: second.row, col: second.col, letters: letters, shapes: shapes)
-        return abs(centerA - centerB) < adjacentThresholdKeyWidths
+        guard abs(centerA - centerB) < adjacentThresholdKeyWidths else { return nil }
+        return Offset(dx: centerB - centerA, dy: Double(second.row - first.row))
     }
 
     /// Same length, exactly one index differs, those two characters are
@@ -108,6 +299,7 @@ enum KeyProximity {
     private struct RowShape {
         let leadingPinned: Bool
         let trailingPinned: Bool
+        let horizontalOffset: Double
     }
 
     /// **Mirrors `KeyboardLayout.deleteRow(of:)` and the shift line in
@@ -125,7 +317,9 @@ enum KeyProximity {
         return spans.indices.map { index in
             RowShape(
                 leadingPinned: hasCase && index == spans.count - 1,
-                trailingPinned: index == deleteRow)
+                trailingPinned: index == deleteRow,
+                horizontalOffset: language == .hebrew && index == 0
+                    ? hebrewTopRowOffset : 0)
         }
     }
 
@@ -133,27 +327,31 @@ enum KeyProximity {
     ///
     /// **A measured ratio, not a geometric constant, and it is the one number
     /// in this file that is only exact on the device it was measured on.**
-    /// `Theme.Metrics.keySpacing` is a fixed 6pt; the key width it is divided
+    /// `Theme.Metrics.keySpacing` is a fixed 4pt; the key width it is divided
     /// by grows with the screen, so this ratio shrinks a few percent on a
     /// wider phone and grows a few percent on a narrower one. iPhone 17 Pro:
-    /// a 402pt-wide screen gives a 34.2pt reference key width, which is the
+    /// a 402pt-wide screen gives a 36pt reference key width, which is the
     /// same arithmetic `KeyboardLayout.pinnedWidth`'s own doc comment works
-    /// out to 51.3pt at 1.5 units.
+    /// from.
     ///
     /// **That it does not matter was computed rather than argued.** The
     /// tempting justification is that no verdict sits near the threshold — the
-    /// nearest surviving pair clears one key width by 0.16 and the nearest
-    /// dropped pair misses it by 0.51 — which is true and is still only a
+    /// nearest surviving pair clears one key width by 0.37 and the nearest
+    /// dropped pair misses it by 0.57 — which is true and is still only a
     /// margin argument. The whole adjacency sweep was instead re-run at grid
     /// widths 360, 375, 390, 393, 402, 415, 430 and 440, covering the range of
     /// real iPhones: **the dropped list is the same fifteen pairs at every one
     /// of them, nothing is ever added, and `scale` stays exactly 1 throughout**,
     /// checked per row rather than assumed, so no row is ever squeezed out of
     /// the reference width this ratio is derived from.
-    private static let gapRatio: Double = 6.0 / 34.2
+    private static let gapRatio: Double = 4.0 / 36.0
 
-    /// Shift and delete, in key widths. Matches `KeyboardLayout.functionKeyUnits`.
-    private static let pinnedKeyWidth: Double = 1.5
+    /// The leading Shift and trailing Backspace widths, in reference key units.
+    private static let leadingPinnedKeyWidth: Double = 1.5
+    private static let trailingPinnedKeyWidth: Double = 1.35
+
+    /// The explicit 4pt visual nudge on Hebrew's top row, in reference key units.
+    private static let hebrewTopRowOffset: Double = 4.0 / 36.0
 
     /// Ten reference columns and the nine gaps between them, in key widths.
     /// Matches `KeyboardLayout.referenceColumns`, which every letter row is
@@ -180,12 +378,12 @@ enum KeyProximity {
     ) -> Double {
         let shape = shapes[row]
         let count = letters[row].count
-        let leftBoundary = shape.leadingPinned ? pinnedKeyWidth + gapRatio : 0
-        let rightBoundary = shape.trailingPinned ? pinnedKeyWidth + gapRatio : 0
+        let leftBoundary = shape.leadingPinned ? leadingPinnedKeyWidth + gapRatio : 0
+        let rightBoundary = shape.trailingPinned ? trailingPinnedKeyWidth + gapRatio : 0
         let offered = referenceRowWidth - leftBoundary - rightBoundary
         let content = Double(count) + Double(count - 1) * gapRatio
         let margin = max(0, (offered - content) / 2)
         let phase = leftBoundary + margin + 0.5
-        return phase + Double(col) * (1 + gapRatio)
+        return phase + Double(col) * (1 + gapRatio) + shape.horizontalOffset
     }
 }

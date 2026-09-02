@@ -7,6 +7,9 @@ public struct KeyView: View, Equatable {
     let spec: KeySpec
     let width: CGFloat
     let height: CGFloat
+    /// The visual space assigned to this key for hit testing. Insets can differ
+    /// at a pinned-key boundary where the centred letter group leaves extra room.
+    let hitInsets: KeyHitInsets
     let language: KeyboardLanguage
     let shift: ShiftState
     /// What the space bar should say about the language instead of "space", and
@@ -102,6 +105,12 @@ public struct KeyView: View, Equatable {
     /// rotor pick has no lift behind it and goes through `commitAlternate`, which
     /// must type now rather than park.
     let onCharacterTouch: ((CharacterTouchPhase) -> Void)?
+    /// Physical evidence for the same touch. Separate from the public phase enum
+    /// so the enum keeps its original source-compatible two-case contract.
+    let onCharacterTouchEvidence: ((KeyCap, KeyTouchEvidence) -> Void)?
+    /// The identity of the finger that ended. The public phase predates this
+    /// payload, so the shared keyboard uses a private callback instead.
+    let onCharacterTouchEnd: ((KeyCap, UUID?) -> Void)?
     /// Set on Fix, Rewrite and CopyClip so the action row can climb over the
     /// letters for the length of the hold. A preference from every key was a
     /// frame late and a letter press could raise the wrong block.
@@ -114,6 +123,12 @@ public struct KeyView: View, Equatable {
     @State var showsAlternates = false
     @State var selectedAlternate = 0
     @State var keyMinXInCanvas: CGFloat = 0
+    @State var keyFrameInGlobal: CGRect = .zero
+    @State var touchStartLocation: CGPoint?
+    @State var touchEvidence: KeyTouchEvidence?
+    @State var touchContactID: UInt64?
+    @State var characterTouchID: UUID?
+    @State var characterTouchStartedAt: TimeInterval?
 
     /// True for as long as a touch is on this key.
     ///
@@ -126,6 +141,7 @@ public struct KeyView: View, Equatable {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.keyboardCanvasWidth) var keyboardCanvasWidth
     @Environment(\.keyboardCanvasOriginX) var keyboardCanvasOriginX
+    @Environment(\.touchContactMonitor) var touchContactMonitor
     /// Read here and forwarded into the `static` sizing functions in
     /// `KeyView+SpaceLabel`, rather than read again inside them: those take
     /// the size as an explicit parameter so a test can compare two sizes
@@ -159,9 +175,71 @@ public struct KeyView: View, Equatable {
         onCharacterTouch: ((CharacterTouchPhase) -> Void)? = nil,
         onPopupLayerChange: ((Bool) -> Void)? = nil
     ) {
+        self.init(
+            spec: spec,
+            width: width,
+            height: height,
+            hitInsets: .standard(rowSpacing: Theme.Metrics.rowSpacing),
+            language: language,
+            shift: shift,
+            indication: indication,
+            enabledLanguages: enabledLanguages,
+            toneAlternates: toneAlternates,
+            fixAlternates: fixAlternates,
+            copyclipAlternates: copyclipAlternates,
+            isEmojiOpen: isEmojiOpen,
+            isCopyClipOpen: isCopyClipOpen,
+            showsActionCaption: showsActionCaption,
+            usesNeutralActionTint: usesNeutralActionTint,
+            isActionActive: isActionActive,
+            isDisabled: isDisabled,
+            disabledHint: disabledHint,
+            dictationState: dictationState,
+            activity: activity,
+            onPress: onPress,
+            onRepeat: onRepeat,
+            onAlternate: onAlternate,
+            onSpaceTouch: onSpaceTouch,
+            onCharacterTouch: onCharacterTouch,
+            onCharacterTouchEvidence: nil,
+            onCharacterTouchEnd: nil,
+            onPopupLayerChange: onPopupLayerChange)
+    }
+
+    init(
+        spec: KeySpec,
+        width: CGFloat,
+        height: CGFloat,
+        hitInsets: KeyHitInsets,
+        language: KeyboardLanguage,
+        shift: ShiftState,
+        indication: LanguageSwitchIndication? = nil,
+        enabledLanguages: [KeyboardLanguage] = [],
+        toneAlternates: [String] = [],
+        fixAlternates: [String] = [],
+        copyclipAlternates: [String] = [],
+        isEmojiOpen: Bool = false,
+        isCopyClipOpen: Bool = false,
+        showsActionCaption: Bool = true,
+        usesNeutralActionTint: Bool = false,
+        isActionActive: Bool = false,
+        isDisabled: Bool = false,
+        disabledHint: String = "",
+        dictationState: DictationKeyState = .idle,
+        activity: KeyActivity = .idle,
+        onPress: @escaping (KeyCap, CGPoint) -> Void,
+        onRepeat: (() -> Void)? = nil,
+        onAlternate: ((String) -> Void)? = nil,
+        onSpaceTouch: ((SpaceTouchPhase) -> Void)? = nil,
+        onCharacterTouch: ((CharacterTouchPhase) -> Void)? = nil,
+        onCharacterTouchEvidence: ((KeyCap, KeyTouchEvidence) -> Void)? = nil,
+        onCharacterTouchEnd: ((KeyCap, UUID?) -> Void)? = nil,
+        onPopupLayerChange: ((Bool) -> Void)? = nil
+    ) {
         self.spec = spec
         self.width = width
         self.height = height
+        self.hitInsets = hitInsets
         self.language = language
         self.shift = shift
         self.indication = indication
@@ -183,10 +261,12 @@ public struct KeyView: View, Equatable {
         self.onAlternate = onAlternate
         self.onSpaceTouch = onSpaceTouch
         self.onCharacterTouch = onCharacterTouch
+        self.onCharacterTouchEvidence = onCharacterTouchEvidence
+        self.onCharacterTouchEnd = onCharacterTouchEnd
         self.onPopupLayerChange = onPopupLayerChange
     }
 
-    /// Every value this key draws from, and none of the six closures it is handed.
+    /// Every value this key draws from, and none of the closures it is handed.
     ///
     /// **`KeyboardController` publishes on every keystroke and every key on the
     /// board redraws, because a `View` holding a closure can never compare equal
@@ -218,6 +298,7 @@ public struct KeyView: View, Equatable {
         lhs.spec == rhs.spec
             && lhs.width == rhs.width
             && lhs.height == rhs.height
+            && lhs.hitInsets == rhs.hitInsets
             && lhs.language == rhs.language
             && lhs.shift == rhs.shift
             && lhs.indication == rhs.indication
@@ -279,7 +360,9 @@ public struct KeyView: View, Equatable {
         // active action key uses the same raise so Reply's orange cap is
         // not sliced by Fix.
         .zIndex((raisesPopupLayer || isActionActive) ? 10 : 0)
-        .contentShape(Rectangle())
+        .contentShape(
+            KeyHitShape(insets: hitInsets)
+        )
         .gesture(pressGesture)
         // **The whole key, not the gesture alone.** `.disabled` takes the touch out
         // of the subtree, so there is no path — gesture, accessibility action or
@@ -305,10 +388,13 @@ public struct KeyView: View, Equatable {
         }
         .background {
             GeometryReader { proxy in
-                let minX = proxy.frame(in: .global).minX - keyboardCanvasOriginX
+                let frame = proxy.frame(in: .global)
+                let minX = frame.minX - keyboardCanvasOriginX
                 Color.clear
                     .onAppear { keyMinXInCanvas = minX }
+                    .onAppear { keyFrameInGlobal = frame }
                     .onChange(of: minX) { _, x in keyMinXInCanvas = x }
+                    .onChange(of: frame) { _, newFrame in keyFrameInGlobal = newFrame }
             }
         }
         .accessibilityElement()
@@ -445,4 +531,35 @@ public struct KeyView: View, Equatable {
     /// captions — fits at 9pt with the 4pt insets, measured the way
     /// `SuggestionBar.toneButtonWidth` was.
     static let captionMinimumWidth: CGFloat = 56
+}
+
+/// A cap is visually smaller than its share of the keyboard. Expanding only
+/// the hit shape preserves that breathing room while assigning every point in
+/// the gap to the closest row and key.
+private struct KeyHitShape: Shape {
+    let insets: KeyHitInsets
+
+    func path(in rect: CGRect) -> Path {
+        Path(
+            CGRect(
+                x: rect.minX - insets.left,
+                y: rect.minY - insets.top,
+                width: rect.width + insets.left + insets.right,
+                height: rect.height + insets.top + insets.bottom))
+    }
+}
+
+struct KeyHitInsets: Equatable {
+    let left: CGFloat
+    let right: CGFloat
+    let top: CGFloat
+    let bottom: CGFloat
+
+    static func standard(rowSpacing: CGFloat) -> Self {
+        Self(
+            left: Theme.Metrics.keySpacing / 2,
+            right: Theme.Metrics.keySpacing / 2,
+            top: rowSpacing / 2,
+            bottom: rowSpacing / 2)
+    }
 }

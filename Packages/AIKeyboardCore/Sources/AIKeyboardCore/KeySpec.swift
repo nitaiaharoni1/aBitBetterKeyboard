@@ -119,10 +119,14 @@ public enum KeyWidth: Equatable, Sendable {
     /// the same width. `.unit` cannot: it ignores the gutter a merged key
     /// swallowed, so five two-unit keys came out one spacing short of the row.
     case slot(of: Int)
-    /// A fixed width in points, the same on every plane and in all sixty-four
-    /// languages. Shift, delete and the plane switch that brackets the third row.
+    /// The legacy fixed function-key width: 1.5 reference-column units, the same
+    /// on every plane and in all sixty-four languages.
     /// See `KeyboardLayout.widths(for:totalWidth:unitWidth:spacing:)`.
     case pinned
+
+    var isPinned: Bool {
+        self == .pinned
+    }
 }
 
 public struct KeySpec: Identifiable, Equatable, Sendable {
@@ -159,6 +163,9 @@ public struct KeySpec: Identifiable, Equatable, Sendable {
     /// or nil where they have not said. Only a key compiled from a `SlotSpec`
     /// can carry an answer; see `SlotSpec.showsLabel`.
     public let showsLabel: Bool?
+    /// A layout-owned width refinement. Nil for every public `KeySpec`, which
+    /// keeps `.pinned` at its original 1.5-unit meaning for package clients.
+    let pinnedUnits: CGFloat?
 
     /// Whether this key draws its name under its glyph, in the row it is drawn
     /// in and at the width the solver gave it.
@@ -209,6 +216,21 @@ public struct KeySpec: Identifiable, Equatable, Sendable {
         self.alternates = alternates
         self.groupedLetters = groupedLetters
         self.showsLabel = showsLabel
+        pinnedUnits = nil
+        self.id = id ?? KeySpec.identifier(for: cap)
+    }
+
+    init(
+        _ cap: KeyCap, width: KeyWidth, pinnedUnits: CGFloat, id: String? = nil,
+        alternates: [String] = [], groupedLetters: [String]? = nil,
+        showsLabel: Bool? = nil
+    ) {
+        self.cap = cap
+        self.width = width
+        self.alternates = alternates
+        self.groupedLetters = groupedLetters
+        self.showsLabel = showsLabel
+        self.pinnedUnits = pinnedUnits
         self.id = id ?? KeySpec.identifier(for: cap)
     }
 

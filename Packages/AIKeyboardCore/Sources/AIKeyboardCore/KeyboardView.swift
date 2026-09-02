@@ -43,6 +43,7 @@ public struct KeyboardView: View {
     @Environment(\.verticalSizeClass) var verticalSizeClass
     var isEditingLayout: Bool
     @State var actionPopupRaised = false
+    @StateObject private var touchContactMonitor = TouchContactMonitor()
 
     public init(controller: KeyboardController, isEditingLayout: Bool = false) {
         self.controller = controller
@@ -99,13 +100,15 @@ public struct KeyboardView: View {
             keyGrid
                 .frame(
                     height: Theme.Metrics.keyAreaHeight(
-                        for: controller.customization, orientation: orientation))
+                        for: controller.customization, orientation: orientation)
+                )
+                .environment(\.touchContactMonitor, touchContactMonitor)
         }
         .background(Theme.Keys.background)
         .environment(\.layoutDirection, controller.language.layoutDirection)
         .coordinateSpace(name: Self.frameSpace)
         .animation(Theme.Motion.quick, value: controller.showsActionBanner)
-        .background(FeedbackAnchor())
+        .background(FeedbackAnchor(monitor: touchContactMonitor))
         .onAppear {
             Feedback.prepare()
             controller.refreshCopyClip()
@@ -142,12 +145,26 @@ public struct KeyboardView: View {
 /// extension that is why the first taps of a session are late or missing.
 /// `didMoveToWindow` is the moment we have a view UIKit will actually drive.
 private struct FeedbackAnchor: UIViewRepresentable {
-    func makeUIView(context: Context) -> AnchorView { AnchorView() }
-    func updateUIView(_ uiView: AnchorView, context: Context) {}
+    let monitor: TouchContactMonitor
+
+    func makeUIView(context: Context) -> AnchorView { AnchorView(monitor: monitor) }
+    func updateUIView(_ uiView: AnchorView, context: Context) { uiView.monitor = monitor }
+
+    static func dismantleUIView(_ uiView: AnchorView, coordinator: ()) {
+        uiView.detachTouchObserver()
+    }
 
     final class AnchorView: UIView {
-        override init(frame: CGRect) {
-            super.init(frame: frame)
+        var monitor: TouchContactMonitor {
+            didSet { touchObserver.monitor = monitor }
+        }
+
+        private let touchObserver: TouchContactGestureRecognizer
+
+        init(monitor: TouchContactMonitor) {
+            self.monitor = monitor
+            touchObserver = TouchContactGestureRecognizer(monitor: monitor)
+            super.init(frame: .zero)
             isUserInteractionEnabled = false
             backgroundColor = .clear
         }
@@ -156,9 +173,227 @@ private struct FeedbackAnchor: UIViewRepresentable {
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
-            guard window != nil else { return }
+            detachTouchObserver()
+            guard let window else { return }
             Feedback.attach(to: self)
+            window.addGestureRecognizer(touchObserver)
         }
+
+        func detachTouchObserver() {
+            touchObserver.view?.removeGestureRecognizer(touchObserver)
+            monitor.reset()
+        }
+    }
+}
+
+/// UIKit's touch object is richer than SwiftUI's `DragGesture.Value`: UIKit
+/// also reports an approximate contact radius and its error band. This monitor
+/// observes the same touches without cancelling or delaying the key gestures.
+final class TouchContactMonitor: ObservableObject {
+    struct Contact {
+        let id: UInt64
+        let location: CGPoint
+        let radius: CGFloat
+        let radiusTolerance: CGFloat
+        let startedAt: TimeInterval
+        let timestamp: TimeInterval
+    }
+
+    private struct TrackedContact {
+        let id: UInt64
+        let initialLocation: CGPoint
+        let startedAt: TimeInterval
+        var radius: CGFloat
+        var radiusTolerance: CGFloat
+        var timestamp: TimeInterval
+
+        var contact: Contact {
+            Contact(
+                id: id,
+                location: initialLocation,
+                radius: radius,
+                radiusTolerance: radiusTolerance,
+                startedAt: startedAt,
+                timestamp: timestamp)
+        }
+    }
+
+    private var active: [ObjectIdentifier: TrackedContact] = [:]
+    private var recent: [TrackedContact] = []
+    private var claimedIDs: Set<UInt64> = []
+    private var nextID: UInt64 = 0
+
+    func record(_ touches: Set<UITouch>) {
+        for touch in touches {
+            let id = ObjectIdentifier(touch)
+            // For a finger this may equal `location(in:)`; when the hardware
+            // has a finer sample UIKit gives it to us here at no extra cost.
+            let location = touch.preciseLocation(in: nil)
+            let trackedID: UInt64
+            if let existing = active[id] {
+                trackedID = existing.id
+            } else {
+                nextID &+= 1
+                trackedID = nextID
+            }
+            let initial = active[id]?.initialLocation ?? location
+            let startedAt = active[id]?.startedAt ?? touch.timestamp
+            active[id] = TrackedContact(
+                id: trackedID,
+                initialLocation: initial,
+                startedAt: startedAt,
+                radius: touch.majorRadius,
+                radiusTolerance: touch.majorRadiusTolerance,
+                timestamp: touch.timestamp)
+        }
+    }
+
+    func finish(_ touches: Set<UITouch>) {
+        record(touches)
+        for touch in touches {
+            guard let contact = active.removeValue(forKey: ObjectIdentifier(touch)) else { continue }
+            recent.append(contact)
+        }
+        pruneRecent()
+    }
+
+    func reset() {
+        active.removeAll(keepingCapacity: true)
+        recent.removeAll(keepingCapacity: true)
+        claimedIDs.removeAll(keepingCapacity: true)
+    }
+
+    /// The raw and SwiftUI callbacks are delivered during the same event but
+    /// their order is not promised. Recently-ended contacts stay available for
+    /// one beat so a lift can still recover its radius.
+    func contact(
+        near point: CGPoint, matching id: UInt64?, includesRecent: Bool,
+        startedNear gestureStart: TimeInterval?
+    ) -> Contact? {
+        pruneRecent()
+        if let id {
+            if let live = active.values.first(where: { $0.id == id }) { return live.contact }
+            guard includesRecent else { return nil }
+            return recent.last(where: { $0.id == id })?.contact
+        }
+
+        let recentContacts =
+            includesRecent
+            ? recent.filter { contact in
+                gestureStart.map {
+                    abs(contact.startedAt - $0) <= Self.startTimeTolerance
+                } ?? true
+            }.map(\.contact)
+            : []
+        let contacts = (active.values.map(\.contact) + recentContacts)
+            .filter { !claimedIDs.contains($0.id) }
+            .filter { contact in
+                gestureStart.map {
+                    abs(contact.startedAt - $0) <= Self.startTimeTolerance
+                } ?? true
+            }
+        let contact =
+            contacts
+            .map { contact in
+                (
+                    contact: contact,
+                    distance: hypot(contact.location.x - point.x, contact.location.y - point.y)
+                )
+            }
+            .filter { $0.distance <= Self.matchDistance }
+            .min {
+                if $0.distance != $1.distance { return $0.distance < $1.distance }
+                return $0.contact.timestamp > $1.contact.timestamp
+            }?
+            .contact
+        if let contact { claimedIDs.insert(contact.id) }
+        return contact
+    }
+
+    private func pruneRecent() {
+        let cutoff = ProcessInfo.processInfo.systemUptime - Self.recentLifetime
+        recent.removeAll { $0.timestamp < cutoff }
+        let retained = Set(active.values.map(\.id) + recent.map(\.id))
+        claimedIDs.formIntersection(retained)
+    }
+
+    private static let matchDistance: CGFloat = 24
+    private static let recentLifetime: TimeInterval = 0.25
+    private static let startTimeTolerance: TimeInterval = 0.1
+}
+
+/// A passive recognizer: it sees the touch objects but never wins ownership of
+/// a sequence, so SwiftUI's press, long-press and multi-touch handling stays in
+/// charge of behaviour.
+private final class TouchContactGestureRecognizer: UIGestureRecognizer, UIGestureRecognizerDelegate {
+    weak var monitor: TouchContactMonitor?
+    private var activeTouches = Set<ObjectIdentifier>()
+
+    init(monitor: TouchContactMonitor) {
+        self.monitor = monitor
+        super.init(target: nil, action: nil)
+        delegate = self
+        cancelsTouchesInView = false
+        delaysTouchesBegan = false
+        delaysTouchesEnded = false
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        monitor?.record(touches)
+        activeTouches.formUnion(touches.map(ObjectIdentifier.init))
+        state = state == .possible ? .began : .changed
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        monitor?.record(touches)
+        if state == .began || state == .changed { state = .changed }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        finish(touches, cancelled: false)
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        finish(touches, cancelled: true)
+    }
+
+    override func reset() {
+        super.reset()
+        activeTouches.removeAll(keepingCapacity: true)
+    }
+
+    override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+
+    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool {
+        false
+    }
+
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        true
+    }
+
+    private func finish(_ touches: Set<UITouch>, cancelled: Bool) {
+        monitor?.finish(touches)
+        activeTouches.subtract(touches.map(ObjectIdentifier.init))
+        guard activeTouches.isEmpty else {
+            state = .changed
+            return
+        }
+        state = cancelled ? .cancelled : .ended
+    }
+}
+
+private struct TouchContactMonitorKey: EnvironmentKey {
+    static let defaultValue: TouchContactMonitor? = nil
+}
+
+extension EnvironmentValues {
+    var touchContactMonitor: TouchContactMonitor? {
+        get { self[TouchContactMonitorKey.self] }
+        set { self[TouchContactMonitorKey.self] = newValue }
     }
 }
 

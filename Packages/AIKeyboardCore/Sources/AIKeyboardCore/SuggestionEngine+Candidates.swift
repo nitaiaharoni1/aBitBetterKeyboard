@@ -36,6 +36,9 @@ extension SuggestionEngine {
         /// to the one that was pressed. Ranking only; `commitReason`
         /// still refuses a same-length substitution that is not a transposition.
         var keyAdjacent: Bool = false
+        /// Directional support from the physical touches that produced the word.
+        /// Zero for programmatic input, stale traces and non-substitution edits.
+        var touchSupport: Double = 0
         /// How often this person has committed this word. Stamped before
         /// `rank` so `score` stays a pure function of the candidate.
         var personalCount: Int = 0
@@ -226,6 +229,11 @@ extension SuggestionEngine {
         // Below frequency and context, above the source-list ordinal. A
         // fat-finger re-ranks two neighbours; it does not commit one.
         if candidate.keyAdjacent { total += 50 }
+        // A touch at a shared edge is stronger than generic adjacency and weaker
+        // than sentence context or the full frequency prior. It may order two
+        // readings inside a source tier; the commit cascade still decides whether
+        // the space bar is allowed to replace the literal keystrokes.
+        total += candidate.touchSupport * 250
         return total
     }
 

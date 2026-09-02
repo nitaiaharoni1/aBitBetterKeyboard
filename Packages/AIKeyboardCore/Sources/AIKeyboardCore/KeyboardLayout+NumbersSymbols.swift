@@ -70,9 +70,15 @@ extension KeyboardLayout {
     ) -> KeyRow {
         KeyRow(
             id: 2,
-            keys: [KeySpec(.plane(plane, label: label), width: .pinned)]
+            keys: [
+                KeySpec(.plane(plane, label: label), width: .pinned)
+            ]
                 + punctuation(for: language)
-                + [KeySpec(.backspace, width: .pinned)],
+                + [
+                    KeySpec(
+                        .backspace, width: .pinned,
+                        pinnedUnits: trailingFunctionKeyUnits)
+                ],
             sideInsetUnits: 0
         )
     }
@@ -193,7 +199,7 @@ extension KeyboardLayout {
         // without looking. The ids do not collide — this one is `punctuation`.
         keys.append(punctuationKey(for: language))
         // Match Backspace in the row above. Both are trailing function keys.
-        keys.append(KeySpec(.ret, width: .unit(functionKeyUnits)))
+        keys.append(KeySpec(.ret, width: .unit(trailingFunctionKeyUnits)))
         return KeyRow(
             id: 3, keys: keys,
             heightBias: Theme.Metrics.spaceRowHeightBias(

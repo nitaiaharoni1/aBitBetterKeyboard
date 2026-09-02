@@ -114,6 +114,9 @@ extension KeyView {
                 guard acceptsTouches else { return }
                 guard isPressed else {
                     isPressed = true
+                    touchStartLocation = value.startLocation
+                    characterTouchID = UUID()
+                    characterTouchStartedAt = ProcessInfo.processInfo.systemUptime
                     // Three keys defer and the rest commit here. The space bar
                     // defers because the same touch may still turn out to be a
                     // language slide (`SpaceTouchPhase`). A character key defers
@@ -126,7 +129,13 @@ extension KeyView {
                     if slidesForLanguage {
                         onSpaceTouch?(.began)
                     } else if defersCharacterToLift {
+                        let evidence = captureTouchEvidence(
+                            at: value.startLocation, requiresUIKitContact: false,
+                            includesRecentContact: false)
                         onCharacterTouch?(.began(spec.cap, unitPoint(value.startLocation)))
+                        if let evidence {
+                            onCharacterTouchEvidence?(spec.cap, evidence)
+                        }
                     } else if !runsOnLift {
                         onPress(spec.cap, unitPoint(value.startLocation))
                     }
@@ -137,6 +146,13 @@ extension KeyView {
                 if slidesForLanguage {
                     onSpaceTouch?(.moved(value.translation.width))
                     return
+                }
+                if defersCharacterToLift,
+                    let evidence = captureTouchEvidence(
+                        at: value.startLocation, requiresUIKitContact: true,
+                        includesRecentContact: false)
+                {
+                    onCharacterTouchEvidence?(spec.cap, evidence)
                 }
                 // Every later change is either a finger sliding across a popup this
                 // key has or a finger wobbling on an ordinary key. Only the first
@@ -255,6 +271,53 @@ extension KeyView {
             y: height > 0 ? min(1, max(0, location.y / height)) : 0.5)
     }
 
+    /// Joins SwiftUI's point with UIKit's approximate finger radius. The
+    /// tolerance is subtracted rather than added: only contact the hardware says
+    /// is definitely present is allowed to strengthen a correction.
+    @discardableResult
+    func captureTouchEvidence(
+        at location: CGPoint, requiresUIKitContact: Bool,
+        includesRecentContact: Bool
+    ) -> KeyTouchEvidence? {
+        let globalPoint = CGPoint(
+            x: keyFrameInGlobal.minX + location.x,
+            y: keyFrameInGlobal.minY + location.y)
+        // Finger-down can reach SwiftUI before UIKit's passive recognizer sees
+        // that same event. Do not claim a raw contact in that ordering: the only
+        // candidate could be a nearby finger that was already on the glass.
+        // By a later move, or by lift, UIKit has necessarily observed this
+        // sequence and spatial matching is safe. The point-only sample recorded
+        // now is replaced by that richer sample before the character commits.
+        let canMatchUIKitContact = requiresUIKitContact || includesRecentContact
+        let contact =
+            canMatchUIKitContact
+            ? touchContactMonitor?.contact(
+                near: globalPoint, matching: touchContactID,
+                includesRecent: includesRecentContact,
+                startedNear: characterTouchStartedAt)
+            : nil
+        if requiresUIKitContact, contact == nil { return touchEvidence }
+        if touchContactID == nil { touchContactID = contact?.id }
+        // Prefer UIKit's precise centre when it matched this SwiftUI gesture.
+        // The SwiftUI point remains the safe fallback when callback order or a
+        // synthetic touch leaves no UIKit sample to join.
+        let centre =
+            contact.map {
+                CGPoint(
+                    x: $0.location.x - keyFrameInGlobal.minX,
+                    y: $0.location.y - keyFrameInGlobal.minY)
+            } ?? location
+        let certainRadius = contact.map { max(0, $0.radius - $0.radiusTolerance) } ?? 0
+        let evidence = KeyTouchEvidence(
+            x: width > 0 ? Double(centre.x / width) : 0.5,
+            y: height > 0 ? Double(centre.y / height) : 0.5,
+            horizontalRadius: width > 0 ? Double(certainRadius / width) : 0,
+            verticalRadius: height > 0 ? Double(certainRadius / height) : 0,
+            sequenceID: characterTouchID)
+        touchEvidence = evidence
+        return evidence
+    }
+
     /// Everything a finger leaving this key has to undo, on every path it can
     /// leave by. Idempotent, because a normal lift arrives here twice: once from
     /// `onEnded` and once from the gesture state resetting behind it.
@@ -282,7 +345,25 @@ extension KeyView {
         // `wasPressed` is what makes it fire once: a normal lift reaches this
         // twice, from `onEnded` and again from the gesture state resetting
         // behind it, and the second pass sees the flag already cleared.
-        if wasPressed, defersCharacterToLift { onCharacterTouch?(.ended) }
+        if wasPressed, defersCharacterToLift {
+            if let location = touchStartLocation,
+                let evidence = captureTouchEvidence(
+                    at: location, requiresUIKitContact: true,
+                    includesRecentContact: true)
+            {
+                onCharacterTouchEvidence?(spec.cap, evidence)
+            }
+            if let onCharacterTouchEnd {
+                onCharacterTouchEnd(spec.cap, characterTouchID)
+            } else {
+                onCharacterTouch?(.ended)
+            }
+        }
+        touchStartLocation = nil
+        touchEvidence = nil
+        touchContactID = nil
+        characterTouchID = nil
+        characterTouchStartedAt = nil
     }
 
     /// Delete accelerates while held, the way every other keyboard behaves.

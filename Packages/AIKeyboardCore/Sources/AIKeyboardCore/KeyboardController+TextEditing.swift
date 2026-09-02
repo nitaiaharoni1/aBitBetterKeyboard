@@ -150,6 +150,10 @@ extension KeyboardController {
 
     /// Swaps the partial word behind the cursor for a candidate.
     func replaceCurrentWord(with replacement: String) {
+        // A replacement is not another physical sample, even when it writes the
+        // exact same spelling back. Retaining the old geometry would let a later
+        // refresh treat another edit as if the user had just tapped those keys.
+        typingTouchTrace.clear()
         if selection != nil {
             // One backspace takes the whole selection, and the marks it was
             // wearing go with it: the engine was asked about `wordCore`, so the
@@ -217,6 +221,7 @@ extension KeyboardController {
     /// A partial delete is put back byte for byte and reports failure.
     @discardableResult
     func replaceTargetText(with replacement: String) -> Bool {
+        typingTouchTrace.clear()
         endGroupedWord()
         guard let target else {
             refreshSuggestions()

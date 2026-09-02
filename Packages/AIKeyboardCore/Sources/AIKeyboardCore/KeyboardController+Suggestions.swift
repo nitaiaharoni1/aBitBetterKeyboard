@@ -15,6 +15,7 @@ extension KeyboardController {
         let languages: [KeyboardLanguage]
         let supplementary: [String]
         let autocorrect: AutocorrectLevel
+        let touches: TypingTouchTrace?
         let vocabulary: Int
     }
 
@@ -107,9 +108,20 @@ extension KeyboardController {
         let languages = [language] + store.storedEnabledLanguages.filter { $0 != language }
         let supplementary = store.storedPersonalDictionary + supplementaryWords
         let level = store.storedAutocorrectLevel
+        let touches: TypingTouchTrace?
+        if selection == nil {
+            touches =
+                typingTouchTrace
+                .evidence(matching: prefix, context: context)?
+                .aligned(to: SuggestionEngine.wordCore(prefix))
+        } else {
+            typingTouchTrace.clear()
+            touches = nil
+        }
         let query = SuggestionQuery(
             prefix: prefix, context: context, languages: languages,
-            supplementary: supplementary, autocorrect: level, vocabulary: vocabularyVersion)
+            supplementary: supplementary, autocorrect: level, touches: touches,
+            vocabulary: vocabularyVersion)
         let results: [Suggestion]
         if query == lastSuggestionQuery {
             results = lastSuggestionResults
@@ -120,7 +132,8 @@ extension KeyboardController {
                 languages: languages,
                 supplementary: supplementary,
                 personal: personal,
-                autocorrect: level
+                autocorrect: level,
+                touches: touches
             )
             lastSuggestionQuery = query
             lastSuggestionResults = results

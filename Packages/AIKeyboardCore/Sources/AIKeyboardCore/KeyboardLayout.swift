@@ -79,7 +79,7 @@ public enum KeyboardLayout {
     private static func stretchUnits(
         of rows: [GroupedKeys.Row], row index: Int, hasCase: Bool
     ) -> CGFloat {
-        var units: CGFloat = index == deleteRow(of: rows) ? functionKeyUnits : 0
+        var units: CGFloat = index == deleteRow(of: rows) ? trailingFunctionKeyUnits : 0
         // The last letter row, which is row 2 on every ungrouped layout and row 1
         // once the top two have banded.
         if index == rows.count - 1, hasCase { units += functionKeyUnits }
@@ -249,7 +249,12 @@ public enum KeyboardLayout {
                     // letter and read out spelled, and both are wrong for a `.com`.
                     groupedLetters: letters.count > 1 ? letters : nil)
             }
-            if index == deleteRow { keys.append(KeySpec(.backspace, width: .pinned)) }
+            if index == deleteRow {
+                keys.append(
+                    KeySpec(
+                        .backspace, width: .pinned,
+                        pinnedUnits: trailingFunctionKeyUnits))
+            }
             return KeyRow(
                 id: index,
                 keys: keys,
@@ -266,9 +271,12 @@ public enum KeyboardLayout {
         }
     }
 
-    /// How wide shift and delete want to be when the row has room to spare.
-    /// Matches what they work out to on the English layout, where the row is full.
+    /// How wide Shift and the plane switch want to be when the row has room to spare.
     static let functionKeyUnits: CGFloat = 1.5
+
+    /// Return and Backspace stay easy to hit while giving the letters beside
+    /// them a little more room than the wider Shift and plane-switch keys do.
+    static let trailingFunctionKeyUnits: CGFloat = 1.35
 
     /// Long-press alternates shared by every Latin layout: the accented forms
     /// iOS offers on its English keyboard. A superset of what French, German,

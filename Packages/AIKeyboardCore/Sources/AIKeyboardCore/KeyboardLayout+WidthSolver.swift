@@ -16,8 +16,8 @@ extension KeyboardLayout {
     /// The last step is the one that pays for the first: when the pinned keys plus
     /// the letters do not fit, **everything that is not pinned shrinks together**
     /// rather than the pinned key giving ground. Hebrew is the layout that shows
-    /// it — nine letters and a delete key want 359.1pt of a 342pt row on an iPhone
-    /// 17 Pro — so its bottom-row letters come out 32.3pt against the 34.2pt of
+    /// it — nine letters and a delete key want 372.6pt of a 360pt row on an iPhone
+    /// 17 Pro — so its bottom-row letters come out 34.6pt against the 36pt of
     /// the rows above. That misalignment is the visible price of a delete key that
     /// does not move when the language does, and it is deliberate.
     ///
@@ -54,8 +54,13 @@ extension KeyboardLayout {
         let inset = row.sideInsetUnits * (unit + spacing) * 2
         let available = max(0, totalWidth - gaps - inset)
 
-        let pinned = pinnedWidth(totalWidth: totalWidth, spacing: spacing)
-        let pinnedTotal = pinned * CGFloat(row.keys.filter { $0.width == .pinned }.count)
+        let pinnedTotal = row.keys.reduce(CGFloat(0)) { partial, key in
+            guard key.width == .pinned else { return partial }
+            return partial
+                + pinnedWidth(
+                    units: key.pinnedUnits ?? functionKeyUnits,
+                    totalWidth: totalWidth, spacing: spacing)
+        }
         // What the row has to spend on everything else. Never negative, so a
         // degenerate width cannot produce a negative frame.
         let room = max(0, available - pinnedTotal)
@@ -86,7 +91,10 @@ extension KeyboardLayout {
 
         return row.keys.map { key in
             switch key.width {
-            case .pinned: return pinned
+            case .pinned:
+                return pinnedWidth(
+                    units: key.pinnedUnits ?? functionKeyUnits,
+                    totalWidth: totalWidth, spacing: spacing)
             case .unit(let multiple): return unit * multiple * scale
             case .slot(let count): return slotWidth(count) * scale
             case .flexible: return flexibleWidth * scale
@@ -101,15 +109,19 @@ extension KeyboardLayout {
     /// Russian keyboard gets a smaller key than a ten-column English one — and a
     /// delete key expressed in *those* units would be a different size on every
     /// keyboard, which is the thing this exists to stop. So the reference is
-    /// always ten columns, whatever the language is, and the answer is the same
-    /// 51.3pt on a 402pt screen for all sixty-four of them and on all three planes.
+    /// always ten columns, whatever the language is.
     ///
-    /// 1.5 units because that is what English's shift and delete already worked
-    /// out to when they took the leftover, so the language nobody complained about
-    /// keeps the key it had.
+    /// The public answer keeps the original 1.5-unit contract. Compact trailing
+    /// keys ask the unit-taking overload instead.
     public static func pinnedWidth(totalWidth: CGFloat, spacing: CGFloat) -> CGFloat {
+        pinnedWidth(units: functionKeyUnits, totalWidth: totalWidth, spacing: spacing)
+    }
+
+    static func pinnedWidth(
+        units: CGFloat, totalWidth: CGFloat, spacing: CGFloat
+    ) -> CGFloat {
         let columns = CGFloat(referenceColumns)
-        return functionKeyUnits * max(1, (totalWidth - spacing * (columns - 1)) / columns)
+        return units * max(1, (totalWidth - spacing * (columns - 1)) / columns)
     }
 
     /// The column count a pinned key is measured against. The narrowest any

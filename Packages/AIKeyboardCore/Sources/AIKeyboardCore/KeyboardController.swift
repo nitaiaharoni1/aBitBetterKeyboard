@@ -458,7 +458,14 @@ public final class KeyboardController: ObservableObject {
     /// decided by something both keys can reach, exactly as the space bar's debt
     /// already is one property above. Nothing draws this, so it is not
     /// `@Published`. See `beginCharacterTouch`.
-    var pendingCharacter: (cap: KeyCap, unitPoint: CGPoint?)?
+    var pendingCharacter:
+        (
+            cap: KeyCap, unitPoint: CGPoint?, touchEvidence: KeyTouchEvidence?
+        )?
+
+    /// Physical evidence for the word under the caret. It is kept out of the
+    /// document and out of analytics; only the local suggestion pass reads it.
+    var typingTouchTrace = TypingTouchTrace()
 
     /// A word somebody is deleting from is a word they are correcting on
     /// purpose, and the space bar must not overrule them. See `isCorrectingWordByHand`.
@@ -1146,6 +1153,7 @@ public final class KeyboardController: ObservableObject {
         // a character from the last app into this one. See
         // `discardPendingCharacter`.
         discardPendingCharacter()
+        typingTouchTrace.clear()
         // The undo belongs to the old field, but its captured learning does not.
         // Retire the undo before reading the new document and accept the complete
         // observation captured when the replacement landed.

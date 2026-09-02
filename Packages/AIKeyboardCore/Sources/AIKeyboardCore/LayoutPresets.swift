@@ -128,7 +128,8 @@ public struct LayoutPreset: Identifiable, Sendable {
                     // is `.fill` — exactly the trade `KeyboardCustomization.default`
                     // already records making.
                     SlotSpec(action: .punctuation, width: .units(1.0)),
-                    SlotSpec(action: .ret, width: .units(KeyboardLayout.functionKeyUnits))
+                    SlotSpec(
+                        action: .ret, width: .units(KeyboardLayout.trailingFunctionKeyUnits))
                 ]
                 return layout
             }())

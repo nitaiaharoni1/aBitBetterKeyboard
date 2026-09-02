@@ -219,10 +219,29 @@ public enum SuggestionEngine {
         personal personalOrNil: PersonalLanguageModel? = nil,
         autocorrect: AutocorrectLevel = .full
     ) -> [Suggestion] {
+        suggestions(
+            prefix: prefix, context: context, languages: languages,
+            supplementary: supplementary, personal: personalOrNil,
+            autocorrect: autocorrect, touches: nil)
+    }
+
+    /// The keyboard-only route adds geometry for this exact occurrence of the
+    /// prefix. It can re-rank offers, but cannot replace the literal candidate
+    /// or bypass the autocorrect confidence gate.
+    @MainActor
+    static func suggestions(
+        prefix: String,
+        context: String,
+        languages: [KeyboardLanguage],
+        supplementary: [String],
+        personal personalOrNil: PersonalLanguageModel?,
+        autocorrect: AutocorrectLevel,
+        touches: TypingTouchTrace?
+    ) -> [Suggestion] {
         evaluate(
             prefix: prefix, context: context, languages: languages,
             supplementary: supplementary, personal: personalOrNil,
-            autocorrect: autocorrect
+            autocorrect: autocorrect, touches: touches
         ).ranked
     }
 
@@ -247,6 +266,22 @@ public enum SuggestionEngine {
         personal personalOrNil: PersonalLanguageModel? = nil,
         autocorrect: AutocorrectLevel = .full
     ) -> SuggestionEvaluation {
+        evaluate(
+            prefix: prefix, context: context, languages: languages,
+            supplementary: supplementary, personal: personalOrNil,
+            autocorrect: autocorrect, touches: nil)
+    }
+
+    @MainActor
+    static func evaluate(
+        prefix: String,
+        context: String,
+        languages: [KeyboardLanguage],
+        supplementary: [String],
+        personal personalOrNil: PersonalLanguageModel?,
+        autocorrect: AutocorrectLevel,
+        touches: TypingTouchTrace?
+    ) -> SuggestionEvaluation {
         let personal = personalOrNil ?? .shared
         let trimmedPrefix = prefix.trimmingCharacters(in: .whitespacesAndNewlines)
         let contextLanguage =
@@ -267,7 +302,7 @@ public enum SuggestionEngine {
 
         let typedLanguage = dominantLanguage(in: trimmedPrefix, among: languages) ?? contextLanguage
         let preceding = previousWords(in: context)
-        let generatedCandidates = generatedCompletions(
+        var generatedCandidates = generatedCompletions(
             for: trimmedPrefix,
             previousWords: preceding,
             context: context,
@@ -283,6 +318,12 @@ public enum SuggestionEngine {
             // Hebrew rather than to "any non-Latin context", because the list was
             // measured against Hebrew and nothing else. See `codeSwitchVocabulary`.
             codeSwitching: contextLanguage.script == .hebrew && typedLanguage.script == .latin)
+        if let touches {
+            for index in generatedCandidates.indices {
+                generatedCandidates[index].touchSupport = touches.support(
+                    for: generatedCandidates[index].text)
+            }
+        }
         // The bar draws the words; the commit decision reads the provenance the
         // same list still carries. Flattening before that question is asked is
         // what let a two-clitic reading take the space bar — see

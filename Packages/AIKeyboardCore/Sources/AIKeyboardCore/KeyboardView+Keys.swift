@@ -335,7 +335,8 @@ extension KeyboardView {
                     // whole keyboard comes up short by it. `heightBias` is the
                     // other height that must net to zero: the numbers row gives
                     // three points to the space row, and those two cancel.
-                    height: row.drawnHeight(keyHeight: height, rowSpacing: rowSpacing))
+                    height: row.drawnHeight(keyHeight: height, rowSpacing: rowSpacing),
+                    rowSpacing: rowSpacing)
             }
         }
     }
@@ -355,7 +356,8 @@ extension KeyboardView {
     /// bottom row, the action row — fall through this unchanged: the middle block
     /// is the whole row and `maxWidth: .infinity` centres it exactly as before.
     func rowView(
-        _ row: KeyRow, availableWidth: CGFloat, unit: CGFloat, height: CGFloat
+        _ row: KeyRow, availableWidth: CGFloat, unit: CGFloat, height: CGFloat,
+        rowSpacing: CGFloat
     ) -> some View {
         let widths = KeyboardLayout.widths(
             for: row,
@@ -363,24 +365,70 @@ extension KeyboardView {
             unitWidth: unit,
             spacing: Theme.Metrics.keySpacing
         )
-        let leading = row.keys.first?.width == .pinned ? 1 : 0
-        let trailing = row.keys.count > leading && row.keys.last?.width == .pinned ? 1 : 0
+        let leading = row.keys.first?.width.isPinned == true ? 1 : 0
+        let trailing =
+            row.keys.count > leading && row.keys.last?.width.isPinned == true ? 1 : 0
         let middle = leading..<(row.keys.count - trailing)
+        let hebrewTopRowOffset: CGFloat =
+            controller.language == .hebrew && row.id == 0 && row.keys.last?.cap == .backspace
+            ? 4 : 0
+        let spacing = Theme.Metrics.keySpacing
+        let pinnedWidth =
+            (leading == 1 ? widths.first ?? 0 : 0)
+            + (trailing == 1 ? widths.last ?? 0 : 0)
+        // The middle HStack is a flexible outer child. Its letters may be
+        // narrower than that offered frame, leaving a centred margin that is
+        // visually empty but should still belong to the nearest key.
+        let middleFrameWidth = max(
+            0, availableWidth - pinnedWidth - spacing * CGFloat(leading + trailing))
+        let middleContentWidth =
+            middle.reduce(CGFloat(0)) { $0 + widths[$1] }
+            + spacing * CGFloat(max(0, middle.count - 1))
+        let middleSlack = max(0, middleFrameWidth - middleContentWidth)
+        let leftGap = max(
+            0, middleSlack / 2 + hebrewTopRowOffset + (leading == 1 ? spacing : 0))
+        let rightGap = max(
+            0, middleSlack / 2 - hebrewTopRowOffset + (trailing == 1 ? spacing : 0))
 
-        return HStack(spacing: Theme.Metrics.keySpacing) {
-            if leading == 1 { key(at: 0, in: row, widths: widths, unit: unit, height: height) }
-            HStack(spacing: Theme.Metrics.keySpacing) {
+        func hitInsets(for index: Int) -> KeyHitInsets {
+            let halfSpacing = spacing / 2
+            var left = halfSpacing
+            var right = halfSpacing
+            if index == middle.first {
+                left = leading == 1 ? leftGap / 2 : leftGap
+            }
+            if index == middle.last {
+                right = trailing == 1 ? rightGap / 2 : rightGap
+            }
+            if leading == 1, index == 0 { right = leftGap / 2 }
+            if trailing == 1, index == row.keys.count - 1 { left = rightGap / 2 }
+            return KeyHitInsets(
+                left: left, right: right, top: rowSpacing / 2, bottom: rowSpacing / 2)
+        }
+
+        return HStack(spacing: spacing) {
+            if leading == 1 {
+                key(
+                    at: 0, in: row, widths: widths, unit: unit, height: height,
+                    hitInsets: hitInsets(for: 0))
+            }
+            HStack(spacing: spacing) {
                 ForEach(middle, id: \.self) { index in
-                    key(at: index, in: row, widths: widths, unit: unit, height: height)
+                    key(
+                        at: index, in: row, widths: widths, unit: unit, height: height,
+                        hitInsets: hitInsets(for: index))
                 }
             }
             .frame(maxWidth: .infinity)
+            .offset(x: hebrewTopRowOffset)
             // Above a trailing pin. `m` sits next to delete; without this
             // the balloon is delete's background. A pin has no callout, so
             // it does not need the same raise.
             .zIndex(1)
             if trailing == 1 {
-                key(at: row.keys.count - 1, in: row, widths: widths, unit: unit, height: height)
+                key(
+                    at: row.keys.count - 1, in: row, widths: widths, unit: unit, height: height,
+                    hitInsets: hitInsets(for: row.keys.count - 1))
             }
         }
         .frame(maxWidth: .infinity)
@@ -388,7 +436,8 @@ extension KeyboardView {
 
     @ViewBuilder
     func key(
-        at index: Int, in row: KeyRow, widths: [CGFloat], unit: CGFloat, height: CGFloat
+        at index: Int, in row: KeyRow, widths: [CGFloat], unit: CGFloat, height: CGFloat,
+        hitInsets: KeyHitInsets
     ) -> some View {
         if row.keys.indices.contains(index) {
             let key = row.keys[index]
@@ -399,6 +448,7 @@ extension KeyboardView {
                 spec: key,
                 width: keyWidth,
                 height: height,
+                hitInsets: hitInsets,
                 language: controller.language,
                 shift: controller.shift,
                 // Only the space bar carries the language name, and only it
@@ -469,6 +519,8 @@ extension KeyboardView {
                 onAlternate: alternateHandler(for: key),
                 onSpaceTouch: key.cap == .space ? { controller.spaceBarTouch($0) } : nil,
                 onCharacterTouch: characterTouchHandler(for: key),
+                onCharacterTouchEvidence: characterTouchEvidenceHandler(for: key),
+                onCharacterTouchEnd: characterTouchEndHandler(for: key),
                 onPopupLayerChange: popupLayerHandler(for: key)
             )
             // The key redraws when something it draws from moved, and not
@@ -521,6 +573,16 @@ extension KeyboardView {
     func characterTouchHandler(for key: KeySpec) -> ((CharacterTouchPhase) -> Void)? {
         guard case .character = key.cap else { return nil }
         return { controller.characterTouch($0) }
+    }
+
+    func characterTouchEvidenceHandler(for key: KeySpec) -> ((KeyCap, KeyTouchEvidence) -> Void)? {
+        guard case .character = key.cap else { return nil }
+        return { controller.characterTouchEvidence($1, for: $0) }
+    }
+
+    func characterTouchEndHandler(for key: KeySpec) -> ((KeyCap, UUID?) -> Void)? {
+        guard case .character = key.cap else { return nil }
+        return { controller.endCharacterTouch(for: $0, sequenceID: $1) }
     }
 
     /// Fix, Rewrite and CopyClip tell the action row to climb over the letters
