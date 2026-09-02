@@ -3,7 +3,7 @@
 Read `.claude/rules/suggestion-bar.md` and `Bar/typing/README.md` before any
 edit. Keyboard UI lives in `Packages/AIKeyboardCore/`, not the extension.
 
-**Status 2026-08-25: tasks 1, 2 and 4 below are done; only task 3 remains.**
+**Status 2026-09-02: tasks 1, 2 and 4 below are done; task 3 remains, and tasks 5 to 7 were added by the 2026-09-02 engine review (`674598f7`). They live here rather than in Linear because the workspace is at its free-plan issue cap.**
 The opening warning this file used to carry — two local-tier changes on `main`
 never run on a simulator — was retired on 2026-08-24 by NIT-11's proof:
 ContextAwareSuggestionTests 75/75 green including the five tests named under
@@ -139,3 +139,49 @@ keyboard-extension API. Run the harness twice. Headline must not drop.
 | Traps | `.claude/rules/suggestion-bar.md` |
 
 New findings go in that rule file, not in `AGENTS.md`.
+
+## Task 5 — Contractions with an ordinary reading (only if asked)
+
+`SuggestionEngine.contractions` commits `its` → `it's`, `ill` → `I'll` and
+`lets` → `let's` at confidence 98 on every space. Three `must-not-correct` rows
+measure the cost (`en-nc-05` to `en-nc-07` in `Bar/typing/typos/typos.json`,
+all WRONG by design); `apos-05` and `apos-06` in the frozen 90 measure the other
+side. **Decision on 2026-09-02: leave the table.** Removing `its` and `ill`
+trades the two controls for those two entries one for one, and neither word
+list carries an apostrophe form, so there is no frequency to break the tie.
+
+The fix that would settle it is the previous word, not a price: `wagged`,
+`feel` and `he` each decide the reading on their own. Shape: a small
+previous-word table applied only to the ambiguous rows, one corpus row per
+signal. `lets` alone could leave the table for free (no corpus row wants
+`let's`), but one row is not a reason to move. Do not lower the price for the
+whole table; the other seven apostrophe rows are 7/7.
+
+## Task 6 — Touch geometry into the typo channel (only if asked)
+
+`TypingTouchTrace` is spent only on ranking (`score` adds up to 250 for
+`touchSupport`, neighbours only). `TypoChannel.substitutionCost` charges a flat
+55 for any adjacent key, and cost plus count are what price
+`CommitReason.frequency`. Pricing a substitution toward the key the finger
+leaned into below 55 would move commits on the motor-slip class without the
+global adjacent-cost cut NIT-154 records as a trap.
+
+Before code: the typos corpus has no touch traces, so each pair needs a
+synthesised trace plus a centred-evidence control set; `TypoChannel.cost` is a
+pure function of two character arrays and the harness copies `KeyProximity.swift`;
+`frequencyConfidence` is keyed on exact cost values and would need re-probing
+with `Bar/typing/typos/reasons.sh`. Two runs per side on all three corpora,
+headline not below 73/76 and 88 / 16 / 3.
+
+## Task 7 — The letter after an autocorrect undo arrives shifted (bug)
+
+`PendingAutocorrectClaimTests.testImmediateAutocorrectUndoDiscardsTheStagedLearning`
+fails on pristine HEAD with `("heloW") is not equal to ("helow")`: type `helo`,
+space, backspace (undo restores `helo`), type `w`, and it lands as `W`. Something
+on the undo path arms shift; `undoAutocorrectIfPending` goes through
+`replaceCurrentWord`, so `armShiftAtBoundary` or the field's autocapitalization
+adoption is the place to look. User-visible mid-word capital. Not chased.
+`MissingSpacesTests.testAPrematureFinalFormMovesAcrossExactlyOneSpace` is the
+other newly noticed pre-existing failure; decide whether it is a defect or a
+stale fixture. Both are listed in `.claude/docs/test-suite-state.md`.
+
