@@ -50,6 +50,10 @@ Bar/typing/engine_outputs.json
 .superpowers/
 .impeccable/
 .audit/
+AppStore/screenshots-preview-v*.png
+AppStore/screenshots-source/background-editorial-v*.png
+AppStore/screenshots-source/background-reference-v*.png
+AppStore/style-concepts/
 
 # Byte-compiled Python from the Bar harnesses. Bar/drift sets
 # PYTHONDONTWRITEBYTECODE=1 so its own runs leave none behind, but the
