@@ -234,20 +234,21 @@ final class KeyViewDeferredCharacterTests: XCTestCase {
         XCTAssertEqual(target.text, "sched t")
     }
 
-    /// **The one order the two open touches can be in, and the only way to reach
-    /// it is three fingers.** A letter landing on an open space bar pays that
-    /// space on the way in, so a letter that is still parked while a space is
-    /// owed was parked *before* the space bar was touched — a thumb resting on
-    /// `a`, the other thumb on space, and a third key pressed under both. Paying
-    /// the space first there spells `a b` as ` ab`, and it is easy to reach by
-    /// accident: `commitCharacterTouch` goes back through `press`, which pays open
-    /// touches of its own, so the nested call will settle the space out of order
-    /// unless the debt is claimed before the character is committed.
+    /// **A held letter is typed the moment the space bar lands on top of it.**
+    /// Three fingers: a thumb resting on `a`, the other thumb on space, and a
+    /// third key pressed under both. Paying the space before the letter spells
+    /// `a b` as ` ab`, and it is easy to reach by accident: `commitCharacterTouch`
+    /// goes back through `press`, which pays open touches of its own, so a nested
+    /// call settles the space out of order unless the letter was already committed
+    /// when the space bar arrived.
     func testASpaceOpenedAfterAHeldLetterStillLandsAfterThatLetter() {
         let (controller, target) = controller()
 
         controller.characterTouch(.began(.character("a"), CGPoint(x: 0.5, y: 0.5)))
         controller.spaceBarTouch(.began)
+        XCTAssertEqual(
+            target.text, "a",
+            "the space bar landed on a held letter and did not type it on the way in")
         controller.characterTouch(.began(.character("b"), CGPoint(x: 0.5, y: 0.5)))
 
         XCTAssertEqual(
@@ -256,6 +257,37 @@ final class KeyViewDeferredCharacterTests: XCTestCase {
 
         controller.characterTouch(.ended)
         XCTAssertEqual(target.text, "a b")
+    }
+
+    /// **Two fingers, the order every fast typist makes, and the one that shipped
+    /// `hell oworld`.** `o` down, space down, `o` up, space up. A letter commits
+    /// on its lift, and that lift used to go through `press`, which pays an open
+    /// space *first* — so the space landed in front of the letter, the letter
+    /// glued itself to the next word, and the space bar's autocorrect ran on the
+    /// word with its last letter missing. The seed is `hell` so the broken build
+    /// produces exactly the text that was reported (`hell o`) rather than a bare
+    /// ` o`. The space is still paid on its own lift, as a plain tap always was,
+    /// so the space bar's lift is asserted too.
+    func testALetterHeldWhenTheThumbLandsOnSpaceStillComesBeforeTheSpace() {
+        let (controller, target) = controller("hell")
+
+        controller.characterTouch(.began(.character("o"), CGPoint(x: 0.5, y: 0.5)))
+        controller.spaceBarTouch(.began)
+        XCTAssertEqual(
+            target.text, "hello",
+            "the space bar's finger-down did not settle the letter still held under it")
+        XCTAssertEqual(controller.spaceTouch.state, .owesSpace)
+
+        controller.characterTouch(.ended)
+        XCTAssertEqual(target.text, "hello", "the letter's lift paid the space before the letter")
+
+        controller.spaceBarTouch(.ended(0))
+        XCTAssertEqual(target.text, "hello ", "the space bar's lift stopped typing its space")
+        XCTAssertNil(controller.pendingCharacter)
+
+        controller.characterTouch(.began(.character("w"), CGPoint(x: 0.5, y: 0.5)))
+        controller.characterTouch(.ended)
+        XCTAssertEqual(target.text, "hello w")
     }
 
     // MARK: The popup

@@ -128,6 +128,17 @@ extension KeyboardController {
     public func spaceBarTouch(_ phase: SpaceTouchPhase) {
         switch phase {
         case .began:
+            // **A letter still held when the thumb lands on space is typed now,
+            // before the space is owed.** A character key commits on its lift
+            // (NIT-108), and a fast typist has the thumb on space before the
+            // letter finger is up: `o` down, space down, `o` up, space up.
+            // Without this line the letter's lift went through `press`, which
+            // pays the open space *first*, so `hello world` came out as
+            // `hell oworld` — with autocorrect running on `hell`. The arrival
+            // of a touch settles the one before it, the same rule
+            // `beginCharacterTouch` applies when a letter lands on an open
+            // space bar; this is the mirror half of it.
+            commitCharacterTouch()
             // Every touch starts from a known state, which is what lets a
             // cancellation clear only what is on screen. See `SpaceTouchPhase`.
             spaceTouch.began()

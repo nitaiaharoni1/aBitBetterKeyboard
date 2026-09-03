@@ -334,15 +334,15 @@ extension KeyboardController {
     /// What touches still on the glass owe the document, paid before the key that
     /// is about to act.
     ///
-    /// **Order is the whole job, and the character goes first.** The two can only
-    /// ever be open together in one order: a character key landing on top of an
-    /// open space bar pays that space on the way in, so a character that is still
-    /// parked while a space is owed can only have been parked *before* that space
-    /// bar was touched. Three fingers on the glass is what reaches it — a thumb
-    /// resting on a letter, the other on space, and a third key pressed under both
-    /// — and paying the space first there would spell `a b` as ` ab`. In the
-    /// ordinary two-finger case the character commit is a no-op and this order
-    /// costs nothing.
+    /// **Order is the whole job, and the character goes first.** The two should
+    /// never be open together at all now: a character key landing on top of an
+    /// open space bar pays that space on the way in, and the space bar landing
+    /// on top of a parked character commits that character on the way in
+    /// (`spaceBarTouch(.began)`). Before the second half existed, `o` down,
+    /// space down, `o` up spelled `hello world` as `hell oworld`, because the
+    /// letter's lift came through here and paid the space first. The character
+    /// still goes first as a belt-and-braces order, so if a phase ever arrives
+    /// out of sequence, `a b` cannot come out as ` ab`.
     /// **The debt is claimed before either is paid, and that is what makes the
     /// order hold.** `commitCharacterTouch` goes back through `press`, which pays
     /// open touches of its own — so settling the space first inside that nested
