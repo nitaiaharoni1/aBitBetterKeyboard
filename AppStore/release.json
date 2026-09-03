@@ -5,7 +5,7 @@
     "bundleId": "com.nitai.aikeyboard",
     "platform": "ios",
     "version": "1.0",
-    "build": "63"
+    "build": "64"
   },
   "release": {
     "price": "free",
