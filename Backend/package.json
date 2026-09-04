@@ -14,7 +14,7 @@
   "dependencies": {
     "@peculiar/x509": "^2.0.0",
     "cbor-x": "^1.6.5",
-    "jose": "^6.2.8",
+    "jose": "^6.2.10",
     "reflect-metadata": "^0.2.2"
   }
 }
