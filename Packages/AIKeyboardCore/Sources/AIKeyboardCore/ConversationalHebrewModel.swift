@@ -187,11 +187,13 @@ final class ConversationalHebrewModel: @unchecked Sendable {
             case .loaded(let model):
                 return model
             case .unloaded:
+                guard !Task.isCancelled else { return nil }
                 guard let url = bundledResourceURL() else {
                     state = .loaded(nil)
                     return nil
                 }
                 let model = ConversationalHebrewModel(url: url)
+                guard !Task.isCancelled else { return nil }
                 if model == nil {
                     #if !HARNESS
                     logger.error("ConversationalHebrew.akn1 is missing or invalid")

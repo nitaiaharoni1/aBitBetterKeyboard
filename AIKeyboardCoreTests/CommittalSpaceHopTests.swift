@@ -16,6 +16,62 @@ import XCTest
 @MainActor
 final class CommittalSpaceHopTests: XCTestCase {
 
+    func testDoubleSpaceOnlyReplacesTheSpaceAtTheSameCaret() {
+        let target = CursorTextTarget(before: "hello")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.insertSpace()
+        controller.insertSpace()
+        XCTAssertEqual(target.document, "hello. ")
+    }
+
+    func testDoubleSpaceDoesNotPunctuateAnotherDocument() {
+        let target = CursorTextTarget(before: "hello")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.insertSpace()
+        target.documentIdentifier = UUID()
+        controller.insertSpace()
+        XCTAssertEqual(target.document, "hello  ")
+    }
+
+    func testDoubleSpaceDoesNotPunctuateAfterMovingTheCaretAwayAndBack() {
+        let target = CursorTextTarget(before: "hello")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.insertSpace()
+        target.adjustTextPosition(byCharacterOffset: -1)
+        controller.refreshSuggestions(schedulingRefinement: false)
+        target.adjustTextPosition(byCharacterOffset: 1)
+        controller.insertSpace()
+        XCTAssertEqual(target.document, "hello  ")
+    }
+
+    func testDoubleSpaceDoesNotInsertAPeriodWhenDeletionIsRefused() {
+        let target = CursorTextTarget(before: "hello")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.insertSpace()
+        target.backwardDeleteLimit = 0
+        controller.insertSpace()
+        XCTAssertEqual(target.document, "hello  ")
+    }
+
+    func testDoubleSpaceReplacesASelectionWithAnOrdinarySpace() {
+        let target = CursorTextTarget(before: "hello")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.insertSpace()
+        let selected = CursorTextTarget(
+            before: "hello ", selecting: "world", documentIdentifier: target.documentIdentifier)
+        controller.target = selected
+        controller.insertSpace()
+        XCTAssertEqual(selected.document, "hello  ")
+    }
+
+    func testDoubleSpaceWorksWhenTheContextWindowBackfills() {
+        let target = CursorTextTarget(before: "earlier hello", window: 9)
+        let controller = KeyboardController(target: target, language: .english)
+        controller.insertSpace()
+        controller.insertSpace()
+        XCTAssertEqual(target.document, "earlier hello. ")
+    }
+
     /// Taps `candidate` on `target` and returns the resulting document.
     private func apply(candidate: String, on target: TextTarget) -> String {
         let controller = KeyboardController(target: target, language: .english)
@@ -78,6 +134,50 @@ final class CommittalSpaceHopTests: XCTestCase {
     func testAcceptingACandidateOverAMultiWordSelectionKeepsTheUnconditionalSpace() {
         let target = CursorTextTarget(before: "say ", selecting: "hello world.", after: " now")
         XCTAssertEqual(apply(candidate: "the", on: target), "say the  now")
+    }
+
+    func testAcceptingInsideAWordReplacesBothHalvesAndKeepsPunctuation() {
+        for (before, after, candidate, expected) in [
+            ("The te", "h quick", "the", "The the quick"),
+            ("Say (he", "lo), now", "hello", "Say (hello), now"),
+            ("hi שָׁ", "לומ next", "שלום", "hi שלום next"),
+            ("hi he", "llo", "hello", "hi hello "),
+            ("hi he", "llo\nnext", "hello", "hi hello \nnext")
+        ] {
+            let mock = CursorTextTarget(before: before, after: after)
+            let live = LiveTextViewTarget(before: before, after: after)
+            XCTAssertEqual(apply(candidate: candidate, on: mock), expected)
+            XCTAssertEqual(apply(candidate: candidate, on: live), expected)
+        }
+    }
+
+    func testAcceptingAtAWordStartInsertsWithoutEatingTheFollowingWord() {
+        let target = CursorTextTarget(before: "say ", after: "world")
+        XCTAssertEqual(apply(candidate: "hello", on: target), "say hello world")
+    }
+
+    func testARefusedMoveOrPartialDeletionLeavesTheWordAndCaretIntact() {
+        for limit in [0, 1, 2, 3] {
+            let target = CursorTextTarget(before: "The te", after: "h quick")
+            target.backwardDeleteLimit = limit
+            XCTAssertEqual(
+                apply(candidate: "the", on: target), limit == 3 ? "The the quick" : "The teh quick")
+            XCTAssertEqual(target.documentContextBeforeInput, limit == 3 ? "The the " : "The te")
+        }
+        let target = CursorTextTarget(before: "The te", after: "h quick")
+        target.refusesForwardMovement = true
+        XCTAssertEqual(apply(candidate: "the", on: target), "The teh quick")
+        XCTAssertEqual(target.documentContextBeforeInput, "The te")
+    }
+
+    func testATapDoesNotInsertOverAPartiallyDeletedPrefixOrRefusedSelection() {
+        let prefix = CursorTextTarget(before: "say helo")
+        prefix.backwardDeleteLimit = 2
+        XCTAssertEqual(apply(candidate: "hello", on: prefix), "say helo")
+        let selection = CursorTextTarget(before: "say ", selecting: "helo", after: " now")
+        selection.backwardDeleteLimit = 0
+        XCTAssertEqual(apply(candidate: "hello", on: selection), "say helo now")
+        XCTAssertEqual(selection.selectedText, "helo")
     }
 
     // MARK: The grouped idle-completion site

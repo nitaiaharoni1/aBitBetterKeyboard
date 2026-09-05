@@ -559,6 +559,34 @@ public enum SuggestionEngine {
             ? candidate : matchCase(of: source, applyingTo: candidate, in: language)
     }
 
+    static func refinedSuggestions(
+        local: [Suggestion], words: [String], prefix: String, language: KeyboardLanguage
+    ) -> [Suggestion] {
+        let literal = prefix.isEmpty ? [] : Array(local.prefix(1))
+        guard prefix.isEmpty || !literal.isEmpty else { return local }
+        let pool =
+            words.map { Suggestion(text: $0, language: language) }
+            + local.dropFirst(literal.count)
+        // Only a nonempty prefix has literal keystrokes to preserve.
+        var merged = literal
+        var seen = Set(literal.map { SeedLanguageModel.fold($0.text) })
+        // Match the local tier: three next words, or a literal plus three offers.
+        for candidate in pool {
+            guard merged.count < barSlots + literal.count else { break }
+            let folded = SeedLanguageModel.fold(candidate.text)
+            guard !seen.contains(folded) else { continue }
+            seen.insert(folded)
+            merged.append(candidate)
+        }
+        let modelFolds = Set(words.map(SeedLanguageModel.fold))
+        let defaultIndex =
+            merged.firstIndex {
+                modelFolds.contains(SeedLanguageModel.fold($0.text))
+                    && (prefix.isEmpty || isAutomaticallyInsertable($0.text))
+            } ?? 0
+        return markDefault(merged, at: defaultIndex)
+    }
+
     static func markDefault(_ items: [Suggestion], at defaultIndex: Int) -> [Suggestion] {
         guard !items.isEmpty else { return items }
         let index = max(0, min(defaultIndex, items.count - 1))

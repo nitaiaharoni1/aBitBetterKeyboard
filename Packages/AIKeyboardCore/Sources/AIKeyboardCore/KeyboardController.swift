@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import Combine
+import os
 
 /// A keyboard interaction that an in-app host can use to guide a demo.
 ///
@@ -86,6 +87,7 @@ public final class KeyboardController: ObservableObject {
     /// has already gone pale.
     @Published public var arrivingAction: AIAction?
 
+    var aiRequestPosition: SuggestionPosition?
     @Published public var aiSourceText = ""
     @Published public var aiResultText = ""
     @Published public var variants: [RewriteVariant] = []
@@ -447,6 +449,7 @@ public final class KeyboardController: ObservableObject {
 
     var dictationObservers = Set<AnyCancellable>()
     var lastSpaceTapAt: Date?
+    var lastSpacePosition: SuggestionPosition?
     var spaceTouch = SpaceSwipe.Touch()
 
     /// The character key that is down and has not typed anything yet.
@@ -612,6 +615,7 @@ public final class KeyboardController: ObservableObject {
     /// `PredictiveRefiner` for what the second tier is and is not allowed to
     /// change.
     var refiner: PredictiveRefiner?
+    var pendingRefinementPosition: SuggestionPosition?
 
     /// Completes the bold word and/or inserts a space after a pause. Armed
     /// only from a key the user typed, so a caret tap or the keyboard coming
@@ -636,6 +640,7 @@ public final class KeyboardController: ObservableObject {
     /// The instant of the last typed character. `nil` until something is keyed
     /// in this field, and cleared when the word is no longer in progress.
     var idleTypedAt: ContinuousClock.Instant?
+    var idleTypingPosition: SuggestionPosition?
 
     /// What this user's typing has taught the keyboard.
     ///
@@ -667,6 +672,13 @@ public final class KeyboardController: ObservableObject {
     /// The real extension keeps suggestion work suspended until its rebuildable
     /// caches are warm. Cache-warm completion is the sole activation boundary.
     /// App previews and tests keep their existing eager behaviour.
+    private static var warmedSuggestionLanguages = Set<KeyboardLanguage>()
+    private nonisolated static let suggestionStartupReserveMB = 16.0
+    private nonisolated static let suggestionWarmReserveMB = 12.0
+    nonisolated static let suggestionWorkReserveMB = 8.0
+    private static var suggestionMemoryRecoveryAfter: ContinuousClock.Instant?
+    private static let suggestionMemoryLogger = Logger(
+        subsystem: "com.nitai.aikeyboard", category: "suggestion-memory")
     var suggestionWorkIsActive: Bool
 
     public init(
@@ -810,13 +822,20 @@ public final class KeyboardController: ObservableObject {
     /// caches are warm. Cache-warm completion is the extension caller. Safe to
     /// call again.
     @discardableResult
-    public func activateSuggestionWorkAfterPresentation() -> Bool {
+    public func activateSuggestionWorkAfterPresentation(
+        warmedLanguages: [KeyboardLanguage] = []
+    ) -> Bool {
         guard !suggestionWorkIsActive else { return false }
+        if isSystemKeyboard, !Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionWorkReserveMB) {
+            stopSuggestionWorkForMemoryPressure()
+            return false
+        }
+        Self.warmedSuggestionLanguages.formUnion(warmedLanguages)
         retirePendingAutocorrectUndo(.acceptLearning)
         suggestionWorkIsActive = true
         if refiner == nil {
             refiner = PredictiveRefiner.standard { [weak self] words, askedAbout in
-                self?.applyRefinement(words, for: askedAbout)
+                self?.applyPendingRefinement(words, for: askedAbout)
             }
         }
         refreshSuggestions(schedulingRefinement: false)
@@ -832,6 +851,41 @@ public final class KeyboardController: ObservableObject {
         lastSuggestionQuery = nil
         lastSuggestionResults = []
         if !suggestions.isEmpty { suggestions = [] }
+    }
+
+    public func resumeSuggestionWorkWithWarmCaches() -> Bool {
+        guard Self.suggestionMemoryRecoveryAfter.map({ .now >= $0 }) ?? true,
+            Set(enabledLanguages + [language]).isSubset(of: Self.warmedSuggestionLanguages),
+            Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionWorkReserveMB)
+        else { return false }
+        return suggestionWorkIsActive || activateSuggestionWorkAfterPresentation()
+    }
+
+    public func prepareMemoryIntensiveWork() -> Bool {
+        if let recoveryAfter = Self.suggestionMemoryRecoveryAfter, .now < recoveryAfter {
+            return false
+        }
+        guard Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionStartupReserveMB) else {
+            stopSuggestionWorkForMemoryPressure()
+            return false
+        }
+        Self.suggestionMemoryRecoveryAfter = nil
+        return true
+    }
+
+    public func stopSuggestionWorkForMemoryPressure() {
+        guard isSystemKeyboard else { return }
+        Self.suggestionMemoryRecoveryAfter = .now.advanced(by: .seconds(30))
+        Self.suggestionMemoryLogger.notice("Suggestion work paused to preserve keyboard memory")
+        suspendSuggestionWork()
+        cancelAIWork()
+        refiner = nil
+        Self.dropRebuildableCaches()
+    }
+
+    nonisolated static func hasSuggestionMemoryHeadroom(reservingMB reserve: Double) -> Bool {
+        guard let headroom = MemoryReading.current()?.headroomMB else { return true }
+        return headroom >= reserve
     }
 
     // MARK: Layout
@@ -1165,6 +1219,10 @@ public final class KeyboardController: ObservableObject {
     /// contains right-to-left text keeps that content direction even when the keys
     /// are English. The real extension's UIKit identity is separate.
     public func prepareForNewDocument() {
+        lastSpaceTapAt = nil
+        lastSpacePosition = nil
+        cancelAIWork()
+        cancelRefinement()
         // **Before anything reads the field.** A character key parks its letter
         // until the finger lifts, and a keyboard torn down mid-press gets no
         // reliable disappear callback — so a letter can survive on an instance
@@ -1264,6 +1322,7 @@ public final class KeyboardController: ObservableObject {
     /// `EmojiCatalog` is deliberately absent: it is a `static let`, so there is
     /// nothing to release, and it is a fraction of the size of one word list.
     public static func dropRebuildableCaches() {
+        warmedSuggestionLanguages.removeAll()
         GroupedLexiconResource.purge()
         TypoLexicon.purge()
         MissingSpaces.purge()
@@ -1303,34 +1362,50 @@ public final class KeyboardController: ObservableObject {
     @discardableResult
     public static func warmRebuildableCaches(
         for languages: [KeyboardLanguage],
-        completion: @escaping @MainActor @Sendable () -> Void
+        completion: @escaping @MainActor @Sendable (Bool) -> Void
     ) -> Task<Void, Never> {
         Task.detached(priority: .userInitiated) {
             guard !Task.isCancelled else { return }
             if languages.contains(where: { $0.script == .hebrew }) {
-                guard !Task.isCancelled else { return }
+                guard Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionWarmReserveMB) else {
+                    await completion(false)
+                    return
+                }
                 ConversationalHebrewModel.warm()
             }
             for language in languages {
                 guard !Task.isCancelled else { return }
-                // Any lookup builds the block; the word itself is never read.
+                guard Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionWarmReserveMB) else {
+                    await completion(false)
+                    return
+                }
+                autoreleasepool {
+                    _ = TypoLexicon.isWord("a", in: language)
+                }
                 guard !Task.isCancelled else { return }
-                _ = TypoLexicon.isWord("a", in: language)
-                guard !Task.isCancelled else { return }
-                _ = SeedLanguageModel.knows("a", in: language)
+                guard Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionWarmReserveMB) else {
+                    await completion(false)
+                    return
+                }
+                autoreleasepool {
+                    _ = SeedLanguageModel.knows("a", in: language)
+                }
                 guard let locale = language.spellCheckerLocale else { continue }
                 guard !Task.isCancelled else { return }
-                // `nativeName` only has to be letters in this language's own
-                // script — the answer is thrown away, and asking the question is
-                // the whole of the work.
-                let probe = language.nativeName
-                _ = UITextChecker().completions(
-                    forPartialWordRange: NSRange(
-                        location: 0, length: (probe as NSString).length),
-                    in: probe, language: locale)
+                guard Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionWarmReserveMB) else {
+                    await completion(false)
+                    return
+                }
+                autoreleasepool {
+                    let probe = language.nativeName
+                    _ = UITextChecker().completions(
+                        forPartialWordRange: NSRange(
+                            location: 0, length: (probe as NSString).length),
+                        in: probe, language: locale)
+                }
             }
             guard !Task.isCancelled else { return }
-            await completion()
+            await completion(Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionWorkReserveMB))
         }
     }
 
@@ -1339,7 +1414,7 @@ public final class KeyboardController: ObservableObject {
     public static func warmRebuildableCaches(
         for languages: [KeyboardLanguage]
     ) -> Task<Void, Never> {
-        warmRebuildableCaches(for: languages, completion: {})
+        warmRebuildableCaches(for: languages, completion: { _ in })
     }
 }
 

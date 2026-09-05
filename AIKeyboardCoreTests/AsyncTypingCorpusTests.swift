@@ -49,7 +49,8 @@ final class AsyncTypingCorpusTests: XCTestCase {
                     permitted: true)
                 let applied = refine(request)
                 if let words = applied {
-                    slots = Self.mergeRefinement(local: local, words: words, language: language)
+                    slots = SuggestionEngine.refinedSuggestions(
+                        local: local, words: words, prefix: entry.prefix, language: language)
                     asyncRan = true
                 }
             }
@@ -72,31 +73,6 @@ final class AsyncTypingCorpusTests: XCTestCase {
         let metaURL = outURL.deletingPathExtension().appendingPathExtension("meta.json")
         try encoder.encode(MetaFile(engineAvailable: engineAvailable, entries: metaEntries))
             .write(to: metaURL)
-    }
-
-    /// Same merge as `KeyboardController.applyRefinement` with Autocorrect on:
-    /// hold slot 0, fill from the model then the rest, bold the first model
-    /// word that landed.
-    private static func mergeRefinement(
-        local: [Suggestion], words: [String], language: KeyboardLanguage
-    ) -> [Suggestion] {
-        guard let first = local.first else { return local }
-        let held = [0: first]
-        let pool = words.map { Suggestion(text: $0, language: language) } + local.dropFirst()
-        var merged: [Suggestion] = []
-        var seen = Set(held.values.map { SeedLanguageModel.fold($0.text) })
-        for slot in 0..<3 {
-            guard
-                let choice = held[slot]
-                    ?? pool.first(where: { !seen.contains(SeedLanguageModel.fold($0.text)) })
-            else { continue }
-            seen.insert(SeedLanguageModel.fold(choice.text))
-            merged.append(choice)
-        }
-        let modelFolds = Set(words.map(SeedLanguageModel.fold))
-        let defaultIndex =
-            merged.firstIndex { modelFolds.contains(SeedLanguageModel.fold($0.text)) } ?? 0
-        return SuggestionEngine.markDefault(merged, at: defaultIndex)
     }
 
     private func refine(_ request: PredictiveRefiner.Request) -> [String]? {

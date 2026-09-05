@@ -494,6 +494,9 @@ extension KeyboardController {
     func insertSpace() {
         Feedback.keyPress()
         retirePendingAutocorrectUndo(.acceptLearning)
+        if let query = lastSuggestionQuery, query.autocorrect != store.storedAutocorrectLevel {
+            refreshSuggestions(schedulingRefinement: false)
+        }
         // **The way back survives a space**, which is most of what NIT-154 asked
         // for: a wrong word is noticed in the sentence it landed in, and a space
         // is what finishes the word after it. `refreshSuggestions` at the end of
@@ -511,18 +514,22 @@ extension KeyboardController {
         let now = Date()
         if let last = lastSpaceTapAt,
             now.timeIntervalSince(last) < 0.6,
+            selection == nil,
+            lastSpacePosition == suggestionPosition,
             contextBefore.hasSuffix(" "),
             !contextBefore.hasSuffix("  ")
         {
-            target?.deleteBackward()
-            target?.insertText(". ")
+            let deleted = deleteBackwardReversibly(utf16Units: 1)
+            target?.insertText(deleted.unitsRemoved == 1 ? ". " : " ")
             lastSpaceTapAt = nil
+            lastSpacePosition = nil
             armShiftAtBoundary()
             _ = consumeGroupedSkipLearn()
             refreshSuggestions()
             return
         }
-        lastSpaceTapAt = now
+        lastSpaceTapAt = nil
+        lastSpacePosition = nil
 
         // A space commits the highlighted candidate, which is what makes a
         // suggestion bar worth having.
@@ -556,6 +563,8 @@ extension KeyboardController {
         if store.storedAutocorrectLevel != .off,
             !isCorrectingWordByHand,
             selection == nil,
+            let after = target?.documentContextAfterInput,
+            !Self.continuesWord(in: after),
             let candidate = suggestions.first(where: \.isDefault),
             candidate.commit == .contextual,
             !original.isEmpty,
@@ -570,15 +579,16 @@ extension KeyboardController {
                     in: replacement,
                     among: [language] + store.storedEnabledLanguages.filter { $0 != language })
                 ?? language
-            replaceCurrentWord(with: candidate.text)
-            swapped = (
-                original,
-                replacement,
-                LearnedCommit(
-                    word: SuggestionEngine.wordCore(replacement), previous: previous,
-                    language: wordLanguage,
-                    permitted: permitted)
-            )
+            if replaceCurrentWord(with: candidate.text) {
+                swapped = (
+                    original,
+                    replacement,
+                    LearnedCommit(
+                        word: SuggestionEngine.wordCore(replacement), previous: previous,
+                        language: wordLanguage,
+                        permitted: permitted)
+                )
+            }
         }
 
         // After any correction, so what gets remembered is the word that ended up
@@ -620,6 +630,8 @@ extension KeyboardController {
         // capitalises every word, not only the first letter of a sentence.
         if autocapitalizationMode == .words { armShiftAtBoundary() }
         refreshSuggestions()
+        lastSpaceTapAt = now
+        lastSpacePosition = suggestionPosition
     }
 
     public func deleteBackward() {
@@ -676,9 +688,18 @@ extension KeyboardController {
             selection == nil,
             contextBefore == pending.contextAfterSwap
         else { return false }
-        retirePendingAutocorrectUndo(.discardLearningForUndo)
         target?.deleteBackward()
-        replaceCurrentWord(with: pending.original)
+        guard
+            Self.unitsRemoved(
+                from: Array(pending.contextAfterSwap.utf16), to: Array(contextBefore.utf16),
+                expectedTrailingCharacterWidth: 1) == 1
+        else { return true }
+        guard replaceCurrentWord(with: pending.original) else {
+            target?.insertText(" ")
+            refreshSuggestions()
+            return true
+        }
+        retirePendingAutocorrectUndo(.discardLearningForUndo)
         undoneAutocorrectSpellings.insert(SeedLanguageModel.fold(pending.original))
         deletedWordPrefix = pending.original
         refreshSuggestions()

@@ -1746,6 +1746,121 @@ final class ContextAwareSuggestionTests: XCTestCase {
         }
     }
 
+    func testNextWordRefinementUsesAllThreeSlotsWithoutPinningALocalWord() {
+        withBarSettingsOn {
+            let target = MockTextTarget(text: "See you ")
+            let controller = KeyboardController(target: target, language: .english)
+            controller.suggestions = [
+                Suggestion(text: "later", language: .english),
+                Suggestion(text: "tomorrow", language: .english, isDefault: true),
+                Suggestion(text: "soon", language: .english)
+            ]
+            controller.applyRefinement(["Thursday", "Friday"], for: "")
+            XCTAssertEqual(controller.suggestions.map(\.text), ["Thursday", "Friday", "later"])
+            XCTAssertEqual(controller.suggestions.first(where: \.isDefault)?.text, "Thursday")
+            controller.suggestions = []
+            controller.applyRefinement(["Thursday"], for: "")
+            XCTAssertEqual(controller.suggestions.map(\.text), ["Thursday"])
+        }
+    }
+
+    func testRefinedPersonalTokensAndPhrasesStayTapOnly() {
+        withBarSettingsOn {
+            for word in ["hello@example.com", "hello there", "hello"] {
+                let target = MockTextTarget(text: "hel")
+                let controller = KeyboardController(target: target, language: .english)
+                controller.suggestions = [Suggestion(text: "hel", language: .english, isDefault: true)]
+                controller.applyRefinement([word], for: "hel")
+                XCTAssertTrue(controller.suggestions.contains { $0.text == word })
+                XCTAssertEqual(
+                    controller.suggestions.first(where: \.isDefault)?.text,
+                    word == "hello" ? word : "hel")
+                controller.press(.space)
+                XCTAssertEqual(target.text, word == "hello" ? "hello " : "hel ")
+            }
+        }
+    }
+
+    func testPendingRefinementBelongsToTheExactDocumentPositionAndLanguage() {
+        withBarSettingsOn {
+            for change in ["none", "before", "after", "document", "language", "cancel", "prepare"] {
+                let target = CursorTextTarget(before: "say hel", after: " there")
+                let controller = KeyboardController(target: target, language: .english)
+                controller.suggestions = [Suggestion(text: "hel", language: .english, isDefault: true)]
+                controller.pendingRefinementPosition = controller.suggestionPosition
+                switch change {
+                case "before": target.placeCaret(before: "other hel", after: " there")
+                case "after": target.placeCaret(before: "say hel", after: " elsewhere")
+                case "document": target.documentIdentifier = UUID()
+                case "language": controller.language = .hebrew
+                case "cancel": controller.cancelRefinement()
+                case "prepare": controller.prepareForNewDocument()
+                default: break
+                }
+                let original = controller.suggestions
+                controller.applyPendingRefinement(["hello"], for: "hel")
+                if change == "none" {
+                    XCTAssertEqual(controller.suggestions.first(where: \.isDefault)?.text, "hello")
+                } else {
+                    XCTAssertEqual(controller.suggestions, original, change)
+                }
+            }
+        }
+    }
+
+    func testPartialAndMultiwordSelectionsCancelPendingPrediction() {
+        withBarSettingsOn {
+            for selected in ["lo", "hello world"] {
+                let target = CursorTextTarget(before: "say hel", selecting: selected, after: " there")
+                let controller = KeyboardController(target: target, language: .english)
+                controller.refiner = PredictiveRefiner(onDevice: AlwaysPredicts(), apply: { _, _ in })
+                controller.pendingRefinementPosition = controller.suggestionPosition
+                XCTAssertNil(controller.selectedWord)
+                controller.refreshSuggestions()
+                XCTAssertNil(controller.pendingRefinementPosition)
+                controller.cancelRefinement()
+            }
+        }
+    }
+
+    func testCancelledPredictionCannotApplyEvenWhenPredictorIgnoresCancellation() async {
+        let asked = expectation(description: "predictor started")
+        let returned = expectation(description: "predictor returned")
+        let applied = expectation(description: "cancelled answer must not apply")
+        applied.isInverted = true
+        let predictor = PausedPredictor(asked: asked, returned: returned)
+        let refiner = PredictiveRefiner(onDevice: predictor) { _, _ in applied.fulfill() }
+        refiner.refine(
+            .init(
+                textBefore: "See you ", wordInProgress: "", language: .english,
+                screenContext: nil, permitted: true))
+        await fulfillment(of: [asked], timeout: 2)
+        refiner.cancel()
+        await predictor.finish()
+        await fulfillment(of: [returned], timeout: 2)
+        await fulfillment(of: [applied], timeout: 0.1)
+    }
+
+    func testPredictionCacheSeparatesTextFromPrefixEvenWithSeparatorCharacters() {
+        let first = PredictiveRefiner.Request(
+            textBefore: "there", wordInProgress: "hello\u{1F}over", language: .english,
+            screenContext: nil, permitted: true)
+        let second = PredictiveRefiner.Request(
+            textBefore: "over\u{1F}there", wordInProgress: "hello", language: .english,
+            screenContext: nil, permitted: true)
+        XCTAssertNotEqual(first.cacheKey, second.cacheKey)
+    }
+
+    func testRefinementCanStartOnTheFirstWord() {
+        let refiner = PredictiveRefiner(onDevice: AlwaysPredicts(), apply: { _, _ in })
+        for prefix in ["hel", "", "   "] {
+            let request = PredictiveRefiner.Request(
+                textBefore: "", wordInProgress: prefix, language: .english,
+                screenContext: nil, permitted: true)
+            XCTAssertEqual(refiner.shouldRefine(request), prefix == "hel")
+        }
+    }
+
     /// Pins the two settings the controller re-reads at every keystroke, and puts
     /// them back. Both ship on, but both are *stored*, so a developer who turned
     /// either off in the app would otherwise watch the two tests above fail for a
@@ -1886,5 +2001,34 @@ private final class CapturingPredictor: TextPrediction, @unchecked Sendable {
     ) async throws -> [String] {
         textReceived = text
         return ["one"]
+    }
+}
+
+private actor PausedPredictor: TextPrediction {
+    let asked: XCTestExpectation
+    let returned: XCTestExpectation
+    private var continuation: CheckedContinuation<[String], Never>?
+
+    init(asked: XCTestExpectation, returned: XCTestExpectation) {
+        self.asked = asked
+        self.returned = returned
+    }
+
+    nonisolated func canPredict(in language: KeyboardLanguage) -> Bool { true }
+
+    func continuations(
+        after text: String, replyingTo context: ScreenContext?, language: KeyboardLanguage
+    ) async throws -> [String] {
+        let words = await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            asked.fulfill()
+        }
+        returned.fulfill()
+        return words
+    }
+
+    func finish() {
+        continuation?.resume(returning: ["tomorrow"])
+        continuation = nil
     }
 }

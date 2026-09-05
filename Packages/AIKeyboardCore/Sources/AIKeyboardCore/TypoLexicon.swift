@@ -365,7 +365,9 @@ enum TypoLexicon {
     private static func block(for language: KeyboardLanguage) -> Block {
         cache.withLock { store in
             if let known = store[language.languageTag] { return known }
+            guard !Task.isCancelled else { return .empty }
             let built = load(language)
+            guard !Task.isCancelled else { return .empty }
             store[language.languageTag] = built
             return built
         }
@@ -383,65 +385,34 @@ enum TypoLexicon {
     private static func load(_ language: KeyboardLanguage) -> Block {
         let all = GroupedLexiconResource.uncachedWords(for: language)
         guard !all.isEmpty else { return .empty }
-        let allForms = Set(all.map(SeedLanguageModel.fold))
-        let head = Array(all.prefix(depth(for: language)))
-
-        // Folded, and deliberately not shape-folded onto ordinary Hebrew
-        // letter forms: `TypoChannel` charges 20 for a final-form
-        // substitution, and shape-folding it away here would make every
-        // final-form pair in this list indistinguishable before the channel
-        // ever gets a chance to price the difference.
-        //
-        // **The one-code-unit-per-character invariant is enforced here rather
-        // than assumed, because two other things silently depend on it.**
-        // `offsets` counts UTF-16 units while `corrections(of:)` compares those
-        // offsets against a count of `Character`s, so an astral character would
-        // make one entry's length quietly wrong; and `characters(at:)` decodes
-        // the same buffer back. Every Hebrew consonant and every ASCII letter is
-        // one unit, and `Scripts/generate-grouped-lexicon.py` filters both lists
-        // to letters this keyboard can type, so this drops nothing today — it is
-        // here so that a regenerated list cannot make it untrue without also
-        // making it visible.
-        // Stated as the invariant itself rather than as a proxy for it: a word
-        // qualifies when its folded form has exactly as many UTF-16 units as it
-        // has `Character`s. Testing for the Basic Multilingual Plane would not
-        // be the same claim, because a grapheme built from several scalars is
-        // one `Character` and more than one unit even when every scalar is BMP.
-        let kept = head.map { ($0, SeedLanguageModel.fold($0)) }
-            .filter { $0.1.count == $0.1.utf16.count }
-        let originals = kept.map(\.0)
-        let folded = kept.map(\.1)
-
+        let depth = depth(for: language)
+        var allForms = Set<String>()
+        allForms.reserveCapacity(all.count)
+        var originals: [String] = []
+        originals.reserveCapacity(min(depth, all.count))
         var ranks: [String: Int] = [:]
-        ranks.reserveCapacity(folded.count)
-        for (index, word) in folded.enumerated() where ranks[word] == nil {
-            ranks[word] = index
-        }
-
+        ranks.reserveCapacity(min(depth, all.count))
         var letterBits: [Character: Int] = [:]
-        for word in folded {
-            for character in word where letterBits[character] == nil && letterBits.count < 32 {
-                letterBits[character] = letterBits.count
-            }
-        }
-
         var charBuffer: [UInt16] = []
-        charBuffer.reserveCapacity(folded.reduce(0) { $0 + $1.count })
         var offsets: [Int32] = [0]
-        offsets.reserveCapacity(folded.count + 1)
+        offsets.reserveCapacity(min(depth, all.count) + 1)
         var masks: [UInt32] = []
-        masks.reserveCapacity(folded.count)
-        for word in folded {
+        masks.reserveCapacity(min(depth, all.count))
+        for (index, word) in all.enumerated() {
+            guard !Task.isCancelled else { return .empty }
+            let folded = SeedLanguageModel.fold(word)
+            allForms.insert(folded)
+            guard index < depth, folded.count == folded.utf16.count else { continue }
+            if ranks[folded] == nil { ranks[folded] = originals.count }
+            originals.append(word)
             var wordMask: UInt32 = 0
-            for character in word {
-                // Every folded Hebrew consonant and every ASCII letter is one
-                // UTF-16 code unit, which is what keeps `offsets` — counted
-                // in characters — in step with `charBuffer` — appended in
-                // UTF-16 units. Nothing in either bundled list needs more
-                // than that.
-                charBuffer.append(contentsOf: String(character).utf16)
+            for character in folded {
+                if letterBits[character] == nil && letterBits.count < 32 {
+                    letterBits[character] = letterBits.count
+                }
                 if let bit = letterBits[character] { wordMask |= 1 << UInt32(bit) }
             }
+            charBuffer.append(contentsOf: folded.utf16)
             offsets.append(Int32(charBuffer.count))
             masks.append(wordMask)
         }

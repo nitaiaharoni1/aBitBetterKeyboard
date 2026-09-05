@@ -234,7 +234,13 @@ extension KeyboardController {
                 // and waits there.
                 context = try await session.contextForReply()
             }
-            await MainActor.run { self?.replyContext = context }
+            try await MainActor.run {
+                guard !Task.isCancelled, let self, self.aiRequestBelongsToCurrentDocument else {
+                    throw CancellationError()
+                }
+                self.replyContext = context
+            }
+            try Task.checkCancellation()
             return try await engine.replies(to: context)
         } apply: { controller, replies in
             // **Straight into the field, like the other two.** `replies` is still
@@ -290,6 +296,8 @@ extension KeyboardController {
         apply: @MainActor @escaping (KeyboardController, Value) -> Void
     ) {
         workingTask?.cancel()
+        guard permitsAIWork(action) else { return }
+        aiRequestPosition = suggestionPosition
         // A stale rim must not fade over a call that has already started again.
         endArrival()
         isWorking = true
@@ -314,21 +322,54 @@ extension KeyboardController {
         withAnimation(Theme.Motion.panel) { overlay = destination }
 
         workingTask = Task { [weak self] in
-            guard let self else { return }
+            guard !Task.isCancelled else { return }
+            let result: Result<AIOutput<Value>, Error>
             do {
-                let output = try await work()
-                guard !Task.isCancelled else { return }
-                apply(self, output.value)
-                aiProvenance = output.provenance
-            } catch let error as AIEngineError {
-                guard !Task.isCancelled else { return }
-                aiError = error
+                result = .success(try await work())
             } catch {
-                guard !Task.isCancelled else { return }
-                aiError = .failed(error.localizedDescription)
+                result = .failure(error)
             }
+            guard !Task.isCancelled, let self else { return }
+            guard self.aiRequestBelongsToCurrentDocument else {
+                self.cancelAIWork()
+                return
+            }
+            switch result {
+            case .success(let output):
+                guard self.permitsAIWork(action) else { return }
+                apply(self, output.value)
+                guard !Task.isCancelled else { return }
+                self.aiProvenance = output.provenance
+            case .failure(let error):
+                if !(error is CancellationError) {
+                    self.aiError = (error as? AIEngineError) ?? .failed(error.localizedDescription)
+                }
+            }
+            self.workingTask = nil
             withAnimation(Theme.Motion.content) { self.isWorking = false }
         }
+    }
+
+    var aiRequestBelongsToCurrentDocument: Bool {
+        guard let position = aiRequestPosition else { return !isSystemKeyboard }
+        if isSystemKeyboard, position.documentIdentifier == nil { return false }
+        return position.documentIdentifier == target?.documentIdentifier
+    }
+
+    func cancelAIWorkIfDocumentChanged() {
+        guard aiRequestPosition != nil, !aiRequestBelongsToCurrentDocument else { return }
+        cancelAIWork()
+    }
+
+    private func permitsAIWork(_ action: AIAction) -> Bool {
+        guard isSystemKeyboard else { return true }
+        guard prepareMemoryIntensiveWork() else {
+            cancelAIWork()
+            runningAction = action
+            aiError = .failed("Memory is low. Keep typing and try again shortly.")
+            return false
+        }
+        return true
     }
 
     /// Accepts an answer the banner is offering.
@@ -338,6 +379,11 @@ extension KeyboardController {
     /// moved on while the model was thinking. See `applyDirectly`, which is where
     /// that decision is taken and where the reasoning for it lives.
     public func applyResult(_ text: String) {
+        guard aiRequestBelongsToCurrentDocument else {
+            cancelAIWork()
+            return
+        }
+        guard permitsAIWork(runningAction ?? .fix) else { return }
         let preferred =
             bannerOptions.indices.contains(bannerIndex)
             ? bannerOptions[bannerIndex].language : nil
@@ -401,6 +447,14 @@ extension KeyboardController {
     /// applying would have written a correction of five words over the whole
     /// message.
     func applyDirectly(_ text: String, for action: AIAction) {
+        guard aiRequestBelongsToCurrentDocument else {
+            cancelAIWork()
+            return
+        }
+        if action == .reply, let position = aiRequestPosition, position != suggestionPosition {
+            return
+        }
+        guard permitsAIWork(action) else { return }
         // The staleness test below is also what makes this the right string: past
         // it, `previous` is what was sent to the model *and* what is standing in
         // the field right now — which is what `replaceTargetText` is about to take
@@ -409,9 +463,7 @@ extension KeyboardController {
         // **Empty means Reply, and Reply replaces nothing.** `runReply` empties
         // `aiSourceText` on purpose, because a reply is inserted where the cursor
         // is rather than over the message — so there is nothing for the staleness
-        // test to compare and nothing for the undo to put back. It is also why a
-        // reply is not stale when the field moves: it was written about what is on
-        // the *screen*, not about what is in the field.
+        // test to compare. Its document and caret are checked above.
         let inserts = previous.isEmpty
         guard inserts || aiTargetText == previous else { return }
         // Both asked before the replacement, because the replacement is what removes
@@ -580,7 +632,8 @@ extension KeyboardController {
     /// `clearBannerState()` alone is not enough: a cancelled `beginWork` returns at
     /// its own `Task.isCancelled` guard without ever reaching the line that clears
     /// `isWorking`, so the orbit on the key would run for ever.
-    func cancelAIWork() {
+    public func cancelAIWork() {
+        aiRequestPosition = nil
         workingTask?.cancel()
         workingTask = nil
         endArrival()

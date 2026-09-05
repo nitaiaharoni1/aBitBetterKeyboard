@@ -338,6 +338,12 @@ final class KeyboardViewController: UIInputViewController {
         // Forget lives in the app. Reload only after presentation so its file
         // read cannot delay the first frame of the extension.
         PersonalLanguageModel.shared.reload()
+        guard SharedStore.shared.storedPredictions else {
+            controller.activateSuggestionWorkAfterPresentation()
+            return
+        }
+        if controller.resumeSuggestionWorkWithWarmCaches() { return }
+        guard controller.prepareMemoryIntensiveWork() else { return }
         requestSupplementaryLexiconOnce()
         // Off the main thread, and from here rather than `viewDidLoad` for the
         // reason `recordPresence()` gives: this is the moment the keyboard is
@@ -354,9 +360,10 @@ final class KeyboardViewController: UIInputViewController {
         // — which is exactly the keyboard that should rebuild them off this thread
         // rather than under the next finger.
         let language = controller.language
+        let languages = [language] + controller.enabledLanguages.filter { $0 != language }
         cacheWarmTask = KeyboardController.warmRebuildableCaches(
-            for: [language] + controller.enabledLanguages.filter { $0 != language }
-        ) { [weak self] in
+            for: languages
+        ) { [weak self] warmed in
             guard !Task.isCancelled,
                 let self,
                 self.isKeyboardVisible,
@@ -364,11 +371,15 @@ final class KeyboardViewController: UIInputViewController {
             else { return }
             self.cacheWarmTask = nil
             self.recordMemory()
-            self.controller.activateSuggestionWorkAfterPresentation()
+            guard warmed else {
+                self.controller.stopSuggestionWorkForMemoryPressure()
+                return
+            }
+            self.controller.activateSuggestionWorkAfterPresentation(warmedLanguages: languages)
         }
     }
 
-    /// The one warning iOS sends before it starts killing.
+    /// A best-effort warning: iOS may terminate the extension without sending it.
     ///
     /// **It is now acted on as well as recorded, and for its whole life it was
     /// only recorded.** iOS sends this so a process can give memory back; a
@@ -376,7 +387,8 @@ final class KeyboardViewController: UIInputViewController {
     /// only notice it gets. `dropRebuildableCaches()` hands back the word lists,
     /// which are the largest thing this process holds and the only large thing it
     /// can build again from its own bundle. The active warm is cancelled and
-    /// suggestion work stays suspended until the next appearance, so neither the
+    /// suggestion work stays suspended for at least 30 seconds and until an
+    /// appearance has sufficient headroom, so neither the
     /// warm nor the next input callback immediately rebuilds what iOS asked us to
     /// release.
     ///
@@ -387,8 +399,7 @@ final class KeyboardViewController: UIInputViewController {
         recordMemory(warning: true)
         cacheWarmTask?.cancel()
         cacheWarmTask = nil
-        controller?.suspendSuggestionWork()
-        KeyboardController.dropRebuildableCaches()
+        controller?.stopSuggestionWorkForMemoryPressure()
     }
 
     /// Folds this process's high-water mark into the record the app reads.
@@ -588,6 +599,7 @@ final class KeyboardViewController: UIInputViewController {
         cacheWarmTask?.cancel()
         cacheWarmTask = nil
         controller?.suspendSuggestionWork()
+        controller?.cancelAIWork()
         // Unconditional where the start is gated: `stopConsuming` is idempotent
         // and nils a channel that was never set, so it costs nothing here — and
         // gating it too would strand a live session if the flag were ever

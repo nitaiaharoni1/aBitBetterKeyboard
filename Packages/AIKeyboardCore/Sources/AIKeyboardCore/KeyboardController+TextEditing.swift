@@ -149,11 +149,13 @@ extension KeyboardController {
     // MARK: Text mutation helpers
 
     /// Swaps the partial word behind the cursor for a candidate.
-    func replaceCurrentWord(with replacement: String) {
+    @discardableResult
+    func replaceCurrentWord(with replacement: String, following suffix: String = "") -> Bool {
         // A replacement is not another physical sample, even when it writes the
         // exact same spelling back. Retaining the old geometry would let a later
         // refresh treat another edit as if the user had just tapped those keys.
         typingTouchTrace.clear()
+        guard let target else { return false }
         if selection != nil {
             // One backspace takes the whole selection, and the marks it was
             // wearing go with it: the engine was asked about `wordCore`, so the
@@ -167,14 +169,36 @@ extension KeyboardController {
             // would come back glued to a one-word candidate. Read before the
             // delete, which is what clears the selection.
             let word = selectedWord
-            target?.deleteBackward()
-            target?.insertText(
+            target.deleteBackward()
+            guard selection == nil else { return false }
+            target.insertText(
                 word.map { Self.restoringEdgeMarks(of: $0, to: replacement) } ?? replacement)
-            return
+            return true
         }
         let typed = currentWordPrefix
-        deleteBackward(utf16Units: typed.utf16.count)
-        target?.insertText(Self.restoringEdgeMarks(of: typed, to: replacement))
+        let tailUnits = suffix.utf16.count
+        if !suffix.isEmpty {
+            let before = contextBefore
+            guard let after = target.documentContextAfterInput, after.hasPrefix(suffix) else {
+                return false
+            }
+            target.adjustTextPosition(byCharacterOffset: tailUnits)
+            let moved = Self.forwardMovement(
+                from: before, through: after, to: contextBefore, remaining: contextAfter)
+            guard moved == tailUnits else {
+                if moved > 0 { target.adjustTextPosition(byCharacterOffset: -moved) }
+                return false
+            }
+        }
+        let word = typed + suffix
+        let deletion = deleteBackwardReversibly(utf16Units: word.utf16.count)
+        guard deletion.unitsRemoved == word.utf16.count else {
+            if !deletion.deletedText.isEmpty { target.insertText(deletion.deletedText) }
+            if tailUnits > 0 { target.adjustTextPosition(byCharacterOffset: -tailUnits) }
+            return false
+        }
+        target.insertText(Self.restoringEdgeMarks(of: word, to: replacement))
+        return true
     }
 
     /// A candidate wearing the marks the typed word wore.

@@ -35,6 +35,91 @@ final class CandidateCommitTests: XCTestCase {
         super.tearDown()
     }
 
+    func testSpaceDoesNotAutocorrectOnlyTheLeftHalfOfAWord() {
+        for after in ["x", "'s", "7", ""] {
+            let target = CursorTextTarget(before: "helo", after: after)
+            let controller = KeyboardController(target: target, language: .english)
+            controller.suggestions = [
+                Suggestion(text: "helo", language: .english),
+                Suggestion(text: "hello", language: .english, isDefault: true)
+            ]
+            controller.press(.space)
+            XCTAssertEqual(target.document, after.isEmpty ? "hello " : "helo " + after)
+        }
+    }
+
+    func testAnUnavailableTailCannotAuthorizeAutocorrect() {
+        let target = CursorTextTarget(before: "helo")
+        target.afterContextIsAvailable = false
+        let controller = KeyboardController(target: target, language: .english)
+        controller.suggestions = [Suggestion(text: "hello", language: .english, isDefault: true)]
+        controller.press(.space)
+        XCTAssertEqual(target.document, "helo ")
+    }
+
+    func testTheBarDoesNotPromiseAutocorrectInsideAWord() {
+        let target = CursorTextTarget(before: "helo", after: "x")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.refreshSuggestions()
+        XCTAssertEqual(controller.suggestions.first(where: \.isDefault)?.text, "helo")
+        target.placeCaret(before: "helo")
+        controller.refreshSuggestions()
+        XCTAssertEqual(controller.suggestions.first(where: \.isDefault)?.text, "hello")
+    }
+
+    func testSpaceRereadsAChangedAutocorrectConfidenceLevel() {
+        for prefix in ["sched", "dont"] {
+            SharedStore.shared.autocorrectLevel = .full
+            let target = CursorTextTarget(before: prefix)
+            let controller = KeyboardController(target: target, language: .english)
+            XCTAssertNotEqual(controller.suggestions.first(where: \.isDefault)?.text, prefix)
+            SharedStore.shared.autocorrectLevel = .confident
+            controller.press(.space)
+            XCTAssertEqual(target.document, prefix == "sched" ? "sched " : "don't ")
+        }
+    }
+
+    func testAFailedAutocorrectDoesNotClaimOrLearnTheReplacement() {
+        let target = CursorTextTarget(before: "helo")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.suggestions = [Suggestion(text: "hello", language: .english, isDefault: true)]
+        target.backwardDeleteLimit = 2
+        controller.press(.space)
+        XCTAssertEqual(target.document, "helo ")
+        XCTAssertNil(controller.pendingAutocorrectUndo)
+        XCTAssertEqual(controller.personal.count(of: "hello", in: .english), 0)
+    }
+
+    func testARefusedOrPartialUndoKeepsTheCorrectedWordAndItsClaim() {
+        for limit in [0, 1, 3] {
+            let target = CursorTextTarget(before: "helo")
+            let controller = KeyboardController(target: target, language: .english)
+            controller.suggestions = [Suggestion(text: "hello", language: .english, isDefault: true)]
+            controller.press(.space)
+            XCTAssertEqual(target.document, "hello ")
+            target.backwardDeleteLimit = limit
+            controller.deleteBackward()
+            XCTAssertEqual(target.document, "hello ")
+            XCTAssertNotNil(controller.pendingAutocorrectUndo)
+            target.backwardDeleteLimit = nil
+            controller.deleteBackward()
+            XCTAssertEqual(target.document, "helo")
+            XCTAssertNil(controller.pendingAutocorrectUndo)
+        }
+    }
+
+    func testUndoAcceptsAContextWindowThatBackfillsAfterDeletingTheSpace() {
+        let target = CursorTextTarget(before: "earlier helloo", window: 9)
+        let controller = KeyboardController(target: target, language: .english)
+        controller.suggestions = [Suggestion(text: "hello", language: .english, isDefault: true)]
+        controller.press(.space)
+        XCTAssertEqual(target.document, "earlier hello ")
+        XCTAssertEqual(controller.pendingAutocorrectUndo?.contextAfterSwap, target.documentContextBeforeInput)
+        controller.deleteBackward()
+        XCTAssertEqual(target.document, "earlier helloo")
+        XCTAssertNil(controller.pendingAutocorrectUndo)
+    }
+
     /// One case, twice: against the model and against a real `UITextView`.
     private func check(
         before: String,

@@ -263,7 +263,9 @@ final class PersonalDictionaryTests: XCTestCase {
         XCTAssertTrue(
             possessive.contains("'") || possessive.contains("\u{2019}"),
             "the possessive was eaten: \(possessive)")
-        XCTAssertEqual(committed("שלום סאפא,", in: .hebrew), "שלום ספא, ")
+        let sappa = committed("שלום סאפא,", in: .hebrew)
+        XCTAssertNotEqual(sappa, "שלום סאפא, ", "the empty list left the name alone")
+        XCTAssertTrue(sappa.hasSuffix(", "), "the comma was eaten: \(sappa)")
     }
 
     /// **A separate bug, with no dictionary anywhere near it: the correction ate

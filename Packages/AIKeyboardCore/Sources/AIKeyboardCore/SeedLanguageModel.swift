@@ -387,8 +387,9 @@ enum SeedLanguageModel {
     /// a Hebrew layout can only type the ASCII hyphen, so an entry spelled with
     /// Hebrew's own would otherwise be unreachable by the person who owns it.
     static func fold(_ word: String) -> String {
-        word.precomposedStringWithCanonicalMapping.lowercased()
-            .replacingOccurrences(of: "־", with: "-")
-            .replacingOccurrences(of: "’", with: "'")
+        var folded = word.precomposedStringWithCanonicalMapping.lowercased()
+        if folded.contains("־") { folded = folded.replacingOccurrences(of: "־", with: "-") }
+        if folded.contains("’") { folded = folded.replacingOccurrences(of: "’", with: "'") }
+        return folded
     }
 }

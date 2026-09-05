@@ -1,3 +1,5 @@
+import Foundation
+
 extension KeyboardController {
 
     // MARK: Suggestions
@@ -19,10 +21,30 @@ extension KeyboardController {
         let vocabulary: Int
     }
 
+    struct SuggestionPosition: Equatable {
+        let before: String?
+        let after: String?
+        let selected: String?
+        let documentIdentifier: UUID?
+        let language: KeyboardLanguage
+    }
+
+    var suggestionPosition: SuggestionPosition {
+        SuggestionPosition(
+            before: target?.documentContextBeforeInput,
+            after: target?.documentContextAfterInput,
+            selected: selection, documentIdentifier: target?.documentIdentifier, language: language)
+    }
+
     /// - Parameter schedulingRefinement: Whether a fresh answer may arm the
     ///   async tier's 300ms clock. Activation uses `false` because appearing over
     ///   an existing word is not a user typing pause.
     public func refreshSuggestions(schedulingRefinement: Bool = true) {
+        if let position = lastSpacePosition, position != suggestionPosition {
+            lastSpaceTapAt = nil
+            lastSpacePosition = nil
+        }
+        cancelAIWorkIfDocumentChanged()
         // Identity has first refusal for undo. A field switch may arrive here
         // without an appearance callback, so retire the old field's undo before
         // any new-document context is read. Its learning was captured at swap.
@@ -59,6 +81,10 @@ extension KeyboardController {
             cancelRefinement()
             return
         }
+        if isSystemKeyboard, !Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionWorkReserveMB) {
+            stopSuggestionWorkForMemoryPressure()
+            return
+        }
         expirePendingAutocorrectUndoIfCaretMoved()
         // The field already holds the decoder's guess. Scoring that as typed
         // text replaces the grouped bar and lets space commit a third word.
@@ -67,6 +93,8 @@ extension KeyboardController {
             return
         }
         guard store.storedPredictions else {
+            refiner?.cancel()
+            pendingRefinementPosition = nil
             suggestions = []
             dropIdleTypingIfStale()
             return
@@ -164,10 +192,11 @@ extension KeyboardController {
         // at. See the `selection == nil` guard on `applyRefinement` itself, which
         // is what actually closes it — this cancel only stops paying for an
         // answer nothing can use any more.
-        if selected == nil {
+        if selection == nil {
             if schedulingRefinement { askForRefinement(prefix: prefix, context: context) }
         } else {
             refiner?.cancel()
+            pendingRefinementPosition = nil
         }
         dropIdleTypingIfStale()
     }
@@ -222,6 +251,7 @@ extension KeyboardController {
         // Folded, the same way the set itself is keyed.
         if store.storedAutocorrectLevel == .off || isCorrectingWordByHand
             || undoneAutocorrectSpellings.contains(SeedLanguageModel.fold(prefix))
+            || target?.documentContextAfterInput == nil || Self.continuesWord(in: contextAfter)
         {
             return SuggestionEngine.markDefault(results, at: 0)
         }
@@ -335,7 +365,12 @@ extension KeyboardController {
         // so a thirty-second dictation would buy a dozen model calls to predict the
         // next word of a sentence the user is not typing. The local tier still
         // runs; it is free.
-        guard !isDictating else { return }
+        guard !isDictating else {
+            refiner.cancel()
+            pendingRefinementPosition = nil
+            return
+        }
+        pendingRefinementPosition = suggestionPosition
         refiner.refine(
             PredictiveRefiner.Request(
                 textBefore: context,
@@ -356,6 +391,13 @@ extension KeyboardController {
                     ? ScreenContextSession.shared.state.context : nil,
                 permitted: SecureField.permitsRead(
                     secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)))
+    }
+
+    func applyPendingRefinement(_ words: [String], for prefix: String) {
+        guard suggestionWorkIsActive, let pendingRefinementPosition,
+            pendingRefinementPosition == suggestionPosition
+        else { return }
+        applyRefinement(words, for: prefix)
     }
 
     /// Put the model's words into the bar.
@@ -379,26 +421,10 @@ extension KeyboardController {
     /// onto a selection's correction candidates.
     func applyRefinement(_ words: [String], for prefix: String) {
         guard store.storedPredictions, selection == nil, prefix == currentWordPrefix,
-            let first = suggestions.first
+            !isDictating,
+            SecureField.permitsRead(
+                secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
         else { return }
-        let pool =
-            words.map { Suggestion(text: $0, language: language) } + suggestions.dropFirst()
-        // Slot 0 is always the typed keystrokes, never anything from `pool`.
-        var merged: [Suggestion] = [first]
-        var seen = Set([SeedLanguageModel.fold(first.text)])
-        // The same shape the local tier returns: the typed echo plus one offer per
-        // drawn slot. Fixed at three here, this was the one path that could shrink
-        // the bar back to two candidates the moment the refiner answered.
-        for candidate in pool {
-            guard merged.count < SuggestionEngine.barSlots + 1 else { break }
-            let folded = SeedLanguageModel.fold(candidate.text)
-            guard !seen.contains(folded) else { continue }
-            seen.insert(folded)
-            merged.append(candidate)
-        }
-        let modelFolds = Set(words.map(SeedLanguageModel.fold))
-        let defaultIndex =
-            merged.firstIndex { modelFolds.contains(SeedLanguageModel.fold($0.text)) } ?? 0
         // **Guarded the same way `refreshSuggestions` guards its own publish.**
         // A cache hit answers synchronously, so a keystroke that fires two or
         // three refreshes could fire the refiner that many times too, and
@@ -407,7 +433,8 @@ extension KeyboardController {
         // on screen. `Suggestion.==` is text, language and the bold flag, the
         // same equality `refreshSuggestions` already trusts.
         let bar = pinningDefaultToTypedIfNeeded(
-            SuggestionEngine.markDefault(merged, at: defaultIndex), prefix: prefix)
+            SuggestionEngine.refinedSuggestions(
+                local: suggestions, words: words, prefix: prefix, language: language), prefix: prefix)
         if bar != suggestions { suggestions = bar }
     }
 
@@ -432,20 +459,26 @@ extension KeyboardController {
     func dropIdleTypingIfStale() {
         let prefix = currentWordPrefix
         let armed = store.storedCompleteOnIdle || store.storedSpaceOnIdle
-        if prefix.isEmpty || !armed || !idleTypingMayRun {
+        if prefix.isEmpty || !armed || !idleTypingMayRun
+            || idleTypingPosition.map({ $0 != suggestionPosition }) == true
+        {
             idleTypingTask?.cancel()
             idleTypingTask = nil
             idleTypedAt = nil
+            idleTypingPosition = nil
         }
     }
 
     func scheduleIdleTyping(armedPrefix: String, typedAt: ContinuousClock.Instant) {
         idleTypingTask?.cancel()
         idleTypingTask = nil
+        idleTypingPosition = nil
         guard store.storedCompleteOnIdle || store.storedSpaceOnIdle else { return }
         guard !armedPrefix.isEmpty else { return }
         guard idleTypingMayRun else { return }
         let delay = store.storedIdleDelayMs
+        let position = suggestionPosition
+        idleTypingPosition = position
         idleTypingTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: .milliseconds(delay))
@@ -461,8 +494,8 @@ extension KeyboardController {
             // A tap in the host field moved the caret onto a different word
             // without a key. The pause belonged to `armedPrefix`.
             guard
-                SuggestionEngine.comparable(self.currentWordPrefix)
-                    == SuggestionEngine.comparable(armedPrefix)
+                self.currentWordPrefix == armedPrefix,
+                self.suggestionPosition == position
             else { return }
             self.performIdleTyping()
         }
@@ -515,6 +548,7 @@ extension KeyboardController {
                 idleTypingTask?.cancel()
                 idleTypingTask = nil
                 idleTypedAt = nil
+                idleTypingPosition = nil
                 reportInteraction(.suggestion)
                 return
             }
@@ -538,7 +572,11 @@ extension KeyboardController {
                 Feedback.keyPress()
                 Feedback.keyClick(.tock)
                 endGroupedWord()
-                replaceCurrentWord(with: candidate.text)
+                guard replaceCurrentWord(with: candidate.text) else {
+                    cancelRefinement()
+                    refreshSuggestions()
+                    return
+                }
                 recordCommittedWord(SuggestionEngine.wordCore(candidate.text))
                 deletedWordPrefix = nil
                 refreshSuggestions()
@@ -548,6 +586,7 @@ extension KeyboardController {
                 idleTypingTask?.cancel()
                 idleTypingTask = nil
                 idleTypedAt = nil
+                idleTypingPosition = nil
                 reportInteraction(.suggestion)
             }
             return
@@ -613,6 +652,9 @@ extension KeyboardController {
     /// `insertSpace` already skips autocorrect, so the letters they kept stay.
     private var idleTypingMayRun: Bool {
         guard overlay == .none, !isDictating, selection == nil else { return false }
+        guard let after = target?.documentContextAfterInput,
+            !Self.continuesWord(in: after)
+        else { return false }
         if grouped.isTyping, !store.storedCompleteOnIdle { return false }
         return SecureField.permitsRead(
             secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
@@ -623,9 +665,11 @@ extension KeyboardController {
     /// the next document.
     public func cancelRefinement() {
         refiner?.cancel()
+        pendingRefinementPosition = nil
         idleTypingTask?.cancel()
         idleTypingTask = nil
         idleTypedAt = nil
+        idleTypingPosition = nil
     }
 
     public func updateSupplementaryLexicon(_ words: [String]) {
@@ -652,8 +696,17 @@ extension KeyboardController {
         // is nil for both) nor a plain caret, and `insertCommittalSpace`'s hop
         // is only safe for the caret — see the branch below.
         let hadSelection = selection != nil
-        let after = contextAfter
-        replaceCurrentWord(with: suggestion.text)
+        guard let after = target?.documentContextAfterInput else {
+            refreshSuggestions()
+            return
+        }
+        let suffix =
+            !hadSelection && !currentWordPrefix.isEmpty && Self.continuesWord(in: after)
+            ? String(after.prefix { !$0.isWhitespace }) : ""
+        guard replaceCurrentWord(with: suggestion.text, following: suffix) else {
+            refreshSuggestions()
+            return
+        }
         // The candidate may already carry a mark (`hello,`). The space-bar path
         // skips a word that is already terminated so `hello.` + space does not
         // count twice; a tap is the first time this word is committed.
@@ -685,7 +738,7 @@ extension KeyboardController {
             lastLearnedFolded = nil
             deletedWordPrefix = nil
         } else {
-            insertCommittalSpace(after: after)
+            insertCommittalSpace(after: String(after.dropFirst(suffix.count)))
             lastLearnedFolded = nil
             // Committed on purpose, so the hand repair this word may have been
             // under is over — the same line `insertSpace` ends on, for the same

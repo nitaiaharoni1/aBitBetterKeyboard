@@ -39,8 +39,8 @@ public final class PredictiveRefiner {
     /// being cached is a sentence somebody is still typing, so the oldest key is
     /// almost always the least useful one, and an LRU would need an order to
     /// maintain on the keystroke path to say the same thing.
-    private var cache: [String: [String]] = [:]
-    private var cacheOrder: [String] = []
+    private var cache: [CacheKey: [String]] = [:]
+    private var cacheOrder: [CacheKey] = []
     private var inFlight: Task<Void, Never>?
 
     /// Called with the refined words and the word-in-progress they were asked
@@ -97,12 +97,19 @@ public final class PredictiveRefiner {
         /// `self`: the screen context is carried by identity and the permission is
         /// not part of the question, so including them would miss cache hits the
         /// model has already been paid for.
-        var cacheKey: String {
-            [
-                language.rawValue, wordInProgress, textBefore,
-                screenContext.map { "\($0.sender)|\($0.message)" } ?? ""
-            ].joined(separator: "\u{1F}")
+        var cacheKey: CacheKey {
+            CacheKey(
+                language: language.rawValue, prefix: wordInProgress, textBefore: textBefore,
+                sender: screenContext?.sender, message: screenContext?.message)
         }
+    }
+
+    struct CacheKey: Hashable {
+        let language: String
+        let prefix: String
+        let textBefore: String
+        let sender: String?
+        let message: String?
     }
 
     /// Ask, once the user has stopped typing.
@@ -131,7 +138,7 @@ public final class PredictiveRefiner {
 
     /// Keeps the extension's paid-answer cache useful without letting a long-lived
     /// keyboard process grow it forever.
-    private func store(_ words: [String], for key: String) {
+    private func store(_ words: [String], for key: CacheKey) {
         if cache[key] == nil {
             cacheOrder.append(key)
             if cacheOrder.count > Self.cacheLimit {
@@ -166,7 +173,8 @@ public final class PredictiveRefiner {
         guard let predictor, predictor.canPredict(in: request.language) else {
             return false
         }
-        let hasText = !request.textBefore.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasText = !(request.textBefore + request.wordInProgress)
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasText || request.screenContext != nil else { return false }
         return true
     }

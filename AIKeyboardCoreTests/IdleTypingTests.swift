@@ -266,6 +266,68 @@ final class IdleTypingTests: XCTestCase {
             "space on pause followed the caret onto a word that was not typed: \(target.text)")
     }
 
+    func testRefinementCannotPublishIntoASecureField() {
+        let target = SecureTypingTarget(text: "hel")
+        let controller = KeyboardController(target: target, language: .english)
+        let original = [Suggestion(text: "hel", language: .english, isDefault: true)]
+        controller.suggestions = original
+        controller.applyRefinement(["hello"], for: "hel")
+        XCTAssertEqual(controller.suggestions, original)
+    }
+
+    func testIdlePauseBelongsToTheExactCaretAndDocument() async {
+        SharedStore.shared.spaceOnIdle = true
+        SharedStore.shared.autocorrectLevel = .off
+        for change in ["none", "before", "after", "document", "prepare"] {
+            let target = CursorTextTarget(before: "first hel", after: " last")
+            let controller = KeyboardController(target: target, language: .english)
+            controller.noteTypedInput()
+            switch change {
+            case "before": target.placeCaret(before: "other hel", after: " last")
+            case "after": target.placeCaret(before: "first hel", after: " elsewhere")
+            case "document": target.documentIdentifier = UUID()
+            case "prepare": controller.prepareForNewDocument()
+            default: break
+            }
+            controller.refreshSuggestions()
+            let unchanged = target.document
+            try? await Task.sleep(for: .milliseconds(500))
+            XCTAssertEqual(
+                target.document, change == "none" ? "first hel  last" : unchanged, change)
+            controller.cancelRefinement()
+        }
+    }
+
+    func testLeavingAndReturningToTheSameCaretDoesNotReviveThePause() async {
+        SharedStore.shared.spaceOnIdle = true
+        SharedStore.shared.autocorrectLevel = .off
+        let target = CursorTextTarget(before: "say hel")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.noteTypedInput()
+        target.placeCaret(before: "other hel")
+        controller.refreshSuggestions()
+        target.placeCaret(before: "say hel")
+        controller.refreshSuggestions()
+        try? await Task.sleep(for: .milliseconds(500))
+        XCTAssertEqual(target.document, "say hel")
+    }
+
+    func testIdleTypingDoesNotSplitAnExistingWordOrAssumeAnUnavailableTail() {
+        SharedStore.shared.completeOnIdle = true
+        SharedStore.shared.spaceOnIdle = true
+        for after in ["lo", "'s", "7", ""] {
+            let target = CursorTextTarget(before: "hel", after: after)
+            target.afterContextIsAvailable = !after.isEmpty
+            let controller = KeyboardController(target: target, language: .english)
+            controller.suggestions = [
+                Suggestion(text: "hel", language: .english, isDefault: true),
+                Suggestion(text: "hello", language: .english)
+            ]
+            controller.performIdleTyping()
+            XCTAssertEqual(target.document, "hel" + after)
+        }
+    }
+
     /// Backspace is a keystroke. The wait from the letters it removed is armed
     /// on a prefix that is gone, so a new wait has to start on what is left.
     func testIdleSpaceFiresAfterBackspace() async {

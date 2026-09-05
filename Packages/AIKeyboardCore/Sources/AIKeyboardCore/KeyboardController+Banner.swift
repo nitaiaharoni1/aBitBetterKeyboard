@@ -159,6 +159,7 @@ extension KeyboardController {
 
     /// Clears every published field the banner reads for an AI answer.
     func clearBannerState() {
+        aiRequestPosition = nil
         variants = []
         replies = []
         replyContext = nil
