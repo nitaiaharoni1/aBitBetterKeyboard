@@ -159,6 +159,48 @@ final class SelectedWordSuggestionTests: XCTestCase {
         }
     }
 
+    func testASelectedWordIsReplacedWithoutDeletingItFirst() {
+        let target = CursorTextTarget(before: "please ", selecting: "recieve", after: " it")
+        target.backwardDeleteLimit = 0
+        let controller = KeyboardController(target: target, language: .english)
+        controller.apply(Suggestion(text: "receive", language: .english))
+        XCTAssertEqual(target.document, "please receive it")
+        XCTAssertNil(target.selectedText)
+    }
+
+    func testReplacementPreservesSingleSpacesAndCollapsesRepeatedSpaces() {
+        for (typed, replacement, language) in [
+            ("recieve", "receive", KeyboardLanguage.english),
+            ("שלומ", "שלום", KeyboardLanguage.hebrew)
+        ] {
+            for (gap, expectedGap) in [
+                (" ", " "), ("  ", " "), ("   ", " "),
+                ("\n", "\n"), ("\t", "\t"), ("\u{00A0}", "\u{00A0}")
+            ] {
+                for selected in [true, false] {
+                    let before = "hello" + gap + (selected ? "" : typed)
+                    let mock = CursorTextTarget(
+                        before: before, selecting: selected ? typed : nil, after: " next")
+                    let live = LiveTextViewTarget(
+                        before: before, selecting: selected ? typed : "", after: " next")
+                    live.view.smartInsertDeleteType = .yes
+                    for (target, document) in [
+                        (mock as TextTarget, { mock.document }),
+                        (live as TextTarget, { live.document })
+                    ] {
+                        let controller = KeyboardController(target: target, language: language)
+                        controller.apply(Suggestion(text: replacement, language: language))
+                        XCTAssertEqual(document(), "hello" + expectedGap + replacement + " next")
+                        XCTAssertEqual(
+                            target.documentContextBeforeInput,
+                            "hello" + expectedGap + replacement + (selected ? "" : " "))
+                        XCTAssertEqual(target.documentContextAfterInput, selected ? " next" : "next")
+                    }
+                }
+            }
+        }
+    }
+
     /// The mark the selection was wearing comes back, for the same reason the
     /// caret path restores it: the engine was asked about `wordCore`, so the
     /// candidate never carries it and inserting the candidate bare deletes it.

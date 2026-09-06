@@ -73,6 +73,11 @@ enum GroupedLexiconResource {
         subsystem: "com.nitai.aikeyboard", category: "GroupedLexicon")
 
     private static func load(_ language: KeyboardLanguage) -> [String] {
+        uncachedText(for: language).split(separator: "\n", omittingEmptySubsequences: true)
+            .map(String.init)
+    }
+
+    static func uncachedText(for language: KeyboardLanguage) -> String {
         guard
             let url = resourceURL(for: language),
             let text = try? String(contentsOf: url, encoding: .utf8)
@@ -83,9 +88,9 @@ enum GroupedLexiconResource {
                 grouped keys will decode from the seed list only. Run \
                 Scripts/generate-grouped-lexicon.py.
                 """)
-            return []
+            return ""
         }
-        return text.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
+        return text
     }
 
     private static func resourceURL(for language: KeyboardLanguage) -> URL? {

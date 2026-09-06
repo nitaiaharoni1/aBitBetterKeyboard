@@ -21,6 +21,7 @@ final class CursorTextTarget: TextTarget {
     var documentIdentifier: UUID?
     var afterContextIsAvailable = true
     var refusesForwardMovement = false
+    var refusesInsertion = false
     var backwardDeleteLimit: Int? {
         didSet { backwardDeleteCount = 0 }
     }
@@ -62,6 +63,7 @@ final class CursorTextTarget: TextTarget {
     var keyboardType: UIKeyboardType? { .default }
 
     func insertText(_ text: String) {
+        guard !refusesInsertion else { return }
         selected = nil
         before += text
     }

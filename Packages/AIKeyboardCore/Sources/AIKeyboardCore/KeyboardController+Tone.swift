@@ -6,6 +6,7 @@ extension KeyboardController {
     // MARK: Tone selection
 
     public func selectTone(_ tone: ToneStyle) {
+        guard !isWorking, !isDictationActive else { return }
         Feedback.modifierPress()
         aiSourceText = aiSourceText.isEmpty ? aiTargetText : aiSourceText
         runTone(.builtIn(tone))
@@ -69,6 +70,7 @@ extension KeyboardController {
 
     /// The same, for the tone the user wrote. The panel's seventh chip.
     public func selectTone(_ setting: ToneSetting) {
+        guard !isWorking, !isDictationActive else { return }
         Feedback.modifierPress()
         aiSourceText = aiSourceText.isEmpty ? aiTargetText : aiSourceText
         runTone(setting)
@@ -149,7 +151,7 @@ extension KeyboardController {
         // the length of the recording and says why, and a refusal strip opening
         // under somebody mid-sentence would be the banner coming back for exactly
         // the case it was taken away for.
-        guard !isDictationActive else { return }
+        guard !isDictationActive, !isWorking else { return }
         let tone = setting.style
         let instruction = setting.instruction
         selectedTone = tone
@@ -160,7 +162,7 @@ extension KeyboardController {
         // or from a panel of tone chips the user was standing in (taking it away
         // under them would be a screen that vanishes when you use it). That panel is
         // deleted, so there is one place an answer can go and no choice to make.
-        beginWork(.rewrite, showing: .none) { [engine] in
+        beginWork(.rewrite, showing: .none) { engine in
             try await engine.variants(for: source, tone: tone, instruction: instruction)
         } apply: { controller, variants in
             controller.variants = variants

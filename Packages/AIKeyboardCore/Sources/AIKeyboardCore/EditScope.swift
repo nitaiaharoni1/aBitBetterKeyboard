@@ -85,6 +85,9 @@ public enum EditScope {
         let original = split(source)
         let corrected = split(candidate)
         guard !original.isEmpty, !corrected.isEmpty else { return source }
+        guard original.count + 1 <= 262_144 / (corrected.count + 1) else {
+            return source
+        }
         var kept: [Token] = []
 
         for segment in segments(from: original.map { word($0.text) }, to: corrected.map { word($0.text) }) {

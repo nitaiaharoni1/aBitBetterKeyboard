@@ -157,8 +157,8 @@ extension KeyboardController {
         typingTouchTrace.clear()
         guard let target else { return false }
         if selection != nil {
-            // One backspace takes the whole selection, and the marks it was
-            // wearing go with it: the engine was asked about `wordCore`, so the
+            // The marks the selection was wearing go with it: the engine
+            // was asked about `wordCore`, so the
             // candidate for a selected `Nitai's` is `Nitai` and inserting it
             // bare deletes the possessive. The same rule the caret path below
             // follows, asked of the selection instead of the keystrokes.
@@ -167,12 +167,13 @@ extension KeyboardController {
             // wear" has no answer for a range spanning two of them: `wordCore`
             // trims the full stop off a selected `hello world.` and the mark
             // would come back glued to a one-word candidate. Read before the
-            // delete, which is what clears the selection.
+            // replacement, which is what clears the selection.
             let word = selectedWord
-            target.deleteBackward()
+            let inserted = word.map { Self.restoringEdgeMarks(of: $0, to: replacement) } ?? replacement
+            let before = contextBefore
+            target.insertText(inserted)
             guard selection == nil else { return false }
-            target.insertText(
-                word.map { Self.restoringEdgeMarks(of: $0, to: replacement) } ?? replacement)
+            collapseSpacesBeforeWord(inserted, originalBefore: before)
             return true
         }
         let typed = currentWordPrefix
@@ -197,8 +198,34 @@ extension KeyboardController {
             if tailUnits > 0 { target.adjustTextPosition(byCharacterOffset: -tailUnits) }
             return false
         }
-        target.insertText(Self.restoringEdgeMarks(of: word, to: replacement))
+        let before = contextBefore
+        let inserted = Self.restoringEdgeMarks(of: word, to: replacement)
+        target.insertText(inserted)
+        collapseSpacesBeforeWord(inserted, originalBefore: before)
         return true
+    }
+
+    private func collapseSpacesBeforeWord(_ word: String, originalBefore: String) {
+        let spaces = originalBefore.reversed().prefix { $0 == " " }.count
+        guard spaces > 1, let target else { return }
+        let beforeMove = contextBefore
+        let afterMove = contextAfter
+        let width = word.utf16.count
+        target.adjustTextPosition(byCharacterOffset: -width)
+        let moved = Self.forwardMovement(
+            from: contextBefore, through: contextAfter,
+            to: beforeMove, remaining: afterMove)
+        guard moved == width else {
+            if moved > 0 { target.adjustTextPosition(byCharacterOffset: moved) }
+            return
+        }
+        if contextBefore.hasSuffix(String(repeating: " ", count: spaces)) {
+            let deletion = deleteBackwardReversibly(utf16Units: spaces - 1)
+            if deletion.unitsRemoved != spaces - 1, !deletion.deletedText.isEmpty {
+                target.insertText(deletion.deletedText)
+            }
+        }
+        target.adjustTextPosition(byCharacterOffset: width)
     }
 
     /// A candidate wearing the marks the typed word wore.

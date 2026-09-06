@@ -42,7 +42,7 @@ extension KeyboardController {
     func runFix(_ style: FixStyle) {
         guard !isDictationActive else { return }
         let source = aiSourceText
-        beginWork(.fix, showing: .none) { [engine] in
+        beginWork(.fix, showing: .none) { engine in
             try await engine.fix(source, style: style)
         } apply: { controller, text in
             // **Straight into the field, with no Use button in front of it.**

@@ -175,7 +175,7 @@ final class CommittalSpaceHopTests: XCTestCase {
         prefix.backwardDeleteLimit = 2
         XCTAssertEqual(apply(candidate: "hello", on: prefix), "say helo")
         let selection = CursorTextTarget(before: "say ", selecting: "helo", after: " now")
-        selection.backwardDeleteLimit = 0
+        selection.refusesInsertion = true
         XCTAssertEqual(apply(candidate: "hello", on: selection), "say helo now")
         XCTAssertEqual(selection.selectedText, "helo")
     }

@@ -218,10 +218,13 @@ public struct CloudIntelligence: TextIntelligence {
         prompt: String,
         fields: [CloudField]
     ) async throws -> [String: String] {
+        try Task.checkCancellation()
         guard networkAllowed() else { throw AIEngineError.needsFullAccess }
-        return try await transport.send(
+        let result = try await transport.send(
             CloudRequest(instructions: instructions, prompt: prompt, fields: fields)
         )
+        try Task.checkCancellation()
+        return result
     }
 }
 

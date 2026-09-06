@@ -228,11 +228,15 @@ public struct FoundationModelsEngine: TextIntelligence {
         prompt: String,
         source: String
     ) async throws -> Content {
+        try Task.checkCancellation()
         if let unavailableReason { throw unavailableReason }
         do {
             let session = LanguageModelSession(model: model, instructions: instructions)
-            return try await session.respond(to: prompt, generating: Content.self).content
+            let content = try await session.respond(to: prompt, generating: Content.self).content
+            try Task.checkCancellation()
+            return content
         } catch let error as LanguageModelSession.GenerationError {
+            try Task.checkCancellation()
             var mapped = Self.mapped(error)
             // The framework rejects a whole session whose *instructions* are in a
             // language it does not list — measured: Hebrew instructions fail even
@@ -247,6 +251,8 @@ public struct FoundationModelsEngine: TextIntelligence {
             }
             throw mapped
         } catch {
+            try Task.checkCancellation()
+            if error is CancellationError { throw error }
             throw AIEngineError.failed(error.localizedDescription)
         }
     }

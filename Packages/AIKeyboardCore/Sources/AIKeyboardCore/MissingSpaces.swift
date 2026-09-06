@@ -185,7 +185,9 @@ enum MissingSpaces {
 
     private static func segment(_ letters: String) -> [String]? {
         let count = letters.count
-        guard count >= minimumLetters, let language = lexiconLanguage(of: letters) else {
+        guard count >= minimumLetters, count <= 256,
+            let language = lexiconLanguage(of: letters)
+        else {
             return nil
         }
         let ranks = index(for: language)
@@ -202,7 +204,7 @@ enum MissingSpaces {
         cost[0] = 0
 
         for end in 1...count {
-            for start in 0..<end {
+            for start in max(0, end - ranks.maximumPieceLength)..<end {
                 guard cost[start].isFinite else { continue }
                 let piece = String(characters[start..<end])
                 guard
@@ -282,7 +284,7 @@ enum MissingSpaces {
     /// **A glued `ה` is allowed on a stem, never on the whole jammed token** —
     /// that is `המקורן` inside `מהמושלהמקורן`, and not `מהקורה` read as `מ`+`הקורה`.
     private static func pieceRank(
-        _ piece: String, language: KeyboardLanguage, ranks: [String: Int],
+        _ piece: String, language: KeyboardLanguage, ranks: RankIndex,
         ofWhole whole: String
     ) -> Int? {
         let key = language == .english ? piece.lowercased() : piece
@@ -308,27 +310,73 @@ enum MissingSpaces {
     }
 
     private static let shortPieceRankLimit = 250
-    private static let ranks = OSAllocatedUnfairLock(initialState: [String: [String: Int]]())
+    private static let ranks = OSAllocatedUnfairLock(initialState: [String: RankIndex]())
 
-    /// **`uncachedWords` rather than `words(for:)`, which is the same call
-    /// `TypoLexicon.load` makes and for the same reason.** This reads each string
-    /// exactly once, to key a dictionary, and never wants the array again — where
-    /// `words(for:)` keeps all 50,000 boxed strings alive for the life of the
-    /// process to serve `GroupedDecoder`, which indexes them on every grouped
-    /// keystroke. Borrowing that cache made one press of Fix cost a keyboard
-    /// extension two permanent 50,000-entry structures instead of one, in a
-    /// process with roughly 50 MB to live in.
-    private static func index(for language: KeyboardLanguage) -> [String: Int] {
+    private struct RankIndex {
+        private struct Entry {
+            let start: Int32
+            let end: Int32
+            let rank: Int32
+        }
+
+        private let bytes: [UInt8]
+        private let entries: [Entry]
+        let maximumPieceLength: Int
+
+        init(language: KeyboardLanguage) {
+            let text = GroupedLexiconResource.uncachedText(for: language)
+                .precomposedStringWithCanonicalMapping
+            let bytes = Array((language == .english ? text.lowercased() : text).utf8)
+            var entries: [Entry] = []
+            entries.reserveCapacity(50_000)
+            var start = 0
+            var maximumLength = 0
+            for end in 0...bytes.count where end == bytes.count || bytes[end] == 10 {
+                if start < end {
+                    entries.append(
+                        Entry(
+                            start: Int32(start), end: Int32(end), rank: Int32(entries.count)))
+                    maximumLength = max(maximumLength, end - start)
+                }
+                start = end + 1
+            }
+            entries.sort { left, right in
+                let lhs = bytes[Int(left.start)..<Int(left.end)]
+                let rhs = bytes[Int(right.start)..<Int(right.end)]
+                if lhs.elementsEqual(rhs) { return left.rank < right.rank }
+                return lhs.lexicographicallyPrecedes(rhs)
+            }
+            self.bytes = bytes
+            self.entries = entries
+            maximumPieceLength = maximumLength + (language == .hebrew ? 1 : 0)
+        }
+
+        subscript(word: String) -> Int? {
+            let key = Array(word.precomposedStringWithCanonicalMapping.utf8)
+            var low = 0
+            var high = entries.count
+            while low < high {
+                let middle = low + (high - low) / 2
+                let entry = entries[middle]
+                if bytes[Int(entry.start)..<Int(entry.end)].lexicographicallyPrecedes(key) {
+                    low = middle + 1
+                } else {
+                    high = middle
+                }
+            }
+            guard low < entries.count else { return nil }
+            let entry = entries[low]
+            guard bytes[Int(entry.start)..<Int(entry.end)].elementsEqual(key) else { return nil }
+            return Int(entry.rank)
+        }
+    }
+
+    private static func index(for language: KeyboardLanguage) -> RankIndex {
         ranks.withLock { store in
             if let known = store[language.languageTag] { return known }
-            var map: [String: Int] = [:]
-            map.reserveCapacity(50_000)
-            for (rank, word) in GroupedLexiconResource.uncachedWords(for: language).enumerated() {
-                let key = language == .english ? word.lowercased() : word
-                if map[key] == nil { map[key] = rank }
-            }
-            store[language.languageTag] = map
-            return map
+            let index = RankIndex(language: language)
+            store[language.languageTag] = index
+            return index
         }
     }
 }

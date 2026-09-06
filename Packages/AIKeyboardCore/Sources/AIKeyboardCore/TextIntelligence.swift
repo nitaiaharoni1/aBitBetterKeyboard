@@ -79,6 +79,7 @@ public protocol TextIntelligence: Sendable {
 /// the on-device model and marks the answer `onDeviceBestEffort` so the panel can
 /// say so, rather than either failing outright or passing off a guess as a fix.
 public struct RoutedIntelligence: Sendable {
+    static let maximumInputBytes = 16_384
     private let onDevice: (any TextIntelligence)?
     private let cloud: (any TextIntelligence)?
     private let deadline: Duration
@@ -139,6 +140,10 @@ public struct RoutedIntelligence: Sendable {
         _ action: AIAction,
         _ call: @escaping @Sendable (any TextIntelligence) async throws -> Value
     ) async throws -> AIOutput<Value> {
+        try Task.checkCancellation()
+        guard text.utf8.prefix(Self.maximumInputBytes + 1).count <= Self.maximumInputBytes else {
+            throw AIEngineError.inputTooLong
+        }
         var firstFailure: AIEngineError?
 
         // 1. On-device, when it says it can take this language.
@@ -146,6 +151,7 @@ public struct RoutedIntelligence: Sendable {
             do {
                 return AIOutput(try await bounded { try await call(onDevice) }, provenance: .onDevice)
             } catch let error as AIEngineError {
+                try Task.checkCancellation()
                 guard error.isWorthFallingBackFrom else { throw error }
                 firstFailure = error
             }
@@ -154,9 +160,11 @@ public struct RoutedIntelligence: Sendable {
         // 2. Cloud, either because the language is outside the on-device model's
         //    list or because on-device just failed.
         if let cloud {
+            try Task.checkCancellation()
             do {
                 return AIOutput(try await bounded { try await call(cloud) }, provenance: .cloud)
             } catch let error as AIEngineError {
+                try Task.checkCancellation()
                 guard error.isWorthFallingBackFrom else { throw error }
                 if firstFailure == nil || firstFailure!.isAvailabilityMiss {
                     firstFailure = error
@@ -168,10 +176,12 @@ public struct RoutedIntelligence: Sendable {
         //    run the on-device model outside its supported languages and label
         //    the answer for what it is.
         if let onDevice, !onDevice.canHandle(text, action: action) {
+            try Task.checkCancellation()
             do {
                 return AIOutput(
                     try await bounded { try await call(onDevice) }, provenance: .onDeviceBestEffort)
             } catch let error as AIEngineError {
+                try Task.checkCancellation()
                 throw firstFailure ?? error
             }
         }

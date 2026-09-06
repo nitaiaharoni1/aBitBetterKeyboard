@@ -365,7 +365,7 @@ extension KeyboardController {
         // so a thirty-second dictation would buy a dozen model calls to predict the
         // next word of a sentence the user is not typing. The local tier still
         // runs; it is free.
-        guard !isDictating else {
+        guard !isDictating, !isWorking else {
             refiner.cancel()
             pendingRefinementPosition = nil
             return
@@ -651,7 +651,7 @@ extension KeyboardController {
     /// backspace; `performIdleTyping` skips completing the word, and
     /// `insertSpace` already skips autocorrect, so the letters they kept stay.
     private var idleTypingMayRun: Bool {
-        guard overlay == .none, !isDictating, selection == nil else { return false }
+        guard overlay == .none, !isDictating, !isWorking, selection == nil else { return false }
         guard let after = target?.documentContextAfterInput,
             !Self.continuesWord(in: after)
         else { return false }

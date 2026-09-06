@@ -22,7 +22,7 @@ extension KeyboardController {
         // already been made by three dim keys, and a refusal strip opening under
         // somebody mid-sentence would be the banner coming back for exactly the
         // case it was taken away for.
-        guard !isDictationActive else { return }
+        guard !isDictationActive, !isWorking else { return }
 
         // Reply works on an empty field on purpose: answering a message you have
         // not started writing is the whole point of it.
@@ -65,7 +65,7 @@ extension KeyboardController {
             selectedTone = nil
             selectedToneIsCustom = false
             let source = aiSourceText
-            beginWork(.rewrite, showing: .none) { [engine] in
+            beginWork(.rewrite, showing: .none) { engine in
                 try await engine.variants(for: source, tone: nil)
             } apply: { controller, variants in
                 controller.variants = variants
@@ -222,7 +222,7 @@ extension KeyboardController {
         // A reply replaces nothing; it is inserted where the cursor already is.
         aiSourceText = ""
         replyContext = nil
-        beginWork(.reply, showing: .none) { [engine, weak self] in
+        beginWork(.reply, showing: .none) { [weak self] engine in
             let context: ScreenContext
             switch source {
             case .clipboard(let copied):
@@ -292,11 +292,14 @@ extension KeyboardController {
     func beginWork<Value: Sendable>(
         _ action: AIAction,
         showing destination: KeyboardOverlay,
-        work: @escaping @Sendable () async throws -> AIOutput<Value>,
+        work: @escaping @Sendable (RoutedIntelligence) async throws -> AIOutput<Value>,
         apply: @MainActor @escaping (KeyboardController, Value) -> Void
     ) {
+        guard !isWorking else { return }
         workingTask?.cancel()
+        cancelRefinement()
         guard permitsAIWork(action) else { return }
+        let engine = self.engine
         aiRequestPosition = suggestionPosition
         // A stale rim must not fade over a call that has already started again.
         endArrival()
@@ -325,7 +328,7 @@ extension KeyboardController {
             guard !Task.isCancelled else { return }
             let result: Result<AIOutput<Value>, Error>
             do {
-                result = .success(try await work())
+                result = .success(try await work(engine))
             } catch {
                 result = .failure(error)
             }

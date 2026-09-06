@@ -5,6 +5,7 @@ import Foundation
 extension BackendTransport {
 
     public func send(_ request: CloudRequest) async throws -> [String: String] {
+        try Task.checkCancellation()
         if case .shared(let defaults) = credential,
             !Self.allowsCloudAIProcessing(defaults: defaults)
         {
@@ -22,6 +23,7 @@ extension BackendTransport {
     private func send(
         _ request: CloudRequest, token: String?, allowCredentialRefresh: Bool
     ) async throws -> [String: String] {
+        try Task.checkCancellation()
         var body: [String: Any] = [
             "instructions": request.instructions,
             "prompt": request.prompt,
@@ -60,10 +62,32 @@ extension BackendTransport {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: urlRequest)
+            let (bytes, receivedResponse) = try await session.bytes(for: urlRequest)
+            defer { bytes.task.cancel() }
+            let maximumResponseBytes = 256 * 1_024
+            guard receivedResponse.expectedContentLength <= maximumResponseBytes else {
+                throw AIEngineError.failed("The response was too large. Try a shorter selection.")
+            }
+            var received = Data()
+            for try await byte in bytes {
+                try Task.checkCancellation()
+                guard received.count < maximumResponseBytes else {
+                    throw AIEngineError.failed("The response was too large. Try a shorter selection.")
+                }
+                received.append(byte)
+            }
+            data = received
+            response = receivedResponse
         } catch {
+            try Task.checkCancellation()
+            if error is CancellationError || (error as? URLError)?.code == .cancelled {
+                throw CancellationError()
+            }
+            if let error = error as? AIEngineError { throw error }
             throw AIEngineError.network(error.localizedDescription)
         }
+
+        try Task.checkCancellation()
 
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard status != 200 else { return try Self.decode(data) }
