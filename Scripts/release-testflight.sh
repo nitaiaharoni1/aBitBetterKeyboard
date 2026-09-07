@@ -147,7 +147,13 @@ status="${PIPESTATUS[0]}"
 # exact defect the comment above describes, reached a second way: the first fix
 # caught a failing pipeline, and this one has to catch a lying exit code. The log
 # is the only witness, so the log is what gets read.
-if [ "$status" -eq 0 ] && grep -qE "ERROR: \[altool|Failed to upload" "$build/upload.log"; then
+upload_receipt=false
+if grep -qx 'UPLOAD SUCCEEDED with no errors' "$build/upload.log" \
+    && grep -qE '^Delivery UUID: [0-9a-fA-F-]{36}$' "$build/upload.log"; then
+    upload_receipt=true
+fi
+if [ "$status" -eq 0 ] && [ "$upload_receipt" = false ] \
+    && grep -qE "ERROR: \[altool|Failed to upload" "$build/upload.log"; then
     status=1
 fi
 
