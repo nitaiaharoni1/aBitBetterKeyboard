@@ -234,11 +234,14 @@ public struct SuggestionBar: View {
         // Asked once for the whole row rather than per slot: it is a call into
         // the host, and the three candidates are three evaluations of `candidate`.
         let overSelectedWord = controller.selectedWord != nil
+        let hasSelection = controller.selection != nil
         return HStack(spacing: 0) {
             ForEach(0..<SuggestionEngine.barSlots, id: \.self) { slot in
                 if slot > 0 { candidateSeparator }
                 if let suggestion = slots[slot] {
-                    candidate(suggestion, replacesSelection: overSelectedWord)
+                    candidate(
+                        suggestion, replacesSelection: overSelectedWord,
+                        emphasized: hasSelection ? slot == 1 : suggestion.isDefault)
                         .accessibilityIdentifier("suggestion-\(slot)")
                 } else {
                     // `barHeight`, not a repeated 36: a floor taller than the row
@@ -315,7 +318,9 @@ public struct SuggestionBar: View {
         min(17 * Theme.DynamicType.scale(for: dynamicTypeSize), barHeight * 0.7)
     }
 
-    private func candidate(_ suggestion: Suggestion, replacesSelection: Bool = false) -> some View {
+    private func candidate(
+        _ suggestion: Suggestion, replacesSelection: Bool, emphasized: Bool
+    ) -> some View {
         Button {
             controller.apply(suggestion)
         } label: {
@@ -329,7 +334,7 @@ public struct SuggestionBar: View {
                     .system(
                         size: Self.candidateFontSize(
                             for: dynamicTypeSize, barHeight: barHeight),
-                        weight: suggestion.isDefault ? .bold : .light)
+                        weight: emphasized ? .bold : .light)
                 )
                 .foregroundStyle(Theme.Keys.label)
                 .lineLimit(1)
