@@ -277,7 +277,6 @@ extension KeyboardController {
             return false
         }
         guard !aiSourceText.isEmpty else {
-            target.insertText(replacement)
             // **The one branch here that used to skip this, and the only one that
             // changes the document without replacing anything.** It is how a Reply
             // lands — `runReply` empties `aiSourceText` on purpose, because a reply
@@ -286,14 +285,11 @@ extension KeyboardController {
             // the state Fix and Rewrite are drawn disabled in. Without the refresh
             // their keys stayed dim over a field that now held a whole sentence,
             // until some unrelated keystroke happened to recompute it.
-            refreshSuggestions()
-            return true
+            return insertAndRefresh(replacement, into: target)
         }
         if selection != nil {
             target.deleteBackward()
-            target.insertText(replacement)
-            refreshSuggestions()
-            return true
+            return insertAndRefresh(replacement, into: target)
         }
         let head = editSpanBeforeCursor
         let tail = editSpanAfterCursor
@@ -304,9 +300,7 @@ extension KeyboardController {
                 refreshSuggestions()
                 return false
             }
-            target.insertText(replacement)
-            refreshSuggestions()
-            return true
+            return insertAndRefresh(replacement, into: target)
         }
         let contextBeforeMove = contextBefore
         let contextAfterMove = contextAfter
@@ -346,6 +340,10 @@ extension KeyboardController {
             refreshSuggestions()
             return false
         }
+        return insertAndRefresh(replacement, into: target)
+    }
+
+    private func insertAndRefresh(_ replacement: String, into target: TextTarget) -> Bool {
         target.insertText(replacement)
         refreshSuggestions()
         return true

@@ -54,17 +54,26 @@ public enum DictationTextNormalizer {
         guard !leftLetters.isEmpty, !rightLetters.isEmpty else { return false }
         let allLetters = leftLetters + rightLetters
         if allLetters.allSatisfy({ (0x05D0...0x05EA).contains($0.value) }) {
-            if ["\"", "״", "“", "”"].contains(symbol) {
-                return rightLetters.count == 1
-            }
-            guard let last = leftLetters.last, "גזצ".unicodeScalars.contains(last) else {
-                return false
-            }
-            return leftLetters.count > 1 || before > 0 || after == 0 || rightLetters.count == 1
+            return shouldJoinHebrew(
+                left: left, right: right, symbol: symbol, before: before, after: after)
         }
         guard ["'", "’", "ʼ"].contains(symbol),
             allLetters.allSatisfy({ (65...90).contains($0.value) || (97...122).contains($0.value) })
         else { return false }
+        return shouldJoinEnglish(left: left, right: right)
+    }
+
+    private static func shouldJoinHebrew(
+        left: String, right: String, symbol: String, before: Int, after: Int
+    ) -> Bool {
+        let leftLetters = left.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+        let rightLetters = right.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+        if ["\"", "״", "“", "”"].contains(symbol) { return rightLetters.count == 1 }
+        guard let last = leftLetters.last, "גזצ".unicodeScalars.contains(last) else { return false }
+        return leftLetters.count > 1 || before > 0 || after == 0 || rightLetters.count == 1
+    }
+
+    private static func shouldJoinEnglish(left: String, right: String) -> Bool {
         let stem = left.lowercased()
         switch right.lowercased() {
         case "t":

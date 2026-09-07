@@ -104,22 +104,7 @@ public struct CloudIntelligence: TextIntelligence {
         let source = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !source.isEmpty else { throw AIEngineError.empty }
 
-        if let tone {
-            let fields = try await run(
-                instructions: Prompts.tone(tone, for: source, instruction: instruction),
-                prompt: "Message:\n\(source)",
-                fields: [CloudField("text", "The message rewritten in the requested register.")]
-            )
-            guard let rewritten = fields["text"]?.trimmed, !rewritten.isEmpty else {
-                throw AIEngineError.empty
-            }
-            // Tone replaces what the user typed with one string and no choice,
-            // so an invented commitment here is the one they send.
-            guard OutputGuard.addedSpecifics(in: rewritten, notIn: source).isEmpty else {
-                throw AIEngineError.invented
-            }
-            return [RewriteVariant(tone: tone, text: rewritten)]
-        }
+        if let tone { return try await toneVariant(tone, source: source, instruction: instruction) }
 
         // The first two fields are answered before the three versions are
         // written, and are there to be answered rather than shown: naming the
@@ -165,6 +150,25 @@ public struct CloudIntelligence: TextIntelligence {
             ],
             against: source
         )
+    }
+
+    private func toneVariant(
+        _ tone: ToneStyle, source: String, instruction: String?
+    ) async throws -> [RewriteVariant] {
+        let fields = try await run(
+            instructions: Prompts.tone(tone, for: source, instruction: instruction),
+            prompt: "Message:\n\(source)",
+            fields: [CloudField("text", "The message rewritten in the requested register.")]
+        )
+        guard let rewritten = fields["text"]?.trimmed, !rewritten.isEmpty else {
+            throw AIEngineError.empty
+        }
+        // Tone replaces what the user typed with one string and no choice, so an
+        // invented commitment here is the one they send.
+        guard OutputGuard.addedSpecifics(in: rewritten, notIn: source).isEmpty else {
+            throw AIEngineError.invented
+        }
+        return [RewriteVariant(tone: tone, text: rewritten)]
     }
 
     public func replies(to context: ScreenContext) async throws -> [ReplyOption] {

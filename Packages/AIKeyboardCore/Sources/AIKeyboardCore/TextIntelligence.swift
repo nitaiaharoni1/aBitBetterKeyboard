@@ -141,9 +141,7 @@ public struct RoutedIntelligence: Sendable {
         _ call: @escaping @Sendable (any TextIntelligence) async throws -> Value
     ) async throws -> AIOutput<Value> {
         try Task.checkCancellation()
-        guard text.utf8.prefix(Self.maximumInputBytes + 1).count <= Self.maximumInputBytes else {
-            throw AIEngineError.inputTooLong
-        }
+        try validateInput(text)
         var firstFailure: AIEngineError?
 
         // 1. On-device, when it says it can take this language.
@@ -191,6 +189,12 @@ public struct RoutedIntelligence: Sendable {
         // model and the build carries no key. Saying "no cloud model" here would
         // point at the half the user is least able to do anything about.
         throw AIEngineError.deviceNotSupported
+    }
+
+    private func validateInput(_ text: String) throws {
+        guard text.utf8.prefix(Self.maximumInputBytes + 1).count <= Self.maximumInputBytes else {
+            throw AIEngineError.inputTooLong
+        }
     }
 
     /// Caps how long any one engine may take.

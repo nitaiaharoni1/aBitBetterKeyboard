@@ -250,26 +250,40 @@ public struct KeySpec: Identifiable, Equatable, Sendable {
         // it is layout, not content.
         case .character(let value):
             return "char-\(value.replacingOccurrences(of: "\n", with: "-"))"
+        case .plane(_, let label): return "plane-\(label)"
+        case .shift, .backspace, .globe, .settings, .space, .ret, .dictation, .emoji:
+            return basicIdentifier(cap)
+        case .copyclip, .quickTone, .cursorLeft, .cursorRight, .deleteForward, .hideKeyboard,
+            .aiReply, .aiFix:
+            return actionIdentifier(cap)
+        }
+    }
+
+    private static func basicIdentifier(_ cap: KeyCap) -> String {
+        switch cap {
         case .shift: return "shift"
         case .backspace: return "backspace"
-        case .plane(_, let label): return "plane-\(label)"
         case .globe: return "globe"
         case .settings: return "settings"
         case .space: return "space"
         case .ret: return "return"
         case .dictation: return "dictation"
         case .emoji: return "emoji"
+        default: preconditionFailure("Unexpected basic key cap")
+        }
+    }
+
+    private static func actionIdentifier(_ cap: KeyCap) -> String {
+        switch cap {
         case .copyclip: return "copyclip"
         case .quickTone: return "quick-tone"
         case .cursorLeft: return "cursor-left"
         case .cursorRight: return "cursor-right"
         case .deleteForward: return "delete-forward"
         case .hideKeyboard: return "hide-keyboard"
-        // Kebab-case like their neighbours, because these reach a UI test and a
-        // screen reader through `addressableID`: `key-ai-reply` is what a test
-        // addresses, and it must not change once anything is written against it.
         case .aiReply: return "ai-reply"
         case .aiFix: return "ai-fix"
+        default: preconditionFailure("Unexpected action key cap")
         }
     }
 }

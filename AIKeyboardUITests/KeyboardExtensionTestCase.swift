@@ -49,12 +49,7 @@ class KeyboardExtensionTestCase: XCTestCase {
         // previous run is somewhere inside Keyboards. Walk back to the root
         // before navigating down.
         let general = settings.cells.staticTexts["General"]
-        for _ in 0..<8 {
-            if general.waitForExistence(timeout: 3) { break }
-            let back = settings.navigationBars.buttons.element(boundBy: 0)
-            guard back.exists else { break }
-            back.tap()
-        }
+        returnSettingsToRoot(settings, general: general)
         guard general.waitForExistence(timeout: 10) else {
             throw XCTSkip("Could not reach the Settings root; cannot enable the keyboard")
         }
@@ -95,6 +90,14 @@ class KeyboardExtensionTestCase: XCTestCase {
                 "Full Access was not granted, so iOS keeps the shared container from the keyboard")
         }
         settings.terminate()
+    }
+
+    private func returnSettingsToRoot(_ settings: XCUIApplication, general: XCUIElement) {
+        for _ in 0..<8 where !general.waitForExistence(timeout: 3) {
+            let back = settings.navigationBars.buttons.element(boundBy: 0)
+            guard back.exists else { break }
+            back.tap()
+        }
     }
 
     func tapCell(_ app: XCUIApplication, _ label: String) throws {

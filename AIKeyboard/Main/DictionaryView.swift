@@ -54,30 +54,7 @@ struct DictionaryView: View {
                         FullAccessNeededBanner(
                             message: Self.fullAccessMessage, context: "dictionary")
                     }
-                    addField
-
-                    if isEmpty {
-                        emptyState
-                    } else {
-                        searchField
-                        if filteredDictionary.isEmpty, filteredLearned.isEmpty {
-                            Text("No words match")
-                                .font(Theme.Fonts.callout)
-                                .foregroundStyle(Theme.Text.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, Theme.Space.lg)
-                        }
-                        if !filteredDictionary.isEmpty {
-                            addedList
-                        }
-                        if !filteredLearned.isEmpty {
-                            learnedLists
-                            caption
-                        }
-                        if !learned.isEmpty {
-                            forgetButton
-                        }
-                    }
+                    dictionaryContent
                 }
                 .padding(.horizontal, Theme.Space.md)
                 .padding(.bottom, Theme.Space.xl)
@@ -97,6 +74,26 @@ struct DictionaryView: View {
                 refreshLearned()
             }
         }
+    }
+
+    @ViewBuilder private var dictionaryContent: some View {
+        addField
+        if isEmpty { emptyState }
+        else {
+            searchField
+            if filteredDictionary.isEmpty, filteredLearned.isEmpty { noMatches }
+            if !filteredDictionary.isEmpty { addedList }
+            if !filteredLearned.isEmpty { learnedLists; caption }
+            if !learned.isEmpty { forgetButton }
+        }
+    }
+
+    private var noMatches: some View {
+        Text("No words match")
+            .font(Theme.Fonts.callout)
+            .foregroundStyle(Theme.Text.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, Theme.Space.lg)
     }
 
     // MARK: Added words
@@ -143,14 +140,16 @@ struct DictionaryView: View {
 
             Card(padding: Theme.Space.xs) {
                 VStack(spacing: 0) {
-                    ForEach(Array(filteredDictionary.enumerated()), id: \.element) { index, word in
-                        if index > 0 {
-                            Divider.themed.padding(.leading, Theme.Space.xs)
-                        }
-                        wordRow(word, count: nil) { removeAdded(word) }
-                    }
+                    addedRows
                 }
             }
+        }
+    }
+
+    @ViewBuilder private var addedRows: some View {
+        ForEach(Array(filteredDictionary.enumerated()), id: \.element) { index, word in
+            if index > 0 { Divider.themed.padding(.leading, Theme.Space.xs) }
+            wordRow(word, count: nil) { removeAdded(word) }
         }
     }
 
@@ -159,30 +158,31 @@ struct DictionaryView: View {
     private var learnedLists: some View {
         let groups = groupedLearned
         return VStack(alignment: .leading, spacing: Theme.Space.md) {
-            ForEach(groups, id: \.language.id) { group in
-                VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    listHeader(
-                        groups.count > 1
-                            ? "From typing · \(group.language.displayName)"
-                            : "From typing",
-                        count: group.words.count)
-                    let shown = visibleWords(of: group)
-                    Card(padding: Theme.Space.xs) {
-                        VStack(spacing: 0) {
-                            ForEach(Array(shown.enumerated()), id: \.element.id) {
-                                index, word in
-                                if index > 0 {
-                                    Divider.themed.padding(.leading, Theme.Space.xs)
-                                }
-                                wordRow(word.word, count: word.count) { forgetLearned(word) }
-                            }
-                            if shown.count < group.words.count || isExpanded(group.language) {
-                                Divider.themed.padding(.leading, Theme.Space.xs)
-                                expandRow(for: group)
-                            }
-                        }
-                    }
-                }
+            ForEach(groups, id: \.language.id) { group in learnedGroup(group, total: groups.count) }
+        }
+    }
+
+    private func learnedGroup(
+        _ group: (language: KeyboardLanguage, words: [LearnedWord]), total: Int
+    ) -> some View {
+        let shown = visibleWords(of: group)
+        return VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            listHeader(total > 1 ? "From typing · \(group.language.displayName)" : "From typing", count: group.words.count)
+            Card(padding: Theme.Space.xs) { learnedRows(shown, group: group) }
+        }
+    }
+
+    @ViewBuilder private func learnedRows(
+        _ shown: [LearnedWord], group: (language: KeyboardLanguage, words: [LearnedWord])
+    ) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(shown.enumerated()), id: \.element.id) { index, word in
+                if index > 0 { Divider.themed.padding(.leading, Theme.Space.xs) }
+                wordRow(word.word, count: word.count) { forgetLearned(word) }
+            }
+            if shown.count < group.words.count || isExpanded(group.language) {
+                Divider.themed.padding(.leading, Theme.Space.xs)
+                expandRow(for: group)
             }
         }
     }

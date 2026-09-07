@@ -119,12 +119,7 @@ public enum EditScope {
                 // improved the one next to it keeps the correction and loses the
                 // improvement.
                 if was.count == now.count {
-                    kept += zip(was, now).map { old, new in
-                        if let named, !named.contains(word(old.text)), !named.contains(word(new.text)) {
-                            return old
-                        }
-                        return isSpellingVariant(word(old.text), word(new.text)) ? old : new
-                    }
+                    kept += zip(was, now).map { pair in reconciledPair(pair.0, pair.1, named: named) }
                     continue
                 }
                 // A span that changed shape cannot be split that way, so all of
@@ -139,6 +134,11 @@ public enum EditScope {
             }
         }
         return withoutAnAddedHebrewFullStop(joined(kept), source: source)
+    }
+
+    private static func reconciledPair(_ old: Token, _ new: Token, named: Set<String>?) -> Token {
+        if let named, !named.contains(word(old.text)), !named.contains(word(new.text)) { return old }
+        return isSpellingVariant(word(old.text), word(new.text)) ? old : new
     }
 
     /// Whether `candidate` is a leftover scrap of `source` rather than a

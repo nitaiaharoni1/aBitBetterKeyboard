@@ -333,24 +333,31 @@ extension KeyboardController {
                 result = .failure(error)
             }
             guard !Task.isCancelled, let self else { return }
-            guard self.aiRequestBelongsToCurrentDocument else {
-                self.cancelAIWork()
-                return
-            }
-            switch result {
-            case .success(let output):
-                guard self.permitsAIWork(action) else { return }
-                apply(self, output.value)
-                guard !Task.isCancelled else { return }
-                self.aiProvenance = output.provenance
-            case .failure(let error):
-                if !(error is CancellationError) {
-                    self.aiError = (error as? AIEngineError) ?? .failed(error.localizedDescription)
-                }
-            }
-            self.workingTask = nil
-            withAnimation(Theme.Motion.content) { self.isWorking = false }
+            self.finishWork(result, action: action, apply: apply)
         }
+    }
+
+    private func finishWork<Value: Sendable>(
+        _ result: Result<AIOutput<Value>, Error>, action: AIAction,
+        apply: @MainActor @escaping (KeyboardController, Value) -> Void
+    ) {
+        guard aiRequestBelongsToCurrentDocument else {
+            cancelAIWork()
+            return
+        }
+        switch result {
+        case .success(let output):
+            guard permitsAIWork(action) else { return }
+            apply(self, output.value)
+            guard !Task.isCancelled else { return }
+            aiProvenance = output.provenance
+        case .failure(let error):
+            if !(error is CancellationError) {
+                aiError = (error as? AIEngineError) ?? .failed(error.localizedDescription)
+            }
+        }
+        workingTask = nil
+        withAnimation(Theme.Motion.content) { isWorking = false }
     }
 
     var aiRequestBelongsToCurrentDocument: Bool {

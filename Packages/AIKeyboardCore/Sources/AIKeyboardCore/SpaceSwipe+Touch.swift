@@ -19,19 +19,7 @@ extension SpaceSwipe {
     /// stopped asking for a language and never asked for a space.
     public struct Touch: Equatable, Sendable {
 
-        public enum State: Equatable, Sendable {
-            /// No finger on the space bar.
-            case away
-            /// A finger is down and the document is owed a space.
-            case owesSpace
-            /// The touch has travelled far enough to be a language slide.
-            case sliding
-            /// Another key was pressed while this one was down, so the space has
-            /// already been typed. The lift owes nothing and switches nothing.
-            case spent
-        }
-
-        public private(set) var state: State = .away
+        public private(set) var state: SpaceSwipeTouchState = .away
 
         /// True once the key has reported this touch gone without a lift.
         ///
@@ -78,22 +66,14 @@ extension SpaceSwipe {
             return true
         }
 
-        public enum Outcome: Equatable, Sendable {
-            /// Nothing is owed: the touch was already spent, or was never seen to
-            /// begin.
-            case nothing
-            case space
-            case slide(CGFloat)
-        }
-
-        public mutating func lifted(after translation: CGFloat) -> Outcome {
+        public mutating func lifted(after translation: CGFloat) -> SpaceSwipeTouchOutcome {
             // The lift carries the distance because it may be the only event that
             // does. A touch delivered as one `onChanged` and then `onEnded` never
             // reports its travel any other way, and without this a swipe that
             // arrives that way types a space.
             moved(to: translation)
 
-            let outcome: Outcome
+            let outcome: SpaceSwipeTouchOutcome
             switch state {
             case .sliding: outcome = .slide(translation)
             case .owesSpace: outcome = .space
@@ -104,6 +84,24 @@ extension SpaceSwipe {
             return outcome
         }
     }
+}
+
+public enum SpaceSwipeTouchState: Equatable, Sendable {
+    /// No finger on the space bar.
+    /// A finger is down and the document is owed a space.
+    /// The touch has travelled far enough to be a language slide.
+    /// Another key was pressed while this one was down, so the space has already been typed.
+    case away, owesSpace, sliding, spent
+}
+
+public enum SpaceSwipeTouchOutcome: Equatable, Sendable {
+    /// Nothing is owed: the touch was already spent, or was never seen to begin.
+    case nothing, space, slide(CGFloat)
+}
+
+extension SpaceSwipe.Touch {
+    public typealias State = SpaceSwipeTouchState
+    public typealias Outcome = SpaceSwipeTouchOutcome
 }
 
 // MARK: - What the key reports

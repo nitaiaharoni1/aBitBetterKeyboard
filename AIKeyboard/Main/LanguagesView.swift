@@ -19,34 +19,7 @@ struct LanguagesView: View {
                 AmbientBackground()
 
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: Theme.Space.md) {
-                            if search.isSearching {
-                                AppSearchResults(
-                                    includeLanguages: false,
-                                    showsEmpty: LanguageCatalogueSection.matches(for: search.query)
-                                        .isEmpty)
-                                LanguageCatalogueSection(
-                                    filter: search.query, hideIfEmpty: true)
-                            } else {
-                                activeSummary
-                                dictionaryRow
-                                LanguageCatalogueSection()
-                                LanguageMixingSection()
-                                    .searchTarget(.mixing)
-                            }
-                        }
-                        .padding(.horizontal, Theme.Space.md)
-                        .padding(.bottom, Theme.Space.xl)
-                    }
-                    .scrollDismissesKeyboard(.immediately)
-                    .onChange(of: search.highlightedLanguage) { _, _ in
-                        scrollToSearchHit(proxy)
-                    }
-                    .onChange(of: search.highlightedRow) { _, _ in
-                        scrollToSearchHit(proxy)
-                    }
-                    .onAppear { scrollToSearchHit(proxy) }
+                    languagesScroll(proxy: proxy)
                 }
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
@@ -72,6 +45,30 @@ struct LanguagesView: View {
         }
     }
 
+    private func languagesScroll(proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Space.md) {
+                if search.isSearching {
+                    AppSearchResults(
+                        includeLanguages: false,
+                        showsEmpty: LanguageCatalogueSection.matches(for: search.query).isEmpty)
+                    LanguageCatalogueSection(filter: search.query, hideIfEmpty: true)
+                } else {
+                    activeSummary
+                    dictionaryRow
+                    LanguageCatalogueSection()
+                    LanguageMixingSection().searchTarget(.mixing)
+                }
+            }
+            .padding(.horizontal, Theme.Space.md)
+            .padding(.bottom, Theme.Space.xl)
+        }
+        .scrollDismissesKeyboard(.immediately)
+        .onChange(of: search.highlightedLanguage) { _, _ in scrollToSearchHit(proxy) }
+        .onChange(of: search.highlightedRow) { _, _ in scrollToSearchHit(proxy) }
+        .onAppear { scrollToSearchHit(proxy) }
+    }
+
     // MARK: Active summary
 
     /// What the globe key will cycle through, as a row of chips.
@@ -93,11 +90,7 @@ struct LanguagesView: View {
                             .font(Theme.Fonts.callout)
                             .foregroundStyle(Theme.Text.secondary)
                     } else {
-                        FlowRow(spacing: Theme.Space.xs) {
-                            ForEach(store.enabledLanguages) { language in
-                                chip(for: language)
-                            }
-                        }
+                        enabledLanguageChips
                     }
 
                 }
@@ -113,6 +106,12 @@ struct LanguagesView: View {
                 FullAccessNeededBanner(
                     message: SetupState.languagesNeedFullAccess, context: "languages")
             }
+        }
+    }
+
+    private var enabledLanguageChips: some View {
+        FlowRow(spacing: Theme.Space.xs) {
+            ForEach(store.enabledLanguages) { language in chip(for: language) }
         }
     }
 

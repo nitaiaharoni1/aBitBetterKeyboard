@@ -1,17 +1,5 @@
 import Foundation
 
-/// One word the keyboard has seen this person type, with how often.
-///
-/// Personal dictionary lists these. Ranking still ignores a count below
-/// `PersonalLanguageModel.boostThreshold`.
-public struct LearnedWord: Identifiable, Equatable, Sendable {
-    public let word: String
-    public let count: Int
-    public let language: KeyboardLanguage
-
-    public var id: String { "\(language.languageTag)\u{1F}\(word)" }
-}
-
 @MainActor
 public final class PersonalLanguageModel {
 
@@ -37,26 +25,7 @@ public final class PersonalLanguageModel {
     /// several times a second.
     private static let flushInterval = 25
 
-    enum LearningSource: Sendable {
-        case typed
-        case selectedSuggestion
-        case automatic
-    }
-
-    private struct VerbatimToken: Codable {
-        var kind: PersonalToken.Kind
-        var text: String
-        var count: Int
-        var languageTag: String
-    }
-
-    private struct LegacyPhone: Decodable {
-        var text: String
-        var count: Int
-        var languageTag: String
-    }
-
-    private struct Store: Codable {
+    struct Store: Codable {
         var unigrams: [String: [String: Int]] = [:]
         var bigrams: [String: [String: Int]] = [:]
         var selected: [String: [String: Int]] = [:]
@@ -64,16 +33,10 @@ public final class PersonalLanguageModel {
         var rejected: [String: [String: Int]] = [:]
         var tokens: [String: VerbatimToken] = [:]
 
-        private enum CodingKeys: String, CodingKey {
-            case unigrams, bigrams, selected, automatic, rejected, tokens
-        }
-
-        private enum LegacyCodingKeys: String, CodingKey { case phones }
-
         init() {}
 
         init(from decoder: any Decoder) throws {
-            let values = try decoder.container(keyedBy: CodingKeys.self)
+            let values = try decoder.container(keyedBy: PersonalStoreCodingKeys.self)
             unigrams = try values.decodeIfPresent([String: [String: Int]].self, forKey: .unigrams) ?? [:]
             bigrams = try values.decodeIfPresent([String: [String: Int]].self, forKey: .bigrams) ?? [:]
             selected = try values.decodeIfPresent([String: [String: Int]].self, forKey: .selected) ?? [:]
@@ -85,7 +48,7 @@ public final class PersonalLanguageModel {
                 mergeToken(
                     kind: token.kind, text: token.text, count: token.count, languageTag: token.languageTag)
             }
-            let legacy = try decoder.container(keyedBy: LegacyCodingKeys.self)
+            let legacy = try decoder.container(keyedBy: PersonalStoreLegacyCodingKeys.self)
             let phones = try legacy.decodeIfPresent([String: LegacyPhone].self, forKey: .phones) ?? [:]
             for phone in phones.values.sorted(by: { $0.text < $1.text }) {
                 mergeToken(kind: .phone, text: phone.text, count: phone.count, languageTag: phone.languageTag)
@@ -132,7 +95,7 @@ public final class PersonalLanguageModel {
         }
     }
 
-    private var store = Store()
+    var store = Store()
     /// Rebuilt from the Hebrew half of `store` on first use after a mutation.
     /// Nil means "not built", not "empty".
     private var hebrewIndex: HebrewPersonalIndex?
@@ -147,7 +110,7 @@ public final class PersonalLanguageModel {
     private var loadedGeneration = 0
     /// What the file looked like when `store` was decoded from it. See
     /// `FileStamp` and `reload()`.
-    private var loadedStamp: FileStamp?
+    var loadedStamp: FileStamp?
 
     /// Enough of the file's identity to answer "is this the same bytes I already
     /// decoded" without reading them.
@@ -164,11 +127,6 @@ public final class PersonalLanguageModel {
     /// .atomic)`, a create and a rename, so two of those from two processes are
     /// milliseconds apart at their closest. It is a real limit and not a
     /// reachable one.
-    private struct FileStamp: Equatable {
-        let modified: Date
-        let size: Int
-    }
-
     /// - Parameter url: where to persist. Defaults to the App Group container;
     ///   `nil` keeps the model entirely in memory, which is what tests and the
     ///   corpus harness use so a scoring run cannot inherit a developer's typing.
@@ -223,27 +181,6 @@ public final class PersonalLanguageModel {
         return selected && !Self.isVerbatimToken(folded) ? max(observed, Self.boostThreshold) : observed
     }
 
-    public func learnedWords() -> [LearnedWord] {
-        var out: [LearnedWord] = []
-        for (tag, counts) in store.unigrams {
-            guard let language = KeyboardLanguage(languageTag: tag) else { continue }
-            for (word, count) in counts {
-                out.append(LearnedWord(word: word, count: count, language: language))
-            }
-        }
-        out += store.tokens.values.compactMap { token in
-            guard let language = KeyboardLanguage(languageTag: token.languageTag) else { return nil }
-            return LearnedWord(word: token.text, count: token.count, language: language)
-        }
-        return out.sorted {
-            if $0.count != $1.count { return $0.count > $1.count }
-            if $0.language.displayName != $1.language.displayName {
-                return $0.language.displayName < $1.language.displayName
-            }
-            return $0.word < $1.word
-        }
-    }
-
     /// Re-read the App Group file. The keyboard writes it; the app's in-memory
     /// copy is from launch and goes stale the moment you type elsewhere.
     /// A previously loaded file that disappears means empty: Forget deletes
@@ -290,13 +227,6 @@ public final class PersonalLanguageModel {
         if Self.isVerbatimToken(word) { return count(of: word, in: language) > 0 }
         return count(of: word, in: language) >= Self.protectThreshold
             || (store.selected[language.languageTag]?[SeedLanguageModel.fold(word)] ?? 0) > 0
-    }
-
-    func allWords(in language: KeyboardLanguage) -> [String] {
-        guard let counts = store.unigrams[language.languageTag] else { return [] }
-        return counts.filter { isReadable($0.key, count: $0.value, in: language) }
-            .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
-            .map(\.key)
     }
 
     func words(startingWith prefix: String, in language: KeyboardLanguage, limit: Int) -> [String] {
@@ -463,7 +393,7 @@ public final class PersonalLanguageModel {
         PersonalToken.kind(of: text) != nil
     }
 
-    private func isReadable(_ word: String, count: Int, in language: KeyboardLanguage) -> Bool {
+    func isReadable(_ word: String, count: Int, in language: KeyboardLanguage) -> Bool {
         count >= Self.boostThreshold || (store.selected[language.languageTag]?[word] ?? 0) > 0
     }
 
@@ -499,13 +429,7 @@ public final class PersonalLanguageModel {
         let tag = language.languageTag
         switch source {
         case .automatic:
-            store.automatic[tag, default: [:]][folded] = Self.incremented(store.automatic[tag]?[folded])
-            if store.automatic[tag, default: [:]].count > Self.unigramCap {
-                store.automatic[tag] = halved(store.automatic[tag] ?? [:], limit: Self.unigramCap)
-            }
-            pendingWrites += 1
-            if pendingWrites >= Self.flushInterval { save() }
-            return true
+            return recordAutomatic(folded, tag: tag)
         case .selectedSuggestion:
             store.selected[tag, default: [:]][folded] = Self.incremented(store.selected[tag]?[folded])
         case .typed:
@@ -524,6 +448,16 @@ public final class PersonalLanguageModel {
         let prunedHebrew = prune()
         if language.script == .hebrew || prunedHebrew { invalidateHebrewIndex() }
         invalidateFollowerIndexes()
+        pendingWrites += 1
+        if pendingWrites >= Self.flushInterval { save() }
+        return true
+    }
+
+    private func recordAutomatic(_ folded: String, tag: String) -> Bool {
+        store.automatic[tag, default: [:]][folded] = Self.incremented(store.automatic[tag]?[folded])
+        if store.automatic[tag, default: [:]].count > Self.unigramCap {
+            store.automatic[tag] = halved(store.automatic[tag] ?? [:], limit: Self.unigramCap)
+        }
         pendingWrites += 1
         if pendingWrites >= Self.flushInterval { save() }
         return true

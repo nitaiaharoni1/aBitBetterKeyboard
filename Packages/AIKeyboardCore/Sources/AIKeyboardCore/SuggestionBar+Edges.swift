@@ -189,18 +189,7 @@ extension SuggestionBar {
             // never the tone's, for the reason `.claude/rules/suggestion-bar.md`
             // records — and the tone survives in the spoken label, which is where
             // the key in the action row keeps it too.
-            edgeButton(
-                systemImage: Self.toneButtonSymbol,
-                label: AIAction.rewrite.title,
-                identifier: "bar-tone",
-                spokenLabel: "Rewrite as \(controller.defaultTone.title)",
-                isActive: controller.isActionKeyActive(.quickTone),
-                activity: KeyActivity.resolve(for: .quickTone, controller: controller),
-                isDisabled: controller.isActionKeyDisabled(.quickTone),
-                disabledHint: controller.actionKeyDisabledReason(.quickTone)
-            ) {
-                controller.runDefaultTone()
-            }
+            landscapeToneButton
         case .quickTone:
             toneButton
         case .dictation:
@@ -255,6 +244,17 @@ extension SuggestionBar {
                 }
             }
         }
+    }
+
+    private var landscapeToneButton: some View {
+        edgeButton(
+            systemImage: Self.toneButtonSymbol, label: AIAction.rewrite.title,
+            identifier: "bar-tone", spokenLabel: "Rewrite as \(controller.defaultTone.title)",
+            isActive: controller.isActionKeyActive(.quickTone),
+            activity: KeyActivity.resolve(for: .quickTone, controller: controller),
+            isDisabled: controller.isActionKeyDisabled(.quickTone),
+            disabledHint: controller.actionKeyDisabledReason(.quickTone)
+        ) { controller.runDefaultTone() }
     }
 
     /// A bar copy of an action key, lit the same way the key in the grid is.

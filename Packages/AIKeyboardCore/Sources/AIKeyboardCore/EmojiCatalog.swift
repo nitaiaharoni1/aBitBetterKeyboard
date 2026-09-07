@@ -161,12 +161,7 @@ public enum EmojiCatalog {
     static let loaded: Loaded = load()
 
     private struct Payload: Decodable {
-        struct Category: Decodable {
-            let id: String
-            let icon: String
-            let emoji: [String]
-        }
-        let categories: [Category]
+        let categories: [EmojiCatalogPayloadCategory]
         let keywords: [String: String]
         /// Absent in version 1 of the file, so this decodes as empty rather
         /// than throwing — a keyboard with no tone strips still types.
@@ -212,4 +207,10 @@ public enum EmojiCatalog {
             return Loaded(failure: "EmojiCatalog.json could not be read: \(error)")
         }
     }
+}
+
+private struct EmojiCatalogPayloadCategory: Decodable {
+    let id: String
+    let icon: String
+    let emoji: [String]
 }

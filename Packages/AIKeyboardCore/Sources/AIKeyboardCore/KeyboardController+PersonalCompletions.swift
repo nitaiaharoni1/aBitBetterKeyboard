@@ -53,29 +53,7 @@ extension KeyboardController {
             let after = target?.documentContextAfterInput,
             !PersonalToken.continues(in: after, kind: candidate.kind)
         else {
-            if before.isEmpty, !documentHasText, deletedWordPrefix == nil {
-                commitPendingPersonalToken()
-            } else if let draft = pendingPersonalValue, draft.kind == .phone,
-                before.hasPrefix(draft.contextBefore),
-                before.count > draft.contextBefore.count,
-                before.dropFirst(draft.contextBefore.count).allSatisfy({ $0 == "." || $0.isWhitespace }),
-                let after = target?.documentContextAfterInput,
-                !PersonalToken.continues(in: after, kind: .phone)
-            {
-                if before.dropFirst(draft.contextBefore.count).contains(where: \.isWhitespace) {
-                    commitPendingPersonalToken()
-                } else {
-                    return true
-                }
-            } else if let draft = pendingPersonalValue, draft.kind == .email,
-                before.hasPrefix(draft.contextBefore),
-                before.dropFirst(draft.contextBefore.count).first?.isWhitespace == true
-            {
-                commitPendingPersonalToken()
-            } else {
-                pendingPersonalValue = nil
-            }
-            return false
+            return stageNoPersonalToken(in: before)
         }
         pendingPersonalValue = PendingPersonalToken(
             kind: candidate.kind, text: candidate.text, contextBefore: before,
@@ -84,6 +62,29 @@ extension KeyboardController {
             permitted: SecureField.permitsRead(
                 secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType))
         return true
+    }
+
+    private func stageNoPersonalToken(in before: String) -> Bool {
+        if before.isEmpty, !documentHasText, deletedWordPrefix == nil {
+            commitPendingPersonalToken()
+            return false
+        }
+        guard let draft = pendingPersonalValue else { return false }
+        let added = before.dropFirst(draft.contextBefore.count)
+        if draft.kind == .phone, before.hasPrefix(draft.contextBefore), !added.isEmpty,
+            added.allSatisfy({ $0 == "." || $0.isWhitespace }),
+            let after = target?.documentContextAfterInput,
+            !PersonalToken.continues(in: after, kind: .phone)
+        {
+            if added.contains(where: \.isWhitespace) { commitPendingPersonalToken() }
+            return !added.contains(where: \.isWhitespace)
+        }
+        if draft.kind == .email, before.hasPrefix(draft.contextBefore), added.first?.isWhitespace == true {
+            commitPendingPersonalToken()
+        } else {
+            pendingPersonalValue = nil
+        }
+        return false
     }
 
     public func commitPendingPersonalToken() {

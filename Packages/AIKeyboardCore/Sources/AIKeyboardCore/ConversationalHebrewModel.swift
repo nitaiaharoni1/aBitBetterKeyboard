@@ -9,11 +9,11 @@ import os
 final class ConversationalHebrewModel: @unchecked Sendable {
     private static let resourceName = "ConversationalHebrew"
     private static let resourceExtension = "akn1"
-    private static let triPairsU32Flag: UInt16 = 1
+    static let triPairsU32Flag: UInt16 = 1
     private static let sectionCount = 11
     private static let headerSize = 32 + sectionCount * 8
 
-    private enum Section: Int, CaseIterable {
+    enum Section: Int, CaseIterable {
         case strings
         case words
         case counts
@@ -27,12 +27,12 @@ final class ConversationalHebrewModel: @unchecked Sendable {
         case triFollow
     }
 
-    private struct Span {
+    struct Span {
         let offset: Int
         let length: Int
     }
 
-    private struct Header {
+    struct Header {
         let flags: UInt16
         let vocabularyCount: Int
         let bigramRowCount: Int
@@ -42,7 +42,7 @@ final class ConversationalHebrewModel: @unchecked Sendable {
         let sections: [Span]
     }
 
-    private final class Mapping {
+    final class Mapping {
         let pointer: UnsafeRawPointer
         let count: Int
 
@@ -76,8 +76,8 @@ final class ConversationalHebrewModel: @unchecked Sendable {
     private static let logger = Logger(
         subsystem: "com.nitai.aikeyboard", category: "ConversationalHebrewModel")
 
-    private let mapping: Mapping
-    private let header: Header
+    let mapping: Mapping
+    let header: Header
 
     private init?(url: URL) {
         guard let mapping = Mapping(url: url),
@@ -244,91 +244,7 @@ final class ConversationalHebrewModel: @unchecked Sendable {
             sections: sections)
     }
 
-    private func validate() -> Bool {
-        let vocab = header.vocabularyCount
-        guard vocab > 0, vocab <= Int(UInt16.max),
-            exactLength(.words, vocab, width: 6),
-            exactLength(.counts, vocab, width: 4),
-            exactLength(.alpha, vocab, width: 4),
-            exactLength(.byLength, vocab, width: 4),
-            exactLength(.biFirst, vocab + 1, width: 4),
-            exactLength(.biFollow, header.bigramEdgeCount, width: 4),
-            exactLength(
-                .triPairs, header.trigramKeyCount,
-                width: header.flags & Self.triPairsU32Flag != 0 ? 4 : 8),
-            exactLength(.triFirst, header.trigramKeyCount + 1, width: 4),
-            exactLength(.triFollow, header.trigramEdgeCount, width: 4),
-            span(.lengthFirst).length >= 8,
-            span(.lengthFirst).length % 4 == 0
-        else { return false }
-
-        var previousCount = UInt32.max
-        var previousWord: Int?
-        for wordID in 0..<vocab {
-            guard let descriptor = wordDescriptor(wordID),
-                descriptor.offset <= span(.strings).length,
-                descriptor.byteCount <= span(.strings).length - descriptor.offset,
-                validUTF8(wordID, expectedCharacters: descriptor.characterCount),
-                let count = u32(.counts, wordID),
-                count <= previousCount
-            else { return false }
-            if count == previousCount, let previousWord,
-                compareWords(previousWord, wordID) != .orderedAscending
-            {
-                return false
-            }
-            previousCount = count
-            previousWord = wordID
-        }
-
-        guard validatePermutation(.alpha), validatePermutation(.byLength) else { return false }
-        for index in 1..<vocab {
-            guard let left = u32(.alpha, index - 1), let right = u32(.alpha, index),
-                compareWords(Int(left), Int(right)) == .orderedAscending
-            else { return false }
-        }
-
-        let lengthEntries = span(.lengthFirst).length / 4
-        var previous = 0
-        for bucket in 0..<lengthEntries {
-            guard let raw = u32(.lengthFirst, bucket) else { return false }
-            let next = Int(raw)
-            guard next >= previous, next <= vocab else { return false }
-            if bucket > 0 {
-                for index in previous..<next {
-                    guard let wordID = u32(.byLength, index),
-                        wordDescriptor(Int(wordID))?.characterCount == bucket - 1
-                    else { return false }
-                }
-            }
-            previous = next
-        }
-        guard previous == vocab else { return false }
-
-        var bigramRows = 0
-        guard
-            validateCSR(
-                first: .biFirst, followers: .biFollow, rows: vocab,
-                edgeCount: header.bigramEdgeCount, nonemptyRows: &bigramRows),
-            bigramRows == header.bigramRowCount
-        else { return false }
-
-        var priorPair: UInt64?
-        for index in 0..<header.trigramKeyCount {
-            guard let pair = trigramPair(at: index) else { return false }
-            let first = Int(pair >> 32)
-            let second = Int(pair & 0xFFFF_FFFF)
-            guard first < vocab, second < vocab, priorPair.map({ $0 < pair }) ?? true
-            else { return false }
-            priorPair = pair
-        }
-        var ignoredRows = 0
-        return validateCSR(
-            first: .triFirst, followers: .triFollow, rows: header.trigramKeyCount,
-            edgeCount: header.trigramEdgeCount, nonemptyRows: &ignoredRows)
-    }
-
-    private func validateCSR(
+    func validateCSR(
         first: Section, followers: Section, rows: Int, edgeCount: Int,
         nonemptyRows: inout Int
     ) -> Bool {
@@ -349,7 +265,7 @@ final class ConversationalHebrewModel: @unchecked Sendable {
         return true
     }
 
-    private func validatePermutation(_ section: Section) -> Bool {
+    func validatePermutation(_ section: Section) -> Bool {
         var seen = [Bool](repeating: false, count: header.vocabularyCount)
         for index in 0..<header.vocabularyCount {
             guard let value = u32(section, index), value < UInt32(seen.count),
@@ -360,35 +276,15 @@ final class ConversationalHebrewModel: @unchecked Sendable {
         return true
     }
 
-    private func validUTF8(_ wordID: Int, expectedCharacters: Int) -> Bool {
+    func validUTF8(_ wordID: Int, expectedCharacters: Int) -> Bool {
         guard let bytes = wordBytes(wordID) else { return false }
         var index = 0
         var characters = 0
         while index < bytes.count {
-            let first = bytes[index]
-            let width: Int
-            let minimum: UInt32
-            var scalar: UInt32
-            switch first {
-            case 0x00...0x7F:
-                width = 1
-                minimum = 0
-                scalar = UInt32(first)
-            case 0xC2...0xDF:
-                width = 2
-                minimum = 0x80
-                scalar = UInt32(first & 0x1F)
-            case 0xE0...0xEF:
-                width = 3
-                minimum = 0x800
-                scalar = UInt32(first & 0x0F)
-            case 0xF0...0xF4:
-                width = 4
-                minimum = 0x10000
-                scalar = UInt32(first & 0x07)
-            default:
-                return false
-            }
+            guard let lead = Self.utf8Lead(bytes[index]) else { return false }
+            let width = lead.width
+            let minimum = lead.minimum
+            var scalar = lead.scalar
             guard width <= bytes.count - index else { return false }
             for offset in 1..<width {
                 let continuation = bytes[index + offset]
@@ -402,6 +298,16 @@ final class ConversationalHebrewModel: @unchecked Sendable {
             characters += 1
         }
         return characters == expectedCharacters
+    }
+
+    private static func utf8Lead(_ byte: UInt8) -> (width: Int, minimum: UInt32, scalar: UInt32)? {
+        switch byte {
+        case 0x00...0x7F: return (1, 0, UInt32(byte))
+        case 0xC2...0xDF: return (2, 0x80, UInt32(byte & 0x1F))
+        case 0xE0...0xEF: return (3, 0x800, UInt32(byte & 0x0F))
+        case 0xF0...0xF4: return (4, 0x10000, UInt32(byte & 0x07))
+        default: return nil
+        }
     }
 
     private func identifier(of bytes: [UInt8]) -> Int? {
@@ -497,7 +403,7 @@ final class ConversationalHebrewModel: @unchecked Sendable {
         return word.count < bytes.count ? -1 : 1
     }
 
-    private func compareWords(_ lhs: Int, _ rhs: Int) -> ComparisonResult {
+    func compareWords(_ lhs: Int, _ rhs: Int) -> ComparisonResult {
         guard let left = wordBytes(lhs), let right = wordBytes(rhs) else { return .orderedSame }
         for (a, b) in zip(left, right) {
             if a != b { return a < b ? .orderedAscending : .orderedDescending }
@@ -517,7 +423,7 @@ final class ConversationalHebrewModel: @unchecked Sendable {
             count: descriptor.byteCount)
     }
 
-    private func wordDescriptor(
+    func wordDescriptor(
         _ wordID: Int
     ) -> (offset: Int, characterCount: Int, byteCount: Int)? {
         guard wordID >= 0, wordID < header.vocabularyCount else { return nil }
@@ -532,7 +438,7 @@ final class ConversationalHebrewModel: @unchecked Sendable {
         )
     }
 
-    private func trigramPair(at index: Int) -> UInt64? {
+    func trigramPair(at index: Int) -> UInt64? {
         guard index >= 0, index < header.trigramKeyCount else { return nil }
         if header.flags & Self.triPairsU32Flag != 0 {
             guard let packed = u32(.triPairs, index) else { return nil }
@@ -546,7 +452,7 @@ final class ConversationalHebrewModel: @unchecked Sendable {
                 fromByteOffset: section.offset + local, as: UInt64.self))
     }
 
-    private func u32(_ section: Section, _ index: Int) -> UInt32? {
+    func u32(_ section: Section, _ index: Int) -> UInt32? {
         guard index >= 0 else { return nil }
         let section = span(section)
         let local = index * 4
@@ -554,11 +460,11 @@ final class ConversationalHebrewModel: @unchecked Sendable {
         return Self.readU32(mapping.pointer, at: section.offset + local)
     }
 
-    private func exactLength(_ section: Section, _ count: Int, width: Int) -> Bool {
+    func exactLength(_ section: Section, _ count: Int, width: Int) -> Bool {
         count <= Int.max / width && span(section).length == count * width
     }
 
-    private func span(_ section: Section) -> Span {
+    func span(_ section: Section) -> Span {
         header.sections[section.rawValue]
     }
 

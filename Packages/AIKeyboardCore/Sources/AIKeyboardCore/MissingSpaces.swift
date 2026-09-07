@@ -3,6 +3,12 @@ import Foundation
 import UIKit
 import os
 
+private struct MissingSpacesRankEntry {
+    let start: Int32
+    let end: Int32
+    let rank: Int32
+}
+
 /// Restores word boundaries from the bundled list.
 ///
 /// Most repairs split a jammed token. The one exception moves a Hebrew boundary
@@ -184,19 +190,10 @@ enum MissingSpaces {
     private static let piecePenalty = 3.0
 
     private static func segment(_ letters: String) -> [String]? {
+        guard let input = segmentationInput(for: letters) else { return nil }
         let count = letters.count
-        guard count >= minimumLetters, count <= 256,
-            let language = lexiconLanguage(of: letters)
-        else {
-            return nil
-        }
-        let ranks = index(for: language)
-        // Exact list membership only. A glued `ה` is a piece inside a longer
-        // run, never a reason to treat the whole jammed token as one word.
-        if pieceRank(letters, language: language, ranks: ranks, ofWhole: letters) != nil {
-            return nil
-        }
-        if isSpelledCorrectly(letters, language: language) { return nil }
+        let language = input.language
+        let ranks = input.ranks
 
         let characters = Array(letters)
         var cost = [Double](repeating: .infinity, count: count + 1)
@@ -230,6 +227,20 @@ enum MissingSpaces {
         }
         parts.reverse()
         return parts.count >= 2 ? parts : nil
+    }
+
+    private static func segmentationInput(
+        for letters: String
+    ) -> (language: KeyboardLanguage, ranks: RankIndex)? {
+        guard (minimumLetters...256).contains(letters.count), let language = lexiconLanguage(of: letters)
+        else { return nil }
+        let ranks = index(for: language)
+        // Exact list membership only. A glued `ה` is a piece inside a longer
+        // run, never a reason to treat the whole jammed token as one word.
+        guard pieceRank(letters, language: language, ranks: ranks, ofWhole: letters) == nil,
+            !isSpelledCorrectly(letters, language: language)
+        else { return nil }
+        return (language, ranks)
     }
 
     /// **The frequency list answers "is this common", not "is this a word", and
@@ -313,28 +324,22 @@ enum MissingSpaces {
     private static let ranks = OSAllocatedUnfairLock(initialState: [String: RankIndex]())
 
     private struct RankIndex {
-        private struct Entry {
-            let start: Int32
-            let end: Int32
-            let rank: Int32
-        }
-
         private let bytes: [UInt8]
-        private let entries: [Entry]
+        private let entries: [MissingSpacesRankEntry]
         let maximumPieceLength: Int
 
         init(language: KeyboardLanguage) {
             let text = GroupedLexiconResource.uncachedText(for: language)
                 .precomposedStringWithCanonicalMapping
             let bytes = Array((language == .english ? text.lowercased() : text).utf8)
-            var entries: [Entry] = []
+            var entries: [MissingSpacesRankEntry] = []
             entries.reserveCapacity(50_000)
             var start = 0
             var maximumLength = 0
             for end in 0...bytes.count where end == bytes.count || bytes[end] == 10 {
                 if start < end {
                     entries.append(
-                        Entry(
+                        MissingSpacesRankEntry(
                             start: Int32(start), end: Int32(end), rank: Int32(entries.count)))
                     maximumLength = max(maximumLength, end - start)
                 }

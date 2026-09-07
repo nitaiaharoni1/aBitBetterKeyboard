@@ -1,4 +1,9 @@
 import Foundation
+
+private struct SeedLanguagePayloadLanguage: Decodable {
+    let unigrams: [String]
+    let bigrams: [String: [String]]
+}
 import os
 
 /// What the keyboard knows about a language on the day it is installed.
@@ -317,11 +322,7 @@ enum SeedLanguageModel {
     }
 
     private struct Payload: Decodable {
-        struct Language: Decodable {
-            let unigrams: [String]
-            let bigrams: [String: [String]]
-        }
-        let languages: [String: Language]
+        let languages: [String: SeedLanguagePayloadLanguage]
     }
 
     /// Read once, on the first suggestion, and held for the life of the process.

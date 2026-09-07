@@ -146,39 +146,10 @@ extension KeyboardView {
 
             VStack(spacing: layout.geometry.rowSpacing) {
                 if !actionRows.isEmpty {
-                    ZStack {
-                        rowsView(
-                            actionRows, availableWidth: available, unit: unit,
-                            height: layout.geometry.height(.action),
-                            rowSpacing: layout.geometry.rowSpacing
-                        )
-                        .opacity(showActionRow ? 1 : 0)
-                        .allowsHitTesting(showActionRow)
-                        .keyboardGridChrome(width: gridWidth, reach: layout.geometry.reach)
-
-                        if searchingEmoji {
-                            EmojiResultsStrip(
-                                controller: controller, height: layout.geometry.height(.action)
-                            )
-                            .frame(width: gridWidth)
-                            .frame(
-                                maxWidth: .infinity,
-                                alignment: reachAlignment(layout.geometry.reach)
-                            )
-                            .transition(panelTransition)
-                        }
-                        if searchingCopyclip {
-                            CopyClipResultsStrip(
-                                controller: controller, height: layout.geometry.height(.action)
-                            )
-                            .frame(width: gridWidth)
-                            .frame(
-                                maxWidth: .infinity,
-                                alignment: reachAlignment(layout.geometry.reach)
-                            )
-                            .transition(panelTransition)
-                        }
-                    }
+                    actionRowView(
+                        actionRows, availableWidth: available, unit: unit, layout: layout,
+                        gridWidth: gridWidth, isShown: showActionRow,
+                        searchingEmoji: searchingEmoji, searchingCopyclip: searchingCopyclip)
                     // Below the letters at rest so a QWERTY callout is not
                     // painted under Reply. Climbs above them only while a
                     // stacked key is held — that raise is what hid the balloon.
@@ -198,22 +169,10 @@ extension KeyboardView {
                     // then sliced the backspace row's own shadow off. Hugging the
                     // keys restores the same 12pt gap every other row has.
                     if !slidingRows.isEmpty {
-                        ZStack {
-                            rowsView(
-                                slidingRows, availableWidth: available, unit: unit,
-                                height: slidingKeyHeight,
-                                rowSpacing: layout.geometry.rowSpacing
-                            )
-                            .id(controller.language)
-                            .transition(
-                                SpaceSwipe.letterTransition(
-                                    step: controller.languageSlideStep,
-                                    reduceMotion: reduceMotion))
-                        }
-                        .fixedSize(horizontal: false, vertical: true)
-                        .opacity(showLetterKeys ? 1 : 0)
-                        .allowsHitTesting(showLetterKeys)
-                        .keyboardGridChrome(width: gridWidth, reach: layout.geometry.reach)
+                        slidingRowsView(
+                            slidingRows, availableWidth: available, unit: unit, height: slidingKeyHeight,
+                            rowSpacing: layout.geometry.rowSpacing, gridWidth: gridWidth,
+                            reach: layout.geometry.reach, isShown: showLetterKeys)
                     }
 
                     // Over the letter area only — not over the action row above.
@@ -341,6 +300,75 @@ extension KeyboardView {
         }
     }
 
+    private func actionRowView(
+        _ rows: [KeyRow], availableWidth: CGFloat, unit: CGFloat, layout: KeyboardCustomization,
+        gridWidth: CGFloat, isShown: Bool, searchingEmoji: Bool, searchingCopyclip: Bool
+    ) -> some View {
+        ZStack {
+            rowsView(rows, availableWidth: availableWidth, unit: unit,
+                     height: layout.geometry.height(.action), rowSpacing: layout.geometry.rowSpacing)
+                .opacity(isShown ? 1 : 0)
+                .allowsHitTesting(isShown)
+                .keyboardGridChrome(width: gridWidth, reach: layout.geometry.reach)
+            searchResults(
+                height: layout.geometry.height(.action), gridWidth: gridWidth,
+                reach: layout.geometry.reach, searchingEmoji: searchingEmoji,
+                searchingCopyclip: searchingCopyclip)
+        }
+    }
+
+    @ViewBuilder
+    private func searchResults(
+        height: CGFloat, gridWidth: CGFloat, reach: Reach,
+        searchingEmoji: Bool, searchingCopyclip: Bool
+    ) -> some View {
+        if searchingEmoji {
+            EmojiResultsStrip(controller: controller, height: height)
+                .frame(width: gridWidth)
+                .frame(maxWidth: .infinity, alignment: reachAlignment(reach))
+                .transition(panelTransition)
+        }
+        if searchingCopyclip {
+            CopyClipResultsStrip(controller: controller, height: height)
+                .frame(width: gridWidth)
+                .frame(maxWidth: .infinity, alignment: reachAlignment(reach))
+                .transition(panelTransition)
+        }
+    }
+
+    private func slidingRowsView(
+        _ rows: [KeyRow], availableWidth: CGFloat, unit: CGFloat, height: CGFloat,
+        rowSpacing: CGFloat, gridWidth: CGFloat, reach: Reach, isShown: Bool
+    ) -> some View {
+        ZStack {
+            rowsView(rows, availableWidth: availableWidth, unit: unit, height: height, rowSpacing: rowSpacing)
+                .id(controller.language)
+                .transition(SpaceSwipe.letterTransition(
+                    step: controller.languageSlideStep, reduceMotion: reduceMotion))
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .opacity(isShown ? 1 : 0)
+        .allowsHitTesting(isShown)
+        .keyboardGridChrome(width: gridWidth, reach: reach)
+    }
+
+    private func hitInsets(
+        for index: Int, middle: Range<Int>, leading: Int, trailing: Int, leftGap: CGFloat,
+        rightGap: CGFloat, spacing: CGFloat, rowCount: Int, rowSpacing: CGFloat
+    ) -> KeyHitInsets {
+        let halfSpacing = spacing / 2
+        var left = index == middle.first ? (leading == 1 ? leftGap / 2 : leftGap) : halfSpacing
+        var right = index == middle.last ? (trailing == 1 ? rightGap / 2 : rightGap) : halfSpacing
+        if leading == 1, index == 0 { right = leftGap / 2 }
+        if trailing == 1, index == rowCount - 1 { left = rightGap / 2 }
+        return KeyHitInsets(left: left, right: right, top: rowSpacing / 2, bottom: rowSpacing / 2)
+    }
+
+    private func keyActivity(for cap: KeyCap) -> KeyActivity {
+        guard cap == .dictation || KeyActivity.hostsWorkingOrbit(cap) else { return .idle }
+        return KeyActivity.resolve(for: cap, controller: controller)
+    }
+
     /// **A row is three parts, and the middle one is the only one that floats.**
     ///
     /// The pinned keys — shift and delete on the letter rows, the plane switch and
@@ -390,33 +418,17 @@ extension KeyboardView {
         let rightGap = max(
             0, middleSlack / 2 - hebrewTopRowOffset + (trailing == 1 ? spacing : 0))
 
-        func hitInsets(for index: Int) -> KeyHitInsets {
-            let halfSpacing = spacing / 2
-            var left = halfSpacing
-            var right = halfSpacing
-            if index == middle.first {
-                left = leading == 1 ? leftGap / 2 : leftGap
-            }
-            if index == middle.last {
-                right = trailing == 1 ? rightGap / 2 : rightGap
-            }
-            if leading == 1, index == 0 { right = leftGap / 2 }
-            if trailing == 1, index == row.keys.count - 1 { left = rightGap / 2 }
-            return KeyHitInsets(
-                left: left, right: right, top: rowSpacing / 2, bottom: rowSpacing / 2)
-        }
-
         return HStack(spacing: spacing) {
             if leading == 1 {
                 key(
                     at: 0, in: row, widths: widths, unit: unit, height: height,
-                    hitInsets: hitInsets(for: 0))
+                    hitInsets: hitInsets(for: 0, middle: middle, leading: leading, trailing: trailing, leftGap: leftGap, rightGap: rightGap, spacing: spacing, rowCount: row.keys.count, rowSpacing: rowSpacing))
             }
             HStack(spacing: spacing) {
                 ForEach(middle, id: \.self) { index in
                     key(
                         at: index, in: row, widths: widths, unit: unit, height: height,
-                        hitInsets: hitInsets(for: index))
+                        hitInsets: hitInsets(for: index, middle: middle, leading: leading, trailing: trailing, leftGap: leftGap, rightGap: rightGap, spacing: spacing, rowCount: row.keys.count, rowSpacing: rowSpacing))
                 }
             }
             .frame(maxWidth: .infinity)
@@ -428,7 +440,7 @@ extension KeyboardView {
             if trailing == 1 {
                 key(
                     at: row.keys.count - 1, in: row, widths: widths, unit: unit, height: height,
-                    hitInsets: hitInsets(for: row.keys.count - 1))
+                    hitInsets: hitInsets(for: row.keys.count - 1, middle: middle, leading: leading, trailing: trailing, leftGap: leftGap, rightGap: rightGap, spacing: spacing, rowCount: row.keys.count, rowSpacing: rowSpacing))
             }
         }
         .frame(maxWidth: .infinity)
@@ -444,7 +456,8 @@ extension KeyboardView {
             let hostsReplyPicker =
                 key.cap == .aiReply && controller.replyKeyBroadcastPrompt != nil
             let keyWidth = widths.indices.contains(index) ? widths[index] : unit
-            KeyView(
+            keySurface(
+                KeyView(
                 spec: key,
                 width: keyWidth,
                 height: height,
@@ -500,13 +513,7 @@ extension KeyboardView {
                 // Only the microphone and the three text actions. Letter keys
                 // stay `.idle` so another key's call can never be the reason
                 // they rebuild.
-                activity: {
-                    let cap = key.cap
-                    if cap == .dictation || KeyActivity.hostsWorkingOrbit(cap) {
-                        return KeyActivity.resolve(for: cap, controller: controller)
-                    }
-                    return .idle
-                }(),
+                activity: keyActivity(for: key.cap),
                 onPress: { controller.press($0, at: $1) },
                 // Held backspace deletes words through `deletePreviousWord`, which
                 // still clicks and still intercepts emoji search. Forward-delete
@@ -521,15 +528,23 @@ extension KeyboardView {
                 onCharacterTouch: characterTouchHandler(for: key),
                 onCharacterTouchEvidence: characterTouchEvidenceHandler(for: key),
                 onCharacterTouchEnd: characterTouchEndHandler(for: key),
-                onPopupLayerChange: popupLayerHandler(for: key)
+                    onPopupLayerChange: popupLayerHandler(for: key)
+                ),
+                key: key,
+                hostsReplyPicker: hostsReplyPicker
             )
             // The key redraws when something it draws from moved, and not
             // because the controller published. See `KeyView.==`.
+        }
+    }
+
+    private func keySurface(_ view: KeyView, key: KeySpec, hostsReplyPicker: Bool) -> some View {
+        view
             .equatable()
             // The overlay sits outside KeyView so VoiceOver can see ReplayKit's
             // real button (`.accessibilityElement()` hides descendants). Hits
-            // must not also reach the SwiftUI gesture, or one tap both opens
-            // the picker and runs `press(.aiReply)`.
+            // must not also reach the SwiftUI gesture, or one tap both opens the
+            // picker and runs `press(.aiReply)`.
             .allowsHitTesting(!hostsReplyPicker)
             .accessibilityHidden(hostsReplyPicker)
             .overlay {
@@ -542,15 +557,9 @@ extension KeyboardView {
                     )
                 }
             }
-            // **Only the layout editor reads these frames, and the system
-            // keyboard was publishing them anyway.** `LayoutView` is the one
-            // `onPreferenceChange(KeyFramesKey.self)` in the project — it puts a
-            // selection ring and a drop target over the real keyboard rather than
-            // over a drawing of one — and `isEditingLayout: true` is passed from
-            // exactly that call site. Everywhere else this was a `GeometryReader`
-            // and a dictionary merge per key, on every layout pass, feeding a
-            // preference with no reader on the other end. `KeyFramesKey`'s own
-            // doc comment has named the cost since it was written.
+            // Only the layout editor reads these frames. Everywhere else this
+            // would be a GeometryReader and dictionary merge per key with no
+            // reader on the other end.
             .background {
                 if isEditingLayout {
                     GeometryReader { proxy in
@@ -560,7 +569,6 @@ extension KeyboardView {
                     }
                 }
             }
-        }
     }
 
     /// Character keys report a touch instead of a press, and its presence is what

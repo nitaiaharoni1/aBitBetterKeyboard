@@ -60,46 +60,57 @@ extension FrameReduction {
                     let rowBase = base.advanced(by: y * bytesPerRow)
                     let accumulator = sums.baseAddress! + destinationRow * columns
 
-                    switch format {
-                    case .luminance8:
-                        let pixels = rowBase.assumingMemoryBound(to: UInt8.self)
-                        for x in 0..<bandWidth {
-                            accumulator[Int(columnOf[x])] &+= UInt32(pixels[firstColumn + x])
-                        }
-                    case .bgra8888, .argb8888:
-                        let blueOffset = format == .bgra8888 ? 0 : 3
-                        let greenOffset = format == .bgra8888 ? 1 : 2
-                        let redOffset = format == .bgra8888 ? 2 : 1
-                        let pixels = rowBase.assumingMemoryBound(to: UInt8.self)
-                        for x in 0..<bandWidth {
-                            let pixel = (firstColumn + x) * stride
-                            // Rec. 601 luma in integer form: the same
-                            // 0.299 / 0.587 / 0.114 the harness uses, scaled by
-                            // 256 so the inner loop stays in integers.
-                            let luma =
-                                77 * UInt32(pixels[pixel + redOffset])
-                                + 150 * UInt32(pixels[pixel + greenOffset])
-                                + 29 * UInt32(pixels[pixel + blueOffset])
-                            accumulator[Int(columnOf[x])] &+= luma >> 8
-                        }
-                    }
+                    addRow(
+                        rowBase, format: format, firstColumn: firstColumn, bandWidth: bandWidth,
+                        stride: stride, columnOf: columnOf, to: accumulator)
                 }
 
-                // Sample counts are the product of the two band widths rather
-                // than a second accumulator: the row and column ranges are
-                // deterministic, so counting them is arithmetic.
-                for row in 0..<rows {
-                    let rowSamples = bandRows * (row + 1) / rows - bandRows * row / rows
-                    for column in 0..<columns {
-                        let columnSamples =
-                            bandWidth * (column + 1) / columns - bandWidth * column / columns
-                        let samples = rowSamples * columnSamples
-                        guard samples > 0 else { return false }
-                        let mean = sums[row * columns + column] / UInt32(samples)
-                        destination[row * columns + column] = UInt8(min(mean, 255))
-                    }
-                }
-                return true
+                return storeMeans(
+                    sums: sums, bandRows: bandRows, bandWidth: bandWidth, into: destination)
+            }
+        }
+    }
+
+    private static func storeMeans(
+        sums: UnsafeMutableBufferPointer<UInt32>, bandRows: Int, bandWidth: Int,
+        into destination: UnsafeMutableBufferPointer<UInt8>
+    ) -> Bool {
+        // Sample counts are the product of the two band widths rather than a
+        // second accumulator: the row and column ranges are deterministic, so
+        // counting them is arithmetic.
+        for row in 0..<rows {
+            let rowSamples = bandRows * (row + 1) / rows - bandRows * row / rows
+            for column in 0..<columns {
+                let columnSamples = bandWidth * (column + 1) / columns - bandWidth * column / columns
+                let samples = rowSamples * columnSamples
+                guard samples > 0 else { return false }
+                let mean = sums[row * columns + column] / UInt32(samples)
+                destination[row * columns + column] = UInt8(min(mean, 255))
+            }
+        }
+        return true
+    }
+
+    private static func addRow(
+        _ rowBase: UnsafeRawPointer, format: PixelFormat, firstColumn: Int, bandWidth: Int,
+        stride: Int, columnOf: UnsafeMutableBufferPointer<UInt16>, to accumulator: UnsafeMutablePointer<UInt32>
+    ) {
+        let pixels = rowBase.assumingMemoryBound(to: UInt8.self)
+        switch format {
+        case .luminance8:
+            for x in 0..<bandWidth {
+                accumulator[Int(columnOf[x])] &+= UInt32(pixels[firstColumn + x])
+            }
+        case .bgra8888, .argb8888:
+            let blueOffset = format == .bgra8888 ? 0 : 3
+            let greenOffset = format == .bgra8888 ? 1 : 2
+            let redOffset = format == .bgra8888 ? 2 : 1
+            for x in 0..<bandWidth {
+                let pixel = (firstColumn + x) * stride
+                let luma = 77 * UInt32(pixels[pixel + redOffset])
+                    + 150 * UInt32(pixels[pixel + greenOffset])
+                    + 29 * UInt32(pixels[pixel + blueOffset])
+                accumulator[Int(columnOf[x])] &+= luma >> 8
             }
         }
     }

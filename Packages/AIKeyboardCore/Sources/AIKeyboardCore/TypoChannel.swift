@@ -143,170 +143,6 @@ enum TypoChannel {
     /// Packing removes the seam before it can matter: there is only one
     /// number per cell, so there is nothing for evaluation order to disagree
     /// about. `packEdit` below is what packs each edit before it is added.
-    static func cost(
-        typed rawTyped: [Character], candidate rawCandidate: [Character],
-        language: KeyboardLanguage, budget: Int
-    ) -> EditCost? {
-        let typed = rawTyped.map(fold)
-        let candidate = rawCandidate.map(fold)
-        let typedCount = typed.count
-        let candidateCount = candidate.count
-
-        let band = max(0, budget / minimumIndelCost)
-        guard abs(candidateCount - typedCount) <= band else { return nil }
-
-        // Each letter's insertion or deletion cost depends only on its own
-        // neighbours inside its own word, never on where the DP path happens
-        // to cross it — so both tables are computed once, up front, rather
-        // than recomputed inside the O(band · n) loop below. Packed once here
-        // rather than at every one of the `O(band · n)` places a table entry
-        // is added into a running cell.
-        let packedInsertionCostAt: [Int] = (0..<typedCount).map { index in
-            packEdit(
-                insertionCost(
-                    typed[index], leftNeighbor: index >= 1 ? typed[index - 1] : nil,
-                    rightNeighbor: index + 1 < typedCount ? typed[index + 1] : nil, language: language))
-        }
-        let packedDeletionCostAt: [Int] = (0..<candidateCount).map { index in
-            packEdit(
-                deletionCost(
-                    candidate[index], leftNeighbor: index >= 1 ? candidate[index - 1] : nil,
-                    rightNeighbor: index + 1 < candidateCount ? candidate[index + 1] : nil,
-                    isTrailing: index == candidateCount - 1, language: language))
-        }
-
-        // **A packed sentinel, not a raw-cost one.** Every cell below stores
-        // `cost * 16 + count`, so "unreachable" has to dominate that packed
-        // scale rather than the raw one — `Int.max / 2` still clears it by
-        // many orders of magnitude (the richest packed value this file ever
-        // produces is a few thousand), so no cell arithmetic can wrap round to
-        // looking reachable.
-        let unreachable = Int.max / 2
-        let width = 2 * band + 1
-        // Row `i` is stored indexed by `d + band`, where `d = j - i`, so every
-        // row uses the same fixed-width array regardless of how far into the
-        // word it is — the diagonal a row is centred on shifts with `i`, the
-        // storage does not.
-        var rowBeforeLast = [Int](repeating: unreachable, count: width)
-        var previousRow = [Int](repeating: unreachable, count: width)
-        var currentRow = [Int](repeating: unreachable, count: width)
-
-        // Row 0: turning the empty candidate prefix into `typed[0..<j]` is
-        // nothing but insertions.
-        var running = 0
-        for d in 0...band {
-            guard d <= typedCount else { break }
-            if d == 0 {
-                previousRow[band] = 0
-            } else {
-                running += packedInsertionCostAt[d - 1]
-                previousRow[d + band] = running
-            }
-        }
-
-        if candidateCount >= 1 {
-            for i in 1...candidateCount {
-                for k in 0..<width { currentRow[k] = unreachable }
-                let dMin = max(-band, -i)
-                let dMax = min(band, typedCount - i)
-                guard dMin <= dMax else { return nil }
-
-                for d in dMin...dMax {
-                    let j = i + d
-                    var best = unreachable
-
-                    // Deletion: from (i-1, j), one row up, offset shifts to d+1.
-                    let deletionOffset = d + 1
-                    if deletionOffset <= band {
-                        let candidateCost = previousRow[deletionOffset + band]
-                        if candidateCost < unreachable {
-                            best = min(best, candidateCost + packedDeletionCostAt[i - 1])
-                        }
-                    }
-
-                    if j >= 1 {
-                        // Insertion: from (i, j-1), same row, offset shifts to d-1.
-                        let insertionOffset = d - 1
-                        if insertionOffset >= -band {
-                            let candidateCost = currentRow[insertionOffset + band]
-                            if candidateCost < unreachable {
-                                best = min(best, candidateCost + packedInsertionCostAt[j - 1])
-                            }
-                        }
-
-                        // Substitution (or a match, at cost 0): from (i-1, j-1),
-                        // one row up, same offset.
-                        let diagonalCost = previousRow[d + band]
-                        if diagonalCost < unreachable {
-                            best = min(
-                                best,
-                                diagonalCost
-                                    + packEdit(
-                                        substitutionCost(
-                                            candidate[i - 1], typed[j - 1], language: language))
-                            )
-                        }
-                    }
-
-                    // Transposition: from (i-2, j-2), two rows up, same offset —
-                    // the two letters that swapped are still both inside the
-                    // band because a transposition never moves the diagonal.
-                    //
-                    // **Checked twice, cheap first.** Swapping a letter across
-                    // Hebrew's word-final boundary changes its shape along
-                    // with its position — `שלמו` for `שלום` moves `ם` out of
-                    // final position, where it must be written `מ`, so on the
-                    // code points the swap is `ו`↔`מ` and `ם`↔`ו`, not the
-                    // clean two-letter swap the raw check below is written to
-                    // find. The raw check is tried first because it is what a
-                    // transposition looks like whenever neither letter
-                    // crosses that boundary, and it is strictly cheaper when
-                    // it matches. Only when it fails is the same pair tried
-                    // again against `shapeFold`, at `transpositionCost + 20`
-                    // — the same 20 `substitutionCost` already charges for a
-                    // final-form pair, because that is exactly the extra
-                    // difference a shape change costs on top of the swap
-                    // itself. **One transition, priced and packed as one
-                    // edit**, not two: the shape correction rides along with
-                    // the swap rather than being a second edit stacked on it,
-                    // which is what keeps `שלמו` → `שלום` (cost 80) at
-                    // `count == 1` rather than 2.
-                    if i >= 2, j >= 2 {
-                        let candidateCost = rowBeforeLast[d + band]
-                        if candidateCost < unreachable {
-                            if candidate[i - 1] == typed[j - 2], candidate[i - 2] == typed[j - 1] {
-                                best = min(best, candidateCost + packEdit(transpositionCost))
-                            } else if shapeFold(candidate[i - 1]) == shapeFold(typed[j - 2]),
-                                shapeFold(candidate[i - 2]) == shapeFold(typed[j - 1])
-                            {
-                                best = min(best, candidateCost + packEdit(transpositionCost + 20))
-                            }
-                        }
-                    }
-
-                    currentRow[d + band] = best
-                }
-
-                // **The cost half of the packed cell, not the packed value
-                // itself.** `rowMinimum >> 4` recovers the raw cost because
-                // `count` never reaches 16 (see `packEdit`), so this early
-                // exit fires on exactly the same rows it always did — the
-                // budget is a bound on cost, never on the packed number.
-                let rowMinimum = (dMin...dMax).map { currentRow[$0 + band] }.min() ?? unreachable
-                if (rowMinimum >> 4) > budget { return nil }
-
-                rowBeforeLast = previousRow
-                previousRow = currentRow
-            }
-        }
-
-        let finalOffset = typedCount - candidateCount
-        let packedResult = previousRow[finalOffset + band]
-        guard packedResult < unreachable else { return nil }
-        let finalCost = packedResult >> 4
-        guard finalCost <= budget else { return nil }
-        return EditCost(cost: finalCost, count: packedResult & 0xF)
-    }
 
     /// Packs one edit's cost and whether it counts as an edit into a single
     /// comparable integer, `cost * 16 + (cost > 0 ? 1 : 0)`, so a plain `min()`
@@ -321,7 +157,7 @@ enum TypoChannel {
     /// reachable path inside any budget here can carry more than `130 / 20 =
     /// 6` edits — comfortably inside the 15 four bits can hold before the
     /// count digit would start bleeding into the cost one.
-    private static func packEdit(_ cost: Int) -> Int {
+    static func packEdit(_ cost: Int) -> Int {
         cost * 16 + (cost > 0 ? 1 : 0)
     }
 
@@ -332,7 +168,7 @@ enum TypoChannel {
     /// answer the same question whichever letter is "the candidate's" and
     /// which is "what was typed" — so `substitutionCost(a, b)` always equals
     /// `substitutionCost(b, a)`, unlike the insertion and deletion tables.
-    private static func substitutionCost(
+    static func substitutionCost(
         _ a: Character, _ b: Character, language: KeyboardLanguage
     )
         -> Int
@@ -366,7 +202,7 @@ enum TypoChannel {
     private static let ordinaryForms: [Character: Character] = HebrewMorphology.finalForms
         .reduce(into: [:]) { $0[$1.value] = $1.key }
 
-    private static func shapeFold(_ character: Character) -> Character {
+    static func shapeFold(_ character: Character) -> Character {
         ordinaryForms[character] ?? character
     }
 
@@ -410,7 +246,7 @@ enum TypoChannel {
     /// a hurried typist skips. They say nothing about what makes a *stray*
     /// keystroke likely, which is a different question with its own table
     /// below.
-    private static func deletionCost(
+    static func deletionCost(
         _ missing: Character, leftNeighbor: Character?, rightNeighbor: Character?, isTrailing: Bool,
         language: KeyboardLanguage
     ) -> Int {
@@ -437,7 +273,7 @@ enum TypoChannel {
 
     // MARK: Insertion — the typed word has a letter the candidate does not
 
-    private static func insertionCost(
+    static func insertionCost(
         _ extra: Character, leftNeighbor: Character?, rightNeighbor: Character?,
         language: KeyboardLanguage
     ) -> Int {
@@ -462,7 +298,7 @@ enum TypoChannel {
     /// the commonest slip there is, which is the whole reason Damerau's
     /// extension to Levenshtein exists rather than paying for it as two
     /// substitutions.
-    private static let transpositionCost = 60
+    static let transpositionCost = 60
 
     // MARK: Folding
 
@@ -475,7 +311,7 @@ enum TypoChannel {
     /// charges 20 for a final-form pair, and folding the difference away
     /// before it gets there would make the two letters indistinguishable and
     /// that whole rule dead code.
-    private static func fold(_ character: Character) -> Character {
+    static func fold(_ character: Character) -> Character {
         SeedLanguageModel.fold(String(character)).first ?? character
     }
 }

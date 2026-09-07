@@ -76,16 +76,16 @@ struct LanguageCatalogueSection: View {
 
             Card(padding: Theme.Space.xs) {
                 VStack(spacing: 0) {
-                    ForEach(Array(group.languages.enumerated()), id: \.element.id) {
-                        index, language in
-                        if index > 0 {
-                            Divider.themed
-                                .padding(.leading, 46)
-                        }
-                        languageRow(for: language)
-                    }
+                    languageRows(group.languages)
                 }
             }
+        }
+    }
+
+    @ViewBuilder private func languageRows(_ languages: [KeyboardLanguage]) -> some View {
+        ForEach(Array(languages.enumerated()), id: \.element.id) { index, language in
+            if index > 0 { Divider.themed.padding(.leading, 46) }
+            languageRow(for: language)
         }
     }
 

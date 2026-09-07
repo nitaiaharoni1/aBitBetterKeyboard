@@ -23,6 +23,133 @@ final class ScreenContextBarTests: XCTestCase {
         let session = ScreenContextSession.shared
         session.stop()
 
+        let shippingScore = ShippingScore()
+        for entry in entries {
+            try await score(
+                entry, recorded: recorded, harness: harness, session: session, into: shippingScore)
+        }
+
+        session.stop()
+        try assertShippingResults(
+            rows: shippingScore.rows, byEngine: shippingScore.byEngine,
+            byLanguage: shippingScore.byLanguage, silent: shippingScore.silent,
+            disagreesWithHarness: shippingScore.disagreesWithHarness,
+            returnedATrap: shippingScore.returnedATrap)
+    }
+
+    private func score(
+        _ entry: ScreenBar.Entry, recorded: [String: [String: String]],
+        harness: [String: ScreenBar.ReaderRow], session: ScreenContextSession, into score: ShippingScore
+    ) async throws {
+        let result = try await read(entry, recorded: recorded, session: session)
+        verify(result, for: entry, score: score)
+        record(result, for: entry, harness: harness, score: score)
+    }
+
+    private func read(
+        _ entry: ScreenBar.Entry, recorded: [String: [String: String]], session: ScreenContextSession
+    ) async throws -> ShippingRead {
+        let frame = try ScreenBar.frame(entry.file)
+        let fields = try XCTUnwrap(recorded[entry.id], "no recorded cloud answer for \(entry.id)")
+        let transport = ReplayTransport(fields)
+        let reader = RecordingReader(RoutedScreenReader(
+            onDevice: VisionScreenReader(), cloud: CloudScreenReader(transport: transport)))
+        // One session for all thirty frames, started once, exactly as a capture
+        // stream would drive it. Swapping the reader only attaches this frame's
+        // recorded answer.
+        session.reader = reader
+        if !session.isLive {
+            session.start()
+            XCTAssertEqual(session.state, .watching)
+        }
+        let started = Date()
+        await session.submit(frame, appName: entry.app, appIcon: "message.fill")
+        return ShippingRead(reader: reader, transport: transport, context: session.state.context,
+                            seconds: Date().timeIntervalSince(started))
+    }
+
+    private func verify(_ result: ShippingRead, for entry: ScreenBar.Entry, score: ShippingScore) {
+        XCTAssertNil(result.reader.error, "\(entry.id) failed outright: \(String(describing: result.reader.error))")
+        // The session is the thing under test, so score what the strip would
+        // render, not the reader's return value.
+        if let reading = result.reader.output?.value {
+            XCTAssertEqual(result.context?.sender, reading.sender, "\(entry.id) lost the sender")
+            XCTAssertEqual(result.context?.message, reading.message, "\(entry.id) lost the message")
+            XCTAssertEqual(result.context?.language, reading.language, "\(entry.id) lost the language")
+            XCTAssertEqual(result.context?.appName, entry.app)
+        } else {
+            XCTAssertNil(result.context, "\(entry.id) read nothing but left a reply on screen")
+            score.silent.append(entry.id)
+        }
+        let engine = result.transport.requests.isEmpty ? "vision" : "cloud"
+        XCTAssertEqual(result.reader.output?.provenance, engine == "cloud" ? .cloud : .onDevice,
+                       "\(entry.id): the transport and the provenance disagree about which engine answered")
+        verifyRequest(result.transport, score: score)
+    }
+
+    private func verifyRequest(_ transport: ReplayTransport, score: ShippingScore) {
+        // Recorded answers were bought with this prompt, so check the wire shape
+        // once before using them as the score's baseline.
+        guard let request = transport.requests.first, !score.checkedRequest else { return }
+        score.checkedRequest = true
+        XCTAssertEqual(request.instructions, ScreenPrompt.instructions)
+        XCTAssertEqual(request.prompt, ScreenPrompt.task)
+        XCTAssertEqual(request.fields.map(\.name), ["messages", "sender", "message", "script", "language"])
+        guard case .screenJPEG(let jpeg) = request.payload else {
+            XCTFail("screen corpus must use the screen JPEG payload")
+            return
+        }
+        XCTAssertGreaterThan(jpeg.count, 1000)
+    }
+
+    private func record(
+        _ result: ShippingRead, for entry: ScreenBar.Entry, harness: [String: ScreenBar.ReaderRow],
+        score: ShippingScore
+    ) {
+        let reading = result.reader.output?.value
+        let engine = result.transport.requests.isEmpty ? "vision" : "cloud"
+        // The ground truth uses these lowercase identifiers. Keep the third
+        // script case distinct, rather than collapsing it into English.
+        let script = reading.map { $0.scripts.contains(.hebrew) && $0.scripts.contains(.latin) ? "mixed" : ($0.scripts.contains(.hebrew) ? "hebrew" : "latin") }
+        let language = result.context.map(\.language.rawValue)
+        let tally = BarScorer.score(
+            entry, sender: result.context?.sender, message: result.context?.message,
+            script: script, language: language)
+        score.byEngine[engine] = (score.byEngine[engine] ?? BarScorer.Tally()) + tally
+        score.byLanguage[entry.language] = (score.byLanguage[entry.language] ?? BarScorer.Tally()) + tally
+        recordHarnessDifference(result, entry: entry, engine: engine, harness: harness, score: score)
+        recordTrap(entry, message: result.context?.message, score: score)
+        score.rows.append(RoutedRow(
+            id: entry.id, language: entry.language, config: "routed-session", engine: engine,
+            sender: result.context?.sender, message: result.context?.message, detectedScript: script,
+            detectedLanguage: language, seconds: (result.seconds * 100).rounded() / 100))
+    }
+
+    private func recordHarnessDifference(
+        _ result: ShippingRead, entry: ScreenBar.Entry, engine: String,
+        harness: [String: ScreenBar.ReaderRow], score: ShippingScore
+    ) {
+        guard let row = harness[entry.id] else { return }
+        // The macOS reader harness measures the same sources on a different
+        // platform. Collect differences here, then name the whole set below.
+        let sameGate = (engine == "vision") == row.gated
+        let sameAnswer = BarScorer.normalise(result.context?.sender) == BarScorer.normalise(row.sender)
+            && BarScorer.normalise(result.context?.message) == BarScorer.normalise(row.message)
+        if !sameGate || (row.gated && !sameAnswer) { score.disagreesWithHarness.append(entry.id) }
+    }
+
+    private func recordTrap(_ entry: ScreenBar.Entry, message: String?, score: ShippingScore) {
+        let normalised = BarScorer.normalise(message)
+        // The bar's counter is exact-string matching; containment separately
+        // catches a trap returned with surrounding bubble chrome.
+        guard !normalised.isEmpty, entry.traps.contains(where: { trap in
+            let text = BarScorer.normalise(trap.text)
+            return text.count >= 8 && normalised.contains(text)
+        }) else { return }
+        score.returnedATrap.append(entry.id)
+    }
+
+    private final class ShippingScore {
         var rows: [RoutedRow] = []
         var byEngine: [String: BarScorer.Tally] = [:]
         var byLanguage: [String: BarScorer.Tally] = [:]
@@ -30,129 +157,24 @@ final class ScreenContextBarTests: XCTestCase {
         var disagreesWithHarness: [String] = []
         var returnedATrap: [String] = []
         var checkedRequest = false
+    }
 
-        for entry in entries {
-            let frame = try ScreenBar.frame(entry.file)
-            let fields = try XCTUnwrap(recorded[entry.id], "no recorded cloud answer for \(entry.id)")
-            let transport = ReplayTransport(fields)
-            let reader = RecordingReader(
-                RoutedScreenReader(
-                    onDevice: VisionScreenReader(),
-                    cloud: CloudScreenReader(transport: transport)))
+    private struct ShippingRead {
+        let reader: RecordingReader
+        let transport: ReplayTransport
+        let context: ScreenContext?
+        let seconds: TimeInterval
+    }
 
-            // One session for all thirty frames, started once, exactly as a
-            // capture stream would drive it. Swapping the reader between frames
-            // is only how the recorded answer for this frame is attached.
-            session.reader = reader
-            if !session.isLive {
-                session.start()
-                XCTAssertEqual(session.state, .watching)
-            }
-
-            let started = Date()
-            await session.submit(frame, appName: entry.app, appIcon: "message.fill")
-            let seconds = Date().timeIntervalSince(started)
-
-            XCTAssertNil(reader.error, "\(entry.id) failed outright: \(String(describing: reader.error))")
-            let reading = reader.output?.value
-            let provenance = reader.output?.provenance
-
-            // The session is the thing under test, so the score is read off the
-            // state the strip would render, not off the reader's return value.
-            let context = session.state.context
-            if let reading {
-                XCTAssertEqual(context?.sender, reading.sender, "\(entry.id) lost the sender")
-                XCTAssertEqual(context?.message, reading.message, "\(entry.id) lost the message")
-                XCTAssertEqual(context?.language, reading.language, "\(entry.id) lost the language")
-                XCTAssertEqual(context?.appName, entry.app)
-            } else {
-                XCTAssertNil(context, "\(entry.id) read nothing but left a reply on screen")
-                silent.append(entry.id)
-            }
-
-            let engine = transport.requests.isEmpty ? "vision" : "cloud"
-            XCTAssertEqual(
-                provenance, engine == "cloud" ? .cloud : .onDevice,
-                "\(entry.id): the transport and the provenance disagree about which engine answered")
-
-            // What the shipping path would put on the wire, checked once: the
-            // recorded answers were bought with this prompt, so a drift here
-            // would make every number below a number for a different call.
-            if let request = transport.requests.first, !checkedRequest {
-                checkedRequest = true
-                XCTAssertEqual(request.instructions, ScreenPrompt.instructions)
-                XCTAssertEqual(request.prompt, ScreenPrompt.task)
-                XCTAssertEqual(
-                    request.fields.map(\.name), ["messages", "sender", "message", "script", "language"])
-                guard case .screenJPEG(let jpeg) = request.payload else {
-                    XCTFail("screen corpus must use the screen JPEG payload")
-                    continue
-                }
-                XCTAssertGreaterThan(jpeg.count, 1000)
-            }
-
-            let script = reading.map {
-                $0.scripts.contains(.hebrew) && $0.scripts.contains(.latin)
-                    ? "mixed" : ($0.scripts.contains(.hebrew) ? "hebrew" : "latin")
-            }
-            // `KeyboardLanguage`'s identifiers are the same lowercase words the
-            // ground truth uses, so this is what the old two-way collapse said for
-            // all 30 frames — and it stops being a lie the day a frame in a third
-            // script is added, where the collapse would have scored an Arabic
-            // reading as "english" and called it right.
-            let detectedLanguage = context.map(\.language.rawValue)
-
-            let tally = BarScorer.score(
-                entry, sender: context?.sender, message: context?.message,
-                script: script, language: detectedLanguage)
-            byEngine[engine] = (byEngine[engine] ?? BarScorer.Tally()) + tally
-            byLanguage[entry.language] = (byLanguage[entry.language] ?? BarScorer.Tally()) + tally
-
-            // The on-device half has recorded numbers of its own, written by
-            // `harness/run-reader.sh` from the same sources — on macOS. Where
-            // this run disagrees with that file, the two are not measuring the
-            // same product, and the difference is collected rather than asserted
-            // per frame so the whole set can be named at the end.
-            if let harnessRow = harness[entry.id] {
-                let sameGate = (engine == "vision") == harnessRow.gated
-                let sameAnswer =
-                    BarScorer.normalise(context?.sender) == BarScorer.normalise(harnessRow.sender)
-                    && BarScorer.normalise(context?.message) == BarScorer.normalise(harnessRow.message)
-                if !sameGate || (harnessRow.gated && !sameAnswer) {
-                    disagreesWithHarness.append(entry.id)
-                }
-            }
-
-            // The bar's own trap counter is an exact-string check, so a trap
-            // returned with a bubble timestamp glued to it scores as a plain
-            // near-miss. Containment is counted alongside it, because "returned
-            // the trap plus chrome" is the same failure as "returned the trap".
-            let normalised = BarScorer.normalise(context?.message)
-            if !normalised.isEmpty,
-                entry.traps.contains(where: {
-                    let text = BarScorer.normalise($0.text)
-                    return text.count >= 8 && normalised.contains(text)
-                })
-            {
-                returnedATrap.append(entry.id)
-            }
-
-            rows.append(
-                RoutedRow(
-                    id: entry.id, language: entry.language, config: "routed-session",
-                    engine: engine, sender: context?.sender, message: context?.message,
-                    detectedScript: script, detectedLanguage: detectedLanguage,
-                    seconds: (seconds * 100).rounded() / 100))
-        }
-
-        session.stop()
+    private func assertShippingResults(
+        rows: [RoutedRow], byEngine: [String: BarScorer.Tally], byLanguage: [String: BarScorer.Tally],
+        silent: [String], disagreesWithHarness: [String], returnedATrap: [String]
+    ) throws {
         XCTAssertEqual(rows.count, 30)
-
         try write(rows)
         report(
             rows: rows, byEngine: byEngine, byLanguage: byLanguage, silent: silent,
             disagreesWithHarness: disagreesWithHarness, returnedATrap: returnedATrap)
-
         let total = byLanguage.values.reduce(BarScorer.Tally(), +)
 
         // The routed score, measured on the simulator, which is the only place

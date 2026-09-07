@@ -264,26 +264,6 @@ extension Theme {
         /// numbers for a portrait thumb. Landscape's constraint is the
         /// fingerprint cap over an iPhone's short axis, not a preference, and the
         /// cap does not leave room for Apple's comfortable target here.
-        public enum Landscape {
-            public static let suggestionBarHeight: CGFloat = 30
-            public static let keyHeight: CGFloat = 26
-            /// **4, paid down from 8 so the keyboard fits the narrowest phone it
-            /// ships to.** See the table above: this is the one vertical
-            /// dimension landscape spends that no thumb ever aims at.
-            public static let rowSpacing: CGFloat = 4
-
-            /// The landscape screen height every number here has to satisfy: the
-            /// portrait *width* of the narrowest iPhone this package's iOS 17
-            /// floor still reaches (SE 2/3, XS, 11 Pro, 12 mini, 13 mini).
-            ///
-            /// `KeyboardGeometry.referenceLandscapeScreenHeight` (402) is the
-            /// device every other number under `Bar/screen-context/` is measured
-            /// on; this is the device the *cap* is decided on, and they are not
-            /// the same phone. Checking only the reference one is exactly how a
-            /// 30-of-30 defect survived two tickets.
-            public static let narrowestScreenHeight: CGFloat = 375
-        }
-
         /// The layout landscape actually draws: the caller's rows and reach, with
         /// the two that do not fit removed and the compact key height and row
         /// spacing substituted. Shared by `keyAreaHeight(for:orientation:)` and
@@ -304,7 +284,7 @@ extension Theme {
             compact.showsNumberRow = false
             compact.cursorRow = []
             compact.geometry = LayoutGeometry(
-                keyHeight: Landscape.keyHeight, rowSpacing: Landscape.rowSpacing,
+                keyHeight: ThemeLandscapeMetrics.keyHeight, rowSpacing: ThemeLandscapeMetrics.rowSpacing,
                 reach: layout.geometry.reach)
             return compact
         }
@@ -353,7 +333,7 @@ extension Theme {
         ) -> CGFloat {
             let banner = orientation == .landscape ? 0 : (showsBanner ? bannerHeight : 0)
             let suggestionBar =
-                orientation == .landscape ? Landscape.suggestionBarHeight : suggestionBarHeight
+                orientation == .landscape ? ThemeLandscapeMetrics.suggestionBarHeight : suggestionBarHeight
             return banner + suggestionBar + keyAreaHeight(for: layout, orientation: orientation)
         }
 
@@ -381,4 +361,19 @@ extension Theme {
             return max(0, (block - gaps) / CGFloat(slidingRows))
         }
     }
+}
+
+public enum ThemeLandscapeMetrics {
+    /// The compact suggestion bar height in landscape.
+    public static let suggestionBarHeight: CGFloat = 30
+    /// The compact landscape key height.
+    public static let keyHeight: CGFloat = 26
+    /// **4, paid down from 8 so the keyboard fits the narrowest phone it ships to.**
+    public static let rowSpacing: CGFloat = 4
+    /// The narrowest portrait width used to validate landscape geometry.
+    public static let narrowestScreenHeight: CGFloat = 375
+}
+
+extension Theme.Metrics {
+    public typealias Landscape = ThemeLandscapeMetrics
 }

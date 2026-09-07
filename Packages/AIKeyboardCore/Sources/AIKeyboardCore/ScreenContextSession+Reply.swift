@@ -76,6 +76,8 @@ extension ScreenContextSession {
     public func contextForReply(timeout: Duration = .seconds(12)) async throws -> ScreenContext {
         if source == .scripted, let context = state.context { return context }
 
+        let channel = try keyboardChannelForReply()
+
         // The app is an observer: it watches the page so its Screen Context
         // screen can be honest, but it is not the keyboard and its preview is not
         // at the bottom of anyone's screen. A read raised from the in-app
@@ -83,28 +85,11 @@ extension ScreenContextSession {
         // own animation inside the fingerprint band — and answer a question
         // nobody asked. The sample is what the playground is for, and it is
         // handled above; anything else is refused rather than read.
-        guard role == .keyboard else {
-            throw AIEngineError.screenNotRead(
-                "Reading the screen works in the keyboard, on the app you are writing in.")
-        }
-
-        guard let channel else {
-            throw AIEngineError.screenNotRead("Screen context is not running.")
-        }
-
         // Freshness is decided at the instant of the tap, never against the last
         // poll, which may be 250 ms old and about the previous conversation.
-        channel.poll()
-        if channel.verdict == .offerable, let record = channel.reading {
-            lastReadWentUnanswered = false
-            return record.screenContext
-        }
+        if let context = freshContext(from: channel) { return context }
 
-        let sequence = channel.requestRead()
-        guard sequence > 0 else {
-            throw AIEngineError.screenNotRead(
-                "The keyboard cannot reach screen context. It needs Full Access.")
-        }
+        let sequence = try requestRead(from: channel)
 
         isAwaitingRead = true
         defer { isAwaitingRead = false }
@@ -164,6 +149,31 @@ extension ScreenContextSession {
         lastReadWentUnanswered = true
         throw AIEngineError.screenNotRead(
             "Screen context is watching, but nothing answered the request to read the screen.")
+    }
+
+    private func freshContext(from channel: ScreenContextChannel) -> ScreenContext? {
+        channel.poll()
+        guard channel.verdict == .offerable, let record = channel.reading else { return nil }
+        lastReadWentUnanswered = false
+        return record.screenContext
+    }
+
+    private func keyboardChannelForReply() throws -> ScreenContextChannel {
+        guard role == .keyboard else {
+            throw AIEngineError.screenNotRead(
+                "Reading the screen works in the keyboard, on the app you are writing in.")
+        }
+        guard let channel else { throw AIEngineError.screenNotRead("Screen context is not running.") }
+        return channel
+    }
+
+    private func requestRead(from channel: ScreenContextChannel) throws -> UInt64 {
+        let sequence = channel.requestRead()
+        guard sequence > 0 else {
+            throw AIEngineError.screenNotRead(
+                "The keyboard cannot reach screen context. It needs Full Access.")
+        }
+        return sequence
     }
 
     // MARK: - Frames handed in directly

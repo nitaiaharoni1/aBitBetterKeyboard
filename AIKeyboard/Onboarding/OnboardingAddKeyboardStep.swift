@@ -71,13 +71,7 @@ struct AddKeyboardStep: View {
 
             if !instructions.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(instructions.enumerated()), id: \.offset) { index, row in
-                        if index > 0 {
-                            Divider.themed
-                        }
-                        ExplainerStepRow(number: index + 1, title: row.title, detail: row.detail)
-                            .padding(.vertical, Theme.Space.sm)
-                    }
+                    instructionRows
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -100,6 +94,14 @@ struct AddKeyboardStep: View {
                 .foregroundStyle(Theme.Text.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    @ViewBuilder private var instructionRows: some View {
+        ForEach(Array(instructions.enumerated()), id: \.offset) { index, row in
+            if index > 0 { Divider.themed }
+            ExplainerStepRow(number: index + 1, title: row.title, detail: row.detail)
+                .padding(.vertical, Theme.Space.sm)
         }
     }
 

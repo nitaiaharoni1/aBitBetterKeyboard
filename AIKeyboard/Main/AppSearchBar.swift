@@ -128,15 +128,19 @@ struct AppSearchResults: View {
             } else {
                 Card(padding: Theme.Space.xs) {
                     VStack(spacing: 0) {
-                        ForEach(Array(hits.enumerated()), id: \.element.id) { index, item in
-                            if index > 0 { Divider.themed.padding(.leading, 46) }
-                            resultRow(item)
-                        }
+                        resultRows(hits)
                     }
                 }
             }
         }
         .accessibilityIdentifier("app-search-results")
+    }
+
+    @ViewBuilder private func resultRows(_ hits: [AppSearchItem]) -> some View {
+        ForEach(Array(hits.enumerated()), id: \.element.id) { index, item in
+            if index > 0 { Divider.themed.padding(.leading, 46) }
+            resultRow(item)
+        }
     }
 
     private var filteredHits: [AppSearchItem] {

@@ -35,35 +35,40 @@ enum PhoneNumberToken {
     static func isComplete(_ text: String) -> Bool {
         guard let normalized = normalizedPrefix(text) else { return false }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.first?.isNumber == true || trimmed.first == "+" || trimmed.first == "(" else {
-            return false
-        }
-        guard trimmed.last?.isNumber == true || trimmed.last == ")" else { return false }
+        guard hasValidBounds(trimmed), hasBalancedParentheses(trimmed) else { return false }
         let digits = normalized.compactMap(\.wholeNumberValue)
-        let international = normalized.hasPrefix("+")
-        if international {
-            guard (8...15).contains(digits.count), digits.first != 0 else { return false }
-        } else {
-            guard (9...11).contains(digits.count), digits.count != 9 || digits.first == 0 else {
-                return false
-            }
-        }
-        guard Set(digits).count > 2 else { return false }
+        return hasValidDigits(digits, international: normalized.hasPrefix("+"))
+            && Set(digits).count > 2
+            && !failsLongNumberChecksum(digits)
+    }
+
+    private static func hasValidBounds(_ text: String) -> Bool {
+        (text.first?.isNumber == true || text.first == "+" || text.first == "(")
+            && (text.last?.isNumber == true || text.last == ")")
+    }
+
+    private static func hasValidDigits(_ digits: [Int], international: Bool) -> Bool {
+        if international { return (8...15).contains(digits.count) && digits.first != 0 }
+        return (9...11).contains(digits.count) && (digits.count != 9 || digits.first == 0)
+    }
+
+    private static func hasBalancedParentheses(_ text: String) -> Bool {
         var parentheses = 0
-        for character in trimmed {
+        for character in text {
             if character == "(" { parentheses += 1 }
             if character == ")" { parentheses -= 1 }
             if parentheses < 0 || parentheses > 1 { return false }
         }
-        guard parentheses == 0 else { return false }
-        if digits.count >= 13 {
-            let checksum = digits.reversed().enumerated().reduce(0) { sum, item in
-                let digit = item.offset.isMultiple(of: 2) ? item.element : item.element * 2
-                return sum + (digit > 9 ? digit - 9 : digit)
-            }
-            if checksum.isMultiple(of: 10) { return false }
+        return parentheses == 0
+    }
+
+    private static func failsLongNumberChecksum(_ digits: [Int]) -> Bool {
+        guard digits.count >= 13 else { return false }
+        let checksum = digits.reversed().enumerated().reduce(0) { sum, item in
+            let digit = item.offset.isMultiple(of: 2) ? item.element : item.element * 2
+            return sum + (digit > 9 ? digit - 9 : digit)
         }
-        return true
+        return checksum.isMultiple(of: 10)
     }
 
     static func suffix(in context: String) -> String? {

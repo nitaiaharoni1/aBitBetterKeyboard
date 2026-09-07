@@ -5,6 +5,10 @@ import os
 
 extension ScreenReadService {
 
+    private enum ClaimOutcome {
+        case ignore, stale, notConfigured, inFlight, supersedes, supersedesQuietly, read
+    }
+
     /// Whether this sampled frame is the one that answers a raised request.
     ///
     /// Called from ReplayKit's delivery callback for every sampled frame, and it
@@ -16,25 +20,8 @@ extension ScreenReadService {
     ) -> Ticket? {
         guard let intent, intent.readNow > 0 else { return nil }
 
-        enum Outcome {
-            case ignore
-            case stale
-            case notConfigured
-            case inFlight
-            /// A tap about a screen the running read is not about. Deliberately
-            /// left unclaimed and unmarked, so the next frame after that read
-            /// finishes serves it for real.
-            case supersedes
-            /// The same, on every frame after the first. Identical behaviour,
-            /// silent: the deferral is re-offered four times a second for the
-            /// length of a cloud call, and saying so twenty times says nothing the
-            /// first line did not.
-            case supersedesQuietly
-            case read
-        }
-
         var sequence: UInt64 = 0
-        let outcome: Outcome = state.withLock { state in
+        let outcome: ClaimOutcome = state.withLock { state in
             guard intent.readNow > state.seen else { return .ignore }
             sequence = intent.readNow
 
@@ -87,6 +74,12 @@ extension ScreenReadService {
             return .read
         }
 
+        return finish(outcome, sequence: sequence, identity: identity, capturedAt: capturedAt)
+    }
+
+    private func finish(
+        _ outcome: ClaimOutcome, sequence: UInt64, identity: FrameIdentity, capturedAt: UInt64
+    ) -> Ticket? {
         switch outcome {
         case .ignore:
             return nil

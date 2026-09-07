@@ -257,12 +257,20 @@ public enum Theme {
             case .xLarge: return 19 / 17
             case .xxLarge: return 21 / 17
             case .xxxLarge: return 23 / 17
+            case .accessibility1, .accessibility2, .accessibility3, .accessibility4, .accessibility5:
+                return accessibilityScale(for: size)
+            @unknown default: return 1
+            }
+        }
+
+        private static func accessibilityScale(for size: DynamicTypeSize) -> CGFloat {
+            switch size {
             case .accessibility1: return 28 / 17
             case .accessibility2: return 33 / 17
             case .accessibility3: return 40 / 17
             case .accessibility4: return 47 / 17
             case .accessibility5: return 53 / 17
-            @unknown default: return 1
+            default: return 1
             }
         }
     }

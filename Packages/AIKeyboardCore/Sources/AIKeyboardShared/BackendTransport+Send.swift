@@ -24,29 +24,7 @@ extension BackendTransport {
         _ request: CloudRequest, token: String?, allowCredentialRefresh: Bool
     ) async throws -> [String: String] {
         try Task.checkCancellation()
-        var body: [String: Any] = [
-            "instructions": request.instructions,
-            "prompt": request.prompt,
-            "fields": request.fields.map(Self.encoded)
-        ]
-
-        let route: BackendEndpoint.Route
-        switch request.payload {
-        case .text:
-            route = .text
-        case .screenJPEG(let data):
-            route = .screen
-            body["image"] = [
-                "mimeType": "image/jpeg",
-                "data": data.base64EncodedString()
-            ]
-        case .audioWAV(let data):
-            route = .audio
-            body["audio"] = [
-                "mimeType": "audio/wav",
-                "data": data.base64EncodedString()
-            ]
-        }
+        let (route, body) = Self.requestBody(for: request)
 
         var urlRequest = URLRequest(url: endpoint.url(for: route))
         urlRequest.httpMethod = "POST"
@@ -59,33 +37,7 @@ extension BackendTransport {
         }
         urlRequest.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let data: Data
-        let response: URLResponse
-        do {
-            let (bytes, receivedResponse) = try await session.bytes(for: urlRequest)
-            defer { bytes.task.cancel() }
-            let maximumResponseBytes = 256 * 1_024
-            guard receivedResponse.expectedContentLength <= maximumResponseBytes else {
-                throw AIEngineError.failed("The response was too large. Try a shorter selection.")
-            }
-            var received = Data()
-            for try await byte in bytes {
-                try Task.checkCancellation()
-                guard received.count < maximumResponseBytes else {
-                    throw AIEngineError.failed("The response was too large. Try a shorter selection.")
-                }
-                received.append(byte)
-            }
-            data = received
-            response = receivedResponse
-        } catch {
-            try Task.checkCancellation()
-            if error is CancellationError || (error as? URLError)?.code == .cancelled {
-                throw CancellationError()
-            }
-            if let error = error as? AIEngineError { throw error }
-            throw AIEngineError.network(error.localizedDescription)
-        }
+        let (data, response) = try await receive(from: urlRequest)
 
         try Task.checkCancellation()
 
@@ -115,6 +67,51 @@ extension BackendTransport {
         }
 
         throw Self.mapped(status: status, body: data)
+    }
+
+    private static func requestBody(for request: CloudRequest) -> (BackendEndpoint.Route, [String: Any]) {
+        var body: [String: Any] = [
+            "instructions": request.instructions,
+            "prompt": request.prompt,
+            "fields": request.fields.map(Self.encoded)
+        ]
+        switch request.payload {
+        case .text:
+            return (.text, body)
+        case .screenJPEG(let data):
+            body["image"] = ["mimeType": "image/jpeg", "data": data.base64EncodedString()]
+            return (.screen, body)
+        case .audioWAV(let data):
+            body["audio"] = ["mimeType": "audio/wav", "data": data.base64EncodedString()]
+            return (.audio, body)
+        }
+    }
+
+    private func receive(from request: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            let (bytes, response) = try await session.bytes(for: request)
+            defer { bytes.task.cancel() }
+            let maximumResponseBytes = 256 * 1_024
+            guard response.expectedContentLength <= maximumResponseBytes else {
+                throw AIEngineError.failed("The response was too large. Try a shorter selection.")
+            }
+            var data = Data()
+            for try await byte in bytes {
+                try Task.checkCancellation()
+                guard data.count < maximumResponseBytes else {
+                    throw AIEngineError.failed("The response was too large. Try a shorter selection.")
+                }
+                data.append(byte)
+            }
+            return (data, response)
+        } catch {
+            try Task.checkCancellation()
+            if error is CancellationError || (error as? URLError)?.code == .cancelled {
+                throw CancellationError()
+            }
+            if let error = error as? AIEngineError { throw error }
+            throw AIEngineError.network(error.localizedDescription)
+        }
     }
 
     /// Field order is preserved all the way to the provider. Both engines rely

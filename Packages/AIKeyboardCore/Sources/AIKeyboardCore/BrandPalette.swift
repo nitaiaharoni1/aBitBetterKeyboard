@@ -79,21 +79,8 @@ public enum BrandPalette: String, CaseIterable, Sendable {
     /// dark, and 3.27 / 4.82 / 4.65 in light.
     func hex(_ role: Role, dark: Bool) -> UInt32 {
         switch self {
-        case .orange:
-            switch role {
-            case .solid, .fillStart: return 0xEE7442
-            case .fillEnd: return 0xD9632F
-            }
-        case .pink:
-            switch role {
-            case .solid, .fillStart: return 0xE8589B
-            case .fillEnd: return 0xC42A73
-            }
-        case .blue:
-            switch role {
-            case .solid, .fillStart: return 0x4A8CF7
-            case .fillEnd: return 0x2563EB
-            }
+        case .orange, .pink, .blue:
+            return coloredHex(for: self, role: role)
         case .monochrome:
             // The one palette that has to be adaptive, and the numbers are why.
             // A light-mode graphite (0x4A5051) is 7.40:1 against the light
@@ -103,11 +90,24 @@ public enum BrandPalette: String, CaseIterable, Sendable {
             // dark enough to keep white text over 4.5:1 (0x6E7375 is 4.80). That
             // window is roughly 0x6E7375 to 0x7A7F81 wide and nothing outside it
             // satisfies both.
-            switch role {
-            case .solid: return dark ? 0xA6AAA8 : 0x4A5051
-            case .fillStart: return dark ? 0x7A7F81 : 0x3F4445
-            case .fillEnd: return dark ? 0x6E7375 : 0x2C3031
-            }
+            return monochromeHex(role, dark: dark)
+        }
+    }
+
+    private func coloredHex(for palette: BrandPalette, role: Role) -> UInt32 {
+        switch palette {
+        case .orange: return role == .fillEnd ? 0xD9632F : 0xEE7442
+        case .pink: return role == .fillEnd ? 0xC42A73 : 0xE8589B
+        case .blue: return role == .fillEnd ? 0x2563EB : 0x4A8CF7
+        case .monochrome: return 0
+        }
+    }
+
+    private func monochromeHex(_ role: Role, dark: Bool) -> UInt32 {
+        switch role {
+        case .solid: return dark ? 0xA6AAA8 : 0x4A5051
+        case .fillStart: return dark ? 0x7A7F81 : 0x3F4445
+        case .fillEnd: return dark ? 0x6E7375 : 0x2C3031
         }
     }
 

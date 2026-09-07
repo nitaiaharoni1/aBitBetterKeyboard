@@ -253,19 +253,7 @@ public final class DictationSession: ObservableObject {
         // changed. The record itself is still checked against this keyboard's
         // own session and utterance — the page can say "something changed"
         // for a partial that belongs to nobody this keyboard is listening to.
-        if utterance > 0, state.partialSequence != lastAppliedPartialSequence,
-            let partial = reader.partial(), partial.sessionID == state.sessionID,
-            partial.utterance == utterance, partial.sequence > lastAppliedPartialSequence
-        {
-            lastAppliedPartialSequence = partial.sequence
-            // Before the text. The insert sink reads `transcriptLanguages` on
-            // this same turn, and a mixed Hebrew partial with empty languages
-            // here is counted as Latin: `בוא נעשה sync על ה-roadmap`.
-            if !partial.languages.isEmpty {
-                transcriptLanguages = partial.languages
-            }
-            partialTranscript = DictationTextNormalizer.normalize(partial.text)
-        }
+        applyPartialIfNeeded(from: reader, state: state)
 
         if utterance > 0, let record = reader.transcript(), record.utterance == utterance,
             record.sessionID == state.sessionID
@@ -286,6 +274,18 @@ public final class DictationSession: ObservableObject {
             }
         }
         report()
+    }
+
+    private func applyPartialIfNeeded(from reader: DictationChannelReader, state: DictationState) {
+        guard utterance > 0, state.partialSequence != lastAppliedPartialSequence,
+            let partial = reader.partial(), partial.sessionID == state.sessionID,
+            partial.utterance == utterance, partial.sequence > lastAppliedPartialSequence
+        else { return }
+        lastAppliedPartialSequence = partial.sequence
+        // Before the text. The insert sink reads `transcriptLanguages` on this
+        // same turn, so an empty language list cannot misclassify mixed text.
+        if !partial.languages.isEmpty { transcriptLanguages = partial.languages }
+        partialTranscript = DictationTextNormalizer.normalize(partial.text)
     }
 
     /// One line per change of what this process can see, emitted by the

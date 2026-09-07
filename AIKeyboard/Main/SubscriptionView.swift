@@ -107,22 +107,21 @@ struct SubscriptionView: View {
     private var featureList: some View {
         Card {
             VStack(alignment: .leading, spacing: Theme.Space.md) {
-                ForEach(features, id: \.0) { icon, title, detail in
-                    HStack(alignment: .top, spacing: Theme.Space.sm) {
-                        IconBadge(systemName: icon)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(title)
-                                .font(Theme.Fonts.body.weight(.semibold))
-                                .foregroundStyle(Theme.Text.primary)
-                            Text(detail)
-                                .font(Theme.Fonts.caption)
-                                .foregroundStyle(Theme.Text.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
+                featureRows
+            }
+        }
+    }
+
+    @ViewBuilder private var featureRows: some View {
+        ForEach(features, id: \.0) { icon, title, detail in
+            HStack(alignment: .top, spacing: Theme.Space.sm) {
+                IconBadge(systemName: icon)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(Theme.Fonts.body.weight(.semibold)).foregroundStyle(Theme.Text.primary)
+                    Text(detail).font(Theme.Fonts.caption).foregroundStyle(Theme.Text.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .accessibilityElement(children: .combine)
         }
     }
 

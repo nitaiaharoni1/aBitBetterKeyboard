@@ -253,9 +253,21 @@ final class CaptureChannelTests: XCTestCase {
         // Quiescent: nobody is writing, so every load must settle. This is the
         // one that catches the permanent wedge, which is invisible to the tear
         // count because a wedged page hands out no snapshots at all.
-        var nilLoads = 0
-        for _ in 0..<1_000 where reader.load() == nil { nilLoads += 1 }
+        let nilLoads = quiescentNilLoads(from: reader)
 
+        try assertConcurrentWriterResults(
+            torn: torn, reads: reads, backwards: backwards, file: file, nilLoads: nilLoads)
+    }
+
+    private func quiescentNilLoads(from reader: SharedPage<CaptureStatus>) -> Int {
+        (0..<1_000).reduce(into: 0) { count, _ in
+            if reader.load() == nil { count += 1 }
+        }
+    }
+
+    private func assertConcurrentWriterResults(
+        torn: Int, reads: Int, backwards: Int, file: URL, nilLoads: Int
+    ) throws {
         XCTAssertEqual(torn, 0, "the reader saw \(torn) torn snapshots in \(reads) reads")
         XCTAssertEqual(
             backwards, 0,

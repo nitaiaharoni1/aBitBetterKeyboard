@@ -130,9 +130,7 @@ private struct MainTabBar: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, Theme.Space.xs)
                     .background {
-                        if selection == tab {
-                            Capsule().fill(Theme.Brand.solid.opacity(0.12))
-                        }
+                        selectedTabBackground(for: tab)
                     }
                     .contentShape(Rectangle())
                 }
@@ -146,6 +144,10 @@ private struct MainTabBar: View {
         .tabBarGlass()
         .padding(.horizontal, Theme.Space.md)
         .padding(.bottom, -Theme.Space.sm)
+    }
+
+    @ViewBuilder private func selectedTabBackground(for tab: MainTab) -> some View {
+        if selection == tab { Capsule().fill(Theme.Brand.solid.opacity(0.12)) }
     }
 }
 

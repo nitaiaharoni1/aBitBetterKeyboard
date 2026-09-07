@@ -64,35 +64,7 @@ final class KeyboardViewController: UIInputViewController {
         // the instance iOS kept alive across a change made in the app.
         let store = SharedStore.shared
         store.load()
-
-        // Resolved per call, so a host swapping the focused field cannot leave us
-        // typing into the old one. `weak` rather than `unowned`: `KeyView`'s
-        // key-repeat task is cancelled from `DragGesture.onEnded`, so a gesture
-        // interrupted by teardown can call back in after this controller has
-        // gone, and against `unowned` that is a crash rather than a no-op.
-        textTarget = ProxyTextTarget { [weak self] in self?.textDocumentProxy }
-
-        controller = KeyboardController(
-            target: textTarget,
-            store: store,
-            // Where the user left it, not the head of the list. iOS rebuilds this
-            // controller whenever it feels like it, so `enabledLanguages.first`
-            // meant a Hebrew speaker re-sliding the space bar several times a day.
-            // See `SharedStore.storedOpeningLanguage`, which is also the stored
-            // read rather than the `@Published` copy `load()` filled a moment ago.
-            language: store.storedOpeningLanguage,
-            // **The one caller that says this is the real keyboard**, and the
-            // things it turns on are all things only a real keyboard should do:
-            // ask a model for a better suggestion on a typing pause, remember the
-            // words the person typed, and remember which language the person
-            // chose. The app's playground and all 57 test constructions leave it
-            // off, so none of them spends a model call on a screenshot run, writes
-            // scripted demo words into somebody's vocabulary — which the test
-            // suite did, teaching the store `Handi` ten times before
-            // `KeyboardController.personal` existed — or decides what tomorrow's
-            // keyboard opens on.
-            isSystemKeyboard: true
-        )
+        controller = makeController(store: store)
         controller.showsGlobeKey = needsInputModeSwitchKey
         // Construction uses the in-app default (no iOS handoff key). Reapply
         // after this real host supplies the device's answer.
@@ -172,6 +144,35 @@ final class KeyboardViewController: UIInputViewController {
             }
             .store(in: &cancellables)
 
+    }
+
+    private func makeController(store: SharedStore) -> KeyboardController {
+        // Resolved per call, so a host swapping the focused field cannot leave us
+        // typing into the old one. `weak` rather than `unowned`: `KeyView`'s
+        // key-repeat task is cancelled from `DragGesture.onEnded`, so a gesture
+        // interrupted by teardown can call back in after this controller has
+        // gone, and against `unowned` that is a crash rather than a no-op.
+        textTarget = ProxyTextTarget { [weak self] in self?.textDocumentProxy }
+        return KeyboardController(
+            target: textTarget,
+            store: store,
+            // Where the user left it, not the head of the list. iOS rebuilds this
+            // controller whenever it feels like it, so `enabledLanguages.first`
+            // meant a Hebrew speaker re-sliding the space bar several times a day.
+            // See `SharedStore.storedOpeningLanguage`, which is also the stored
+            // read rather than the `@Published` copy `load()` filled a moment ago.
+            language: store.storedOpeningLanguage,
+            // **The one caller that says this is the real keyboard**, and the
+            // things it turns on are all things only a real keyboard should do:
+            // ask a model for a better suggestion on a typing pause, remember the
+            // words the person typed, and remember which language the person
+            // chose. The app's playground and all 57 test constructions leave it
+            // off, so none of them spends a model call on a screenshot run, writes
+            // scripted demo words into somebody's vocabulary — which the test
+            // suite did, teaching the store `Handi` ten times before
+            // `KeyboardController.personal` existed — or decides what tomorrow's
+            // keyboard opens on.
+            isSystemKeyboard: true)
     }
 
     /// Adds the user's names and text replacements after the keyboard is visible.

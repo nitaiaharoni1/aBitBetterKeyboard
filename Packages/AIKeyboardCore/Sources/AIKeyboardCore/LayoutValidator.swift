@@ -95,10 +95,12 @@ public enum LayoutValidator {
     public static func issues(
         in layout: KeyboardCustomization
     ) -> [LayoutIssue] {
+        essentialIssues(in: layout) + geometryIssues(in: layout) + contentIssues(in: layout)
+    }
+
+    private static func essentialIssues(in layout: KeyboardCustomization) -> [LayoutIssue] {
         var found: [LayoutIssue] = []
-        let custom = layout.bottomRow + layout.cursorRow
-        let everywhere = custom + layout.barLeading + layout.barTrailing
-        let actions = custom.map(\.action)
+        let actions = (layout.bottomRow + layout.cursorRow).map(\.action)
 
         // MARK: The essentials
         //
@@ -145,7 +147,11 @@ public enum LayoutValidator {
                     message: "Only one space bar. Two of them both try to fill the row."))
         }
 
-        // MARK: Geometry
+        return found
+    }
+
+    private static func geometryIssues(in layout: KeyboardCustomization) -> [LayoutIssue] {
+        var found: [LayoutIssue] = []
 
         // Every band, not only the letters. A hand-edited JSON that put the
         // action row at 4 pt would otherwise pass a rail whose whole job is to
@@ -162,7 +168,6 @@ public enum LayoutValidator {
                     message: "The key size is outside what fits on screen."))
         }
 
-        // MARK: Width
         //
         // This is the Bulgarian-class defect and it does not fail loudly: a row
         // over budget runs off the side of the screen. Apple's own Bulgarian
@@ -179,6 +184,12 @@ public enum LayoutValidator {
                     ))
             }
         }
+        return found
+    }
+
+    private static func contentIssues(in layout: KeyboardCustomization) -> [LayoutIssue] {
+        var found: [LayoutIssue] = []
+        let everywhere = layout.bottomRow + layout.cursorRow + layout.barLeading + layout.barTrailing
 
         // MARK: Taste, not safety
 

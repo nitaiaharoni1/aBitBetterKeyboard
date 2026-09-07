@@ -25,54 +25,51 @@ struct SettingsAISection: View {
                 FullAccessNeededBanner(message: Self.fullAccessMessage, context: "ai")
             }
             SectionHeader(title: "AI")
-            Card {
-                VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                    ZStack {
-                        HStack(spacing: Theme.Space.xs) {
-                            IconBadge(systemName: "slider.horizontal.3")
-                            Text("Default tone")
-                                .font(Theme.Fonts.body)
-                                .foregroundStyle(Theme.Text.primary)
-                            Spacer(minLength: Theme.Space.xs)
-                            selectionChip
-                        }
-                        .accessibilityHidden(true)
-
-                        Menu {
-                            Picker("Default tone", selection: toneChoice) {
-                                ForEach(ToneStyle.allCases) { tone in
-                                    Label(tone.title, systemImage: tone.icon)
-                                        .tag(Optional(tone))
-                                }
-                                Label(
-                                    ToneSetting.customTitle,
-                                    systemImage: ToneSetting.customIcon
-                                )
-                                .tag(ToneStyle?.none)
-                            }
-                        } label: {
-                            Color.clear
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .contentShape(Rectangle())
-                        }
-                        .menuIndicator(.hidden)
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Default tone, \(selectedToneTitle)")
-                    }
-                    .frame(minHeight: 44)
-                    .searchTarget(.defaultTone)
-
-                    if store.prefersCustomTone {
-                        customToneField
-                    }
-
-                    Text(toneSentence)
-                        .font(Theme.Fonts.caption)
-                        .foregroundStyle(Theme.Text.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            Card { aiCard }
         }
+    }
+
+    private var aiCard: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.sm) {
+            ZStack {
+                HStack(spacing: Theme.Space.xs) {
+                    IconBadge(systemName: "slider.horizontal.3")
+                    Text("Default tone")
+                        .font(Theme.Fonts.body)
+                        .foregroundStyle(Theme.Text.primary)
+                    Spacer(minLength: Theme.Space.xs)
+                    selectionChip
+                }
+                .accessibilityHidden(true)
+                toneMenu
+            }
+            .frame(minHeight: 44)
+            .searchTarget(.defaultTone)
+            if store.prefersCustomTone { customToneField }
+            Text(toneSentence)
+                .font(Theme.Fonts.caption)
+                .foregroundStyle(Theme.Text.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var toneMenu: some View {
+        Menu {
+            Picker("Default tone", selection: toneChoice) {
+                ForEach(ToneStyle.allCases) { tone in
+                    Label(tone.title, systemImage: tone.icon).tag(Optional(tone))
+                }
+                Label(ToneSetting.customTitle, systemImage: ToneSetting.customIcon)
+                    .tag(ToneStyle?.none)
+            }
+        } label: {
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Default tone, \(selectedToneTitle)")
     }
 
     /// Drawn in the row, not as `Menu`'s label. The menu host is a clear

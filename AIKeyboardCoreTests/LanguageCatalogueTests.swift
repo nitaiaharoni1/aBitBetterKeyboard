@@ -122,14 +122,8 @@ final class LanguageCatalogueTests: LanguageCatalogueTestFixture {
                     let unit = KeyboardLayout.unitWidth(
                         totalWidth: width, spacing: spacing, sideInset: sideInset,
                         columns: columns)
-                    let rows = allRows(language, plane)
                     let place = "\(language.displayName) \(plane) at \(width)pt"
-                    guard
-                        let row = rows.first(where: { $0.keys.contains { $0.cap == .backspace } })
-                    else {
-                        XCTFail("\(place) has no delete key")
-                        continue
-                    }
+                    guard let row = backspaceRow(for: language, plane: plane, place: place) else { continue }
 
                     XCTAssertEqual(row.keys.last?.cap, .backspace, "delete does not close \(place)")
                     XCTAssertEqual(row.sideInsetUnits, 0, "the delete row is inset on \(place)")
@@ -142,6 +136,20 @@ final class LanguageCatalogueTests: LanguageCatalogueTestFixture {
                 }
             }
         }
+    }
+
+    private func backspaceRow(
+        for language: KeyboardLanguage, plane: KeyboardPlane, place: String
+    ) -> KeyRow? {
+        guard let row = allRows(language, plane).first(where: hasBackspace) else {
+            XCTFail("\(place) has no delete key")
+            return nil
+        }
+        return row
+    }
+
+    private func hasBackspace(_ row: KeyRow) -> Bool {
+        row.keys.contains { $0.cap == .backspace }
     }
 
     /// **The space row is the same proportions in every language**, which is the

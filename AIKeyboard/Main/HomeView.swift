@@ -19,34 +19,7 @@ struct HomeView: View {
                 AmbientBackground()
 
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(spacing: Theme.Space.md) {
-                            if search.isSearching {
-                                AppSearchResults()
-                            } else {
-                                if !setup.isReady { setupCard }
-                                featureCard
-                                playgroundCard
-                                replyCard
-                                // The card said, in as many words, "A mock
-                                // paywall. Nothing in this build is gated, for
-                                // anyone." `AppFeatureFlags.subscriptionPaywall`
-                                // is why it is not on the home screen of a
-                                // shipping build; NIT-20 is what brings it back.
-                                if AppFeatureFlags.subscriptionPaywall, !store.isSubscribed {
-                                    upgradeCard
-                                }
-                            }
-                        }
-                        .padding(.horizontal, Theme.Space.md)
-                        .padding(.bottom, Theme.Space.xl)
-                    }
-                    .scrollDismissesKeyboard(.immediately)
-                    .onChange(of: search.highlightedRow) { _, row in
-                        guard let row, row.tab == .home else { return }
-                        scrollToHighlight(proxy)
-                    }
-                    .onAppear { scrollToHighlight(proxy) }
+                    homeScroll(proxy: proxy)
                 }
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
@@ -65,6 +38,33 @@ struct HomeView: View {
         .onAppear { setup = .current(store: store) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { setup = .current(store: store) }
+        }
+    }
+
+    private func homeScroll(proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            pageContent
+                .padding(.horizontal, Theme.Space.md)
+                .padding(.bottom, Theme.Space.xl)
+        }
+        .scrollDismissesKeyboard(.immediately)
+        .onChange(of: search.highlightedRow) { _, row in
+            guard let row, row.tab == .home else { return }
+            scrollToHighlight(proxy)
+        }
+        .onAppear { scrollToHighlight(proxy) }
+    }
+
+    @ViewBuilder private var pageContent: some View {
+        VStack(spacing: Theme.Space.md) {
+            if search.isSearching { AppSearchResults() }
+            else {
+                if !setup.isReady { setupCard }
+                featureCard
+                playgroundCard
+                replyCard
+                if AppFeatureFlags.subscriptionPaywall, !store.isSubscribed { upgradeCard }
+            }
         }
     }
 
@@ -277,11 +277,7 @@ struct HomeView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(Self.replySteps.enumerated()), id: \.offset) { index, step in
-                        if index > 0 { Divider.themed }
-                        ExplainerStepRow(number: index + 1, title: step.title, detail: step.detail)
-                            .padding(.vertical, Theme.Space.sm)
-                    }
+                    replyStepRows
                 }
 
                 Text(
@@ -296,6 +292,14 @@ struct HomeView: View {
         }
         .searchTarget(.reply)
         .accessibilityIdentifier("home-reply-explainer")
+    }
+
+    @ViewBuilder private var replyStepRows: some View {
+        ForEach(Array(Self.replySteps.enumerated()), id: \.offset) { index, step in
+            if index > 0 { Divider.themed }
+            ExplainerStepRow(number: index + 1, title: step.title, detail: step.detail)
+                .padding(.vertical, Theme.Space.sm)
+        }
     }
 
     /// **Written to survive being read next to the refusal.** Step 2 names

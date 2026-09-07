@@ -246,17 +246,9 @@ extension KeyView {
         if showsAlternates, alternateItems.count > 1 {
             Group {
                 if alternatesAreStacked {
-                    VStack(spacing: 0) {
-                        ForEach(Array(alternateItems.enumerated()), id: \.offset) { index, item in
-                            alternateItem(item, index: index)
-                        }
-                    }
+                    alternateItemsStacked
                 } else {
-                    HStack(spacing: 0) {
-                        ForEach(Array(alternateItems.enumerated()), id: \.offset) { index, item in
-                            alternateItem(item, index: index)
-                        }
-                    }
+                    alternateItemsInline
                 }
             }
             // Laid out left to right whatever the keyboard's direction, because
@@ -279,6 +271,20 @@ extension KeyView {
                     reduceMotion: reduceMotion,
                     anchor: alternatesAreStacked ? .top : .bottom)
             )
+        }
+    }
+
+    private var alternateItemsStacked: some View {
+        VStack(spacing: 0) { alternateItemsView }
+    }
+
+    private var alternateItemsInline: some View {
+        HStack(spacing: 0) { alternateItemsView }
+    }
+
+    private var alternateItemsView: some View {
+        ForEach(Array(alternateItems.enumerated()), id: \.offset) { index, item in
+            alternateItem(item, index: index)
         }
     }
 

@@ -22,27 +22,11 @@ struct StepLayout<Content: View>: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
                 VStack(alignment: .leading, spacing: Theme.Space.md) {
-                    if let icon {
-                        iconWell(icon)
-                    }
+                    iconContent
 
                     VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                        if let eyebrow {
-                            Text(eyebrow.uppercased())
-                                .font(Theme.Fonts.micro)
-                                .tracking(0.8)
-                                .foregroundStyle(Theme.Brand.solid)
-                        }
-
-                        if let circledWord, title.hasSuffix(circledWord) {
-                            heroTitle(word: circledWord)
-                        } else {
-                            Text(title)
-                                .font(Theme.Fonts.display)
-                                .tracking(-0.5)
-                                .foregroundStyle(Theme.Text.primary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                        eyebrowContent
+                        titleContent
 
                         Text(subtitle)
                             .font(Theme.Fonts.body)
@@ -59,6 +43,25 @@ struct StepLayout<Content: View>: View {
             .frame(minHeight: minimumContentHeight, alignment: .center)
         }
         .scrollBounceBehavior(.basedOnSize)
+    }
+
+    @ViewBuilder private var iconContent: some View {
+        if let icon { iconWell(icon) }
+    }
+
+    @ViewBuilder private var eyebrowContent: some View {
+        if let eyebrow {
+            Text(eyebrow.uppercased()).font(Theme.Fonts.micro).tracking(0.8)
+                .foregroundStyle(Theme.Brand.solid)
+        }
+    }
+
+    @ViewBuilder private var titleContent: some View {
+        if let circledWord, title.hasSuffix(circledWord) { heroTitle(word: circledWord) }
+        else {
+            Text(title).font(Theme.Fonts.display).tracking(-0.5)
+                .foregroundStyle(Theme.Text.primary).fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     /// The one marketing headline in onboarding. The circled word stays on

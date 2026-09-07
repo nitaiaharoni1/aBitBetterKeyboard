@@ -115,23 +115,21 @@ extension SuggestionEngine {
         // Only when nothing above answered. An opener after a real word is not a
         // prediction, it is the bar giving up in a way that looks like an answer —
         // which is exactly what `I · The · We` after "Happy" was.
-        if out.isEmpty, let words = openers[contextLanguage] {
-            out +=
-                words.enumerated()
-                .map {
-                    Candidate(
-                        text: $0.element, language: contextLanguage, source: .seed,
-                        ordinal: $0.offset)
-                }
-        }
+        appendOpeners(to: &out, for: contextLanguage)
 
         // Capitalised at the start of a message, because that is where the word is
         // going and the shift key has already decided the same thing.
         let atStart = context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         stampPersonalCounts(&out, personal: personal)
+        return (out, rankedNextWords(out, contextLanguage: contextLanguage, atStart: atStart))
+    }
+
+    private static func rankedNextWords(
+        _ candidates: [Candidate], contextLanguage: KeyboardLanguage, atStart: Bool
+    ) -> [Suggestion] {
         // Exactly what the bar draws, not one more: there is no typed word here
         // for `SuggestionBar.centeredSlots` to filter out.
-        let ranked = rank(out, limit: barSlots).map { candidate -> Suggestion in
+        return rank(candidates, limit: barSlots).map { candidate -> Suggestion in
             guard atStart else {
                 return Suggestion(text: candidate.text, language: candidate.language)
             }
@@ -140,6 +138,12 @@ extension SuggestionEngine {
                     + candidate.text.dropFirst(),
                 language: candidate.language)
         }
-        return (out, ranked)
+    }
+
+    private static func appendOpeners(to candidates: inout [Candidate], for language: KeyboardLanguage) {
+        guard candidates.isEmpty, let words = openers[language] else { return }
+        candidates += words.enumerated().map {
+            Candidate(text: $0.element, language: language, source: .seed, ordinal: $0.offset)
+        }
     }
 }

@@ -244,6 +244,10 @@ final class DemoWalkthroughTests: XCTestCase {
         tap(element("banner-blocked-dismiss"), "dismiss the explanation")
         settle(0.6)
 
+        exerciseHebrewNumbersPlane()
+    }
+
+    private func exerciseHebrewNumbersPlane() {
         // Hebrew
         let space = element("key-space")
         space.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))

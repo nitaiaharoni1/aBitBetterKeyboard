@@ -29,29 +29,7 @@ struct KeysView: View {
                 AmbientBackground()
 
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: Theme.Space.md) {
-                            if search.isSearching {
-                                AppSearchResults()
-                            } else {
-                                if setup.fullAccess != .confirmed {
-                                    FullAccessNeededBanner(
-                                        message: Self.fullAccessMessage, context: "keys")
-                                }
-                                layoutSection
-                                lookSection
-                                feelSection
-                            }
-                        }
-                        .padding(.horizontal, Theme.Space.md)
-                        .padding(.bottom, Theme.Space.xl)
-                    }
-                    .scrollDismissesKeyboard(.immediately)
-                    .onChange(of: search.highlightedRow) { _, row in
-                        guard let row, row.tab == .keys else { return }
-                        scrollToHighlight(proxy)
-                    }
-                    .onAppear { scrollToHighlight(proxy) }
+                    keysScroll(proxy: proxy)
                 }
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
@@ -68,6 +46,34 @@ struct KeysView: View {
         .onAppear { setup = .current(store: store) }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { setup = .current(store: store) }
+        }
+    }
+
+    private func keysScroll(proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            pageContent
+                .padding(.horizontal, Theme.Space.md)
+                .padding(.bottom, Theme.Space.xl)
+        }
+        .scrollDismissesKeyboard(.immediately)
+        .onChange(of: search.highlightedRow) { _, row in
+            guard let row, row.tab == .keys else { return }
+            scrollToHighlight(proxy)
+        }
+        .onAppear { scrollToHighlight(proxy) }
+    }
+
+    @ViewBuilder private var pageContent: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.md) {
+            if search.isSearching { AppSearchResults() }
+            else {
+                if setup.fullAccess != .confirmed {
+                    FullAccessNeededBanner(message: Self.fullAccessMessage, context: "keys")
+                }
+                layoutSection
+                lookSection
+                feelSection
+            }
         }
     }
 
@@ -197,13 +203,7 @@ struct KeysView: View {
                             .foregroundStyle(Theme.Text.secondary)
                     }
                     Spacer(minLength: 0)
-                    Picker("Strength", selection: $store.hapticStrength) {
-                        ForEach(HapticStrength.allCases, id: \.self) { level in
-                            Text(level.title).tag(level)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
+                    hapticStrengthPicker
                 }
                 // Plays the stop the user just picked, here in the app, because
                 // a strength you cannot feel until you next open the keyboard in
@@ -216,6 +216,16 @@ struct KeysView: View {
                 }
             }
         }
+    }
+
+    private var hapticStrengthPicker: some View {
+        Picker("Strength", selection: $store.hapticStrength) {
+            ForEach(HapticStrength.allCases, id: \.self) { level in
+                Text(level.title).tag(level)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
     }
 
     // MARK: Scaffolding

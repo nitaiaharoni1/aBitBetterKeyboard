@@ -68,17 +68,7 @@ extension SampleHandler {
         // One `task_info` call per sampled frame — 4 Hz, no allocation — and the
         // shared page is written only when the answer flips, so the status screen
         // reflects the refusal without a seqlock transaction four times a second.
-        let footprint = memory.observe()
-        channel?.recordFootprint(baselineMB: nil, currentMB: footprint.footprintMB)
-        if footprint.changed {
-            channel?.setDegraded(footprint.isRefusing)
-            Self.log.notice(
-                """
-                memory degraded=\(footprint.isRefusing, privacy: .public) \
-                footprintMB=\(footprint.footprintMB.map { String(format: "%.1f", $0) } ?? "unmeasurable", privacy: .public)
-                """
-            )
-        }
+        recordMemoryObservation()
 
         // Orientation rides as an attachment, not as a property of the image, and
         // a landscape frame read as portrait is read sideways.
@@ -96,20 +86,7 @@ extension SampleHandler {
             )
         }
 
-        if !hasLoggedFormat, let format = sampleBuffer.formatDescription {
-            hasLoggedFormat = true
-            let size = CMVideoFormatDescriptionGetDimensions(format)
-            let subType = CMFormatDescriptionGetMediaSubType(format)
-            channel?.recordFrameFormat(
-                width: Int(size.width), height: Int(size.height), pixelFormat: subType)
-            Self.log.notice(
-                """
-                video first-frame \(size.width, privacy: .public)x\
-                \(size.height, privacy: .public) format=\
-                \(Self.fourCharCode(subType), privacy: .public)
-                """
-            )
-        }
+        recordFormat(of: sampleBuffer)
 
         // One clock reading for the identity and for anything read off this
         // frame, so the record's `capturedAt` is the same instant the page
@@ -149,6 +126,34 @@ extension SampleHandler {
                 """
             )
         }
+    }
+
+    private func recordMemoryObservation() {
+        let footprint = memory.observe()
+        channel?.recordFootprint(baselineMB: nil, currentMB: footprint.footprintMB)
+        guard footprint.changed else { return }
+        channel?.setDegraded(footprint.isRefusing)
+        Self.log.notice(
+            """
+            memory degraded=\(footprint.isRefusing, privacy: .public) \
+            footprintMB=\(footprint.footprintMB.map { String(format: "%.1f", $0) } ?? "unmeasurable", privacy: .public)
+            """
+        )
+    }
+
+    private func recordFormat(of sampleBuffer: CMSampleBuffer) {
+        guard !hasLoggedFormat, let format = sampleBuffer.formatDescription else { return }
+        hasLoggedFormat = true
+        let size = CMVideoFormatDescriptionGetDimensions(format)
+        let subType = CMFormatDescriptionGetMediaSubType(format)
+        channel?.recordFrameFormat(width: Int(size.width), height: Int(size.height), pixelFormat: subType)
+        Self.log.notice(
+            """
+            video first-frame \(size.width, privacy: .public)x\
+            \(size.height, privacy: .public) format=\
+            \(Self.fourCharCode(subType), privacy: .public)
+            """
+        )
     }
 
     // MARK: - The read

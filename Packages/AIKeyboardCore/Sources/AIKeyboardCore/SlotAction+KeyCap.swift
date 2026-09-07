@@ -3,6 +3,20 @@ import Foundation
 // MARK: - Compiling one slot
 
 public extension SlotAction {
+    private static let simpleCaps: [SlotAction: KeyCap] = [
+        .shift: .shift, .backspace: .backspace, .globe: .globe, .settings: .settings,
+        .space: .space, .ret: .ret, .dictation: .dictation, .emoji: .emoji,
+        .copyclip: .copyclip, .quickTone: .quickTone, .cursorLeft: .cursorLeft,
+        .cursorRight: .cursorRight, .deleteForward: .deleteForward,
+        .hideKeyboard: .hideKeyboard, .reply: .aiReply, .fix: .aiFix
+    ]
+    private static let simpleGlyphs: [SlotAction: String] = [
+        .shift: "shift", .globe: "globe", .settings: "gearshape", .space: "space",
+        .ret: "return", .dictation: "waveform", .emoji: "face.smiling",
+        .copyclip: "clipboard", .quickTone: AIAction.rewrite.icon,
+        .reply: AIAction.reply.icon, .fix: AIAction.fix.icon,
+        .hideKeyboard: "keyboard.chevron.compact.down"
+    ]
 
     /// The cap this action draws as.
     ///
@@ -11,24 +25,8 @@ public extension SlotAction {
     /// Nothing returns nil today.
     func keyCap(language: KeyboardLanguage) -> KeyCap? {
         switch self {
-        case .shift: return .shift
-        case .backspace: return .backspace
         case .numbersPlane: return .plane(.numbers, label: "123")
         case .symbolsPlane: return .plane(.symbols, label: "#+=")
-        case .globe: return .globe
-        case .settings: return .settings
-        case .space: return .space
-        case .ret: return .ret
-        case .dictation: return .dictation
-        case .emoji: return .emoji
-        case .copyclip: return .copyclip
-        case .quickTone: return .quickTone
-        case .cursorLeft: return .cursorLeft
-        case .cursorRight: return .cursorRight
-        case .deleteForward: return .deleteForward
-        case .hideKeyboard: return .hideKeyboard
-        case .reply: return .aiReply
-        case .fix: return .aiFix
         // Its cap is the script's own mark, and the alternates that come with it
         // live on the `KeySpec` rather than the `KeyCap`, so the compiler builds
         // this one whole through `KeyboardLayout.punctuationKey(for:)`. Answered
@@ -37,7 +35,12 @@ public extension SlotAction {
         case .punctuation:
             return KeyboardLayout.punctuationKey(for: language).cap
         case .text(let value): return .character(value)
+        default: return simpleKeyCap
         }
+    }
+
+    private var simpleKeyCap: KeyCap? {
+        Self.simpleCaps[self]
     }
 
     /// Whether this key draws its name under its glyph, and so has a label the
@@ -59,25 +62,17 @@ public extension SlotAction {
     /// editor defaults false.
     func glyph(isRightToLeft: Bool = false) -> String? {
         switch self {
-        case .shift: return "shift"
         case .backspace: return KeyCap.backspaceSymbol(isRightToLeft: isRightToLeft)
         case .numbersPlane, .symbolsPlane: return nil
-        case .globe: return "globe"
-        case .settings: return "gearshape"
-        case .space: return "space"
-        case .ret: return "return"
-        case .dictation: return "waveform"
-        case .emoji: return "face.smiling"
-        case .copyclip: return "clipboard"
-        case .quickTone: return AIAction.rewrite.icon
-        // Each action's own icon, so the key and the banner's label draw one thing.
-        case .reply: return AIAction.reply.icon
-        case .fix: return AIAction.fix.icon
         case .cursorLeft: return KeyCap.cursorLeftSymbol(isRightToLeft: isRightToLeft)
         case .cursorRight: return KeyCap.cursorRightSymbol(isRightToLeft: isRightToLeft)
         case .deleteForward: return KeyCap.deleteForwardSymbol(isRightToLeft: isRightToLeft)
-        case .hideKeyboard: return "keyboard.chevron.compact.down"
         case .punctuation, .text: return nil
+        default: return simpleGlyph
         }
+    }
+
+    private var simpleGlyph: String? {
+        Self.simpleGlyphs[self]
     }
 }

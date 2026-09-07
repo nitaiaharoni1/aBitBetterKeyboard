@@ -1,0 +1,23 @@
+name: Swift lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: macos-15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: Check Swift size, complexity and nesting limits
+        run: bash Scripts/lint.sh

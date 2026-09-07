@@ -49,28 +49,7 @@ struct SettingsView: View {
                 AmbientBackground()
 
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: Theme.Space.md) {
-                            if search.isSearching {
-                                AppSearchResults()
-                            } else {
-                                SettingsTypingSection(setup: setup)
-                                SettingsAISection(setup: setup)
-                                accountSection
-                                privacySection
-                                diagnosticsSection
-                                footer
-                            }
-                        }
-                        .padding(.horizontal, Theme.Space.md)
-                        .padding(.bottom, Theme.Space.xl)
-                    }
-                    .scrollDismissesKeyboard(.immediately)
-                    .onChange(of: search.highlightedRow) { _, row in
-                        guard let row, row.tab == .settings else { return }
-                        scrollToHighlight(proxy)
-                    }
-                    .onAppear { scrollToHighlight(proxy) }
+                    settingsScroll(proxy: proxy)
                 }
             }
             .safeAreaInset(edge: .top, spacing: Theme.Space.xs) {
@@ -97,6 +76,30 @@ struct SettingsView: View {
             launch = KeyboardLaunchRecord.load()
             secure = SecureDecisionRecord.load()
         }
+    }
+
+    private func settingsScroll(proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Space.md) {
+                if search.isSearching { AppSearchResults() }
+                else {
+                    SettingsTypingSection(setup: setup)
+                    SettingsAISection(setup: setup)
+                    accountSection
+                    privacySection
+                    diagnosticsSection
+                    footer
+                }
+            }
+            .padding(.horizontal, Theme.Space.md)
+            .padding(.bottom, Theme.Space.xl)
+        }
+        .scrollDismissesKeyboard(.immediately)
+        .onChange(of: search.highlightedRow) { _, row in
+            guard let row, row.tab == .settings else { return }
+            scrollToHighlight(proxy)
+        }
+        .onAppear { scrollToHighlight(proxy) }
     }
 
     // MARK: Account

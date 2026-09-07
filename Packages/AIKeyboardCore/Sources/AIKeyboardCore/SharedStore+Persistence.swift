@@ -122,12 +122,8 @@ extension SharedStore {
         defer { isLoading = false }
         Self.removeRetiredKeys(from: defaults)
 
-        if defaults.object(forKey: Key.hasCompletedOnboarding) != nil {
-            hasCompletedOnboarding = defaults.bool(forKey: Key.hasCompletedOnboarding)
-        }
-        if defaults.object(forKey: Key.hasAcknowledgedKeyboardSwitch) != nil {
-            hasAcknowledgedKeyboardSwitch = defaults.bool(forKey: Key.hasAcknowledgedKeyboardSwitch)
-        }
+        loadBool(Key.hasCompletedOnboarding) { self.hasCompletedOnboarding = $0 }
+        loadBool(Key.hasAcknowledgedKeyboardSwitch) { self.hasAcknowledgedKeyboardSwitch = $0 }
         // Assigned unconditionally rather than only when the key exists, because
         // this is also what puts the shipped default into `Theme.palette` — the
         // published property starts on `.orange` and so would never fire its
@@ -142,28 +138,20 @@ extension SharedStore {
         // Through the accessor rather than off the key, so the upgrade from the
         // old boolean happens in exactly one place. See `storedAutocorrectLevel`.
         autocorrectLevel = storedAutocorrectLevel
-        if defaults.object(forKey: Key.completeOnIdle) != nil {
-            completeOnIdle = defaults.bool(forKey: Key.completeOnIdle)
-        }
-        if defaults.object(forKey: Key.spaceOnIdle) != nil {
-            spaceOnIdle = defaults.bool(forKey: Key.spaceOnIdle)
-        }
+        loadBool(Key.completeOnIdle) { self.completeOnIdle = $0 }
+        loadBool(Key.spaceOnIdle) { self.spaceOnIdle = $0 }
         let delay = defaults.integer(forKey: Key.idleDelayMs)
         if Self.idleDelayChoices.contains(delay) { idleDelayMs = delay }
-        if defaults.object(forKey: Key.autocapitalise) != nil {
-            autocapitalise = defaults.bool(forKey: Key.autocapitalise)
-        }
-        if defaults.object(forKey: Key.predictions) != nil {
-            predictions = defaults.bool(forKey: Key.predictions)
-        }
+        loadBool(Key.autocapitalise) { self.autocapitalise = $0 }
+        loadBool(Key.predictions) { self.predictions = $0 }
         if let level = GroupedKeys.Level(rawValue: defaults.integer(forKey: Key.groupedLevel)) {
             groupedLevel = level
         }
-        if defaults.object(forKey: Key.haptics) != nil { haptics = defaults.bool(forKey: Key.haptics) }
+        loadBool(Key.haptics) { self.haptics = $0 }
         if let strength = HapticStrength(rawValue: defaults.integer(forKey: Key.hapticStrength)) {
             hapticStrength = strength
         }
-        if defaults.object(forKey: Key.keySounds) != nil { keySounds = defaults.bool(forKey: Key.keySounds) }
+        loadBool(Key.keySounds) { self.keySounds = $0 }
         if let tone = defaults.string(forKey: Key.defaultTone).flatMap(ToneStyle.init(rawValue:)) {
             defaultTone = tone
         }
@@ -190,12 +178,8 @@ extension SharedStore {
             copyclipRecord = decoded.record
             copyclipMigrated = decoded.migrated
         }
-        if defaults.object(forKey: Key.isSubscribed) != nil {
-            isSubscribed = defaults.bool(forKey: Key.isSubscribed)
-        }
-        if defaults.object(forKey: Key.screenContextAllowed) != nil {
-            screenContextAllowed = defaults.bool(forKey: Key.screenContextAllowed)
-        }
+        loadBool(Key.isSubscribed) { self.isSubscribed = $0 }
+        loadBool(Key.screenContextAllowed) { self.screenContextAllowed = $0 }
         // Unguarded, because `decodeLayout` already answers `.default` for an
         // absent key and for anything it cannot use. A guard here would be a
         // second opinion about what "no stored layout" means, and the two would
@@ -205,12 +189,12 @@ extension SharedStore {
 
         persistMigrations(layoutMigrated: layout.migrated, copyclipMigrated: copyclipMigrated)
 
-        // The app and the keyboard are separate processes, and a process always
-        // sees its own writes — so the only way to observe that the App Group is
-        // genuinely shared is to watch both processes report what they read. The
-        // unified log stamps each line with the process that emitted it, which
-        // makes `AppGroupProof.sh` able to fail. Keep this in sync with the keys
-        // that script greps for.
+        logLoadedSettings()
+    }
+
+    private func logLoadedSettings() {
+        // The app and keyboard are separate processes, so seeing this record
+        // from both is the App Group proof this process can emit.
         Self.log.notice(
             """
             load storage=\(self.storage.rawValue, privacy: .public) \
@@ -219,5 +203,10 @@ extension SharedStore {
             palette=\(self.brandPalette.rawValue, privacy: .public)
             """
         )
+    }
+
+    private func loadBool(_ key: String, assign: (Bool) -> Void) {
+        guard defaults.object(forKey: key) != nil else { return }
+        assign(defaults.bool(forKey: key))
     }
 }

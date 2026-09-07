@@ -3,116 +3,6 @@ import CoreGraphics
 import Foundation
 
 /// Where a lift started. Tray origins mint a `SlotSpec` for the session only.
-public enum DragOrigin: Equatable, Sendable {
-    case board(SlotSpec)
-    case tray(SlotAction)
-}
-
-/// Where the finger currently proposes to drop.
-///
-/// `.board` index is into the row *without* the lifted key — the same contract
-/// as `move(_:to:at:)`.
-public enum DropTarget: Equatable, Sendable {
-    case board(row: LayoutEditorModel.RowKind, index: Int)
-    case tray
-}
-
-public struct DragSession: Equatable, Sendable {
-    public let origin: DragOrigin
-    public let lifted: SlotSpec
-    /// Where the key returns if the gesture ends with no legal target.
-    /// Captured at lift so a torn-down board drag cannot fall into the tray.
-    public let home: DropTarget
-    public var proposed: DropTarget?
-    /// After a re-order, `updateDrag` refuses to resolve until a new
-    /// `CanvasGeometry` arrives. Re-ordering moves the frames that decide
-    /// re-ordering.
-    public var awaitingGeometry: Bool
-}
-
-/// An in-flight handle drag. `draft` stays put until `endResize`.
-public struct ResizeSession: Equatable, Sendable {
-    public let slotID: UUID
-    public let start: SlotWidth
-    public var proposed: SlotWidth
-}
-
-/// What the view measured, in the keyboard's own bounds.
-///
-/// Letter rows (and digits, shift, delete) live in `frozenBands`. A drop there
-/// is ignored unless it is also in `extraRowWell`. They are not in `rowBands`.
-/// `extraRowWell` is the top frozen row, present only when `cursorRow` is empty.
-public struct CanvasGeometry: Equatable, Sendable {
-    public var keyFrames: [UUID: CGRect]
-    public var rowBands: [LayoutEditorModel.RowKind: ClosedRange<CGFloat>]
-    public var trayBand: ClosedRange<CGFloat>?
-    public var extraRowWell: ClosedRange<CGFloat>?
-    public var frozenBands: [ClosedRange<CGFloat>]
-
-    public init(
-        keyFrames: [UUID: CGRect],
-        rowBands: [LayoutEditorModel.RowKind: ClosedRange<CGFloat>],
-        trayBand: ClosedRange<CGFloat>?,
-        extraRowWell: ClosedRange<CGFloat>?,
-        frozenBands: [ClosedRange<CGFloat>] = []
-    ) {
-        self.keyFrames = keyFrames
-        self.rowBands = rowBands
-        self.trayBand = trayBand
-        self.extraRowWell = extraRowWell
-        self.frozenBands = frozenBands
-    }
-}
-
-/// One unused key in the tray. Derived, never stored.
-public struct TrayItem: Identifiable, Equatable, Sendable {
-    public var id: SlotAction { action }
-    public let action: SlotAction
-
-    /// Literals are stamps. Everything else is unique, like an app on the home screen.
-    public var isRepeatable: Bool {
-        if case .text = action { return true }
-        return false
-    }
-}
-
-/// Legal VoiceOver (and context) actions for one placed key.
-///
-/// The list is the rail: an illegal remove is not present.
-public enum KeyA11yAction: Equatable, Hashable, Sendable {
-    case moveLeft
-    case moveRight
-    case moveToRow(LayoutEditorModel.RowKind)
-    case remove
-    case widen
-    case narrow
-    case fillWidth
-    case inspect
-
-    public var title: String {
-        switch self {
-        case .moveLeft: return "Move left"
-        case .moveRight: return "Move right"
-        case .moveToRow(let kind): return "Move to \(kind.title.lowercased())"
-        case .remove: return "Remove"
-        case .widen: return "Increase width"
-        case .narrow: return "Decrease width"
-        case .fillWidth: return "Fill the row"
-        case .inspect: return "Inspect"
-        }
-    }
-}
-
-public enum TrayA11yAction: Equatable, Hashable, Sendable {
-    case addTo(LayoutEditorModel.RowKind)
-
-    public var title: String {
-        switch self {
-        case .addTo(let kind): return "Add to \(kind.title.lowercased())"
-        }
-    }
-}
-
 /// The layout editor's state.
 ///
 /// **No SwiftUI in here on purpose.** It is arithmetic over a
@@ -121,31 +11,6 @@ public enum TrayA11yAction: Equatable, Hashable, Sendable {
 /// without standing a view up. The screen observes it and draws.
 @MainActor
 public final class LayoutEditorModel: ObservableObject {
-
-    /// Which editable row a key belongs to.
-    ///
-    /// The suggestion bar's two ends are rows as far as the arithmetic is
-    /// concerned; only the drawing differs. That is what keeps move, remove and
-    /// retarget from being written twice.
-    public enum RowKind: String, CaseIterable, Sendable {
-        case cursor, bottom, barLeading, barTrailing
-
-        /// **Spoken, not internal.** These reach VoiceOver through
-        /// `KeyA11yAction.moveToRow`, `TrayA11yAction.addTo` and the canvas key's
-        /// own label, so they have to be the names the screen uses. `.cursor` was
-        /// "Extra row" — the name of a switch that no longer exists and never
-        /// described what is on the row — while every visible label on the editor
-        /// called it the action row, and the bar ends were "Bar, leading" against
-        /// a card reading "Left end".
-        public var title: String {
-            switch self {
-            case .bottom: return "Bottom row"
-            case .cursor: return "Action row"
-            case .barLeading: return "Suggestion bar, left end"
-            case .barTrailing: return "Suggestion bar, right end"
-            }
-        }
-    }
 
     /// Twenty steps. Deep enough that an experiment is recoverable, shallow
     /// enough that the stack is not a second copy of the feature.
@@ -219,20 +84,6 @@ public final class LayoutEditorModel: ObservableObject {
     public var isUsable: Bool { LayoutValidator.isUsable(draft) }
 
     public var canUndo: Bool { !history.isEmpty }
-
-    public func row(_ kind: RowKind) -> [SlotSpec] {
-        switch kind {
-        case .bottom: return draft.bottomRow
-        case .cursor: return draft.cursorRow
-        case .barLeading: return draft.barLeading
-        case .barTrailing: return draft.barTrailing
-        }
-    }
-
-    /// Which row a key is in, or nil if it is not in the draft at all.
-    public func rowKind(of slot: SlotSpec) -> RowKind? {
-        RowKind.allCases.first { kind in row(kind).contains { $0.id == slot.id } }
-    }
 
     /// What a row may hold. The bar is a narrower list than the grid.
     public func catalogue(for kind: RowKind) -> [SlotAction] {
@@ -357,14 +208,7 @@ public final class LayoutEditorModel: ObservableObject {
         let start = resize.start
         self.resize = nil
         guard proposed != start else { return }
-        edit { layout in
-            for kind in RowKind.allCases {
-                Self.write(kind, in: &layout) { keys in
-                    guard let index = keys.firstIndex(where: { $0.id == id }) else { return }
-                    keys[index].width = proposed
-                }
-            }
-        }
+        edit { Self.setWidth(proposed, for: id, in: &$0) }
     }
 
     public func cancelResize() {
@@ -509,13 +353,6 @@ public final class LayoutEditorModel: ObservableObject {
         return result
     }
 
-    public func trayActions(for action: SlotAction) -> [TrayA11yAction] {
-        RowKind.allCases.compactMap { kind in
-            guard canAccept(action, in: kind) else { return nil }
-            return .addTo(kind)
-        }
-    }
-
     public func perform(_ action: KeyA11yAction, on slot: SlotSpec) {
         cancelDrag()
         switch action {
@@ -524,23 +361,23 @@ public final class LayoutEditorModel: ObservableObject {
         case .moveToRow(let kind): move(slot, to: kind, at: row(kind).count)
         case .remove: remove(slot)
         case .widen:
-            if case .units(let value) = slot.width {
-                setWidth(.clampedUnits(value + 0.5), for: slot)
-            }
+            widen(slot)
         case .narrow:
-            switch slot.width {
-            case .fill: setWidth(.units(1), for: slot)
-            case .units(let value): setWidth(.clampedUnits(value - 0.5), for: slot)
-            }
+            narrow(slot)
         case .fillWidth: setWidth(.fill, for: slot)
         case .inspect: selection = slot
         }
     }
 
-    public func perform(_ action: TrayA11yAction, adding catalogueAction: SlotAction) {
-        cancelDrag()
-        switch action {
-        case .addTo(let kind): add(catalogueAction, to: kind)
+    private func widen(_ slot: SlotSpec) {
+        guard case .units(let value) = slot.width else { return }
+        setWidth(.clampedUnits(value + 0.5), for: slot)
+    }
+
+    private func narrow(_ slot: SlotSpec) {
+        switch slot.width {
+        case .fill: setWidth(.units(1), for: slot)
+        case .units(let value): setWidth(.clampedUnits(value - 0.5), for: slot)
         }
     }
 
@@ -783,6 +620,15 @@ public final class LayoutEditorModel: ObservableObject {
         case .cursor: change(&layout.cursorRow)
         case .barLeading: change(&layout.barLeading)
         case .barTrailing: change(&layout.barTrailing)
+        }
+    }
+
+    private static func setWidth(_ width: SlotWidth, for id: UUID, in layout: inout KeyboardCustomization) {
+        for kind in RowKind.allCases {
+            Self.write(kind, in: &layout) { keys in
+                guard let index = keys.firstIndex(where: { $0.id == id }) else { return }
+                keys[index].width = width
+            }
         }
     }
 

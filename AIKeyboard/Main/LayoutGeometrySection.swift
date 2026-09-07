@@ -37,13 +37,7 @@ struct LayoutGeometrySection: View {
                         .font(Theme.Fonts.caption)
                         .foregroundStyle(Theme.Text.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    ForEach(LayoutGeometry.RowBand.allCases, id: \.self) { band in
-                        LayoutSlider(
-                            title: band.title, value: model.draft.geometry.height(band),
-                            range: LayoutGeometry.keyHeightRange, unit: "pt",
-                            identifier: identifier(for: band)
-                        ) { model.setKeyHeight($0, for: band) }
-                    }
+                    rowHeightSliders
                     Divider.themed
                     LayoutSlider(
                         title: "Row spacing", value: model.draft.geometry.rowSpacing,
@@ -64,23 +58,28 @@ struct LayoutGeometrySection: View {
                         Text("One-handed")
                             .font(Theme.Fonts.body)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        Picker(
-                            "One-handed",
-                            selection: Binding(
-                                get: { model.draft.geometry.reach },
-                                set: { model.setReach($0) })
-                        ) {
-                            Text("Off").tag(Reach.full)
-                            Text("Left").tag(Reach.left)
-                            Text("Right").tag(Reach.right)
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .accessibilityIdentifier("layout-reach")
+                        reachPicker
                     }
                 }
             }
         }
+    }
+
+    private var rowHeightSliders: some View {
+        ForEach(LayoutGeometry.RowBand.allCases, id: \.self) { band in
+            LayoutSlider(title: band.title, value: model.draft.geometry.height(band), range: LayoutGeometry.keyHeightRange, unit: "pt", identifier: identifier(for: band)) { model.setKeyHeight($0, for: band) }
+        }
+    }
+
+    private var reachPicker: some View {
+        Picker("One-handed", selection: Binding(get: { model.draft.geometry.reach }, set: { model.setReach($0) })) {
+            Text("Off").tag(Reach.full)
+            Text("Left").tag(Reach.left)
+            Text("Right").tag(Reach.right)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .accessibilityIdentifier("layout-reach")
     }
 
     /// **The letters band keeps the original `layout-key-height`.** It is the

@@ -81,136 +81,7 @@ extension KeyboardController {
             cancelRefinement()
             return
         }
-        if isSystemKeyboard, !Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionWorkReserveMB) {
-            stopSuggestionWorkForMemoryPressure()
-            return
-        }
-        expirePendingAutocorrectUndoIfCaretMoved()
-        // The field already holds the decoder's guess. Scoring that as typed
-        // text replaces the grouped bar and lets space commit a third word.
-        if grouped.isTyping {
-            dropIdleTypingIfStale()
-            return
-        }
-        guard store.storedPredictions,
-            SecureField.permitsRead(
-                secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
-        else {
-            refiner?.cancel()
-            pendingRefinementPosition = nil
-            suggestions = []
-            dropIdleTypingIfStale()
-            return
-        }
-        // A whole word the host has selected is scored in place of the word
-        // behind the cursor — with a range selected there is nothing being typed,
-        // and `documentContextBeforeInput` stops in front of the selection, so
-        // the two never overlap. See `selectedWord`, which costs one `selectedText`
-        // read and nothing else when there is no selection.
-        let before = contextBefore
-        if let personalOffers = personalTokenSuggestions(in: before) {
-            if personalOffers != suggestions { suggestions = personalOffers }
-            cancelRefinement()
-            dropIdleTypingIfStale()
-            return
-        }
-        // Held rather than re-read: every one of these is a call into the host,
-        // this function runs on every keystroke, and the local tier's whole
-        // budget is about a millisecond.
-        let typed = currentWordPrefix
-        let selected = selectedWord
-        let availableAfter = target?.documentContextAfterInput
-        let after = availableAfter ?? ""
-        if selection == nil,
-            availableAfter != nil,
-            !Self.continuesWord(in: after),
-            let repair = MissingSpaces.trailingBoundaryRepair(in: before)
-        {
-            let bar = [
-                Suggestion(
-                    text: repair.replacement,
-                    language: .hebrew,
-                    commit: .replaceSuffix(expected: repair.source))
-            ]
-            if bar != suggestions { suggestions = bar }
-            cancelRefinement()
-            dropIdleTypingIfStale()
-            return
-        }
-        let prefix = selected ?? typed
-        // Everything in front of what is being scored. A selection is not part of
-        // the before-context at all, and `selectedWord` refuses one with a word
-        // joined to its leading end, so this drops nothing in that case.
-        let context = String(before.dropLast(typed.count))
-        let languages = [language] + store.storedEnabledLanguages.filter { $0 != language }
-        let supplementary = store.storedPersonalDictionary + supplementaryWords
-        let level = store.storedAutocorrectLevel
-        let touches: TypingTouchTrace?
-        if selection == nil {
-            touches =
-                typingTouchTrace
-                .evidence(matching: prefix, context: context)?
-                .aligned(to: SuggestionEngine.wordCore(prefix))
-        } else {
-            typingTouchTrace.clear()
-            touches = nil
-        }
-        let query = SuggestionQuery(
-            prefix: prefix, context: context, languages: languages,
-            supplementary: supplementary, autocorrect: level, touches: touches,
-            vocabulary: vocabularyVersion)
-        let results: [Suggestion]
-        if query == lastSuggestionQuery {
-            results = lastSuggestionResults
-        } else {
-            results = SuggestionEngine.suggestions(
-                prefix: prefix,
-                context: context,
-                languages: languages,
-                supplementary: supplementary,
-                personal: personal,
-                autocorrect: level,
-                touches: touches
-            )
-            lastSuggestionQuery = query
-            lastSuggestionResults = results
-        }
-        // **Compared before it is assigned, and that is a separate saving from the
-        // memo above.** `@Published` emits on assignment and never on change, so
-        // the second and third refresh of a keystroke each republished the same
-        // three words and each rebuilt every key. `Suggestion`'s equality is
-        // deliberately text, language, the bold flag and commit behavior rather
-        // than its `id` —
-        // see `.claude/rules/suggestion-bar.md`, where that is what stops the bar
-        // fading on every letter — so this asks exactly the question the bar
-        // draws from.
-        let ordinaryResults = results.filter {
-            $0.text == prefix || !PersonalLanguageModel.isVerbatimToken($0.text)
-        }
-        let bar = pinningDefaultToTypedIfNeeded(ordinaryResults, prefix: prefix)
-        if bar != suggestions { suggestions = bar }
-        // **Not for a selection.** The async tier predicts what somebody typing
-        // is about to type, and nobody is typing; `applyRefinement` would drop
-        // the answer anyway, because the prefix it hands back is not
-        // `currentWordPrefix`.
-        //
-        // **A request already in flight has to be cancelled here, not merely
-        // skipped.** A space arms the clock on an empty prefix, and a double tap
-        // that selects a word moments later takes this branch and used to leave
-        // the old request running: `applyRefinement`'s only staleness gate was
-        // `prefix == currentWordPrefix`, and an empty prefix asked before the
-        // selection still equals the empty prefix a selection reads, so the
-        // model's guess landed in the bar over a word the user had just pointed
-        // at. See the `selection == nil` guard on `applyRefinement` itself, which
-        // is what actually closes it — this cancel only stops paying for an
-        // answer nothing can use any more.
-        if selection == nil {
-            if schedulingRefinement { askForRefinement(prefix: prefix, context: context) }
-        } else {
-            refiner?.cancel()
-            pendingRefinementPosition = nil
-        }
-        dropIdleTypingIfStale()
+        refreshActiveSuggestions(schedulingRefinement: schedulingRefinement)
     }
 
     /// When space cannot commit a correction, the bold slot has to be the typed
@@ -245,7 +116,7 @@ extension KeyboardController {
     /// whatever bold default the empty-prefix (next-word) tier had drawn, hint
     /// and all. Any selection loses every default; whether the *prefix* is empty
     /// decides nothing about that.
-    private func pinningDefaultToTypedIfNeeded(
+    func pinningDefaultToTypedIfNeeded(
         _ results: [Suggestion], prefix: String
     )
         -> [Suggestion]
@@ -377,7 +248,7 @@ extension KeyboardController {
 
     /// Start the async tier's clock. Every keystroke restarts it, so it only ever
     /// fires into a pause.
-    private func askForRefinement(prefix: String, context: String) {
+    func askForRefinement(prefix: String, context: String) {
         guard let refiner else { return }
         // **Not while somebody is speaking.** A recording rewrites the tail of the
         // field every couple of seconds as a better reading of the same words
@@ -528,96 +399,6 @@ extension KeyboardController {
 
     /// The pause fired. Completing the word and adding a space are separate
     /// switches; both on is the completion plus a space.
-    func performIdleTyping() {
-        guard idleTypingMayRun else { return }
-        let prefix = currentWordPrefix
-        guard !prefix.isEmpty else { return }
-        let complete = store.storedCompleteOnIdle
-        let space = store.storedSpaceOnIdle
-        guard complete || space else { return }
-
-        if grouped.isTyping, complete {
-            let level = groupingLevel
-            let decoder = grouped.decoder(
-                language: language, level: level, personal: personalWordsForDecoding)
-            let decoded = decoder.decode(
-                matching: grouped.code(language: language, level: level),
-                pinnedTo: grouped.pins,
-                completions: .afterExact)
-            if let longer = decoded.idleCompletion {
-                let guess = grouped.cased(longer, in: language)
-                // Read before `writeGroupedGuess` mutates the field, for the
-                // reason `apply`'s own read is. See `insertCommittalSpace`.
-                let after = contextAfter
-                Feedback.keyPress()
-                Feedback.keyClick(.tock)
-                // **Grouped typing is the one writer that still clears the way
-                // back outright**, here and in `pressGroupedKey`. Everything else
-                // leaves it to `expireRevertibleEditIfUnusable`, which runs from
-                // `refreshDocumentState` — and a grouped guess is written by
-                // `writeGroupedGuess`, which rewrites the word in the field
-                // without going through `refreshSuggestions` at all. An expiry
-                // that is never asked is not an expiry.
-                clearRevertibleEdit()
-                writeGroupedGuess(guess)
-                closeGroupedIfCurrentWord()
-                if !consumeGroupedSkipLearn() {
-                    recordCommittedWord(SuggestionEngine.wordCore(guess))
-                }
-                if space {
-                    insertCommittalSpace(after: after)
-                    lastLearnedFolded = nil
-                }
-                deletedWordPrefix = nil
-                refreshSuggestions()
-                idleTypingTask?.cancel()
-                idleTypingTask = nil
-                idleTypedAt = nil
-                idleTypingPosition = nil
-                reportInteraction(.suggestion)
-                return
-            }
-            if space { insertSpace() }
-            return
-        }
-
-        // **The spelling the user already undid this session is refused here
-        // too, not only on the space bar.** `idleCompletion` picks the first
-        // offer that is not the literal keystrokes, with no idea that this exact
-        // prefix is the one `undoAutocorrectIfPending` was just asked to put
-        // back — so completing on pause could silently re-run the swap
-        // `insertSpace` already knows to refuse, from a different call site.
-        if complete, !isCorrectingWordByHand, store.storedPredictions,
-            !undoneAutocorrectSpellings.contains(SeedLanguageModel.fold(prefix)),
-            let candidate = idleCompletion(for: prefix)
-        {
-            if space {
-                apply(candidate, learningSource: .automatic)
-            } else {
-                Feedback.keyPress()
-                Feedback.keyClick(.tock)
-                endGroupedWord()
-                guard replaceCurrentWord(with: candidate.text) else {
-                    cancelRefinement()
-                    refreshSuggestions()
-                    return
-                }
-                recordCommittedWord(SuggestionEngine.wordCore(candidate.text), source: .automatic)
-                deletedWordPrefix = nil
-                refreshSuggestions()
-                // The word is finished. A wait still running from the letters
-                // that just became this word must not fire again (`hellos`
-                // after `hello`).
-                idleTypingTask?.cancel()
-                idleTypingTask = nil
-                idleTypedAt = nil
-                idleTypingPosition = nil
-                reportInteraction(.suggestion)
-            }
-            return
-        }
-        if space { insertSpace() }
-    }
 
     /// Complete on pause writes the first suggestion that **continues** the typed
     /// word, not the bold slot. Mid-word the engine leaves the keystrokes as
@@ -678,7 +459,7 @@ extension KeyboardController {
     /// A hand repair is not in this list. Space on pause has to fire after
     /// backspace; `performIdleTyping` skips completing the word, and
     /// `insertSpace` already skips autocorrect, so the letters they kept stay.
-    private var idleTypingMayRun: Bool {
+    var idleTypingMayRun: Bool {
         guard overlay == .none, !isDictating, !isWorking, selection == nil else { return false }
         guard let after = target?.documentContextAfterInput,
             !Self.continuesWord(in: after)

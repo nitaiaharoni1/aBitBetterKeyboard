@@ -223,20 +223,7 @@ extension KeyView {
     func groupedLabel(_ lines: [[String]], size: CGFloat) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                Group {
-                    if line.isEmpty {
-                        // An empty HStack collapses; a clear view still takes its
-                        // slice, which is how `ךף` stays on the lower half.
-                        Color.clear
-                    } else {
-                        HStack(spacing: Self.groupedLetterSpacing) {
-                            ForEach(Array(line.enumerated()), id: \.offset) { _, letter in
-                                Text(shift.isUppercase ? language.uppercased(letter) : letter)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            }
-                        }
-                    }
-                }
+                groupedLine(line)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -248,6 +235,22 @@ extension KeyView {
         // The letters are a picture of the keyboard, so they run in the order the
         // keyboard does whatever the script does. Same pin every key row carries.
         .environment(\.layoutDirection, .leftToRight)
+    }
+
+    @ViewBuilder
+    private func groupedLine(_ line: [String]) -> some View {
+        if line.isEmpty {
+            // An empty HStack collapses; a clear view still takes its slice,
+            // which is how `ךף` stays on the lower half.
+            Color.clear
+        } else {
+            HStack(spacing: Self.groupedLetterSpacing) {
+                ForEach(Array(line.enumerated()), id: \.offset) { _, letter in
+                    Text(shift.isUppercase ? language.uppercased(letter) : letter)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+        }
     }
 
     // MARK: Action label

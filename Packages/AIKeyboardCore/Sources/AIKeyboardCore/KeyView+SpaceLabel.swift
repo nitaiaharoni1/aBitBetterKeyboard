@@ -223,26 +223,7 @@ private struct SpaceBarLabel: View {
             }
             VStack(spacing: 0) {
                 if !codes.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(codes, id: \.self) { code in
-                            Text(code.shortName)
-                                .font(.system(size: codeFontSize, weight: code == lit ? .semibold : .regular))
-                                .foregroundStyle(
-                                    code == lit
-                                        ? Theme.Keys.label
-                                        : Theme.Keys.secondaryLabel.opacity(0.6)
-                                )
-                                .background(alignment: .center) {
-                                    if code == lit, !reduceMotion {
-                                        Capsule()
-                                            .fill(Theme.Keys.label.opacity(0.10))
-                                            .padding(.horizontal, -5)
-                                            .padding(.vertical, -2)
-                                            .matchedGeometryEffect(id: "space-lit", in: strip)
-                                    }
-                                }
-                        }
-                    }
+                    codeStrip(codes, lit: lit)
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
                 }
@@ -263,6 +244,29 @@ private struct SpaceBarLabel: View {
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity)
         .environment(\.layoutDirection, .leftToRight)
+    }
+
+    private func codeStrip(_ codes: [KeyboardLanguage], lit: KeyboardLanguage) -> some View {
+        HStack(spacing: 6) {
+            ForEach(codes, id: \.self) { code in
+                codeLabel(code, lit: lit)
+            }
+        }
+    }
+
+    private func codeLabel(_ code: KeyboardLanguage, lit: KeyboardLanguage) -> some View {
+        Text(code.shortName)
+            .font(.system(size: codeFontSize, weight: code == lit ? .semibold : .regular))
+            .foregroundStyle(code == lit ? Theme.Keys.label : Theme.Keys.secondaryLabel.opacity(0.6))
+            .background(alignment: .center) {
+                if code == lit, !reduceMotion {
+                    Capsule()
+                        .fill(Theme.Keys.label.opacity(0.10))
+                        .padding(.horizontal, -5)
+                        .padding(.vertical, -2)
+                        .matchedGeometryEffect(id: "space-lit", in: strip)
+                }
+            }
     }
 
     func slideChevron(_ name: String, emphasized: Bool) -> some View {

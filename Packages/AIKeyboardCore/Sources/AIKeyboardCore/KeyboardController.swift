@@ -577,7 +577,7 @@ public final class KeyboardController: ObservableObject {
     /// after the keyboard moves on, which a blanket wipe on every field change
     /// would have cost for no security reason at all.
     var openWordPermitted = true
-    private var cancellables = Set<AnyCancellable>()
+    var cancellables = Set<AnyCancellable>()
 
     /// Names and shortcuts from `UILexicon`, read once by `KeyboardViewController`
     /// via `requestSupplementaryLexicon` and handed down. Empty until that
@@ -676,7 +676,7 @@ public final class KeyboardController: ObservableObject {
     /// App previews and tests keep their existing eager behaviour.
     private static var warmedSuggestionLanguages = Set<KeyboardLanguage>()
     private nonisolated static let suggestionStartupReserveMB = 16.0
-    private nonisolated static let suggestionWarmReserveMB = 12.0
+    nonisolated static let suggestionWarmReserveMB = 12.0
     nonisolated static let suggestionWorkReserveMB = 8.0
     private static var suggestionMemoryRecoveryAfter: ContinuousClock.Instant?
     private static let suggestionMemoryLogger = Logger(
@@ -765,25 +765,7 @@ public final class KeyboardController: ObservableObject {
             }
             .store(in: &cancellables)
 
-        let session = ScreenContextSession.shared
-        screenContext = session.state
-        screenContextSource = session.source
-        screenReadWentUnanswered = session.lastReadWentUnanswered
-        session.$state
-            .receive(on: RunLoop.main)
-            .sink { [weak self] state in
-                guard let self else { return }
-                withAnimation(Theme.Motion.panel) { self.screenContext = state }
-            }
-            .store(in: &cancellables)
-        session.$source
-            .receive(on: RunLoop.main)
-            .sink { [weak self] source in self?.screenContextSource = source }
-            .store(in: &cancellables)
-        session.$lastReadWentUnanswered
-            .receive(on: RunLoop.main)
-            .sink { [weak self] unanswered in self?.screenReadWentUnanswered = unanswered }
-            .store(in: &cancellables)
+        bindScreenContextSession()
 
         // Read through the store rather than off its `@Published` copy, for the
         // reason `storedKeyboardLayout` is on the line above: this is a second
@@ -1331,93 +1313,6 @@ public final class KeyboardController: ObservableObject {
         ConversationalHebrewModel.purge()
     }
 
-    /// Builds the same caches ahead of the first keystroke, off the main thread.
-    ///
-    /// **The first letter of a session used to block the main thread for a
-    /// measured 230 ms in English and another 190 ms the first time the other
-    /// language was typed**, and both halves of that were already written down
-    /// separately — `dropRebuildableCaches()` above records 161 ms to rebuild the
-    /// typo block, and `.claude/rules/suggestion-bar.md` records ~70-280 ms for
-    /// Apple building a language's lexicon on the first `UITextChecker` call. What
-    /// nobody had asked is whether either has to be paid *at the keystroke*.
-    /// Neither does. Measured on the iOS 26.2 Simulator at `-O`, iPhone 17 Pro:
-    /// `TypoLexicon` 65 ms English / 124 ms Hebrew, `UITextChecker` 162 ms English
-    /// / 68 ms Hebrew, all on a background thread, after which the first
-    /// main-thread `TypoLexicon` lookup measures 0.01 ms and the first
-    /// `SuggestionEngine.sharedChecker` call 1.0 ms. iOS rebuilds this extension
-    /// whenever it feels like it, so that stall is one a user meets several times
-    /// a day rather than once.
-    ///
-    /// **A throwaway `UITextChecker`, deliberately not `sharedChecker`.** Apple
-    /// documents no thread safety for that class and the shared one is touched
-    /// from the main actor on every keystroke, so warming it directly would be a
-    /// data race. The cost being paid is the *process* loading the language's
-    /// dictionary, which a second instance shares — that is what the 1.0 ms
-    /// figure above measures, and it is the whole reason this works.
-    ///
-    /// The caller passes every language the user has enabled and puts the one on
-    /// screen first, because the pair this product exists for is typed within
-    /// seconds of each other and the second language's stall is otherwise paid on
-    /// the first space-bar slide. The memory that costs is exactly the memory a
-    /// session was going to hold anyway, and `didReceiveMemoryWarning` still hands
-    /// all of it back.
-    @discardableResult
-    public static func warmRebuildableCaches(
-        for languages: [KeyboardLanguage],
-        completion: @escaping @MainActor @Sendable (Bool) -> Void
-    ) -> Task<Void, Never> {
-        Task.detached(priority: .userInitiated) {
-            guard !Task.isCancelled else { return }
-            if languages.contains(where: { $0.script == .hebrew }) {
-                guard Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionWarmReserveMB) else {
-                    await completion(false)
-                    return
-                }
-                ConversationalHebrewModel.warm()
-            }
-            for language in languages {
-                guard !Task.isCancelled else { return }
-                guard Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionWarmReserveMB) else {
-                    await completion(false)
-                    return
-                }
-                autoreleasepool {
-                    _ = TypoLexicon.isWord("a", in: language)
-                }
-                guard !Task.isCancelled else { return }
-                guard Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionWarmReserveMB) else {
-                    await completion(false)
-                    return
-                }
-                autoreleasepool {
-                    _ = SeedLanguageModel.knows("a", in: language)
-                }
-                guard let locale = language.spellCheckerLocale else { continue }
-                guard !Task.isCancelled else { return }
-                guard Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionWarmReserveMB) else {
-                    await completion(false)
-                    return
-                }
-                autoreleasepool {
-                    let probe = language.nativeName
-                    _ = UITextChecker().completions(
-                        forPartialWordRange: NSRange(
-                            location: 0, length: (probe as NSString).length),
-                        in: probe, language: locale)
-                }
-            }
-            guard !Task.isCancelled else { return }
-            await completion(Self.hasSuggestionMemoryHeadroom(reservingMB: Self.suggestionWorkReserveMB))
-        }
-    }
-
-    /// Warms caches without waiting for completion.
-    @discardableResult
-    public static func warmRebuildableCaches(
-        for languages: [KeyboardLanguage]
-    ) -> Task<Void, Never> {
-        warmRebuildableCaches(for: languages, completion: { _ in })
-    }
 }
 
 // MARK: - Previews

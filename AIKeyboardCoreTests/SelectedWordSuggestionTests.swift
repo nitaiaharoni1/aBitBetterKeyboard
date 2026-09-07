@@ -178,26 +178,28 @@ final class SelectedWordSuggestionTests: XCTestCase {
                 ("\n", "\n"), ("\t", "\t"), ("\u{00A0}", "\u{00A0}")
             ] {
                 for selected in [true, false] {
-                    let before = "hello" + gap + (selected ? "" : typed)
-                    let mock = CursorTextTarget(
-                        before: before, selecting: selected ? typed : nil, after: " next")
-                    let live = LiveTextViewTarget(
-                        before: before, selecting: selected ? typed : "", after: " next")
-                    live.view.smartInsertDeleteType = .yes
-                    for (target, document) in [
-                        (mock as TextTarget, { mock.document }),
-                        (live as TextTarget, { live.document })
-                    ] {
-                        let controller = KeyboardController(target: target, language: language)
-                        controller.apply(Suggestion(text: replacement, language: language))
-                        XCTAssertEqual(document(), "hello" + expectedGap + replacement + " next")
-                        XCTAssertEqual(
-                            target.documentContextBeforeInput,
-                            "hello" + expectedGap + replacement + (selected ? "" : " "))
-                        XCTAssertEqual(target.documentContextAfterInput, selected ? " next" : "next")
-                    }
+                    assertReplacement(
+                        typed: typed, replacement: replacement, language: language, gap: gap,
+                        expectedGap: expectedGap, selected: selected)
                 }
             }
+        }
+    }
+
+    private func assertReplacement(
+        typed: String, replacement: String, language: KeyboardLanguage, gap: String,
+        expectedGap: String, selected: Bool
+    ) {
+        let before = "hello" + gap + (selected ? "" : typed)
+        let mock = CursorTextTarget(before: before, selecting: selected ? typed : nil, after: " next")
+        let live = LiveTextViewTarget(before: before, selecting: selected ? typed : "", after: " next")
+        live.view.smartInsertDeleteType = .yes
+        for (target, document) in [(mock as TextTarget, { mock.document }), (live as TextTarget, { live.document })] {
+            let controller = KeyboardController(target: target, language: language)
+            controller.apply(Suggestion(text: replacement, language: language))
+            XCTAssertEqual(document(), "hello" + expectedGap + replacement + " next")
+            XCTAssertEqual(target.documentContextBeforeInput, "hello" + expectedGap + replacement + (selected ? "" : " "))
+            XCTAssertEqual(target.documentContextAfterInput, selected ? " next" : "next")
         }
     }
 

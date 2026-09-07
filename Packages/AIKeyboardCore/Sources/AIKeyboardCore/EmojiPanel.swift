@@ -223,35 +223,7 @@ public struct EmojiPanel: View {
             // for the top row is entirely. Anchored to the panel, it can stand
             // over the rows either side of the cell that opened it.
             .overlay(alignment: .topLeading) {
-                if let tonePicker {
-                    // **A strip needs a way out that is not the finger that
-                    // opened it, because that finger is the only one there was.**
-                    // Every path that closes this lives in `EmojiPickCell` and is
-                    // guarded on that cell still owning the strip, so a cell that
-                    // stops observing — recycled out of the `LazyHGrid`, or torn
-                    // down between a rebuild and a lift — leaves `tonePicker` set
-                    // with nobody able to clear it, and `scrollDisabled` below
-                    // then freezes the grid for as long as the panel is open. The
-                    // user's only escape was closing emoji and reopening it. This
-                    // is the escape: one tap anywhere on the panel, whatever
-                    // stranded it.
-                    //
-                    // **Under the strip so it does not draw over it, and a tap on
-                    // the strip dismisses too** — `EmojiTonePickerView` is
-                    // `allowsHitTesting(false)`, because the finger that opened it
-                    // is what steers it and the strip must never take the touch.
-                    // So there is no part of the panel this does not answer for,
-                    // which is what makes it an escape rather than a target to
-                    // find.
-                    ZStack(alignment: .topLeading) {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                withAnimation(Theme.Motion.quick) { self.tonePicker = nil }
-                            }
-                        EmojiTonePickerView(picker: tonePicker, surface: geo.size)
-                    }
-                }
+                tonePickerOverlay(surface: geo.size)
             }
         }
         // **Built once per change of the recents, not once per scroll frame.**
@@ -279,6 +251,21 @@ public struct EmojiPanel: View {
         // environment starts at the far end, which would open Hebrew's grid on the
         // flags.
         .environment(\.layoutDirection, .leftToRight)
+    }
+
+    @ViewBuilder
+    private func tonePickerOverlay(surface: CGSize) -> some View {
+        if let tonePicker {
+            // A strip needs an escape other than the finger that opened it. The
+            // picker itself does not take touches, so this backdrop also answers a
+            // tap on the strip and clears a picker stranded by a recycled cell.
+            ZStack(alignment: .topLeading) {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation(Theme.Motion.quick) { self.tonePicker = nil } }
+                EmojiTonePickerView(picker: tonePicker, surface: surface)
+            }
+        }
     }
 
     /// Rebuilds the cells and records the count they were built for, in one step
@@ -338,12 +325,7 @@ public struct EmojiPanel: View {
                     spacing: 0
                 ) {
                     ForEach(sections, id: \.id) { section in
-                        ForEach(section.cells) { cell in
-                            self.cell(
-                                cell, width: cellWidth, height: cellHeight, surface: surface
-                            )
-                            .id(cell.id)
-                        }
+                        sectionCells(section, width: cellWidth, height: cellHeight, surface: surface)
                     }
                 }
                 .frame(width: contentWidth, alignment: .leading)
@@ -377,6 +359,15 @@ public struct EmojiPanel: View {
                 withAnimation(Theme.Motion.quick) { proxy.scrollTo(target, anchor: .leading) }
                 scrollTarget = nil
             }
+        }
+    }
+
+    private func sectionCells(
+        _ section: Section, width: CGFloat, height: CGFloat, surface: CGSize
+    ) -> some View {
+        ForEach(section.cells) { cell in
+            self.cell(cell, width: width, height: height, surface: surface)
+                .id(cell.id)
         }
     }
 

@@ -94,41 +94,12 @@ public enum BannerState: Equatable {
     /// button. Keeping them one case is what stops the strip growing a fifth
     /// almost-identical arm the next time something can refuse.
     public struct Block: Equatable, Sendable {
-
-        /// What the user can do about it from inside the keyboard.
-        public enum Remedy: Equatable, Sendable {
-            /// Nothing here can fix it. Dismiss is the only button.
-            case none
-            /// The banner message *is* `RPSystemBroadcastPickerView`: a tap on the
-            /// sentence asks Control Center to present its broadcast picker. Trailing
-            /// is dismiss. See `BroadcastPickerButton` for the disassembly that
-            /// establishes that a SwiftUI tap cannot start a session itself, and for
-            /// what hosting the picker still does not establish.
-            case broadcastPicker
-            /// A button that opens the CopyClip panel.
-            ///
-            /// **The only remedy that is answered inside this keyboard**, and it
-            /// exists because the sentence it belongs to cannot name a key.
-            /// Reply from the clipboard needs the copied message to be in the
-            /// ledger, the one alert-free route in is the `UIPasteControl` the
-            /// CopyClip panel draws, and the CopyClip key is a configurable slot
-            /// the user may have moved off the bar entirely — which is the rule
-            /// `SuggestionBar.aiButtonName` was written under. So the refusal
-            /// carries the way in rather than describing where to look for it.
-            case copyclip
-            /// A button that asks the extension host to open the containing app at
-            /// the given URL. The host tries `extensionContext?.open(_:)` first and
-            /// falls back to the responder-chain workaround if that fails. The URL
-            /// is carried here so the view does not need to know it separately.
-            case openApp(URL)
-        }
-
         /// Which action was refused, so the strip labels it with the same glyph and
         /// word the key wears. `nil` is dictation, which is not an `AIAction`.
         public let action: AIAction?
         public let title: String
         public let detail: String
-        public let remedy: Remedy
+        public let remedy: BannerRemedy
 
         /// The sentence hosts the system picker; trailing is ×. False for a
         /// refusal that must not start a recording (no Full Access, no cloud).
@@ -136,7 +107,7 @@ public enum BannerState: Equatable {
             remedy == .broadcastPicker
         }
 
-        public init(action: AIAction?, title: String, detail: String, remedy: Remedy) {
+        public init(action: AIAction?, title: String, detail: String, remedy: BannerRemedy) {
             self.action = action
             self.title = title
             self.detail = detail
@@ -263,4 +234,20 @@ public enum BannerState: Equatable {
             return true
         }
     }
+}
+
+/// What the user can do about a blocked banner from inside the keyboard.
+public enum BannerRemedy: Equatable, Sendable {
+    /// Nothing here can fix it. Dismiss is the only button.
+    case none
+    /// The banner message hosts the system broadcast picker.
+    case broadcastPicker
+    /// A button that opens the CopyClip panel.
+    case copyclip
+    /// A button that asks the extension host to open the containing app.
+    case openApp(URL)
+}
+
+extension BannerState.Block {
+    public typealias Remedy = BannerRemedy
 }

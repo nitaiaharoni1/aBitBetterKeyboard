@@ -29,51 +29,57 @@ final class AsyncTypingCorpusTests: XCTestCase {
         var metaEntries: [MetaEntry] = []
 
         for entry in corpus.entries {
-            let languages = Self.languages(forKeyboard: entry.keyboard)
-            let local = SuggestionEngine.suggestions(
-                prefix: entry.prefix,
-                context: entry.context,
-                languages: languages,
-                supplementary: Self.shippedPersonalDictionary,
-                personal: personal)
-
-            var slots = local
-            var asyncRan = false
-            if entry.pauseMs != nil {
-                let language = SuggestionEngine.suggestionLanguage(
-                    prefix: entry.prefix, context: entry.context, languages: languages)
-                let request = PredictiveRefiner.Request(
-                    textBefore: entry.context,
-                    wordInProgress: entry.prefix,
-                    language: language,
-                    screenContext: entry.screen?.makeContext(),
-                    permitted: true)
-                let applied = refine(request)
-                if let words = applied {
-                    slots = SuggestionEngine.refinedSuggestions(
-                        local: local, words: words, prefix: entry.prefix, language: language)
-                    asyncRan = true
-                }
-            }
-
-            let defaultIndex = slots.firstIndex(where: \.isDefault) ?? 0
-            records.append(
-                SlotRecord(
-                    id: entry.id,
-                    category: entry.category,
-                    slots: slots.map(\.text),
-                    defaultIndex: slots.isEmpty ? -1 : defaultIndex,
-                    commits: slots.isEmpty ? entry.prefix : slots[defaultIndex].text))
-            metaEntries.append(MetaEntry(id: entry.id, asyncRan: asyncRan))
+            let result = process(entry, personal: personal)
+            records.append(result.record)
+            metaEntries.append(result.meta)
         }
 
+        try write(
+            records: records, metaEntries: metaEntries,
+            engineAvailable: engineAvailable, at: URL(fileURLWithPath: outPath))
+    }
+
+    private func process(_ entry: CorpusEntry, personal: PersonalLanguageModel) -> (record: SlotRecord, meta: MetaEntry) {
+        let languages = Self.languages(forKeyboard: entry.keyboard)
+        let local = SuggestionEngine.suggestions(
+            prefix: entry.prefix, context: entry.context, languages: languages,
+            supplementary: Self.shippedPersonalDictionary, personal: personal)
+        let (slots, asyncRan) = refinedSlots(for: entry, local: local, languages: languages)
+        let defaultIndex = slots.firstIndex(where: \.isDefault) ?? 0
+        return (
+            SlotRecord(
+                id: entry.id, category: entry.category, slots: slots.map(\.text),
+                defaultIndex: slots.isEmpty ? -1 : defaultIndex,
+                commits: slots.isEmpty ? entry.prefix : slots[defaultIndex].text),
+            MetaEntry(id: entry.id, asyncRan: asyncRan)
+        )
+    }
+
+    private func refinedSlots(
+        for entry: CorpusEntry, local: [Suggestion], languages: [KeyboardLanguage]
+    ) -> ([Suggestion], Bool) {
+        guard entry.pauseMs != nil else { return (local, false) }
+        let language = SuggestionEngine.suggestionLanguage(
+            prefix: entry.prefix, context: entry.context, languages: languages)
+        let request = PredictiveRefiner.Request(
+            textBefore: entry.context, wordInProgress: entry.prefix, language: language,
+            screenContext: entry.screen?.makeContext(), permitted: true)
+        guard let words = refine(request) else { return (local, false) }
+        return (
+            SuggestionEngine.refinedSuggestions(
+                local: local, words: words, prefix: entry.prefix, language: language),
+            true
+        )
+    }
+
+    private func write(
+        records: [SlotRecord], metaEntries: [MetaEntry], engineAvailable: Bool, at outURL: URL
+    ) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        let outURL = URL(fileURLWithPath: outPath)
         try encoder.encode(records).write(to: outURL)
         let metaURL = outURL.deletingPathExtension().appendingPathExtension("meta.json")
-        try encoder.encode(MetaFile(engineAvailable: engineAvailable, entries: metaEntries))
-            .write(to: metaURL)
+        try encoder.encode(MetaFile(engineAvailable: engineAvailable, entries: metaEntries)).write(to: metaURL)
     }
 
     private func refine(_ request: PredictiveRefiner.Request) -> [String]? {
