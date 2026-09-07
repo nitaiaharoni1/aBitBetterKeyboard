@@ -13,10 +13,10 @@
 copy_engine_sources() {
     local core="$1" shared="$2" build="$3" source
     cp "$core"/SuggestionEngine*.swift "$build/"
-    for source in Models.swift LanguageDetector.swift SeedLanguageModel.swift \
+    for source in Models.swift LanguageDetector.swift WordBoundary.swift SeedLanguageModel.swift \
         ConversationalHebrewModel.swift \
         HebrewMorphology.swift HebrewPersonalIndex.swift LayoutTransposition.swift \
-        PersonalLanguageModel.swift \
+        PersonalLanguageModel.swift PhoneNumberToken.swift PersonalToken.swift \
         KeyProximity.swift TypoChannel.swift TypoLexicon.swift GroupedLexiconResource.swift \
         AutocorrectConfidence.swift; do
         cp "$core/$source" "$build/"

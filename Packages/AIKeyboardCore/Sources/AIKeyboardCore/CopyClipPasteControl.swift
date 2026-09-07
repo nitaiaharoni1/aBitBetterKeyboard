@@ -1,16 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// Wraps `UIPasteControl`, iOS 16's system paste button, for the one
-/// generation `refreshCopyClip(_:)` left pending rather than read.
-///
-/// **This is the only route in the package that resolves pasteboard text
-/// without calling `UIPasteboard.general.string`.** The control's own tap is
-/// the user's consent; the text arrives through `paste(itemProviders:)` on
-/// `PasteControlHost`, which iOS calls directly — nothing here ever names
-/// `.string`, so there is no alert to raise. See `PasteboardReader` and
-/// `KeyboardController.captureFromPasteControl(_:)`.
-///
 /// **Styling is what `UIPasteControlConfiguration` exposes and nothing
 /// more.** It is a system button: no card fill, no press animation to match
 /// the letter-key cards around it, and Apple supplies its own label text
@@ -46,6 +36,12 @@ struct CopyClipPasteControl: UIViewRepresentable {
             control.bottomAnchor.constraint(equalTo: host.bottomAnchor)
         ])
         return host
+    }
+
+    func sizeThatFits(
+        _ proposal: ProposedViewSize, uiView: PasteControlHost, context: Context
+    ) -> CGSize? {
+        uiView.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
     }
 
     func updateUIView(_ uiView: PasteControlHost, context: Context) {

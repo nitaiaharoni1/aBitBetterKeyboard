@@ -1670,29 +1670,47 @@ final class ContextAwareSuggestionTests: XCTestCase {
 
     // MARK: The async tier
 
-    /// The model is allowed to change the bold word. Slot 0 stays the typed
-    /// letters. A build that still pins the local default fails the last
-    /// assertion: it would keep `receive` bold after the model said `REFINED`.
-    func testRefinementCanChangeTheBoldWord() {
+    func testRefinementPreservesOnlyTheLocalAutomaticCorrection() {
+        let local = [
+            Suggestion(text: "recieve", language: .english),
+            Suggestion(text: "receive", language: .english, isDefault: true)
+        ]
+        let refined = SuggestionEngine.refinedSuggestions(
+            local: local, words: ["reciever", "recievers"], prefix: "recieve", language: .english)
+        XCTAssertEqual(refined.first?.text, "recieve")
+        XCTAssertEqual(refined.first(where: \.isDefault)?.text, "receive")
+        XCTAssertEqual(refined.first { $0.text == "reciever" }?.commit, .tapOnly)
+
+        let crowded = SuggestionEngine.refinedSuggestions(
+            local: local, words: ["reciever", "recievers", "recieving"],
+            prefix: "recieve", language: .english)
+        XCTAssertEqual(crowded.first(where: \.isDefault)?.text, "recieve")
+    }
+
+    func testRefinementCannotExtendAKnownOrPersonalWordOnSpace() {
         withBarSettingsOn {
-            let target = MockTextTarget(text: "recieve")
-            let controller = KeyboardController(target: target, language: .english)
-            controller.refreshSuggestions()
-
-            XCTAssertEqual(
-                controller.suggestions.first(where: \.isDefault)?.text, "receive",
-                "the local tier has to be autocorrecting for this test to be about anything")
-
-            controller.applyRefinement(["REFINED", "REFINEDER"], for: "recieve")
-
-            XCTAssertEqual(
-                controller.suggestions.first?.text, "recieve",
-                "slot 0 is the literal keystrokes")
-            XCTAssertEqual(
-                controller.suggestions.first(where: \.isDefault)?.text, "REFINED",
-                "the model has to be able to take the bold slot: "
-                    + "\(controller.suggestions.map(\.text))")
+            for (typed, completion) in [("car", "career"), ("Nitai", "Nitaim")] {
+                let target = MockTextTarget(text: typed)
+                let controller = KeyboardController(target: target, language: .english)
+                controller.suggestions = [Suggestion(text: typed, language: .english, isDefault: true)]
+                controller.applyRefinement([completion], for: typed)
+                XCTAssertEqual(controller.suggestions.first(where: \.isDefault)?.text, typed)
+                XCTAssertEqual(controller.suggestions.first { $0.text == completion }?.commit, .tapOnly)
+                controller.press(.space)
+                XCTAssertEqual(target.text, typed + " ")
+            }
         }
+    }
+
+    func testRefinementKeepsASafeLocalDefaultWhenModelRepeatsIt() {
+        let local = [
+            Suggestion(text: "recieve", language: .english),
+            Suggestion(text: "receive", language: .english, isDefault: true)
+        ]
+        let refined = SuggestionEngine.refinedSuggestions(
+            local: local, words: ["receive"], prefix: "recieve", language: .english)
+        XCTAssertEqual(refined.first(where: \.isDefault)?.text, "receive")
+        XCTAssertEqual(refined.first(where: \.isDefault)?.commit, .contextual)
     }
 
     /// Autocorrect-off means space will not commit, so the bar must not bold a
@@ -1774,9 +1792,9 @@ final class ContextAwareSuggestionTests: XCTestCase {
                 XCTAssertTrue(controller.suggestions.contains { $0.text == word })
                 XCTAssertEqual(
                     controller.suggestions.first(where: \.isDefault)?.text,
-                    word == "hello" ? word : "hel")
+                    "hel")
                 controller.press(.space)
-                XCTAssertEqual(target.text, word == "hello" ? "hello " : "hel ")
+                XCTAssertEqual(target.text, "hel ")
             }
         }
     }
@@ -1800,7 +1818,8 @@ final class ContextAwareSuggestionTests: XCTestCase {
                 let original = controller.suggestions
                 controller.applyPendingRefinement(["hello"], for: "hel")
                 if change == "none" {
-                    XCTAssertEqual(controller.suggestions.first(where: \.isDefault)?.text, "hello")
+                    XCTAssertTrue(controller.suggestions.contains { $0.text == "hello" })
+                    XCTAssertEqual(controller.suggestions.first(where: \.isDefault)?.text, "hel")
                 } else {
                     XCTAssertEqual(controller.suggestions, original, change)
                 }

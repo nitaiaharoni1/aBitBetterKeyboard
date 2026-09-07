@@ -557,8 +557,8 @@ struct KeyHitInsets: Equatable {
 
     static func standard(rowSpacing: CGFloat) -> Self {
         Self(
-            left: Theme.Metrics.keySpacing / 2,
-            right: Theme.Metrics.keySpacing / 2,
+            left: Theme.Metrics.horizontalKeySpacing / 2,
+            right: Theme.Metrics.horizontalKeySpacing / 2,
             top: rowSpacing / 2,
             bottom: rowSpacing / 2)
     }

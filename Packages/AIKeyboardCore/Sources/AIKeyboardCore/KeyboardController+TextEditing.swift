@@ -13,9 +13,7 @@ extension KeyboardController {
 
     /// The partial word under the cursor.
     public var currentWordPrefix: String {
-        let before = contextBefore
-        guard let last = before.last, !last.isWhitespace else { return "" }
-        return String(before.reversed().prefix { !$0.isWhitespace }.reversed())
+        WordBoundary.prefix(in: contextBefore)
     }
 
     /// The word the suggestion bar is scoring: a whole word the host has
@@ -30,8 +28,7 @@ extension KeyboardController {
     public var wordUnderConsideration: String { selectedWord ?? currentWordPrefix }
 
     static func continuesWord(in contextAfter: String) -> Bool {
-        guard let next = contextAfter.first else { return false }
-        return next.isLetter || next.isNumber || staysInsideWord(next)
+        WordBoundary.continuesAfterCursor(in: contextAfter)
     }
 
     /// The selection, when it is exactly one whole word and nothing else.
@@ -55,7 +52,8 @@ extension KeyboardController {
         guard let selection else { return nil }
         guard !selection.contains(where: { $0.isWhitespace || $0.isNewline }) else { return nil }
         guard !SuggestionEngine.wordCore(selection).isEmpty else { return nil }
-        guard SuggestionEngine.wordCore(currentWordPrefix).isEmpty else { return nil }
+        guard WordBoundary.words(in: selection).count == 1 else { return nil }
+        guard !WordBoundary.continuesBeforeCursor(in: contextBefore) else { return nil }
         guard !Self.continuesWord(in: contextAfter) else { return nil }
         return selection
     }

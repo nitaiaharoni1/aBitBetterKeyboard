@@ -125,6 +125,7 @@ extension KeyboardController {
             // learning after `\n` would see an empty line and skip the word
             // Return just finished. Chat Send is often this key.
             if !consumeGroupedSkipLearn() { learnWordJustCommitted() }
+            commitPendingPersonalToken()
             target?.insertText("\n")
             lastLearnedFolded = nil
             // The line is finished, so any word on it was finished with it — the
@@ -413,12 +414,13 @@ extension KeyboardController {
         // into a password field — where the alternative is a line break appearing
         // in somebody's message.
         let output = shift.isUppercase ? language.uppercased(value) : value
+        let extendsPersonalValue = preparePersonalTokenForInput(output)
         // A full stop, a comma, emoji, `.com` — anything that is not a letter
         // inside a word — finishes the word the same way space does. Learn first:
         // once the mark is in the field, `learnWordJustCommitted` will refuse so
         // a later space does not count the same word twice. Apostrophe, hyphen
         // and Hebrew geresh stay inside the word.
-        if Self.finishesWord(output), !consumeGroupedSkipLearn() {
+        if Self.finishesWord(output), !extendsPersonalValue, !consumeGroupedSkipLearn() {
             learnWordJustCommitted()
         }
         let inserted = output.replacingOccurrences(of: "\n", with: "")
@@ -441,10 +443,10 @@ extension KeyboardController {
     static func finishesWord(_ value: String) -> Bool {
         if value.count == 1, let character = value.first {
             if staysInsideWord(character) { return false }
-            return !character.isLetter
+            return !character.isLetter && !character.isNumber
         }
         // Snippets such as `.com` finish the word in front of them.
-        return value.contains { !staysInsideWord($0) && !$0.isLetter }
+        return value.contains { !staysInsideWord($0) && !$0.isLetter && !$0.isNumber }
     }
 
     /// Apostrophe, hyphen, maqaf, geresh, gershayim, Catalan interpunt, ZWNJ.
@@ -519,6 +521,7 @@ extension KeyboardController {
             contextBefore.hasSuffix(" "),
             !contextBefore.hasSuffix("  ")
         {
+            commitPendingPersonalToken()
             let deleted = deleteBackwardReversibly(utf16Units: 1)
             target?.insertText(deleted.unitsRemoved == 1 ? ". " : " ")
             lastSpaceTapAt = nil
@@ -574,19 +577,14 @@ extension KeyboardController {
             let replacement = Self.restoringEdgeMarks(of: original, to: candidate.text)
             let precedingContext = String(contextBeforeSwap.dropLast(original.count))
             let previous = SuggestionEngine.previousWords(in: precedingContext).last
-            let wordLanguage =
-                SuggestionEngine.dominantLanguage(
-                    in: replacement,
-                    among: [language] + store.storedEnabledLanguages.filter { $0 != language })
-                ?? language
             if replaceCurrentWord(with: candidate.text) {
                 swapped = (
                     original,
                     replacement,
                     LearnedCommit(
                         word: SuggestionEngine.wordCore(replacement), previous: previous,
-                        language: wordLanguage,
-                        permitted: permitted)
+                        language: candidate.language,
+                        permitted: permitted, source: .automatic)
                 )
             }
         }
@@ -699,6 +697,12 @@ extension KeyboardController {
             refreshSuggestions()
             return true
         }
+        personal.recordRejectedCorrection(
+            original: SuggestionEngine.wordCore(pending.original),
+            replacement: SuggestionEngine.wordCore(pending.replacement),
+            language: pending.learnedCommit.language,
+            permitted: pending.learnedCommit.permitted)
+        vocabularyVersion &+= 1
         retirePendingAutocorrectUndo(.discardLearningForUndo)
         undoneAutocorrectSpellings.insert(SeedLanguageModel.fold(pending.original))
         deletedWordPrefix = pending.original

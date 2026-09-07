@@ -4,8 +4,9 @@ import Foundation
 /// user pauses.
 ///
 /// The local tier fills all three slots on every keystroke. This runs hundreds
-/// of milliseconds later and may replace the side words *and* the bold one.
-/// Slot 0 stays the typed keystrokes. Space still only inserts the bold word
+/// of milliseconds later and offers tap-only completions. The local tier alone
+/// chooses automatic corrections. Slot 0 stays the typed keystrokes.
+/// Space still only inserts the bold word
 /// when Autocorrect is on; Complete on pause and Space on pause are separate
 /// switches. There is no cloud engine here. Hebrew has no on-device predictor,
 /// so this tier is silent there and the dictionary stands.
@@ -62,7 +63,7 @@ public final class PredictiveRefiner {
     }
 
     /// The shipping configuration: Apple's on-device model where it lists the
-    /// script, and silence everywhere else (Hebrew included).
+    /// language, and silence everywhere else (Hebrew included).
     public static func standard(
         apply: @escaping ([String], String) -> Void
     ) -> PredictiveRefiner {

@@ -156,6 +156,56 @@ final class SuggestionLanguageTests: XCTestCase {
                 .map(\.text), ["سلا"])
     }
 
+    func testCompletedContextDistinguishesEnabledLanguagesSharingAScript() {
+        XCTAssertEqual(
+            SuggestionEngine.suggestionLanguage(
+                prefix: "dont", context: "Je voudrais vous remercier pour votre aide ",
+                languages: [.english, .french, .hebrew]), .french)
+        XCTAssertEqual(
+            SuggestionEngine.suggestionLanguage(
+                prefix: "dont", context: "I would like to thank you for your help ",
+                languages: [.french, .english, .hebrew]), .english)
+    }
+
+    func testLanguageRoutingDoesNotGuessFromAShortPrefixOrDisabledLanguage() {
+        XCTAssertEqual(
+            SuggestionEngine.suggestionLanguage(
+                prefix: "bonjour", context: "", languages: [.english, .french]), .english)
+        XCTAssertEqual(
+            SuggestionEngine.suggestionLanguage(
+                prefix: "dont", context: "le livre ", languages: [.french, .english]), .french)
+        XCTAssertEqual(
+            SuggestionEngine.suggestionLanguage(
+                prefix: "dont", context: "Je voudrais vous remercier pour votre aide ",
+                languages: [.english, .hebrew]), .english)
+    }
+
+    func testPrefixScriptWinsOverAnotherLanguageInTheCompletedContext() {
+        XCTAssertEqual(
+            SuggestionEngine.suggestionLanguage(
+                prefix: "של", context: "I would like to thank you for your help ",
+                languages: [.english, .french, .hebrew]), .hebrew)
+        XCTAssertEqual(
+            SuggestionEngine.suggestionLanguage(
+                prefix: "hel", context: "אני רוצה להגיד לך תודה ",
+                languages: [.english, .french, .hebrew]), .english)
+    }
+
+    func testLanguageRoutingCacheTracksCompletedContextAndLayoutOrder() {
+        let context = "Je voudrais vous remercier pour votre aide "
+        for prefix in ["d", "do", "don", "dont"] {
+            XCTAssertEqual(
+                SuggestionEngine.suggestionLanguage(
+                    prefix: prefix, context: context, languages: [.english, .french]), .french)
+        }
+        XCTAssertEqual(
+            SuggestionEngine.suggestionLanguage(
+                prefix: "d", context: "", languages: [.english, .french]), .english)
+        XCTAssertEqual(
+            SuggestionEngine.suggestionLanguage(
+                prefix: "d", context: "", languages: [.french, .english]), .french)
+    }
+
     func testAScriptNobodyEnabledIsStillNamed() {
         XCTAssertEqual(SuggestionEngine.dominantLanguage(in: "مرحبا"), .arabic)
         XCTAssertEqual(SuggestionEngine.dominantLanguage(in: "καλημέρα"), .greek)
@@ -196,6 +246,35 @@ final class SuggestionLayoutRoutingTests: XCTestCase {
 
     private var savedLanguages: [KeyboardLanguage] = []
     private var savedPredictions = true
+
+    func testLearningUsesTheSameSentenceLanguageAsSuggestions() {
+        let target = MockTextTarget(text: "je voudrais acheter un livre")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.learnWordJustCommitted()
+        XCTAssertEqual(controller.personal.count(of: "livre", in: .french), 1)
+        XCTAssertEqual(controller.personal.count(of: "livre", in: .english), 0)
+    }
+
+    func testUndoRecordsTheCandidateLanguageRatherThanTheLayoutLanguage() {
+        let level = SharedStore.shared.autocorrectLevel
+        defer { SharedStore.shared.autocorrectLevel = level }
+        SharedStore.shared.autocorrectLevel = .full
+        let target = MockTextTarget(text: "bonjor")
+        let controller = KeyboardController(target: target, language: .english)
+        controller.suggestions = [
+            Suggestion(text: "bonjor", language: .french),
+            Suggestion(text: "bonjour", language: .french, isDefault: true)
+        ]
+        controller.press(.space)
+        XCTAssertEqual(target.text, "bonjour ")
+        controller.press(.backspace)
+        XCTAssertTrue(
+            controller.personal.isRejectedCorrection(
+                original: "bonjor", replacement: "bonjour", language: .french))
+        XCTAssertFalse(
+            controller.personal.isRejectedCorrection(
+                original: "bonjor", replacement: "bonjour", language: .english))
+    }
 
     override func setUp() {
         super.setUp()

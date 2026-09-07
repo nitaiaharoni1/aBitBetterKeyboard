@@ -261,6 +261,35 @@ final class DictationKeyboardTests: XCTestCase {
     /// them — a build that appended instead would leave the field holding four
     /// versions of one sentence and would pass any assertion about the last words
     /// having arrived.
+    func testFragmentedWordsAreNormalizedBeforeEachPartialIsInserted() throws {
+        let id = beginLiveSession()
+        controller.startDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+        for (index, text) in ["ג", "ג '", "ג ' ף", "ג ' ף אמר don ' t"].enumerated() {
+            try recorder.publishPartial(
+                DictationPartialRecord(
+                    sessionID: id, utterance: utterance, sequence: UInt32(index + 1), text: text,
+                    seconds: Double(index + 1)))
+            session.poll()
+            XCTAssertEqual(target.text, ["ג", "ג '", "ג'ף", "ג'ף אמר don't"][index])
+        }
+        controller.toggleDictation()
+        XCTAssertEqual(target.text, "ג'ף אמר don't")
+    }
+
+    func testFragmentedWordsAreNormalizedInTheFinalTranscriptWithoutPartials() throws {
+        let id = beginLiveSession()
+        controller.startDictation()
+        let utterance = try XCTUnwrap(recorder.request()?.utterance)
+        controller.stopDictation(insert: true)
+        try recorder.publish(
+            DictationTranscriptRecord(
+                sessionID: id, utterance: utterance, text: "ג ' ף אמר צה \" ל ביום ג׳ בשבוע",
+                languages: "he", recordedAt: 1, completedAt: 2, seconds: 3))
+        session.poll()
+        XCTAssertEqual(target.text, "ג'ף אמר צה\"ל ביום ג׳ בשבוע")
+    }
+
     func testPartialsLandInTheFieldAndTheTranscriptReplacesThem() throws {
         let id = beginLiveSession()
         session.poll()

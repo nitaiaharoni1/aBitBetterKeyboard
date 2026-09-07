@@ -92,7 +92,10 @@ extension KeyboardController {
             dropIdleTypingIfStale()
             return
         }
-        guard store.storedPredictions else {
+        guard store.storedPredictions,
+            SecureField.permitsRead(
+                secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
+        else {
             refiner?.cancel()
             pendingRefinementPosition = nil
             suggestions = []
@@ -105,6 +108,12 @@ extension KeyboardController {
         // the two never overlap. See `selectedWord`, which costs one `selectedText`
         // read and nothing else when there is no selection.
         let before = contextBefore
+        if let personalOffers = personalTokenSuggestions(in: before) {
+            if personalOffers != suggestions { suggestions = personalOffers }
+            cancelRefinement()
+            dropIdleTypingIfStale()
+            return
+        }
         // Held rather than re-read: every one of these is a call into the host,
         // this function runs on every keystroke, and the local tier's whole
         // budget is about a millisecond.
@@ -175,7 +184,10 @@ extension KeyboardController {
         // see `.claude/rules/suggestion-bar.md`, where that is what stops the bar
         // fading on every letter — so this asks exactly the question the bar
         // draws from.
-        let bar = pinningDefaultToTypedIfNeeded(results, prefix: prefix)
+        let ordinaryResults = results.filter {
+            $0.text == prefix || !PersonalLanguageModel.isVerbatimToken($0.text)
+        }
+        let bar = pinningDefaultToTypedIfNeeded(ordinaryResults, prefix: prefix)
         if bar != suggestions { suggestions = bar }
         // **Not for a selection.** The async tier predicts what somebody typing
         // is about to type, and nobody is typing; `applyRefinement` would drop
@@ -250,6 +262,7 @@ extension KeyboardController {
         // still bolds the correction is advertising a commit space will not make.
         // Folded, the same way the set itself is keyed.
         if store.storedAutocorrectLevel == .off || isCorrectingWordByHand
+            || PersonalLanguageModel.normalizedPhonePrefix(prefix) != nil
             || undoneAutocorrectSpellings.contains(SeedLanguageModel.fold(prefix))
             || target?.documentContextAfterInput == nil || Self.continuesWord(in: contextAfter)
         {
@@ -325,8 +338,16 @@ extension KeyboardController {
             openWord = ""
             return
         }
+        if stagePersonalToken() {
+            openWord = ""
+            return
+        }
         let raw = currentWordPrefix
         let word = SuggestionEngine.wordCore(raw)
+        if PersonalLanguageModel.normalizedPhonePrefix(word) != nil || word.contains("@") {
+            openWord = ""
+            return
+        }
         if word.isEmpty {
             if !openWord.isEmpty, deletedWordPrefix == nil, !documentHasText {
                 recordCommittedWord(openWord, permittedOverride: openWordPermitted)
@@ -375,7 +396,9 @@ extension KeyboardController {
             PredictiveRefiner.Request(
                 textBefore: context,
                 wordInProgress: prefix,
-                language: language,
+                language: SuggestionEngine.suggestionLanguage(
+                    prefix: prefix, context: context,
+                    languages: [language] + store.storedEnabledLanguages.filter { $0 != language }),
                 // Only a live session, and only the real capture path — never the
                 // scripted demo `MockScreenContext` plays, which is the right thing
                 // to show on a marketing screen and the wrong thing to predict a
@@ -403,10 +426,8 @@ extension KeyboardController {
     /// Put the model's words into the bar.
     ///
     /// Slot 0 stays the typed keystrokes, so the user can always keep what they
-    /// keyed. When Autocorrect is on, the first model word becomes default.
-    /// When it is off (or the user is repairing this word by hand), default
-    /// stays on the typed word so the bar does not advertise a swap space will
-    /// not make. The model's words still fill the other slots for a tap.
+    /// keyed. Model offers require a tap; an existing local correction can
+    /// remain the default only while it survives the merge and the field guards.
     ///
     /// It never applies to a document that has moved on. The prefix is the one
     /// handed back from the callback, not re-read here against itself.
@@ -434,7 +455,11 @@ extension KeyboardController {
         // same equality `refreshSuggestions` already trusts.
         let bar = pinningDefaultToTypedIfNeeded(
             SuggestionEngine.refinedSuggestions(
-                local: suggestions, words: words, prefix: prefix, language: language), prefix: prefix)
+                local: suggestions, words: words, prefix: prefix,
+                language: SuggestionEngine.suggestionLanguage(
+                    prefix: prefix, context: String(contextBefore.dropLast(prefix.count)),
+                    languages: [language] + store.storedEnabledLanguages.filter { $0 != language })),
+            prefix: prefix)
         if bar != suggestions { suggestions = bar }
     }
 
@@ -567,7 +592,7 @@ extension KeyboardController {
             let candidate = idleCompletion(for: prefix)
         {
             if space {
-                apply(candidate)
+                apply(candidate, learningSource: .automatic)
             } else {
                 Feedback.keyPress()
                 Feedback.keyClick(.tock)
@@ -577,7 +602,7 @@ extension KeyboardController {
                     refreshSuggestions()
                     return
                 }
-                recordCommittedWord(SuggestionEngine.wordCore(candidate.text))
+                recordCommittedWord(SuggestionEngine.wordCore(candidate.text), source: .automatic)
                 deletedWordPrefix = nil
                 refreshSuggestions()
                 // The word is finished. A wait still running from the letters
@@ -640,6 +665,9 @@ extension KeyboardController {
                 && candidate != typed
                 && candidate.hasPrefix(typed)
                 && SuggestionEngine.isAutomaticallyInsertable($0.text)
+                && !personal.isRejectedCorrection(
+                    original: SuggestionEngine.wordCore(prefix),
+                    replacement: SuggestionEngine.wordCore($0.text), language: $0.language)
         }
     }
 
@@ -678,6 +706,11 @@ extension KeyboardController {
     }
 
     public func apply(_ suggestion: Suggestion) {
+        apply(suggestion, learningSource: .selectedSuggestion)
+    }
+
+    func apply(_ suggestion: Suggestion, learningSource: PersonalLanguageModel.LearningSource) {
+        if applyPersonalToken(suggestion) { return }
         if applyBoundaryRepair(suggestion) { return }
         Feedback.keyPress()
         retirePendingAutocorrectUndo(.acceptLearning)
@@ -696,13 +729,10 @@ extension KeyboardController {
         // is nil for both) nor a plain caret, and `insertCommittalSpace`'s hop
         // is only safe for the caret — see the branch below.
         let hadSelection = selection != nil
-        guard let after = target?.documentContextAfterInput else {
-            refreshSuggestions()
-            return
-        }
+        let after = target?.documentContextAfterInput
         let suffix =
-            !hadSelection && !currentWordPrefix.isEmpty && Self.continuesWord(in: after)
-            ? String(after.prefix { !$0.isWhitespace }) : ""
+            !hadSelection && !currentWordPrefix.isEmpty && Self.continuesWord(in: after ?? "")
+            ? WordBoundary.continuation(in: after ?? "") : ""
         guard replaceCurrentWord(with: suggestion.text, following: suffix) else {
             refreshSuggestions()
             return
@@ -710,7 +740,7 @@ extension KeyboardController {
         // The candidate may already carry a mark (`hello,`). The space-bar path
         // skips a word that is already terminated so `hello.` + space does not
         // count twice; a tap is the first time this word is committed.
-        recordCommittedWord(SuggestionEngine.wordCore(suggestion.text))
+        recordCommittedWord(SuggestionEngine.wordCore(suggestion.text), source: learningSource)
         if overSelectedWord {
             // **No space, because a selected word is repaired in place.** The
             // spacing around it is already in the field, and `I recieve it` would
@@ -738,12 +768,11 @@ extension KeyboardController {
             lastLearnedFolded = nil
             deletedWordPrefix = nil
         } else {
-            insertCommittalSpace(after: String(after.dropFirst(suffix.count)))
+            if let after {
+                insertCommittalSpace(after: String(after.dropFirst(suffix.count)))
+            }
             lastLearnedFolded = nil
-            // Committed on purpose, so the hand repair this word may have been
-            // under is over — the same line `insertSpace` ends on, for the same
-            // reason.
-            deletedWordPrefix = nil
+            deletedWordPrefix = after == nil ? currentWordPrefix : nil
         }
         refreshSuggestions()
         reportInteraction(.suggestion)
@@ -776,6 +805,7 @@ extension KeyboardController {
     /// eating a space the user pressed themselves rather than the one a tap
     /// would have inserted.
     func insertCommittalSpace(after contextAfter: String) {
+        guard contextAfter.isEmpty || contextAfter.first?.isWhitespace == true else { return }
         guard contextAfter.first == " " else {
             target?.insertText(" ")
             return
@@ -807,8 +837,10 @@ extension KeyboardController {
     /// persist and quietly keeps its counts for as long as this keyboard
     /// instance lives.
     public func learnWordJustCommitted() {
+        if stagePersonalToken() { return }
         let raw = currentWordPrefix
         let word = SuggestionEngine.wordCore(raw)
+        if PersonalLanguageModel.normalizedPhonePrefix(word) != nil || word.contains("@") { return }
         if word.isEmpty {
             if !openWord.isEmpty, deletedWordPrefix == nil {
                 recordCommittedWord(openWord, permittedOverride: openWordPermitted)
@@ -847,7 +879,10 @@ extension KeyboardController {
     ///   field by whatever field the keyboard has moved on to. Nil for every
     ///   other caller, which is committing a word `target` still is the field
     ///   for.
-    func recordCommittedWord(_ word: String, permittedOverride: Bool? = nil) {
+    func recordCommittedWord(
+        _ word: String, permittedOverride: Bool? = nil,
+        source: PersonalLanguageModel.LearningSource = .typed
+    ) {
         guard !word.isEmpty else { return }
         let words = SuggestionEngine.previousWords(in: contextBefore)
         let previous: String?
@@ -865,18 +900,16 @@ extension KeyboardController {
             LearnedCommit(
                 word: word,
                 previous: previous,
-                // The word's own script, not the layout's. Somebody typing a Hebrew
-                // sentence has the Hebrew layout up, and the English words inside it
-                // belong in the English counters or `לעבודה` and `sprint` end up in one
-                // list where neither can be looked up.
-                language: SuggestionEngine.dominantLanguage(
-                    in: word, among: [language] + store.storedEnabledLanguages.filter { $0 != language })
-                    ?? language,
+                language: SuggestionEngine.suggestionLanguage(
+                    prefix: word,
+                    context: (words.last.map { SeedLanguageModel.fold($0) == folded } == true
+                        ? Array(words.dropLast()) : words).joined(separator: " "),
+                    languages: [language] + store.storedEnabledLanguages.filter { $0 != language }),
                 // The same question `SecureField` answers for a screen read, asked
                 // again here because "may I keep this word" and "may I send this
                 // screen" have the same answer for a password. Learning itself is
                 // always on; the only refusal left is a credential field.
-                permitted: permitted
+                permitted: permitted, source: source
             )
         )
         // Cleared regardless of whether the store accepted the write. This
@@ -892,7 +925,7 @@ extension KeyboardController {
             word: commit.word,
             previous: commit.previous,
             language: commit.language,
-            permitted: commit.permitted
+            permitted: commit.permitted, source: commit.source
         )
         if wrote {
             lastLearnedFolded = folded

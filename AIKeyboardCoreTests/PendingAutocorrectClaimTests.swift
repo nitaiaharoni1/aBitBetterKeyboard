@@ -28,52 +28,54 @@ final class PendingAutocorrectClaimTests: XCTestCase {
     // MARK: (a) An unrelated occurrence of the replacement
 
     /// **The measured defect.** A caret tapped after *any* other occurrence of
-    /// "hello " anywhere in the document satisfied the old suffix check and
-    /// resurrected `helo` there — rewriting a word the swap never touched.
+    /// "don't " anywhere in the document satisfied the old suffix check and
+    /// resurrected `dont` there — rewriting a word the swap never touched.
     func testATappedCaretAfterAnUnrelatedOccurrenceDoesNotFireTheUndo() {
-        let target = CursorTextTarget(before: "hello and helo")
+        let target = CursorTextTarget(before: "don't and dont")
         let controller = KeyboardController(target: target, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
         controller.press(.space)
         XCTAssertEqual(
-            target.document, "hello and hello ", "the correction has to be live")
+            target.document, "don't and don't ", "the correction has to be live")
 
-        // Tap the caret to sit right after the pre-existing, unrelated "hello ".
-        target.placeCaret(before: "hello ", after: "and hello ")
+        // Tap the caret to sit right after the pre-existing, unrelated "don't ".
+        target.placeCaret(before: "don't ", after: "and don't ")
         controller.refreshSuggestions()
 
         controller.press(.backspace)
 
         XCTAssertEqual(
-            target.document, "helloand hello ",
-            "backspace at an unrelated \"hello \" must delete a character, not "
-                + "resurrect \"helo\" there: \(target.document)")
+            target.document, "don'tand don't ",
+            "backspace at an unrelated \"don't \" must delete a character, not "
+                + "resurrect \"dont\" there: \(target.document)")
     }
 
     // MARK: (b) A selection right after a fresh swap
 
     /// **The measured defect.** Backspace over a selection did not check for
     /// one at all: the old claim check passed, `target.deleteBackward()`
-    /// consumed the selection, and the code went on to resurrect `helo` beside
+    /// consumed the selection, and the code went on to resurrect `dont` beside
     /// it — deleting real, selected text *and* putting the wrong word back.
     func testBackspaceOverASelectionRightAfterAFreshSwapDoesNotResurrectTheOriginal() {
-        let target = CursorTextTarget(before: "helo")
+        let target = CursorTextTarget(before: "dont")
         let controller = KeyboardController(target: target, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
         controller.press(.space)
-        XCTAssertEqual(target.document, "hello ", "the correction has to be live")
+        XCTAssertEqual(target.document, "don't ", "the correction has to be live")
 
         target.insertText("world")
-        XCTAssertEqual(target.document, "hello world")
+        XCTAssertEqual(target.document, "don't world")
         // The user selects the word they just typed, right after the swap.
-        target.select("world", before: "hello ", after: "")
+        target.select("world", before: "don't ", after: "")
 
         controller.press(.backspace)
 
         XCTAssertEqual(
-            target.document, "hello ",
+            target.document, "don't ",
             "backspace over the selection must delete only the selection, not "
-                + "resurrect \"helo\": \(target.document)")
+                + "resurrect \"dont\": \(target.document)")
     }
 
     // MARK: (c) A document switch
@@ -85,16 +87,17 @@ final class PendingAutocorrectClaimTests: XCTestCase {
     /// alone cannot be what protects it: only retiring the pair on the switch
     /// itself can.
     func testPendingUndoDoesNotSurviveADocumentSwitchEvenWhenTheContextMatchesExactly() {
-        let first = MockTextTarget(text: "helo")
+        let first = MockTextTarget(text: "dont")
         let controller = KeyboardController(target: first, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         let firstIdentity = (first as TextTarget).documentIdentifier
         XCTAssertNotNil(firstIdentity)
         XCTAssertEqual(controller.target?.documentIdentifier, firstIdentity)
         controller.refreshSuggestions()
         controller.press(.space)
-        XCTAssertEqual(first.text, "hello ", "the correction has to be live")
+        XCTAssertEqual(first.text, "don't ", "the correction has to be live")
 
-        let second = MockTextTarget(text: "hello ")
+        let second = MockTextTarget(text: "don't ")
         XCTAssertNotEqual(firstIdentity, (second as TextTarget).documentIdentifier)
         controller.target = second
         controller.prepareForNewDocument()
@@ -102,11 +105,11 @@ final class PendingAutocorrectClaimTests: XCTestCase {
         controller.press(.backspace)
 
         XCTAssertEqual(
-            second.text, "hello",
+            second.text, "don't",
             "a document switch must retire the undo even when the new context "
                 + "reads identically: \(second.text)")
         XCTAssertEqual(
-            controller.personal.count(of: "hello", in: .english), 1,
+            controller.personal.observationCount(of: "don't", in: .english, source: .automatic), 1,
             "preparing the new document must accept the captured learning once")
     }
 
@@ -124,16 +127,17 @@ final class PendingAutocorrectClaimTests: XCTestCase {
     /// forever. Built locally from the pre-swap read instead, the snapshot is
     /// correct from the moment it is taken and the undo survives.
     func testTheUndoSnapshotSurvivesAProxyThatEchoesStaleContextRightAfterTheWrite() {
-        let target = StaleEchoTarget(before: "helo")
+        let target = StaleEchoTarget(before: "dont")
         let controller = KeyboardController(target: target, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
         controller.press(.space)
-        XCTAssertEqual(target.document, "hello ", "the correction has to be live")
+        XCTAssertEqual(target.document, "don't ", "the correction has to be live")
 
         controller.press(.backspace)
 
         XCTAssertEqual(
-            target.document, "helo",
+            target.document, "dont",
             "the first backspace after a swap must restore the typed word even "
                 + "when the proxy echoed stale context right after the space "
                 + "landed: \(target.document)")
@@ -142,65 +146,69 @@ final class PendingAutocorrectClaimTests: XCTestCase {
     // MARK: (e) Provisional learning
 
     func testAutocorrectLearningWaitsUntilTheUndoWindowMovesOn() {
-        let target = MockTextTarget(text: "helo")
+        let target = MockTextTarget(text: "dont")
         let controller = KeyboardController(target: target, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
 
         controller.press(.space)
 
-        XCTAssertEqual(target.text, "hello ", "the correction has to be live")
+        XCTAssertEqual(target.text, "don't ", "the correction has to be live")
         XCTAssertEqual(
-            controller.personal.count(of: "hello", in: .english), 0,
+            controller.personal.observationCount(of: "don't", in: .english, source: .automatic), 0,
             "an autocorrect that can still be undone must not be learned yet")
 
         controller.press(.character("w"))
 
         XCTAssertEqual(
-            controller.personal.count(of: "hello", in: .english), 1,
+            controller.personal.observationCount(of: "don't", in: .english, source: .automatic), 1,
             "the first same-document move-on must finalize the staged replacement once")
     }
 
     func testImmediateAutocorrectUndoDiscardsTheStagedLearning() {
-        let target = MockTextTarget(text: "helo")
+        let target = MockTextTarget(text: "dont")
         let controller = KeyboardController(target: target, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
         controller.press(.space)
 
         controller.press(.backspace)
         controller.press(.character("w"))
 
-        XCTAssertEqual(target.text, "helow")
+        XCTAssertEqual(target.text, "dontw")
         XCTAssertEqual(
-            controller.personal.count(of: "hello", in: .english), 0,
+            controller.personal.observationCount(of: "don't", in: .english, source: .automatic), 0,
             "taking the automatic replacement back must discard its staged learning")
     }
 
     func testIdentityChangeAcceptsLearningOnceButCannotUndoInTheNewDocument() {
-        let first = MockTextTarget(text: "helo")
+        let first = MockTextTarget(text: "dont")
         let controller = KeyboardController(target: first, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
         controller.press(.space)
-        XCTAssertEqual(first.text, "hello ", "the correction has to be live")
+        XCTAssertEqual(first.text, "don't ", "the correction has to be live")
 
-        let second = MockTextTarget(text: "hello ")
+        let second = MockTextTarget(text: "don't ")
         controller.attach(target: second)
         controller.refreshSuggestions()
 
         XCTAssertEqual(
-            controller.personal.count(of: "hello", in: .english), 1,
+            controller.personal.observationCount(of: "don't", in: .english, source: .automatic), 1,
             "an identity mismatch must accept the captured observation exactly once")
 
         controller.press(.backspace)
 
-        XCTAssertEqual(second.text, "hello", "backspace must not undo into the new document")
+        XCTAssertEqual(second.text, "don't", "backspace must not undo into the new document")
         XCTAssertEqual(
-            controller.personal.count(of: "hello", in: .english), 1,
+            controller.personal.observationCount(of: "don't", in: .english, source: .automatic), 1,
             "refreshing and backspace must not accept the same observation twice")
     }
 
     func testAcceptingAStagedClaimDoesNotClearAnotherDocumentsOpenWord() {
-        let first = MockTextTarget(text: "helo")
+        let first = MockTextTarget(text: "dont")
         let controller = KeyboardController(target: first, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
         controller.press(.space)
 
@@ -210,27 +218,30 @@ final class PendingAutocorrectClaimTests: XCTestCase {
         XCTAssertEqual(controller.openWord, "world")
 
         controller.retirePendingAutocorrectUndoIfDocumentChanged()
-        XCTAssertEqual(controller.personal.count(of: "hello", in: .english), 1)
+        XCTAssertEqual(controller.personal.observationCount(of: "don't", in: .english, source: .automatic), 1)
         XCTAssertEqual(controller.openWord, "world")
 
         second.text = ""
         controller.refreshSuggestions()
         controller.refreshSuggestions()
 
-        XCTAssertEqual(controller.personal.count(of: "hello", in: .english), 1)
+        XCTAssertEqual(controller.personal.observationCount(of: "don't", in: .english, source: .automatic), 1)
         XCTAssertEqual(controller.personal.count(of: "world", in: .english), 1)
     }
 
     func testStagedLearningStoresTheCorrectedWordWithoutItsEdgeMark() {
         let target = MockTextTarget(text: "recieve,")
         let controller = KeyboardController(target: target, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
         controller.press(.space)
         XCTAssertEqual(target.text, "receive, ")
 
         controller.press(.character("x"))
 
-        XCTAssertEqual(controller.personal.count(of: "receive", in: .english), 1)
-        XCTAssertEqual(controller.personal.count(of: "receive,", in: .english), 0)
+        XCTAssertEqual(
+            controller.personal.observationCount(of: "receive", in: .english, source: .automatic), 1)
+        XCTAssertEqual(
+            controller.personal.observationCount(of: "receive,", in: .english, source: .automatic), 0)
     }
 }

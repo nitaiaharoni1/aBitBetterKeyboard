@@ -18,6 +18,8 @@ extension KeyboardLanguage {
 public struct Suggestion: Identifiable, Sendable, Equatable {
     public enum Commit: Sendable, Equatable {
         case contextual
+        case tapOnly
+        case verbatimToken(expected: String)
         case replaceSuffix(expected: String)
     }
 

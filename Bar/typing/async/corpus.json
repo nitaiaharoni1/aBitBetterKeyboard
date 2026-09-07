@@ -11,7 +11,8 @@
     "NIT-21: mustNotCorrect entries added below, exercised through a pause for the first time. An entry where the right answer is to leave the bold slot alone is scored exactly as it is in Bar/typing/corpus.json (commit = bold slot still equals what was typed); a corpus made only of improvable cases flatters the refiner.",
     "apos-09-control and apos-10-control pair a risky word with a context where the async-only correction must NOT fire, the same word as its improvable twin either way.",
     "The Hebrew entries below (he-no-correct-*, he-comp-01, he-next-02/03, he-async-screen-01) are still expected-skip: PredictiveRefiner.standard never carries a Hebrew-capable engine (see .claude/rules/suggestion-bar.md). They are here to prove the skip is graceful at a larger, more varied sample than one entry, not to claim Hebrew prediction works.",
-    "First run needs a machine where Foundation Models actually answers (see Bar/typing/async/run.sh); nothing in this file has been scored against the model yet."
+    "First run needs a machine where Foundation Models actually answers (see Bar/typing/async/run.sh); nothing in this file has been scored against the model yet.",
+    "2026-09-07 safety holdouts: intact words must remain the default after refinement. Model completions require a tap even when they extend a valid word. These entries have not been executed."
   ],
   "entries": [
     {
@@ -481,6 +482,61 @@
       ],
       "acceptableIsClosed": false,
       "acceptableSource": "human-authored"
+    },
+    {
+      "id": "no-correct-cart-holdout",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "Please leave the boxes in the ",
+      "prefix": "cart",
+      "mustNotCorrect": true,
+      "pauseMs": 300,
+      "probes": "A complete word must not grow into a longer model completion after a pause."
+    },
+    {
+      "id": "no-correct-art-holdout",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "The children spent the afternoon making ",
+      "prefix": "art",
+      "mustNotCorrect": true,
+      "pauseMs": 300,
+      "probes": "An intact short word must not expand into article or another longer completion."
+    },
+    {
+      "id": "no-correct-mixed-plan-holdout",
+      "category": "no-correct",
+      "language": "he-en",
+      "keyboard": "he_IL",
+      "context": "שלח לי בבקשה את ה ",
+      "prefix": "plan",
+      "mustNotCorrect": true,
+      "pauseMs": 300,
+      "probes": "Latin prefix inside Hebrew context must be routed as English and remain unchanged on space."
+    },
+    {
+      "id": "no-correct-mixed-hebrew-holdout",
+      "category": "no-correct",
+      "language": "he-en",
+      "keyboard": "en_US",
+      "context": "Please reply with the Hebrew word ",
+      "prefix": "כן",
+      "mustNotCorrect": true,
+      "pauseMs": 300,
+      "probes": "Hebrew prefix under an English layout must stay Hebrew; an English refiner must not be asked for it."
+    },
+    {
+      "id": "no-correct-personal-holdout",
+      "category": "no-correct",
+      "language": "en",
+      "keyboard": "en_US",
+      "context": "The package author is ",
+      "prefix": "KeyboardKit",
+      "mustNotCorrect": true,
+      "pauseMs": 300,
+      "probes": "A shipped personal dictionary name must survive a model pause without expansion or replacement."
     }
   ]
 }

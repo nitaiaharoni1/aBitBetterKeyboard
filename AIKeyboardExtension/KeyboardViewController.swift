@@ -613,6 +613,7 @@ final class KeyboardViewController: UIInputViewController {
         // callback that reliably fires when it does.
         if hadAppeared {
             controller?.learnWordJustCommitted()
+            controller?.commitPendingPersonalToken()
             PersonalLanguageModel.shared.save()
         }
         // The end of a visit, which is the last moment the whole visit's peak is

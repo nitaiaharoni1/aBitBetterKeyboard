@@ -40,7 +40,8 @@ final class AsyncTypingCorpusTests: XCTestCase {
             var slots = local
             var asyncRan = false
             if entry.pauseMs != nil {
-                let language = languages[0]
+                let language = SuggestionEngine.suggestionLanguage(
+                    prefix: entry.prefix, context: entry.context, languages: languages)
                 let request = PredictiveRefiner.Request(
                     textBefore: entry.context,
                     wordInProgress: entry.prefix,

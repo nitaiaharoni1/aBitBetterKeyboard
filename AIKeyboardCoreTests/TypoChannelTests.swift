@@ -248,6 +248,41 @@ final class TypoChannelTests: XCTestCase {
 /// scores against.
 final class TypoLexiconTests: XCTestCase {
 
+    func testLengthIndexPreservesExhaustiveCorrectionOrder() {
+        for (word, language) in [("recieve", KeyboardLanguage.english), ("דוגמטןת", .hebrew)] {
+            let budget = TypoChannel.budget(forTypedLength: word.count)!
+            let typed = Array(word)
+            let foldedLength = SeedLanguageModel.fold(word).count
+            let maximumDifference = budget / TypoChannel.minimumIndelCost
+            let vocabulary = GroupedLexiconResource.uncachedWords(for: language)
+                .prefix(TypoLexicon.depth(for: language))
+                .filter { SeedLanguageModel.fold($0).count == SeedLanguageModel.fold($0).utf16.count }
+            var reference: [(word: String, cost: Int, score: Int)] = []
+            for (rank, candidate) in vocabulary.enumerated() {
+                let difference = SeedLanguageModel.fold(candidate).count - foldedLength
+                guard difference >= -1, abs(difference) <= maximumDifference,
+                    let priced = TypoChannel.cost(
+                        typed: typed, candidate: Array(SeedLanguageModel.fold(candidate)), language: language,
+                        budget: budget)
+                else { continue }
+                reference.append(
+                    (
+                        candidate, priced.cost,
+                        priced.cost + Int((7 * log2(1 + Double(rank))).rounded())
+                    ))
+            }
+            reference.sort { $0.score == $1.score ? $0.word < $1.word : $0.score < $1.score }
+            let actual = TypoLexicon.corrections(of: word, in: language, limit: 12)
+            XCTAssertEqual(actual.map(\.word), reference.prefix(12).map(\.word))
+            XCTAssertEqual(actual.map(\.cost), reference.prefix(12).map(\.cost))
+        }
+    }
+
+    func testANonpositiveLimitReturnsNoCorrections() {
+        XCTAssertTrue(TypoLexicon.corrections(of: "recieve", in: .english, limit: 0).isEmpty)
+        XCTAssertTrue(TypoLexicon.corrections(of: "recieve", in: .english, limit: -1).isEmpty)
+    }
+
     func testCorrectionsPutsTheIntendedWordFirst() {
         let results = TypoLexicon.corrections(of: "דוגמטןת", in: .hebrew, limit: 3)
         XCTAssertEqual(

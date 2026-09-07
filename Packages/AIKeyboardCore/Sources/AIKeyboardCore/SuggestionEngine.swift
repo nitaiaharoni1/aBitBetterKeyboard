@@ -179,6 +179,18 @@ public enum SuggestionEngine {
             ?? KeyboardLanguage.allCases.first { $0.script == script }
     }
 
+    @MainActor
+    public static func suggestionLanguage(
+        prefix: String, context: String, languages: [KeyboardLanguage]
+    ) -> KeyboardLanguage {
+        let fallback =
+            dominantLanguage(in: prefix, among: languages)
+            ?? dominantLanguage(in: context, among: languages) ?? languages.first ?? .english
+        let candidates = languages.filter { $0.script == fallback.script }
+        guard candidates.count > 1 else { return fallback }
+        return LanguageDetector.suggestionLanguage(in: context, among: candidates) ?? fallback
+    }
+
     /// Three candidates for the suggestion bar.
     ///
     /// - Parameters:
@@ -284,8 +296,7 @@ public enum SuggestionEngine {
     ) -> SuggestionEvaluation {
         let personal = personalOrNil ?? .shared
         let trimmedPrefix = prefix.trimmingCharacters(in: .whitespacesAndNewlines)
-        let contextLanguage =
-            dominantLanguage(in: context, among: languages) ?? languages.first ?? .english
+        let contextLanguage = suggestionLanguage(prefix: "", context: context, languages: languages)
 
         if trimmedPrefix.isEmpty {
             let next = nextWordTrace(
@@ -300,7 +311,7 @@ public enum SuggestionEngine {
             return pack(ranked, generated: generated, typed: "")
         }
 
-        let typedLanguage = dominantLanguage(in: trimmedPrefix, among: languages) ?? contextLanguage
+        let typedLanguage = suggestionLanguage(prefix: trimmedPrefix, context: context, languages: languages)
         let preceding = previousWords(in: context)
         var generatedCandidates = generatedCompletions(
             for: trimmedPrefix,
@@ -332,7 +343,7 @@ public enum SuggestionEngine {
         let reason = commitReason(
             trimmedPrefix, previousWords: preceding, context: context,
             typedLanguage: typedLanguage, results: ranked,
-            supplementary: supplementary, personal: personal)
+            supplementary: supplementary, personal: personal, alternatives: generatedCandidates)
         // **Nil is not zero confidence, and writing it as one is a live bug.**
         // `.full` floors at 0, so folding "no reason at all" into a number and
         // comparing would commit every word the cascade explicitly refused.
@@ -377,22 +388,7 @@ public enum SuggestionEngine {
     /// a fresh line teaching `PersonalLanguageModel` the previous line's last
     /// word a second time.
     static func previousWords(in context: String, limit: Int = 2) -> [String] {
-        let lineStart =
-            context.lastIndex(where: \.isNewline).map { context.index(after: $0) }
-            ?? context.startIndex
-        let trimmed = context[lineStart...].trimmingCharacters(in: .whitespacesAndNewlines)
-        var out: [String] = []
-        for token in trimmed.split(whereSeparator: \.isWhitespace).suffix(limit) {
-            if token.last.map({ ".!?…،؟".contains($0) }) == true {
-                // The boundary is between this token and the next, so everything
-                // gathered so far is on the far side of it.
-                out.removeAll()
-                continue
-            }
-            let word = String(token).trimmingCharacters(in: .punctuationCharacters)
-            if !word.isEmpty { out.append(word) }
-        }
-        return out
+        WordBoundary.sentenceWords(in: context, limit: limit)
     }
 
     /// Every committed word in the field, in order, including across sentences
@@ -406,8 +402,8 @@ public enum SuggestionEngine {
     /// Punctuation is stripped the same way `wordCore` does, so `Zorblin,` and
     /// `Zorblin` are one entry.
     static func documentWords(in context: String) -> [String] {
-        context.split { $0.isWhitespace || $0.isNewline }.compactMap { token in
-            let word = wordCore(String(token))
+        WordBoundary.words(in: context).compactMap { token in
+            let word = wordCore(token)
             return word.isEmpty ? nil : word
         }
     }
@@ -523,7 +519,7 @@ public enum SuggestionEngine {
     /// `KeyboardController.staysInsideWord` delegates here so the two never
     /// carry their own copies of the same list.
     static func staysInsideWord(_ character: Character) -> Bool {
-        "'’-\u{05BE}\u{05F3}\u{05F4}\u{00B7}\u{200C}".contains(character)
+        WordBoundary.staysInsideWord(character)
     }
 
     /// Whether an automatic path — space or complete-on-pause — may write this
@@ -547,11 +543,7 @@ public enum SuggestionEngine {
         text.allSatisfy { $0.isLetter || staysInsideWord($0) }
     }
 
-    /// `matchCase`, except a verbatim token — today only an email —
-    /// is inserted exactly as it was stored. An address typed under shift is
-    /// still the same address, and `PersonalLanguageModel` folds every one of
-    /// them to lower case before it is kept, so re-casing it here would answer
-    /// with something that was never stored at all.
+    /// Personal tokens retain their stored text even under a shifted prefix.
     static func matchCaseUnlessVerbatim(
         of source: String, applyingTo candidate: String, in language: KeyboardLanguage
     ) -> String {
@@ -564,9 +556,14 @@ public enum SuggestionEngine {
     ) -> [Suggestion] {
         let literal = prefix.isEmpty ? [] : Array(local.prefix(1))
         guard prefix.isEmpty || !literal.isEmpty else { return local }
+        let safeDefault = local.first { $0.isDefault && $0.commit == .contextual }
         let pool =
-            words.map { Suggestion(text: $0, language: language) }
-            + local.dropFirst(literal.count)
+            words.map { word in
+                if let safeDefault, safeDefault.text == word, safeDefault.language == language {
+                    return safeDefault
+                }
+                return Suggestion(text: word, language: language, commit: .tapOnly)
+            } + local.dropFirst(literal.count)
         // Only a nonempty prefix has literal keystrokes to preserve.
         var merged = literal
         var seen = Set(literal.map { SeedLanguageModel.fold($0.text) })
@@ -578,12 +575,16 @@ public enum SuggestionEngine {
             seen.insert(folded)
             merged.append(candidate)
         }
-        let modelFolds = Set(words.map(SeedLanguageModel.fold))
-        let defaultIndex =
-            merged.firstIndex {
-                modelFolds.contains(SeedLanguageModel.fold($0.text))
-                    && (prefix.isEmpty || isAutomaticallyInsertable($0.text))
-            } ?? 0
+        let defaultIndex: Int
+        if prefix.isEmpty {
+            defaultIndex = 0
+        } else {
+            defaultIndex =
+                merged.firstIndex {
+                    $0.text == safeDefault?.text && $0.language == safeDefault?.language
+                        && $0.commit == .contextual
+                } ?? 0
+        }
         return markDefault(merged, at: defaultIndex)
     }
 
@@ -605,8 +606,8 @@ public enum SuggestionEngine {
     /// **`id` was in here and had to come out.** Membership of this table is what
     /// makes a word get replaced on the space bar, and `id` is an ordinary English
     /// noun — so `That's a good id` committed as `That's a good I'd`, which is the
-    /// corpus's `nc-02`. The rest of the table has no such reading: nobody types
-    /// `dont` or `havent` meaning anything but the contraction. `I'd` is also the
+    /// corpus's `nc-02`. This table generates offers; `commitReason` separately
+    /// protects ambiguous real words such as `its`, `ill` and `lets`. `I'd` is also the
     /// rarest expansion in the set, so the trade is a common wrong correction
     /// against an uncommon missing one. `were` is excluded for the same reason:
     /// distinguishing it from `we're` would require word-specific context logic

@@ -18,14 +18,16 @@ public struct CopyClipPanel: View {
     /// it, because `LayoutGeometry.keyHeight` is a user setting between 36 and 56.
     var keyHeight: CGFloat = Theme.Metrics.keyHeight
 
-    /// A new pasteboard generation is waiting and offering `UIPasteControl`
-    /// is the whole reason this file imports the state at all.
-    private var awaitsPasteControl: Bool { controller.copyclipCaptureState == .control }
-
     public var body: some View {
         VStack(spacing: 0) {
+            if controller.copyclipCaptureState == .control {
+                CopyClipPendingCaptureRow(controller: controller)
+                    .padding(.horizontal, Theme.Metrics.sideInset)
+                    .padding(.vertical, Theme.Metrics.keySpacing / 2)
+            }
+
             Group {
-                if controller.clips.isEmpty && !awaitsPasteControl {
+                if controller.clips.isEmpty {
                     empty
                 } else {
                     list
@@ -58,18 +60,6 @@ public struct CopyClipPanel: View {
         // hidden separators, and zero content margins keep the cards looking
         // like letter keys rather than a settings table.
         List {
-            if awaitsPasteControl {
-                CopyClipPendingCaptureRow(controller: controller)
-                    .listRowInsets(
-                        EdgeInsets(
-                            top: Theme.Metrics.keySpacing / 2,
-                            leading: Theme.Metrics.sideInset,
-                            bottom: Theme.Metrics.keySpacing / 2,
-                            trailing: Theme.Metrics.sideInset)
-                    )
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-            }
             ForEach(controller.clips) { clip in
                 CopyClipCard(clip: clip) {
                     controller.insertClip(clip)
@@ -120,7 +110,7 @@ public struct CopyClipPanel: View {
     }
 
     private var emptyBody: String {
-        var lines = ["Copy text, then tap Paste here to save it."]
+        var lines = ["Copied text appears here while the keyboard is active."]
         if SharedStore.shared.storage == .processLocal {
             lines.append("Allow Full Access so CopyClip can see what you copy.")
         }
@@ -468,10 +458,10 @@ private struct CopyClipPendingCaptureRow: View {
     var body: some View {
         HStack(spacing: Theme.Space.sm) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("New copy waiting")
+                Text("Clipboard access needed")
                     .font(Theme.Fonts.body)
                     .foregroundStyle(Theme.Keys.label)
-                Text("Paste adds it here. No prompt.")
+                Text("Tap Paste to allow this copied text.")
                     .font(Theme.Fonts.caption)
                     .foregroundStyle(Theme.Keys.secondaryLabel)
             }

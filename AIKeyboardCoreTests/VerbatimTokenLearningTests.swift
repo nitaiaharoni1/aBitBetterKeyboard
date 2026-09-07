@@ -99,35 +99,16 @@ final class VerbatimTokenLearningTests: XCTestCase {
         controller.press(.space)
     }
 
-    // MARK: The floor — `PersonalLanguageModel.protectThreshold`, not `boostThreshold`
-
-    /// **The floor rejector.** The broken direction is surfacing at two
-    /// sightings, not at none — a store that gates a verbatim token on
-    /// `boostThreshold` the way an ordinary word is offers a paste read once
-    /// or twice.
-    func testAnEmailSurfacesAfterThreeSightingsAndNotAfterTwo() {
+    func testAnEmailSurfacesAfterOneCommittedSightingAcrossLanguages() {
         let target = MockTextTarget(text: "")
-        let controller = KeyboardController(target: target, language: .english)
-        let email = "nitai@gmail.com"
-
+        let controller = KeyboardController(target: target, language: .hebrew)
+        let email = "alex@example.org"
         typeAndSpace(email, on: controller, target: target)
-        typeAndSpace(email, on: controller, target: target)
-
-        target.text = "nita"
+        controller.language = .english
+        target.text = "ale"
         controller.refreshSuggestions()
-        XCTAssertFalse(
-            controller.suggestions.contains { $0.text == email },
-            "an address seen only twice already reached the bar: "
-                + "\(controller.suggestions.map(\.text))")
-
-        typeAndSpace(email, on: controller, target: target)
-
-        target.text = "nita"
-        controller.refreshSuggestions()
-        XCTAssertTrue(
-            controller.suggestions.contains { $0.text == email },
-            "three sightings still did not surface the address: "
-                + "\(controller.suggestions.map(\.text))")
+        XCTAssertTrue(controller.suggestions.contains { $0.text == email })
+        XCTAssertFalse(controller.suggestions.first(where: { $0.text == email })?.isDefault ?? true)
     }
 
     // MARK: The shape
@@ -299,35 +280,17 @@ final class VerbatimTokenLearningTests: XCTestCase {
                 + "\(controller.suggestions.map(\.text))")
     }
 
-    /// **The neighbour-door casing rejector.** `neighbourWords` also searches
-    /// `personal.neighbours`, so a typo of a verbatim token can surface
-    /// through this door too — one substitution off a stored, three-sighting
-    /// `zzqnitai@gmail.com` — and its mapping used to re-case through plain
-    /// `matchCase`: a shifted typo would answer `Zzqnitai@gmail.com`, a string
-    /// this store never held, since every entry is folded to lower case on
-    /// the way in. `matchCaseUnlessVerbatim` on that mapping is the fix; the
-    /// candidate is offered in exactly the stored casing.
-    func testANeighbourTypoOfAnEmailOffersExactlyTheStoredCasing() {
+    func testAStoredEmailIsCompletedByPrefixAndNeverByTypoNeighbour() {
         let target = MockTextTarget(text: "")
         let controller = KeyboardController(target: target, language: .english)
-        let email = "zzqnitai@gmail.com"
-
-        for _ in 0..<3 {
-            typeAndSpace(email, on: controller, target: target)
-        }
-
-        // One substitution off the stored address (`m` for `n`), under shift.
-        target.text = "Zzqnitai@gmail.con"
+        let email = "alex@example.org"
+        typeAndSpace(email, on: controller, target: target)
+        target.text = "alex@example.orh"
         controller.refreshSuggestions()
-
-        XCTAssertTrue(
-            controller.suggestions.contains { $0.text == email },
-            "the neighbour door never offered the stored address at all: "
-                + "\(controller.suggestions.map(\.text))")
-        XCTAssertFalse(
-            controller.suggestions.contains { $0.text != email && $0.text.lowercased() == email },
-            "the neighbour door re-cased the stored address: "
-                + "\(controller.suggestions.map(\.text))")
+        XCTAssertFalse(controller.suggestions.contains { $0.text == email })
+        target.text = "ale"
+        controller.refreshSuggestions()
+        XCTAssertTrue(controller.suggestions.contains { $0.text == email })
     }
 
     // MARK: Complete on pause — the second automatic door
@@ -442,4 +405,276 @@ final class VerbatimTokenLearningTests: XCTestCase {
             model.words(startingWith: "nita", in: .english, limit: 3), ["nitai@gmail.com"])
         model.save()
     }
+    func testPhoneNumberIsRecalledAfterOneTypedCommitAcrossLanguages() {
+        let model = PersonalLanguageModel(url: nil)
+        XCTAssertTrue(
+            model.record(
+                word: "0541236789", previous: "טלפון", language: .hebrew, permitted: true))
+        XCTAssertEqual(model.phoneNumbers(startingWith: "054", limit: 3), ["0541236789"])
+        XCTAssertEqual(model.count(of: "0541236789", in: .english), 1)
+        XCTAssertTrue(model.words(startingWith: "054", in: .english, limit: 3).isEmpty)
+        XCTAssertTrue(model.phoneNumbers(startingWith: "05", limit: 3).isEmpty)
+        XCTAssertTrue(model.phoneNumbers(startingWith: "", limit: 3).isEmpty)
+        XCTAssertTrue(model.phoneNumbers(startingWith: "0541236789", limit: 3).isEmpty)
+        XCTAssertTrue(model.followers(after: "טלפון", in: .hebrew, limit: 3).isEmpty)
+        XCTAssertTrue(model.neighbours(of: "0541236788", in: .hebrew, limit: 3).isEmpty)
+        XCTAssertTrue(model.allWords(in: .hebrew).isEmpty)
+    }
+
+    func testFormattedInternationalPhoneKeepsItsFormatAndMatchesDigitPrefixes() {
+        let model = PersonalLanguageModel(url: nil)
+        let phone = "+972 54-123-6789"
+        XCTAssertTrue(model.recordPhoneNumber(phone, language: .hebrew, permitted: true))
+        XCTAssertEqual(model.phoneNumbers(startingWith: "+97254", limit: 3), [phone])
+        XCTAssertEqual(model.phoneNumbers(startingWith: "+972 54 1", limit: 3), [phone])
+        XCTAssertEqual(PersonalLanguageModel.phoneNumberSuffix(in: "call +972 54 1"), "+972 54 1")
+        XCTAssertFalse(PersonalLanguageModel.isPhoneNumber("+972 54 1"))
+        XCTAssertEqual(model.count(of: "+972541236789", in: .english), 1)
+    }
+
+    func testPhoneShapeRefusesCodesDatesPricesCardsAndMalformedNumbers() {
+        let model = PersonalLanguageModel(url: nil)
+        for text in [
+            "123456", "12345678", "99.99", "2026-09-07", "07-09-2026",
+            "4111 1111 1111 1111", "+4532015112830366", "0541236789-",
+            "054(1236789", "054)1236789(", "054+1236789", "+0123456789", "1111111111"
+        ] {
+            XCTAssertFalse(PersonalLanguageModel.isPhoneNumber(text), text)
+            XCTAssertFalse(model.recordPhoneNumber(text, language: .english, permitted: true), text)
+        }
+        XCTAssertEqual(model.learnedWordCount, 0)
+        for text in ["0541236789", "031234567", "(212) 555-0198", "+44 20 7946 0958"] {
+            XCTAssertTrue(PersonalLanguageModel.isPhoneNumber(text), text)
+        }
+    }
+
+    func testPhoneIsPersistedImmediatelyAndCanBeForgottenFromAnotherLanguage() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writer = PersonalLanguageModel(url: url)
+        writer.recordPhoneNumber("054-1236789", language: .hebrew, permitted: true)
+        let reader = PersonalLanguageModel(url: url)
+        XCTAssertEqual(reader.phoneNumbers(startingWith: "054", limit: 3), ["054-1236789"])
+        XCTAssertEqual(reader.learnedWords().map(\.word), ["054-1236789"])
+        reader.forget("0541236789", in: .english)
+        writer.reload()
+        XCTAssertTrue(writer.phoneNumbers(startingWith: "054", limit: 3).isEmpty)
+        XCTAssertEqual(writer.learnedWordCount, 0)
+    }
+
+    func testPhoneLearningRefusesAutomaticAndForbiddenWrites() {
+        let model = PersonalLanguageModel(url: nil)
+        XCTAssertFalse(model.recordPhoneNumber("0541236789", language: .hebrew, permitted: false))
+        XCTAssertFalse(
+            model.record(
+                word: "0541236789", previous: nil, language: .hebrew, permitted: true,
+                source: .automatic))
+        XCTAssertTrue(model.learnedWords().isEmpty)
+    }
+
+    func testAutomaticSuggestionsCannotTrainTheirOwnRankingOrProtection() {
+        let model = PersonalLanguageModel(url: nil)
+        for _ in 0..<5 {
+            model.record(
+                word: "mistyped", previous: "hello", language: .english, permitted: true,
+                source: .automatic)
+        }
+        XCTAssertEqual(model.count(of: "mistyped", in: .english), 0)
+        XCTAssertFalse(model.isProtected("mistyped", in: .english))
+        XCTAssertTrue(model.words(startingWith: "mis", in: .english, limit: 3).isEmpty)
+        XCTAssertTrue(model.followers(after: "hello", in: .english, limit: 3).isEmpty)
+        model.record(
+            word: "chosen", previous: nil, language: .english, permitted: true,
+            source: .selectedSuggestion)
+        XCTAssertEqual(model.count(of: "chosen", in: .english), 1)
+        XCTAssertTrue(model.isProtected("chosen", in: .english))
+        XCTAssertEqual(model.words(startingWith: "chos", in: .english, limit: 3), ["chosen"])
+        XCTAssertEqual(model.rankingCount(of: "chosen", in: .english), PersonalLanguageModel.boostThreshold)
+    }
+
+    func testRejectedCorrectionPersistsAcrossInstancesAndForgetClearsIt() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writer = PersonalLanguageModel(url: url)
+        writer.recordRejectedCorrection(
+            original: "its", replacement: "it's", language: .english, permitted: true)
+        let reader = PersonalLanguageModel(url: url)
+        XCTAssertTrue(
+            reader.isRejectedCorrection(
+                original: "Its", replacement: "It's", language: .english))
+        XCTAssertFalse(
+            reader.isRejectedCorrection(
+                original: "ill", replacement: "I'll", language: .english))
+        reader.forget("its", in: .english)
+        XCTAssertFalse(
+            reader.isRejectedCorrection(
+                original: "its", replacement: "it's", language: .english))
+        reader.recordRejectedCorrection(
+            original: "ill", replacement: "I'll", language: .english, permitted: false)
+        XCTAssertFalse(
+            reader.isRejectedCorrection(
+                original: "ill", replacement: "I'll", language: .english))
+    }
+
+    func testLegacyStoreLoadsWithoutDiscardingLearnedVocabulary() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let tag = KeyboardLanguage.english.languageTag
+        let legacy = ["unigrams": [tag: ["nitai": 4]], "bigrams": [tag: ["hi\u{1F}nitai": 3]]]
+        try JSONSerialization.data(withJSONObject: legacy).write(to: url)
+        let model = PersonalLanguageModel(url: url)
+        XCTAssertEqual(model.words(startingWith: "nit", in: .english, limit: 3), ["nitai"])
+        XCTAssertEqual(model.followers(after: "hi", in: .english, limit: 3), ["nitai"])
+        model.recordPhoneNumber("0541236789", language: .hebrew, permitted: true)
+        let reloaded = PersonalLanguageModel(url: url)
+        XCTAssertEqual(reloaded.count(of: "nitai", in: .english), 4)
+        XCTAssertEqual(reloaded.phoneNumbers(startingWith: "054", limit: 3), ["0541236789"])
+        reloaded.clear()
+        XCTAssertTrue(reloaded.learnedWords().isEmpty)
+    }
+
+    func testInvalidObservationsCannotCreateSelectedProtectionOrAutomaticEntries() {
+        let model = PersonalLanguageModel(url: nil)
+        for source in [PersonalLanguageModel.LearningSource.selectedSuggestion, .automatic] {
+            for word in ["--", "'", "bad/token", String(repeating: "a", count: 321) + "@example.com"] {
+                XCTAssertFalse(
+                    model.record(
+                        word: word, previous: nil, language: .english, permitted: true, source: source))
+                XCTAssertFalse(model.isProtected(word, in: .english))
+                XCTAssertEqual(model.count(of: word, in: .english), 0)
+            }
+        }
+    }
+
+    func testNumericSuffixInsideSerialIsNotAPhoneToken() {
+        XCTAssertNil(PersonalLanguageModel.phoneNumberSuffix(in: "abc0541236789"))
+        XCTAssertNil(PersonalLanguageModel.phoneNumberSuffix(in: "abc-0541236789"))
+        XCTAssertEqual(PersonalLanguageModel.phoneNumberSuffix(in: "call 0541236789"), "0541236789")
+        XCTAssertTrue(PhoneNumberToken.continues(in: " 123 6789"))
+        XCTAssertFalse(PhoneNumberToken.continues(in: " please call"))
+    }
+
+    func testEmailFirstCommitPreservesOriginalSpellingAndRecallsAcrossLanguages() {
+        let model = PersonalLanguageModel(url: nil)
+        let email = "Nitai+Work@Example.com"
+        XCTAssertTrue(model.recordVerbatimToken(email, language: .hebrew, permitted: true))
+        XCTAssertEqual(model.verbatimTokens(startingWith: "nitai+", kind: .email, limit: 3), [email])
+        XCTAssertEqual(model.words(startingWith: "NIT", in: .english, limit: 3), [email])
+        XCTAssertEqual(model.count(of: "nitai+work@example.com", in: .english), 1)
+        XCTAssertTrue(model.isProtected(email, in: .english))
+        XCTAssertTrue(model.verbatimTokens(startingWith: "ni", kind: .email, limit: 3).isEmpty)
+        XCTAssertTrue(model.verbatimTokens(startingWith: email, kind: .email, limit: 3).isEmpty)
+        XCTAssertTrue(model.neighbours(of: "Nitai+Work@Example.con", in: .hebrew, limit: 3).isEmpty)
+        XCTAssertTrue(model.allWords(in: .hebrew).isEmpty)
+    }
+
+    func testEmailFirstCommitPersistsImmediatelyAndCanBeForgottenAcrossLanguages() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writer = PersonalLanguageModel(url: url)
+        writer.record(word: "My.Address@Example.com", previous: "email", language: .hebrew, permitted: true)
+        let reader = PersonalLanguageModel(url: url)
+        XCTAssertEqual(
+            reader.verbatimTokens(startingWith: "my.", kind: .email, limit: 3), ["My.Address@Example.com"])
+        XCTAssertEqual(reader.learnedWords().map(\.word), ["My.Address@Example.com"])
+        reader.forget("my.address@example.com", in: .english)
+        writer.reload()
+        XCTAssertTrue(writer.verbatimTokens(startingWith: "my.", kind: .email, limit: 3).isEmpty)
+        XCTAssertEqual(writer.learnedWordCount, 0)
+    }
+
+    func testVerbatimTokenLearningRefusesAutomaticAndForbiddenCommitsForBothKinds() {
+        let model = PersonalLanguageModel(url: nil)
+        for token in ["nitai@example.com", "0541236789"] {
+            XCTAssertFalse(model.recordVerbatimToken(token, language: .hebrew, permitted: false))
+            XCTAssertFalse(
+                model.recordVerbatimToken(token, language: .hebrew, permitted: true, source: .automatic))
+            XCTAssertFalse(
+                model.record(
+                    word: token, previous: nil, language: .english, permitted: true, source: .automatic))
+            XCTAssertEqual(model.count(of: token, in: .english), 0)
+        }
+        XCTAssertEqual(model.learnedWordCount, 0)
+    }
+
+    func testLegacyEmailAndPhoneStoresMigrateTogetherWithoutLosingWordsOrDuplicatingCounts() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let english = KeyboardLanguage.english.languageTag
+        let hebrew = KeyboardLanguage.hebrew.languageTag
+        let legacy: [String: Any] = [
+            "unigrams": [english: ["nitai@example.com": 2, "hello": 4], hebrew: ["nitai@example.com": 3]],
+            "bigrams": [english: ["say\u{1F}hello": 3]],
+            "selected": [english: ["nitai@example.com": 1]],
+            "automatic": [english: ["nitai@example.com": 2]],
+            "phones": ["0541236789": ["text": "054-1236789", "count": 2, "languageTag": hebrew]]
+        ]
+        try JSONSerialization.data(withJSONObject: legacy).write(to: url)
+        let model = PersonalLanguageModel(url: url)
+        XCTAssertEqual(model.count(of: "nitai@example.com", in: .hebrew), 5)
+        XCTAssertEqual(model.count(of: "hello", in: .english), 4)
+        XCTAssertEqual(model.followers(after: "say", in: .english, limit: 3), ["hello"])
+        XCTAssertEqual(model.phoneNumbers(startingWith: "054", limit: 3), ["054-1236789"])
+        XCTAssertEqual(
+            model.verbatimTokens(startingWith: "nit", kind: .email, limit: 3), ["nitai@example.com"])
+        XCTAssertEqual(model.learnedWordCount, 3)
+        XCTAssertEqual(
+            model.observationCount(of: "nitai@example.com", in: .english, source: .selectedSuggestion), 0)
+        XCTAssertEqual(model.observationCount(of: "nitai@example.com", in: .english, source: .automatic), 0)
+        model.save()
+        let encoded = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        XCTAssertNil(encoded["phones"])
+        XCTAssertEqual(PersonalLanguageModel(url: url).count(of: "nitai@example.com", in: .english), 5)
+    }
+
+    func testVerbatimStoreIsBoundedAndKeepsTheLatestExplicitCommit() {
+        let model = PersonalLanguageModel(url: nil)
+        for index in 0...200 {
+            model.recordVerbatimToken("person\(index)@example.com", language: .english, permitted: true)
+        }
+        XCTAssertEqual(model.learnedWordCount, 200)
+        XCTAssertEqual(model.count(of: "person200@example.com", in: .english), 1)
+        model.clear()
+        XCTAssertTrue(model.verbatimTokens(startingWith: "person", kind: .email, limit: 3).isEmpty)
+    }
+
+    func testReloadBeforeFirstFileSavePreservesUnsavedVocabulary() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let model = PersonalLanguageModel(url: url)
+        model.record(word: "colleague", previous: nil, language: .english, permitted: true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        model.reload()
+        XCTAssertEqual(model.count(of: "colleague", in: .english), 1)
+        model.record(word: "colleague", previous: nil, language: .english, permitted: true)
+        model.reload()
+        XCTAssertEqual(model.words(startingWith: "coll", in: .english, limit: 3), ["colleague"])
+        model.save()
+        XCTAssertEqual(PersonalLanguageModel(url: url).count(of: "colleague", in: .english), 2)
+    }
+
+    func testReloadHonorsClearEvenBeforeAnyFileWasSaved() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let keyboard = PersonalLanguageModel(url: url)
+        keyboard.record(word: "colleague", previous: nil, language: .english, permitted: true)
+        let app = PersonalLanguageModel(url: url)
+        app.clear()
+        keyboard.reload()
+        XCTAssertEqual(keyboard.count(of: "colleague", in: .english), 0)
+    }
+
+    func testReloadDropsPreviouslyLoadedStoreWhenFileIsDeleted() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let writer = PersonalLanguageModel(url: url)
+        writer.recordVerbatimToken("nitai@example.com", language: .english, permitted: true)
+        let reader = PersonalLanguageModel(url: url)
+        reader.record(word: "colleague", previous: nil, language: .english, permitted: true)
+        try FileManager.default.removeItem(at: url)
+        reader.reload()
+        XCTAssertEqual(reader.learnedWordCount, 0)
+    }
+
 }

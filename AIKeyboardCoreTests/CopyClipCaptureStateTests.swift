@@ -3,13 +3,6 @@ import XCTest
 
 @testable import AIKeyboardCore
 
-/// The decision behind `UIPasteControl`: which of automatic capture, the
-/// paste control, or neither the panel draws. `ClipboardHistoryTests` below
-/// need no live pasteboard at all — that is the point of the pure function —
-/// and the `KeyboardController` half proves the two things a pasteboard test
-/// actually can: that `.userAsked` stops short of reading a text generation,
-/// and that the capture that does land came from the control's own argument
-/// rather than a second read of the board.
 final class CopyClipCaptureStateTests: XCTestCase {
 
     // MARK: Pure decision
@@ -53,45 +46,50 @@ final class CopyClipCaptureStateTests: XCTestCase {
     // MARK: KeyboardController integration
 
     @MainActor
-    func testUserAskedLeavesANewTextGenerationPendingRatherThanReadingIt() {
+    func testAutomaticRefreshCapturesTextWithCopyClipClosed() {
         let before = SharedStore.shared.copyclipRecord
         defer { SharedStore.shared.copyclipRecord = before }
-        // Written by this process, so reading it back in this test never
-        // prompts; what is under test is whether the keyboard's own code
-        // reads it, not what iOS would do about that read.
-        UIPasteboard.general.string = "fresh from another app"
         SharedStore.shared.copyclipRecord = CopyclipRecord(clips: [], lastChangeCount: -1)
-
         let controller = KeyboardController(target: MockTextTarget())
-        controller.refreshCopyClip(.userAsked)
 
-        XCTAssertEqual(
-            controller.clips, [],
-            "a build that still auto-captures on open put the text straight into the ledger")
-        XCTAssertEqual(
-            controller.copyclipCaptureState, .control,
-            "the panel has nothing to offer a build that forgot to leave the cursor pending")
-        XCTAssertNotEqual(
-            controller.lastChangeCount, UIPasteboard.general.changeCount,
-            "the cursor must not advance until a tap through the control grants the read")
+        for text in ["הודעה ראשונה", "הודעה שנייה"] {
+            UIPasteboard.general.string = text
+            controller.refreshCopyClip(.automatic)
+            XCTAssertEqual(controller.clips.first?.text.value, text)
+            XCTAssertEqual(controller.lastChangeCount, UIPasteboard.general.changeCount)
+        }
+        XCTAssertFalse(controller.overlay.isCopyClip)
+        XCTAssertEqual(controller.clips.map(\.text.value), ["הודעה שנייה", "הודעה ראשונה"])
+        XCTAssertEqual(SharedStore.shared.copyclipRecord.clips, controller.clips)
+        XCTAssertEqual(controller.copyclipCaptureState, .automatic)
     }
 
     @MainActor
-    func testUserAskedSkipsANonTextGenerationAndAdvancesThePastCursor() {
+    func testUnavailableTextDoesNotMarkTheGenerationCaptured() {
         let before = SharedStore.shared.copyclipRecord
         defer { SharedStore.shared.copyclipRecord = before }
         UIPasteboard.general.image = UIImage(systemName: "circle")
         SharedStore.shared.copyclipRecord = CopyclipRecord(clips: [], lastChangeCount: -1)
-
         let controller = KeyboardController(target: MockTextTarget())
-        controller.refreshCopyClip(.userAsked)
+        controller.refreshCopyClip(.automatic)
+        XCTAssertTrue(controller.clips.isEmpty)
+        XCTAssertEqual(controller.lastChangeCount, -1)
+        XCTAssertNil(controller.attemptedCopyclipGeneration)
+    }
 
-        XCTAssertEqual(
-            controller.copyclipCaptureState, .automatic,
-            "a copied image must not be left offering a control that can only ever be empty")
-        XCTAssertEqual(
-            controller.lastChangeCount, UIPasteboard.general.changeCount,
-            "a generation that can never become a clip must not be re-examined on the next open")
+    @MainActor
+    func testStoppedWatcherDoesNotPerformItsInitialRead() async {
+        let before = SharedStore.shared.copyclipRecord
+        defer { SharedStore.shared.copyclipRecord = before }
+        UIPasteboard.general.string = "must not be captured after stopping"
+        SharedStore.shared.copyclipRecord = CopyclipRecord(clips: [], lastChangeCount: -1)
+        let controller = KeyboardController(target: MockTextTarget())
+        controller.startWatchingPasteboard()
+        let watch = controller.copyclipWatchTask
+        controller.stopWatchingPasteboard()
+        await watch?.value
+        XCTAssertTrue(controller.clips.isEmpty)
+        XCTAssertNil(controller.attemptedCopyclipGeneration)
     }
 
     @MainActor

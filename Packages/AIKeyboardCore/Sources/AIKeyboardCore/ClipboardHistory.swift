@@ -90,9 +90,10 @@ public enum ClipboardHistory {
         changeCount: Int,
         lastChangeCount: Int,
         rawText: String?,
-        now: Date
+        now: Date,
+        acceptsUnchangedGeneration: Bool = false
     ) -> (clips: [Clip], lastChangeCount: Int) {
-        if changeCount == lastChangeCount {
+        if changeCount == lastChangeCount && !acceptsUnchangedGeneration {
             return (clips, lastChangeCount)
         }
         guard let rawText, let text = ClipText(raw: rawText) else {

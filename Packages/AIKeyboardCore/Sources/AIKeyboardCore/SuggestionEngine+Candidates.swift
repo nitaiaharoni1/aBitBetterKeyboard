@@ -21,6 +21,7 @@ extension SuggestionEngine {
         /// Set when the previous word in the sentence is known to be followed by
         /// this one.
         var followsContext: Bool = false
+        var followsImmediateContext: Bool = false
         /// Where this sat in the list its source returned it in.
         ///
         /// **A source's own order is information and throwing it away cost three

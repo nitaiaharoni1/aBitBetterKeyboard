@@ -57,14 +57,59 @@ final class CandidateCommitTests: XCTestCase {
         XCTAssertEqual(target.document, "helo ")
     }
 
+    func testATappedCorrectionWorksWithAnUnavailableTail() {
+        let target = CursorTextTarget(before: "היי הכל טוב\nמה קורנ?")
+        target.afterContextIsAvailable = false
+        let controller = KeyboardController(target: target, language: .hebrew)
+
+        controller.apply(Suggestion(text: "קורה", language: .hebrew))
+
+        XCTAssertEqual(target.document, "היי הכל טוב\nמה קורה?")
+    }
+
+    func testATappedCorrectionDoesNotMoveIntoAnUnavailableTail() {
+        let target = CursorTextTarget(before: "מה קורנ", after: "? אחר כך")
+        target.afterContextIsAvailable = false
+        let controller = KeyboardController(target: target, language: .hebrew)
+
+        controller.apply(Suggestion(text: "קורה", language: .hebrew))
+
+        XCTAssertEqual(target.document, "מה קורה? אחר כך")
+        XCTAssertEqual(target.documentContextBeforeInput, "מה קורה")
+    }
+
+    func testATappedSelectionReplacementWorksWithAnUnavailableTail() {
+        let target = CursorTextTarget(before: "מה ", selecting: "קורנ", after: "?")
+        target.afterContextIsAvailable = false
+        let controller = KeyboardController(target: target, language: .hebrew)
+
+        controller.apply(Suggestion(text: "קורה", language: .hebrew))
+
+        XCTAssertEqual(target.document, "מה קורה?")
+    }
+
+    func testATappedCorrectionWithAnUnavailableTailIsNotCorrectedAgainOnSpace() {
+        let target = CursorTextTarget(before: "מה קורנ")
+        target.afterContextIsAvailable = false
+        let controller = KeyboardController(target: target, language: .hebrew)
+        controller.apply(Suggestion(text: "קורה", language: .hebrew))
+
+        target.afterContextIsAvailable = true
+        controller.suggestions = [Suggestion(text: "קורא", language: .hebrew, isDefault: true)]
+        controller.press(.space)
+
+        XCTAssertEqual(target.document, "מה קורה ")
+    }
+
     func testTheBarDoesNotPromiseAutocorrectInsideAWord() {
-        let target = CursorTextTarget(before: "helo", after: "x")
+        let target = CursorTextTarget(before: "dont", after: "x")
         let controller = KeyboardController(target: target, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
-        XCTAssertEqual(controller.suggestions.first(where: \.isDefault)?.text, "helo")
-        target.placeCaret(before: "helo")
+        XCTAssertEqual(controller.suggestions.first(where: \.isDefault)?.text, "dont")
+        target.placeCaret(before: "dont")
         controller.refreshSuggestions()
-        XCTAssertEqual(controller.suggestions.first(where: \.isDefault)?.text, "hello")
+        XCTAssertEqual(controller.suggestions.first(where: \.isDefault)?.text, "don't")
     }
 
     func testSpaceRereadsAChangedAutocorrectConfidenceLevel() {
@@ -398,63 +443,69 @@ final class CandidateCommitTests: XCTestCase {
     /// The control half types the same letters and stops at space, so a build
     /// that simply turned Autocorrect off fails both sides.
     func testFirstBackspaceAfterSpaceRestoresTheKeystrokes() {
-        let control = CursorTextTarget(before: "helo")
+        let control = CursorTextTarget(before: "dont")
         let live = KeyboardController(target: control, language: .english)
+        live.personal = PersonalLanguageModel(url: nil)
         live.refreshSuggestions()
         live.press(.space)
         XCTAssertEqual(
-            control.document, "hello ",
+            control.document, "don't ",
             "the correction has to be live, or the undo proves nothing")
 
-        let target = CursorTextTarget(before: "helo")
+        let target = CursorTextTarget(before: "dont")
         let controller = KeyboardController(target: target, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
         controller.press(.space)
-        XCTAssertEqual(target.document, "hello ", "space did not swap, so delete cannot undo it")
+        XCTAssertEqual(target.document, "don't ", "space did not swap, so delete cannot undo it")
         controller.press(.backspace)
         XCTAssertEqual(
-            target.document, "helo",
+            target.document, "dont",
             "delete left the correction standing: \(target.document)")
     }
 
     /// Space must not put the same correction back after the user undid it.
     func testSpaceDoesNotRepeatAnUndoneAutocorrect() {
-        let control = CursorTextTarget(before: "helo")
+        let control = CursorTextTarget(before: "dont")
         let live = KeyboardController(target: control, language: .english)
+        live.personal = PersonalLanguageModel(url: nil)
         live.refreshSuggestions()
         live.press(.space)
-        XCTAssertEqual(control.document, "hello ", "the correction has to be live")
+        XCTAssertEqual(control.document, "don't ", "the correction has to be live")
 
-        let target = CursorTextTarget(before: "helo")
+        let target = CursorTextTarget(before: "dont")
         let controller = KeyboardController(target: target, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
         controller.press(.space)
         controller.press(.backspace)
-        XCTAssertEqual(target.document, "helo")
+        XCTAssertEqual(target.document, "dont")
         controller.press(.space)
         XCTAssertEqual(
-            target.document, "helo ",
+            target.document, "dont ",
             "space put the undone correction back: \(target.document)")
     }
 
     /// A later letter closes the undo. Delete then eats that letter, not the
     /// swapped word.
     func testALaterLetterClearsAutocorrectUndo() {
-        let control = CursorTextTarget(before: "helo")
+        let control = CursorTextTarget(before: "dont")
         let live = KeyboardController(target: control, language: .english)
+        live.personal = PersonalLanguageModel(url: nil)
         live.refreshSuggestions()
         live.press(.space)
-        XCTAssertEqual(control.document, "hello ", "the correction has to be live")
+        XCTAssertEqual(control.document, "don't ", "the correction has to be live")
 
-        let target = CursorTextTarget(before: "helo")
+        let target = CursorTextTarget(before: "dont")
         let controller = KeyboardController(target: target, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.shift = .off
         controller.refreshSuggestions()
         controller.press(.space)
         controller.press(.character("x"))
         controller.press(.backspace)
         XCTAssertEqual(
-            target.document, "hello ",
+            target.document, "don't ",
             "delete undid an earlier word: \(target.document)")
     }
 
@@ -465,14 +516,15 @@ final class CandidateCommitTests: XCTestCase {
         XCTAssertEqual(SharedStore.shared.autocorrectLevel, .full)
         XCTAssertEqual(SharedStore.shared.storedAutocorrectLevel, .off)
 
-        let target = CursorTextTarget(before: "helo")
+        let target = CursorTextTarget(before: "dont")
         let controller = KeyboardController(target: target, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
         controller.press(.space)
-        XCTAssertEqual(target.document, "helo ", "space swapped while Autocorrect was off")
+        XCTAssertEqual(target.document, "dont ", "space swapped while Autocorrect was off")
         controller.press(.backspace)
         XCTAssertEqual(
-            target.document, "helo",
+            target.document, "dont",
             "delete restored a swap that never happened: \(target.document)")
     }
 

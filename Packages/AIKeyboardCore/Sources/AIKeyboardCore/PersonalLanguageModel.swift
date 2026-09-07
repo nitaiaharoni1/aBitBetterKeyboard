@@ -12,48 +12,6 @@ public struct LearnedWord: Identifiable, Equatable, Sendable {
     public var id: String { "\(language.languageTag)\u{1F}\(word)" }
 }
 
-/// What this keyboard has learned about the person typing on it.
-///
-/// **This is the half that makes the bar fit somebody.** `SeedLanguageModel` is
-/// the same few hundred words for every install; this one knows that *this* user
-/// writes `Tzachi`, `standup` and `בלי־פרופ`, and that after `אני` they nearly
-/// always write `מגיע`. Every keyboard that feels like it reads your mind is
-/// doing this and not much else.
-///
-/// **What is stored, exactly.** Two counters: how often a word was committed, and
-/// how often one word was committed directly after another. Nothing else. No
-/// sentences, no message text, no field contents, no host app, no timestamps
-/// beyond the file's own. A word pair is the longest thing that exists in here,
-/// which is the line drawn when this was designed: pairs are what next-word
-/// prediction needs and are short enough that the store cannot be read back as
-/// anything the user wrote. **One shape is kept verbatim rather than as a run of
-/// letters: an email address** (`PersonalLanguageModel.isVerbatimToken`), because
-/// a keyboard that cannot learn the one string its owner retypes every day is not
-/// doing this file's job. It earns no pair — the bigram half is skipped outright
-/// for it, since an address commonly follows a sentence with nothing in common
-/// with what usually follows it — and it earns no ranking at all short of
-/// `protectThreshold` sightings, not `boostThreshold`: a pasted address seen once
-/// or twice must stay out of the bar. Ordinary words also carry a short, fixed
-/// list of marks that sit *inside* a word rather than ending it — Hebrew's geresh
-/// and gershayim, the Catalan interpunct, Persian's zero-width non-joiner — the
-/// same marks `KeyboardController.staysInsideWord` already answers for a typed
-/// character, so a word reached through the accents popup (`צ׳יפס`, `col·legi`)
-/// is one this store can keep too, on both sides of a pair.
-///
-/// **Where it is not written.** Nothing is recorded while the focused field is a
-/// credential field — the same question `SecureField` already answers for screen
-/// reads, asked again here because "may I keep this word" and "may I send this
-/// screen" have the same answer for a password. Nothing is recorded when the user
-/// has turned learning off. And nothing leaves the device: the file lives in the
-/// App Group container, which is also why it needs Full Access, and there is no
-/// code path that uploads it.
-///
-/// **Counts are thresholds, not truth.** A word seen once may be a typo, and a
-/// keyboard that learned typos and then defended them would be worse than one
-/// that learned nothing. So a word has to be seen twice before it changes any
-/// ranking and three times before it is protected from autocorrect. A verbatim
-/// token skips the first floor: it needs the three-sighting one from the start,
-/// because there is no ranking use for an address that has been typed once.
 @MainActor
 public final class PersonalLanguageModel {
 
@@ -79,9 +37,99 @@ public final class PersonalLanguageModel {
     /// several times a second.
     private static let flushInterval = 25
 
+    enum LearningSource: Sendable {
+        case typed
+        case selectedSuggestion
+        case automatic
+    }
+
+    private struct VerbatimToken: Codable {
+        var kind: PersonalToken.Kind
+        var text: String
+        var count: Int
+        var languageTag: String
+    }
+
+    private struct LegacyPhone: Decodable {
+        var text: String
+        var count: Int
+        var languageTag: String
+    }
+
     private struct Store: Codable {
         var unigrams: [String: [String: Int]] = [:]
         var bigrams: [String: [String: Int]] = [:]
+        var selected: [String: [String: Int]] = [:]
+        var automatic: [String: [String: Int]] = [:]
+        var rejected: [String: [String: Int]] = [:]
+        var tokens: [String: VerbatimToken] = [:]
+
+        private enum CodingKeys: String, CodingKey {
+            case unigrams, bigrams, selected, automatic, rejected, tokens
+        }
+
+        private enum LegacyCodingKeys: String, CodingKey { case phones }
+
+        init() {}
+
+        init(from decoder: any Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            unigrams = try values.decodeIfPresent([String: [String: Int]].self, forKey: .unigrams) ?? [:]
+            bigrams = try values.decodeIfPresent([String: [String: Int]].self, forKey: .bigrams) ?? [:]
+            selected = try values.decodeIfPresent([String: [String: Int]].self, forKey: .selected) ?? [:]
+            automatic = try values.decodeIfPresent([String: [String: Int]].self, forKey: .automatic) ?? [:]
+            rejected = try values.decodeIfPresent([String: [String: Int]].self, forKey: .rejected) ?? [:]
+            let decodedTokens =
+                try values.decodeIfPresent([String: VerbatimToken].self, forKey: .tokens) ?? [:]
+            for token in decodedTokens.values.sorted(by: { $0.text < $1.text }) {
+                mergeToken(
+                    kind: token.kind, text: token.text, count: token.count, languageTag: token.languageTag)
+            }
+            let legacy = try decoder.container(keyedBy: LegacyCodingKeys.self)
+            let phones = try legacy.decodeIfPresent([String: LegacyPhone].self, forKey: .phones) ?? [:]
+            for phone in phones.values.sorted(by: { $0.text < $1.text }) {
+                mergeToken(kind: .phone, text: phone.text, count: phone.count, languageTag: phone.languageTag)
+            }
+            for tag in unigrams.keys.sorted() {
+                for (word, count) in (unigrams[tag] ?? [:]).sorted(by: { $0.key < $1.key }) {
+                    guard PersonalToken.isEmail(word) else { continue }
+                    mergeToken(kind: .email, text: word, count: count, languageTag: tag)
+                    unigrams[tag]?[word] = nil
+                }
+                if unigrams[tag]?.isEmpty == true { unigrams[tag] = nil }
+            }
+            for tag in bigrams.keys {
+                bigrams[tag] = bigrams[tag]?.filter { pair in
+                    pair.key.split(separator: "\u{1F}").allSatisfy {
+                        PersonalToken.kind(of: String($0)) == nil
+                    }
+                }
+            }
+            for tag in selected.keys {
+                selected[tag] = selected[tag]?.filter { PersonalToken.kind(of: $0.key) == nil }
+            }
+            for tag in automatic.keys {
+                automatic[tag] = automatic[tag]?.filter { PersonalToken.kind(of: $0.key) == nil }
+            }
+            if tokens.count > 200 {
+                tokens = Dictionary(
+                    uniqueKeysWithValues: tokens.sorted {
+                        $0.value.count == $1.value.count ? $0.key < $1.key : $0.value.count > $1.value.count
+                    }.prefix(200).map { ($0.key, $0.value) })
+            }
+        }
+
+        private mutating func mergeToken(
+            kind: PersonalToken.Kind, text: String, count: Int, languageTag: String
+        ) {
+            guard count > 0, PersonalToken.kind(of: text) == kind,
+                let key = PersonalLanguageModel.tokenKey(for: text, kind: kind)
+            else { return }
+            let total = min(max(tokens[key]?.count ?? 0, 0), 10_000) + min(count, 10_000)
+            tokens[key] = VerbatimToken(
+                kind: kind, text: tokens[key]?.text ?? text, count: min(total, 10_000),
+                languageTag: tokens[key]?.languageTag ?? languageTag)
+        }
     }
 
     private var store = Store()
@@ -140,7 +188,25 @@ public final class PersonalLanguageModel {
 
     /// How often this user has committed this word. Zero for one they never have.
     public func count(of word: String, in language: KeyboardLanguage) -> Int {
-        store.unigrams[language.languageTag]?[SeedLanguageModel.fold(word)] ?? 0
+        if let kind = PersonalToken.kind(of: word), let key = Self.tokenKey(for: word, kind: kind) {
+            return store.tokens[key]?.count ?? 0
+        }
+        return store.unigrams[language.languageTag]?[SeedLanguageModel.fold(word)] ?? 0
+    }
+
+    func observationCount(
+        of word: String, in language: KeyboardLanguage, source: LearningSource
+    ) -> Int {
+        let key = SeedLanguageModel.fold(word)
+        let tag = language.languageTag
+        switch source {
+        case .automatic:
+            return store.automatic[tag]?[key] ?? 0
+        case .selectedSuggestion:
+            return store.selected[tag]?[key] ?? 0
+        case .typed:
+            return max((store.unigrams[tag]?[key] ?? 0) - (store.selected[tag]?[key] ?? 0), 0)
+        }
     }
 
     /// Exact count everywhere except Hebrew, where attested clitic variants of a
@@ -149,15 +215,14 @@ public final class PersonalLanguageModel {
     public func rankingCount(of word: String, in language: KeyboardLanguage) -> Int {
         let folded = SeedLanguageModel.fold(word)
         guard !folded.isEmpty else { return 0 }
-        guard language.script == .hebrew else { return count(of: folded, in: language) }
-        return currentHebrewIndex().rankingCount(of: folded)
+        if Self.isVerbatimToken(word) { return count(of: word, in: language) }
+        let observed =
+            language.script == .hebrew
+            ? currentHebrewIndex().rankingCount(of: folded) : count(of: folded, in: language)
+        let selected = (store.selected[language.languageTag]?[folded] ?? 0) > 0
+        return selected && !Self.isVerbatimToken(folded) ? max(observed, Self.boostThreshold) : observed
     }
 
-    /// Every stored word, including those seen once. Personal dictionary shows
-    /// these so the user can see what the store holds before Forget. Ranking
-    /// still ignores count below `boostThreshold` — `protectThreshold` for a
-    /// verbatim token such as an email — and every other read surface stays
-    /// gated the same way.
     public func learnedWords() -> [LearnedWord] {
         var out: [LearnedWord] = []
         for (tag, counts) in store.unigrams {
@@ -165,6 +230,10 @@ public final class PersonalLanguageModel {
             for (word, count) in counts {
                 out.append(LearnedWord(word: word, count: count, language: language))
             }
+        }
+        out += store.tokens.values.compactMap { token in
+            guard let language = KeyboardLanguage(languageTag: token.languageTag) else { return nil }
+            return LearnedWord(word: token.text, count: token.count, language: language)
         }
         return out.sorted {
             if $0.count != $1.count { return $0.count > $1.count }
@@ -177,8 +246,8 @@ public final class PersonalLanguageModel {
 
     /// Re-read the App Group file. The keyboard writes it; the app's in-memory
     /// copy is from launch and goes stale the moment you type elsewhere.
-    /// A missing file is empty, not "keep what we had": Forget deletes the
-    /// file, and a keyboard that is still alive must drop the old counts.
+    /// A previously loaded file that disappears means empty: Forget deletes
+    /// the file, and a keyboard that is still alive must drop the old counts.
     ///
     /// **A file that has not moved is not read again**, which is what takes the
     /// second full decode off the keyboard's cold launch path:
@@ -193,15 +262,12 @@ public final class PersonalLanguageModel {
     /// present it much later, and the user genuinely can go and press Forget in
     /// the app inside that window. A stamp cannot be fooled by the length of the
     /// gap — if the app rewrote the file, the stamp moved, and this reads it.
-    ///
-    /// An absent file is deliberately **not** an early return. Its stamp is nil,
-    /// the `if let` below fails, and the reset runs — which is the Forget case
-    /// the paragraph above is about.
     public func reload() {
-        loadedGeneration = Self.generation
+        adoptClearIfNeeded()
         guard let url else { return }
         let stamp = Self.stamp(of: url)
         if let stamp, stamp == loadedStamp { return }
+        if stamp == nil, loadedStamp == nil { return }
         guard let data = try? Data(contentsOf: url),
             let decoded = try? JSONDecoder().decode(Store.self, from: data)
         else {
@@ -221,37 +287,27 @@ public final class PersonalLanguageModel {
     /// absolute because the user typed it into Settings by hand. This one is
     /// inferred, so it takes repetition before it earns the same protection.
     func isProtected(_ word: String, in language: KeyboardLanguage) -> Bool {
-        count(of: word, in: language) >= Self.protectThreshold
+        if Self.isVerbatimToken(word) { return count(of: word, in: language) > 0 }
+        return count(of: word, in: language) >= Self.protectThreshold
+            || (store.selected[language.languageTag]?[SeedLanguageModel.fold(word)] ?? 0) > 0
     }
 
-    /// Every word this person has typed often enough to count, most typed first.
-    ///
-    /// Exists for `GroupedDecoder`, which has to *enumerate* a vocabulary rather
-    /// than ask about one word or one prefix: a grouped keystroke is a set of
-    /// possible prefixes, so the decoder indexes the whole list up front. Gated on
-    /// `readThreshold` for the same reason `words(startingWith:)` is — one
-    /// accidental typing of a non-word should not put it in the dictionary that
-    /// decides what other keystrokes mean, and a paste seen once or twice should
-    /// not either.
     func allWords(in language: KeyboardLanguage) -> [String] {
         guard let counts = store.unigrams[language.languageTag] else { return [] }
-        return counts.filter { $0.value >= Self.readThreshold(for: $0.key) }
+        return counts.filter { isReadable($0.key, count: $0.value, in: language) }
             .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
             .map(\.key)
     }
 
-    /// Learned words starting with this prefix, most typed first.
-    ///
-    /// Gated on `boostThreshold`, except a verbatim token — today only an email
-    /// — which needs `protectThreshold` sightings before it is handed back: a
-    /// paste read once or twice must not reach the bar. See `readThreshold`.
     func words(startingWith prefix: String, in language: KeyboardLanguage, limit: Int) -> [String] {
         let folded = SeedLanguageModel.fold(prefix)
-        guard !folded.isEmpty, let counts = store.unigrams[language.languageTag] else { return [] }
-        let matches: [(String, Int)] = counts.filter {
-            $0.key.hasPrefix(folded) && $0.key != folded && $0.value >= Self.readThreshold(for: $0.key)
+        guard !folded.isEmpty, limit > 0 else { return [] }
+        var matches: [(String, Int)] = (store.unigrams[language.languageTag] ?? [:]).filter {
+            $0.key.hasPrefix(folded) && $0.key != folded && isReadable($0.key, count: $0.value, in: language)
+        }.map { ($0.key, $0.value) }
+        matches += verbatimTokens(startingWith: prefix, kind: .email, limit: limit).map {
+            ($0, count(of: $0, in: language))
         }
-        .map { ($0.key, $0.value) }
         return Self.mostFrequent(matches, limit: limit)
     }
 
@@ -268,20 +324,13 @@ public final class PersonalLanguageModel {
             .map(\.0)
     }
 
-    /// Learned words one edit from this typo, most typed first.
-    ///
-    /// The seed neighbour list cannot see a name this person writes. Same
-    /// distance and "never shorter" rules as `SeedLanguageModel.neighbours`,
-    /// and the same floor `words(startingWith:)` reads by — two sightings for
-    /// an ordinary word, three for a verbatim one — so one slip does not become
-    /// a dictionary and a pasted address does not become a "did you mean".
     func neighbours(of word: String, in language: KeyboardLanguage, limit: Int) -> [String] {
         let folded = SeedLanguageModel.fold(word)
         guard folded.count >= 3, let counts = store.unigrams[language.languageTag] else {
             return []
         }
         let matches: [(String, Int)] = counts.compactMap { key, count in
-            guard count >= Self.readThreshold(for: key) else { return nil }
+            guard isReadable(key, count: count, in: language) else { return nil }
             guard SeedLanguageModel.isOneEditAway(key, of: folded) else { return nil }
             return (key, count)
         }
@@ -406,58 +455,16 @@ public final class PersonalLanguageModel {
     /// itself and the one committed before it — have to satisfy before either
     /// is kept.
     private static func isLearnableOrdinaryWord(_ folded: String) -> Bool {
-        folded.allSatisfy { $0.isLetter || $0 == "'" || $0 == "-" || wordInternalMarks.contains($0) }
+        folded.contains(where: \.isLetter)
+            && folded.allSatisfy { $0.isLetter || $0 == "'" || $0 == "-" || wordInternalMarks.contains($0) }
     }
 
-    /// Whether a folded token has the shape of an email address — the one
-    /// string this store learns verbatim rather than as a run of letters.
-    ///
-    /// Exactly one `@`; a non-empty local part of letters, digits, `.`, `_`,
-    /// `%`, `+` or `-`; a domain of one or more dot-separated labels of letters,
-    /// digits or `-`, the last of which is at least two letters. That last
-    /// clause is what keeps a half-typed `nitai@gmail` out — there is no dot yet
-    /// for a domain to end on — and it is what a pure digit string, a price and
-    /// a URL carrying a `/` all fail on their own terms, before this is even
-    /// asked: none of them has an `@` in it at all.
-    ///
-    /// **Two things this shape allows on purpose, named so a later reader does
-    /// not mistake them for gaps.** The local part is a character-class test
-    /// with no adjacency rule, so `nitai..name@gmail.com` passes — this is the
-    /// stated set, not RFC 5321's stricter grammar, because the only job here
-    /// is telling an address apart from a price or a code, not validating one
-    /// a mail server would accept. And a domain or TLD letter is anything
-    /// `Character.isLetter` calls a letter, so `café.fr` and a Hebrew domain
-    /// both pass — an IDN reading rather than the ASCII-only, punycode-encoded
-    /// domains DNS actually carries, chosen because folding non-Latin scripts
-    /// out of a shape test would refuse an address this keyboard's own Hebrew
-    /// typists are exactly the ones who might have.
-    ///
-    /// `nonisolated` because it touches no instance state and
-    /// `SuggestionEngine.matchCaseUnlessVerbatim` needs to ask it from outside
-    /// this actor's isolation, the same reason `defaultURL` above is.
-    nonisolated static func isVerbatimToken(_ folded: String) -> Bool {
-        let halves = folded.split(separator: "@", omittingEmptySubsequences: false)
-        guard halves.count == 2 else { return false }
-        let local = halves[0]
-        let localMarks: Set<Character> = [".", "_", "%", "+", "-"]
-        guard !local.isEmpty,
-            local.allSatisfy({ $0.isLetter || $0.isNumber || localMarks.contains($0) })
-        else { return false }
-
-        let labels = halves[1].split(separator: ".", omittingEmptySubsequences: false)
-        guard labels.count >= 2,
-            labels.allSatisfy({ !$0.isEmpty && $0.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) }),
-            let tld = labels.last, tld.count >= 2, tld.allSatisfy(\.isLetter)
-        else { return false }
-        return true
+    nonisolated static func isVerbatimToken(_ text: String) -> Bool {
+        PersonalToken.kind(of: text) != nil
     }
 
-    /// The sighting floor a stored word needs before a read surface may hand it
-    /// back. An ordinary word crosses at `boostThreshold`; a verbatim token
-    /// needs `protectThreshold` — the same floor autocorrect already asks of it
-    /// — so a paste seen once or twice stays out of every reader alike.
-    private static func readThreshold(for folded: String) -> Int {
-        isVerbatimToken(folded) ? protectThreshold : boostThreshold
+    private func isReadable(_ word: String, count: Int, in language: KeyboardLanguage) -> Bool {
+        count >= Self.boostThreshold || (store.selected[language.languageTag]?[word] ?? 0) > 0
     }
 
     // MARK: Writing
@@ -465,8 +472,8 @@ public final class PersonalLanguageModel {
     /// Remember a committed word, and the pair it makes with the one before it.
     ///
     /// - Parameters:
-    ///   - word: the word as committed. Folded before storage, so the store never
-    ///     holds the user's capitalisation.
+    ///   - word: the word as committed. Ordinary words are folded; structured
+    ///     personal tokens retain their original text.
     ///   - previous: the word committed immediately before, if any.
     ///   - language: which language's counters this belongs in.
     ///   - permitted: whether recording is allowed at all right now. The caller
@@ -477,50 +484,40 @@ public final class PersonalLanguageModel {
     ///   repeats must not treat a refused write as a successful one.
     @discardableResult
     func record(
-        word: String, previous: String?, language: KeyboardLanguage, permitted: Bool
+        word: String, previous: String?, language: KeyboardLanguage, permitted: Bool,
+        source: LearningSource = .typed
     ) -> Bool {
-        guard permitted else { return false }
+        guard permitted, word.unicodeScalars.count <= 1024 else { return false }
         adoptClearIfNeeded()
         let folded = SeedLanguageModel.fold(word)
 
-        // **The one verbatim shape this store keeps, and the only one.** An
-        // email address is not a word by the character-class rule below — it
-        // carries a digit-bearing domain and an `@` no ordinary word has — so it
-        // takes a shape check instead, and it is stored on its own terms: no
-        // ranking floor below `protectThreshold`, and no bigram half at all. A
-        // word pair exists to teach next-word prediction, and an address
-        // commonly follows a sentence with nothing in particular in common with
-        // what usually follows it, so writing that pair would buy nothing and
-        // would be one more fragment of what the user typed sitting in the file.
-        if Self.isVerbatimToken(folded) {
-            store.unigrams[language.languageTag, default: [:]][folded, default: 0] += 1
-            let prunedHebrew = prune()
-            if language.script == .hebrew || prunedHebrew { invalidateHebrewIndex() }
-            invalidateFollowerIndexes()
+        if Self.isVerbatimToken(word) {
+            return recordVerbatimToken(word, language: language, permitted: permitted, source: source)
+        }
+        guard (2...128).contains(folded.count), Self.isLearnableOrdinaryWord(folded)
+        else { return false }
+        let tag = language.languageTag
+        switch source {
+        case .automatic:
+            store.automatic[tag, default: [:]][folded] = Self.incremented(store.automatic[tag]?[folded])
+            if store.automatic[tag, default: [:]].count > Self.unigramCap {
+                store.automatic[tag] = halved(store.automatic[tag] ?? [:], limit: Self.unigramCap)
+            }
             pendingWrites += 1
             if pendingWrites >= Self.flushInterval { save() }
             return true
+        case .selectedSuggestion:
+            store.selected[tag, default: [:]][folded] = Self.incremented(store.selected[tag]?[folded])
+        case .typed:
+            break
         }
 
-        // Two letters is the floor. Single characters carry no signal and every
-        // stray keystroke would land in the store. Letters, apostrophe and
-        // hyphen, plus the marks a word can carry *inside* it without ending —
-        // Hebrew's geresh and gershayim (`צ׳יפס`, `צה״ל`), the Catalan interpunct
-        // (`col·legi`) and Persian's zero-width non-joiner — the same marks
-        // `KeyboardController.staysInsideWord` already answers for, because a
-        // word reached through the accents popup is still a word. Anything else
-        // — a digit outside the email shape above, a slash, most other symbols —
-        // is a code, a price or a URL, and is exactly the kind of thing this
-        // must not keep.
-        guard folded.count >= 2, Self.isLearnableOrdinaryWord(folded)
-        else { return false }
-
-        store.unigrams[language.languageTag, default: [:]][folded, default: 0] += 1
+        store.unigrams[tag, default: [:]][folded] = Self.incremented(store.unigrams[tag]?[folded])
         if let previous {
             let before = SeedLanguageModel.fold(previous)
-            if !before.isEmpty, Self.isLearnableOrdinaryWord(before) {
+            if (2...128).contains(before.count), Self.isLearnableOrdinaryWord(before) {
                 let key = before + Self.pairSeparator + folded
-                store.bigrams[language.languageTag, default: [:]][key, default: 0] += 1
+                store.bigrams[tag, default: [:]][key] = Self.incremented(store.bigrams[tag]?[key])
             }
         }
 
@@ -530,6 +527,106 @@ public final class PersonalLanguageModel {
         pendingWrites += 1
         if pendingWrites >= Self.flushInterval { save() }
         return true
+    }
+
+    @discardableResult
+    func recordVerbatimToken(
+        _ text: String, language: KeyboardLanguage, permitted: Bool,
+        source: LearningSource = .typed
+    ) -> Bool {
+        guard permitted, source != .automatic, text.unicodeScalars.count <= 1024,
+            let kind = PersonalToken.kind(of: text), let key = Self.tokenKey(for: text, kind: kind)
+        else { return false }
+        adoptClearIfNeeded()
+        let display = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let token = VerbatimToken(
+            kind: kind, text: display, count: Self.incremented(store.tokens[key]?.count),
+            languageTag: language.languageTag)
+        store.tokens[key] = token
+        if store.tokens.count > 200 {
+            let keep = store.tokens.filter { $0.key != key }.sorted {
+                $0.value.count == $1.value.count ? $0.key < $1.key : $0.value.count > $1.value.count
+            }.prefix(199)
+            store.tokens = Dictionary(uniqueKeysWithValues: keep.map { ($0.key, $0.value) })
+            store.tokens[key] = token
+        }
+        save()
+        return true
+    }
+
+    func verbatimTokens(startingWith prefix: String, kind: PersonalToken.Kind, limit: Int) -> [String] {
+        adoptClearIfNeeded()
+        guard limit > 0, let key = PersonalToken.completionKey(for: prefix, kind: kind)
+        else { return [] }
+        return store.tokens.values.filter { token in
+            guard token.kind == kind, token.count > 0,
+                let candidate = PersonalToken.key(for: token.text, kind: kind)
+            else { return false }
+            return candidate.hasPrefix(key) && candidate != key
+        }.sorted {
+            $0.count == $1.count ? $0.text < $1.text : $0.count > $1.count
+        }.prefix(limit).map(\.text)
+    }
+
+    @discardableResult
+    func recordPhoneNumber(
+        _ text: String, language: KeyboardLanguage, permitted: Bool,
+        source: LearningSource = .typed
+    ) -> Bool {
+        guard PersonalToken.kind(of: text) == .phone else { return false }
+        return recordVerbatimToken(text, language: language, permitted: permitted, source: source)
+    }
+
+    func phoneNumbers(startingWith prefix: String, limit: Int) -> [String] {
+        verbatimTokens(startingWith: prefix, kind: .phone, limit: limit)
+    }
+
+    nonisolated private static func tokenKey(for text: String, kind: PersonalToken.Kind) -> String? {
+        guard let key = PersonalToken.key(for: text, kind: kind) else { return nil }
+        return kind.rawValue + "\u{1F}" + key
+    }
+
+    func recordRejectedCorrection(
+        original: String, replacement: String, language: KeyboardLanguage, permitted: Bool
+    ) {
+        guard permitted else { return }
+        let original = SeedLanguageModel.fold(original)
+        let replacement = SeedLanguageModel.fold(replacement)
+        guard original != replacement, (2...128).contains(original.count),
+            (2...128).contains(replacement.count),
+            Self.isLearnableOrdinaryWord(original), Self.isLearnableOrdinaryWord(replacement)
+        else { return }
+        adoptClearIfNeeded()
+        let tag = language.languageTag
+        let key = original + Self.pairSeparator + replacement
+        store.rejected[tag, default: [:]][key] = Self.incremented(store.rejected[tag]?[key], maximum: 100)
+        if let pairs = store.rejected[tag], pairs.count > 512 {
+            store.rejected[tag] = Dictionary(
+                uniqueKeysWithValues: pairs.sorted {
+                    $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value
+                }.prefix(512).map { ($0.key, $0.value) })
+        }
+        save()
+    }
+
+    func isRejectedCorrection(
+        original: String, replacement: String, language: KeyboardLanguage
+    ) -> Bool {
+        adoptClearIfNeeded()
+        let key = SeedLanguageModel.fold(original) + Self.pairSeparator + SeedLanguageModel.fold(replacement)
+        return (store.rejected[language.languageTag]?[key] ?? 0) > 0
+    }
+
+    nonisolated static func normalizedPhonePrefix(_ text: String) -> String? {
+        PhoneNumberToken.normalizedPrefix(text)
+    }
+
+    nonisolated static func isPhoneNumber(_ text: String) -> Bool {
+        PhoneNumberToken.isComplete(text)
+    }
+
+    nonisolated static func phoneNumberSuffix(in context: String) -> String? {
+        PhoneNumberToken.suffix(in: context)
     }
 
     /// Halve everything and drop what is left at one.
@@ -543,21 +640,33 @@ public final class PersonalLanguageModel {
         let hebrewTag = KeyboardLanguage.hebrew.languageTag
         var hebrewChanged = false
         for (tag, counts) in store.unigrams where counts.count > Self.unigramCap {
-            store.unigrams[tag] = halved(counts)
+            store.unigrams[tag] = halved(counts, limit: Self.unigramCap)
             if tag == hebrewTag { hebrewChanged = true }
         }
+        for (tag, counts) in store.selected where counts.count > Self.unigramCap {
+            store.selected[tag] = halved(counts, limit: Self.unigramCap)
+        }
         for (tag, counts) in store.bigrams where counts.count > Self.bigramCap {
-            store.bigrams[tag] = halved(counts)
+            store.bigrams[tag] = halved(counts, limit: Self.bigramCap)
             if tag == hebrewTag { hebrewChanged = true }
         }
         return hebrewChanged
     }
 
-    private func halved(_ counts: [String: Int]) -> [String: Int] {
-        counts.reduce(into: [:]) { out, pair in
-            let decayed = pair.value / 2
-            if decayed >= 1 { out[pair.key] = decayed }
+    private static func incremented(_ count: Int?, maximum: Int = 10_000) -> Int {
+        min(max(count ?? 0, 0), maximum - 1) + 1
+    }
+
+    private func halved(_ counts: [String: Int], limit: Int) -> [String: Int] {
+        let decayed: [String: Int] = counts.reduce(into: [:]) { out, pair in
+            let count = pair.value / 2
+            if count >= 1 { out[pair.key] = count }
         }
+        guard decayed.count > limit else { return decayed }
+        return Dictionary(
+            uniqueKeysWithValues: decayed.sorted {
+                $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value
+            }.prefix(limit).map { ($0.key, $0.value) })
     }
 
     // MARK: Persistence
@@ -615,7 +724,16 @@ public final class PersonalLanguageModel {
     public func forget(_ word: String, in language: KeyboardLanguage) {
         let folded = SeedLanguageModel.fold(word)
         guard !folded.isEmpty else { return }
+        if let kind = PersonalToken.kind(of: word), let key = Self.tokenKey(for: word, kind: kind) {
+            store.tokens[key] = nil
+        }
         let tag = language.languageTag
+        store.selected[tag]?[folded] = nil
+        store.automatic[tag]?[folded] = nil
+        store.rejected[tag] = store.rejected[tag]?.filter {
+            !$0.key.hasPrefix(folded + Self.pairSeparator)
+                && !$0.key.hasSuffix(Self.pairSeparator + folded)
+        }
         let oldHebrewUnigrams =
             language.script == .hebrew ? store.unigrams[tag] : nil
         let oldHebrewBigrams =
@@ -659,7 +777,7 @@ public final class PersonalLanguageModel {
     /// number the user can watch go up is the only honest way to show that a
     /// store they cannot read is doing something.
     public var learnedWordCount: Int {
-        store.unigrams.values.reduce(0) { $0 + $1.count }
+        store.unigrams.values.reduce(0) { $0 + $1.count } + store.tokens.count
     }
 
     // MARK: Cross-process clearing

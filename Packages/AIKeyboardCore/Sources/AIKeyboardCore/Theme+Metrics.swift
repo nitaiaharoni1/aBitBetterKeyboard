@@ -134,6 +134,7 @@ extension Theme {
         /// `LanguageCatalogueTests.testNoRowOverflowsTheKeyboard` on 320pt —
         /// Bulgarian's thirteen columns are the ones that run out first.
         public static let keySpacing: CGFloat = 4
+        public static let horizontalKeySpacing: CGFloat = 2
         public static let sideInset: CGFloat = 3
         public static let topInset: CGFloat = 4
         public static let bottomInset: CGFloat = 4

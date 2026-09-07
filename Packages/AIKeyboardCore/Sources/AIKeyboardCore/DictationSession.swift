@@ -264,7 +264,7 @@ public final class DictationSession: ObservableObject {
             if !partial.languages.isEmpty {
                 transcriptLanguages = partial.languages
             }
-            partialTranscript = partial.text
+            partialTranscript = DictationTextNormalizer.normalize(partial.text)
         }
 
         if utterance > 0, let record = reader.transcript(), record.utterance == utterance,
@@ -278,7 +278,7 @@ public final class DictationSession: ObservableObject {
             switch record.outcome {
             case .transcribed:
                 transcriptLanguages = record.languages
-                transcript = record.text
+                transcript = DictationTextNormalizer.normalize(record.text)
                 failure = ""
             case .nothing, .failed:
                 transcript = ""

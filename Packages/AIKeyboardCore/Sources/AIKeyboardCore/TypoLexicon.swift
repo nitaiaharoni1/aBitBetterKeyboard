@@ -141,7 +141,7 @@ enum TypoLexicon {
     /// allow a correction, when the language has no bundled list, or when
     /// nothing in the list is within reach.
     static func corrections(of word: String, in language: KeyboardLanguage, limit: Int) -> [Correction] {
-        guard let budget = TypoChannel.budget(forTypedLength: word.count) else { return [] }
+        guard limit > 0, let budget = TypoChannel.budget(forTypedLength: word.count) else { return [] }
         let block = block(for: language)
         guard !block.originals.isEmpty else { return [] }
 
@@ -160,36 +160,27 @@ enum TypoLexicon {
 
         var survivors: [(index: Int, cost: Int, count: Int)] = []
         survivors.reserveCapacity(limit)
-        for index in block.originals.indices {
-            let start = Int(block.offsets[index])
-            let end = Int(block.offsets[index + 1])
-            let lengthDiff = (end - start) - typedFolded.count
+        let lengths = max(0, typedFolded.count - min(1, maxEdits))...(typedFolded.count + maxEdits)
+        for length in lengths {
+            for storedIndex in block.byLength[length] ?? [] {
+                let index = Int(storedIndex)
 
-            // Never propose a correction more than one letter shorter than
-            // what was typed. Copied from `SeedLanguageModel.neighbours`:
-            // every prefix is a word in progress, so a much shorter
-            // "correction" is a proposal to delete keys the user just
-            // deliberately pressed. One shorter is still allowed, because
-            // that is exactly the shape of dropping a doubled letter or a
-            // mater lectionis — the cases `TypoChannel`'s deletion table
-            // exists for.
-            guard lengthDiff >= -1, abs(lengthDiff) <= maxEdits else { continue }
+                // Every edit can move at most two bits of the letter bitmask —
+                // the letter it removes, the letter it adds — so a popcount
+                // above `2 * maxEdits` proves the word is out of reach without
+                // ever running the DP in `TypoChannel.cost`. One XOR and one
+                // `nonzeroBitCount` is what makes scanning `depth` words on a
+                // keystroke affordable.
+                let differingBits = (typedMask ^ block.masks[index]).nonzeroBitCount
+                guard differingBits <= 2 * maxEdits else { continue }
 
-            // Every edit can move at most two bits of the letter bitmask —
-            // the letter it removes, the letter it adds — so a popcount
-            // above `2 * maxEdits` proves the word is out of reach without
-            // ever running the DP in `TypoChannel.cost`. One XOR and one
-            // `nonzeroBitCount` is what makes scanning `depth` words on a
-            // keystroke affordable.
-            let differingBits = (typedMask ^ block.masks[index]).nonzeroBitCount
-            guard differingBits <= 2 * maxEdits else { continue }
-
-            let candidateChars = characters(at: index, in: block)
-            guard
-                let priced = TypoChannel.cost(
-                    typed: typedChars, candidate: candidateChars, language: language, budget: budget)
-            else { continue }
-            survivors.append((index, priced.cost, priced.count))
+                let candidateChars = characters(at: index, in: block)
+                guard
+                    let priced = TypoChannel.cost(
+                        typed: typedChars, candidate: candidateChars, language: language, budget: budget)
+                else { continue }
+                survivors.append((index, priced.cost, priced.count))
+            }
         }
 
         // Lower wins, and the two terms are the two halves of a noisy channel:
@@ -323,6 +314,7 @@ enum TypoLexicon {
         /// One bit per distinct letter this language's list actually uses,
         /// index-aligned with `originals`.
         let masks: [UInt32]
+        let byLength: [Int: [Int32]]
         /// Folded character -> bit index, built once so `corrections(of:)`
         /// can compute the typed word's mask in the same bit space as the
         /// stored ones. Capped at 32 bits; a language whose loaded words use
@@ -350,7 +342,8 @@ enum TypoLexicon {
         let allForms: Set<String>
 
         static let empty = Block(
-            originals: [], ranks: [:], charBuffer: [], offsets: [0], masks: [], letterBits: [:],
+            originals: [], ranks: [:], charBuffer: [], offsets: [0], masks: [], byLength: [:],
+            letterBits: [:],
             allForms: [])
     }
 
@@ -397,6 +390,7 @@ enum TypoLexicon {
         var offsets: [Int32] = [0]
         offsets.reserveCapacity(min(depth, all.count) + 1)
         var masks: [UInt32] = []
+        var byLength: [Int: [Int32]] = [:]
         masks.reserveCapacity(min(depth, all.count))
         for (index, word) in all.enumerated() {
             guard !Task.isCancelled else { return .empty }
@@ -404,6 +398,7 @@ enum TypoLexicon {
             allForms.insert(folded)
             guard index < depth, folded.count == folded.utf16.count else { continue }
             if ranks[folded] == nil { ranks[folded] = originals.count }
+            byLength[folded.count, default: []].append(Int32(originals.count))
             originals.append(word)
             var wordMask: UInt32 = 0
             for character in folded {
@@ -419,6 +414,6 @@ enum TypoLexicon {
 
         return Block(
             originals: originals, ranks: ranks, charBuffer: charBuffer, offsets: offsets, masks: masks,
-            letterBits: letterBits, allForms: allForms)
+            byLength: byLength, letterBits: letterBits, allForms: allForms)
     }
 }

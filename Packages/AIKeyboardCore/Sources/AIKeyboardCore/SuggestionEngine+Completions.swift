@@ -5,6 +5,8 @@ extension SuggestionEngine {
 
     // MARK: Completion of the word being typed
 
+    static let completionPoolLimit = 12
+
     /// One `UITextChecker` for the process. Apple's own guidance is one per
     /// document mainly so ignored/learned words stay consistent; this keyboard
     /// never calls `ignoreWord`/`learnWord`, so a single shared instance is
@@ -181,7 +183,8 @@ extension SuggestionEngine {
             out.append(
                 Candidate(
                     text: matchCase(of: core, applyingTo: contraction, in: typedLanguage),
-                    language: .english, source: .orthography))
+                    language: .english,
+                    source: ambiguousContractions.contains(lower) ? .checker : .orthography))
         }
 
         // Hebrew's equivalent. Five letters change shape at the end of a word, and
@@ -216,12 +219,7 @@ extension SuggestionEngine {
             out +=
                 supplementary
                 .filter { comparable($0).hasPrefix(typed) && comparable($0) != typed }
-                // One per drawn slot. This was two, which was the number of offers
-                // the bar could show back when the engine returned three candidates
-                // including the typed echo; with a third slot to fill, a cap of two
-                // on the *highest* ranked source is a third name the user typed into
-                // Settings by hand that the bar can never reach.
-                .prefix(barSlots)
+                .prefix(completionPoolLimit)
                 .enumerated()
                 .map {
                     Candidate(
@@ -233,7 +231,7 @@ extension SuggestionEngine {
         // What this user actually types, which is the half no dictionary can
         // supply and the half that makes the bar theirs.
         out +=
-            personal.words(startingWith: core, in: typedLanguage, limit: 3)
+            personal.words(startingWith: core, in: typedLanguage, limit: completionPoolLimit)
             .enumerated()
             .map {
                 Candidate(
@@ -292,7 +290,7 @@ extension SuggestionEngine {
             out +=
                 codeSwitchVocabulary
                 .filter { $0.hasPrefix(lower) && $0 != lower }
-                .prefix(2)
+                .prefix(completionPoolLimit)
                 .enumerated()
                 .map {
                     Candidate(
@@ -308,7 +306,7 @@ extension SuggestionEngine {
         // Common words the keys nearly spell, over a list long enough to have an
         // opinion about which one. Every correction source above this is limited
         // to a single edit; this is the only one that can see two.
-        out += frequencyCorrections(of: core, in: typedLanguage, limit: barSlots - 1)
+        out += frequencyCorrections(of: core, in: typedLanguage, limit: completionPoolLimit)
 
         // The field gets its say last, over everything already collected, so a
         // word any earlier pair is known to be followed by climbs whichever
@@ -320,10 +318,17 @@ extension SuggestionEngine {
                 last: previousWords, field: fieldWords,
                 language: typedLanguage, personal: personal
             ).map(SeedLanguageModel.fold))
-        if !followers.isEmpty {
-            for index in out.indices where followers.contains(SeedLanguageModel.fold(out[index].text)) {
-                out[index].followsContext = true
-            }
+        let immediateFollowers = Set(
+            (SeedLanguageModel.followers(after: previousWords, in: typedLanguage)
+                + personal.followers(
+                    after: previousWords.last ?? "", in: typedLanguage, limit: completionPoolLimit)
+                + documentFollowers(
+                    after: previousWords.last ?? "", among: fieldWords, limit: completionPoolLimit)).map(
+                    SeedLanguageModel.fold))
+        for index in out.indices {
+            let key = SeedLanguageModel.fold(out[index].text)
+            out[index].followsImmediateContext = immediateFollowers.contains(key)
+            out[index].followsContext = followers.contains(key) || out[index].followsImmediateContext
         }
 
         stampPersonalCounts(&out, personal: personal)
@@ -452,7 +457,7 @@ extension SuggestionEngine {
                 Candidate(
                     text: offered, language: typedLanguage, source: .document,
                     ordinal: out.count))
-            if out.count == 3 { break }
+            if out.count == completionPoolLimit { break }
         }
         return out
     }
@@ -726,9 +731,9 @@ extension SuggestionEngine {
         for reading in readings {
             let depth = reading.prefix.count
             let seedStems = SeedLanguageModel.words(
-                startingWith: reading.stem, in: typedLanguage, limit: 3)
+                startingWith: reading.stem, in: typedLanguage, limit: completionPoolLimit)
             let personalStems = personal.words(
-                startingWith: reading.stem, in: typedLanguage, limit: 2)
+                startingWith: reading.stem, in: typedLanguage, limit: completionPoolLimit)
             for (index, stem) in seedStems.enumerated() {
                 let glued = matchCase(
                     of: prefix, applyingTo: reading.prefix + stem, in: typedLanguage)
@@ -821,7 +826,7 @@ extension SuggestionEngine {
 
         out +=
             completions
-            .prefix(8)
+            .prefix(completionPoolLimit)
             .enumerated()
             .map {
                 Candidate(
@@ -854,7 +859,7 @@ extension SuggestionEngine {
         // most of the ground the rule was written to cover.
         if !SeedLanguageModel.knows(word, in: typedLanguage) {
             out +=
-                neighbourWords(of: word, in: typedLanguage, personal: personal, limit: 2)
+                neighbourWords(of: word, in: typedLanguage, personal: personal, limit: completionPoolLimit)
                 .enumerated()
                 .map {
                     Candidate(
@@ -879,7 +884,7 @@ extension SuggestionEngine {
             out +=
                 corrections
                 .filter { $0.lowercased() != lower }
-                .prefix(3)
+                .prefix(completionPoolLimit)
                 .enumerated()
                 .map {
                     Candidate(
@@ -950,7 +955,8 @@ extension SuggestionEngine {
     static func commitReason(
         _ prefix: String, previousWords: [String], context: String = "",
         typedLanguage: KeyboardLanguage,
-        results: [Candidate], supplementary: [String], personal: PersonalLanguageModel
+        results: [Candidate], supplementary: [String], personal: PersonalLanguageModel,
+        alternatives: [Candidate]? = nil
     ) -> CommitReason? {
         guard results.count > 1 else { return nil }
         // The word, not the keystrokes, for every question below — the same string
@@ -989,9 +995,16 @@ extension SuggestionEngine {
         // the evidence. Same shape as the unfinished-stem rules further down, asked
         // of the offered slots rather than of a word list.
         let offers = results.dropFirst()
+        let competingOffers = Array(offers) + (alternatives ?? []).filter { $0.source != .typed }
+        if let first = offers.first,
+            personal.isRejectedCorrection(
+                original: word, replacement: wordCore(first.text), language: first.language)
+        {
+            return nil
+        }
         if !typed.isEmpty, let first = offers.first {
             let entry = comparable(first.text)
-            let contested = offers.dropFirst().contains {
+            let contested = competingOffers.contains {
                 let other = comparable($0.text)
                 return other != entry && other != typed && other.hasPrefix(typed)
             }
@@ -1030,7 +1043,7 @@ extension SuggestionEngine {
                 SuggestionEngine.dominantLanguage(in: context).map {
                     $0.script != typedLanguage.script
                 } ?? false
-            let stillSpellingSomething = offers.dropFirst().contains {
+            let stillSpellingSomething = competingOffers.contains {
                 let other = comparable($0.text)
                 return $0.language.script == typedLanguage.script && other != typed
                     && other.hasPrefix(typed)
@@ -1067,14 +1080,8 @@ extension SuggestionEngine {
             return comparable(winner.text) == comparable(correction)
         }
 
-        // **Asked before the seed list, not after, and the order is the rule.**
-        // `its`, `cant` and `ill` are all ordinary English words *and* all
-        // apostrophe-dropped contractions, so a "we never correct a word" test
-        // placed above this one keeps every one of them and the whole table stops
-        // firing on exactly the words it was written for. Which reading is meant is
-        // decided once, by whether the word is in the table at all — see
-        // `contractions` — and never again at runtime.
         if typedLanguage == .english, let contraction = contractions[lower] {
+            guard !ambiguousContractions.contains(lower) else { return nil }
             return orthographyWins(contraction) ? .contraction : nil
         }
 
@@ -1127,6 +1134,11 @@ extension SuggestionEngine {
         guard commitTrustsReading(first, typed: word) else { return nil }
         let winner = SeedLanguageModel.fold(first.text)
         let typedFolded = SeedLanguageModel.fold(word)
+        if correctionIsAmbiguous(
+            typed: word, winner: first, alternatives: alternatives ?? results)
+        {
+            return nil
+        }
 
         // **The sentence outvoting the dictionary, and the only place it does.**
         // `בעוד רבה` is two real Hebrew words that never appear in that order;
@@ -1268,7 +1280,7 @@ extension SuggestionEngine {
         // before the neighbour return because `respond` is one insertion from
         // `respon` and used to skip the unfinished-stem check entirely.
         let continuations = SeedLanguageModel.words(
-            startingWith: word, in: typedLanguage, limit: 3)
+            startingWith: word, in: typedLanguage, limit: completionPoolLimit)
         let ambiguousStem = hasDistinctLexemes(continuations)
         // `helo` → `hello` is a missing letter, not a prefix. `respon` →
         // `respond` is the letters so far plus one more. Only the second is
@@ -1388,7 +1400,7 @@ extension SuggestionEngine {
             // The readings the keystrokes are ambiguous between, which is the
             // candidates that continue from them. A correction disagrees with a key
             // that was pressed and is not one of them.
-            let readings = offers.map(\.text).filter {
+            let readings = competingOffers.map(\.text).filter {
                 let other = SeedLanguageModel.fold($0)
                 return other != typedFolded && other.hasPrefix(typedFolded)
             }
@@ -1409,7 +1421,10 @@ extension SuggestionEngine {
         if prefixCompletion, typedLanguage.script == .latin,
             SuggestionEngine.dominantLanguage(in: context)?.script == .hebrew
         {
-            let offered = Array(results.dropFirst().map(\.text))
+            let offered = competingOffers.map(\.text).filter {
+                let other = SeedLanguageModel.fold($0)
+                return other != typedFolded && other.hasPrefix(typedFolded)
+            }
             if hasDistinctLexemes(offered) {
                 if !sentenceExpects(winner) { return nil }
             }
@@ -1446,6 +1461,32 @@ extension SuggestionEngine {
                     language: typedLanguage, budget: budget) != nil
             } ?? false
         return .unknownWord(explainable: explainable)
+    }
+
+    private static let ambiguousContractions: Set<String> = ["its", "ill", "lets", "cant", "wont"]
+
+    static func correctionIsAmbiguous(
+        typed: String, winner: Candidate, alternatives: [Candidate]
+    ) -> Bool {
+        let folded = SeedLanguageModel.fold(typed)
+        let chosen = SeedLanguageModel.fold(winner.text)
+        guard !chosen.hasPrefix(folded),
+            let budget = TypoChannel.budget(forTypedLength: typed.count),
+            let chosenCost = TypoChannel.cost(
+                typed: Array(typed), candidate: Array(winner.text),
+                language: winner.language, budget: budget)
+        else { return false }
+        return alternatives.contains { other in
+            let word = SeedLanguageModel.fold(other.text)
+            guard other.source != .typed, other.language == winner.language,
+                word != chosen, word != folded, !word.hasPrefix(folded),
+                !(winner.followsImmediateContext && !other.followsImmediateContext),
+                let cost = TypoChannel.cost(
+                    typed: Array(typed), candidate: Array(other.text),
+                    language: winner.language, budget: budget)
+            else { return false }
+            return cost.cost <= chosenCost.cost
+        }
     }
 
     /// Whether the space bar may act on the reading this candidate was reached

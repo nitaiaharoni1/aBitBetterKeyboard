@@ -199,16 +199,7 @@ final class CopyClipModeTests: XCTestCase {
         XCTAssertEqual(controller.overlay, .none, "the key did not close search")
     }
 
-    /// **The keyboard coming up must not read what is on the pasteboard**, because
-    /// that read is what raises iOS's "Allow Paste?" alert, and it was being spent
-    /// on every focused field in every host app. There is no way to observe the
-    /// alert from a test, so the assertion is on the only consequence a test can
-    /// see: a passive refresh over a board this ledger has never reconciled leaves
-    /// the ledger empty. The old build captured on any refresh at all, so it fails
-    /// on the first `XCTAssertEqual`. **Opening CopyClip no longer reads either**
-    /// — see `CopyClipCaptureStateTests` — so the `.userAsked` half checks that it
-    /// notices the pending text instead of staying silent about it.
-    func testAppearingDoesNotReadThePasteboardAndOpeningCopyClipNotices() {
+    func testPassiveRefreshOnlySyncsAndOpeningCopyClipCaptures() {
         let before = SharedStore.shared.copyclipRecord
         defer { SharedStore.shared.copyclipRecord = before }
         // Written by this process, so reading it back here never prompts. What
@@ -227,22 +218,11 @@ final class CopyClipModeTests: XCTestCase {
             "the keyboard read the pasteboard just for coming up, which is the Allow Paste alert")
 
         controller.refreshCopyClip(.userAsked)
-        XCTAssertEqual(
-            controller.clips, [],
-            "asking for CopyClip read the board directly instead of offering a tap through UIPasteControl"
-        )
-        XCTAssertEqual(
-            controller.copyclipCaptureState, .control,
-            "asking for CopyClip did not notice the pending text, so the feature no longer captures at all"
-        )
+        XCTAssertEqual(controller.clips.map(\.text.value), ["board text nobody asked for"])
+        XCTAssertEqual(controller.copyclipCaptureState, .automatic)
     }
 
-    /// The panel-open path is the one caller of `.userAsked`, so a `show(_:)` that
-    /// still refreshes passively would leave a just-copied string unnoticed until
-    /// the user reopened CopyClip. It no longer reads the string either — the tap
-    /// that actually captures it is `captureFromPasteControl(_:)`, exercised in
-    /// `CopyClipCaptureStateTests`.
-    func testOpeningTheCopyClipPanelIsWhatNoticesAPendingCapture() {
+    func testOpeningTheCopyClipPanelCapturesTheCopiedText() {
         let before = SharedStore.shared.copyclipRecord
         defer { SharedStore.shared.copyclipRecord = before }
         UIPasteboard.general.string = "captured on open"
@@ -250,15 +230,10 @@ final class CopyClipModeTests: XCTestCase {
 
         let controller = KeyboardController(target: MockTextTarget())
         XCTAssertEqual(controller.clips, [], "construction read the board")
-
         controller.press(.copyclip)
         XCTAssertEqual(controller.overlay, .copyclip)
-        XCTAssertEqual(
-            controller.copyclipCaptureState, .control,
-            "opening the panel did not notice the pending text")
-        XCTAssertEqual(
-            controller.clips, [],
-            "opening the panel read the board directly instead of offering a tap")
+        XCTAssertEqual(controller.copyclipCaptureState, .automatic)
+        XCTAssertEqual(controller.clips.map(\.text.value), ["captured on open"])
     }
 
     func testLeavingSearchClearsTheQueryAndTheResults() {

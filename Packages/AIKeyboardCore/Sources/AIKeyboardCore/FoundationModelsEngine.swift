@@ -76,11 +76,9 @@ public struct FoundationModelsEngine: TextIntelligence {
     /// table that can go stale. The cost is that Japanese, Korean and Chinese now
     /// prefer the cloud — they are outside the scripts this keyboard can type in
     /// at all, they still get an answer, and the alternative is the bug above.
-    /// Whether Apple lists this one script. `TextPrediction` asks about a
-    /// language rather than a run of text — there is no text yet, that is the
-    /// point of predicting — so it needs the set without going through
-    /// `canHandle`, which is written against a sentence and an action.
-    func supportsScript(_ script: TextScript) -> Bool { supportedScripts.contains(script) }
+    func supportsLocale(_ language: KeyboardLanguage) -> Bool {
+        model.supportsLocale(Locale(identifier: language.languageTag))
+    }
 
     private var supportedScripts: Set<TextScript> {
         var found: Set<TextScript> = []

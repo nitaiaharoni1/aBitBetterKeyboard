@@ -26,23 +26,20 @@ struct ContinuationDraft {
 @available(iOS 26.0, macOS 26.0, *)
 extension FoundationModelsEngine: TextPrediction {
 
-    /// **The scripts Apple lists, and prediction gets no best-effort branch.**
-    /// Everywhere else in this repo a language outside the list still reaches
-    /// this model, labelled `onDeviceBestEffort`, because a flawed fix is worth
-    /// more than no fix. Prediction is the opposite: three wrong-language words
-    /// sitting above the keys are not a degraded answer, they are noise the
-    /// user has to read past on every keystroke. Hebrew has no on-device
-    /// predictor, and the bar does not ask the cloud, so this returns false.
     public func canPredict(in language: KeyboardLanguage) -> Bool {
         guard unavailableReason == nil else { return false }
-        return supportsScript(language.script)
+        return supportsLocale(language)
     }
 
     public func continuations(
         after text: String, replyingTo context: ScreenContext?, language: KeyboardLanguage
     ) async throws -> [String] {
+        guard canPredict(in: language) else { throw AIEngineError.modelNotReady }
+        let instructions =
+            Prompts.continuation(for: text, replyingTo: context)
+            + "\nReturn suggestions only in \(language.displayName) (\(language.languageTag))."
         let draft: ContinuationDraft = try await generate(
-            instructions: Prompts.continuation(for: text, replyingTo: context),
+            instructions: instructions,
             prompt: prompt(for: text, context: context),
             source: text)
         return [draft.first, draft.second, draft.third]

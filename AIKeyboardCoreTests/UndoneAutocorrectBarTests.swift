@@ -39,13 +39,14 @@ final class UndoneAutocorrectBarTests: XCTestCase {
     /// must bold the literal keystrokes, the same mechanism the Autocorrect-off
     /// path already uses.
     func testTheBarDoesNotBoldAnUndoneCorrectionOnARetype() {
-        let target = CursorTextTarget(before: "helo")
+        let target = CursorTextTarget(before: "dont")
         let controller = KeyboardController(target: target, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
         controller.press(.space)
-        XCTAssertEqual(target.document, "hello ", "the correction has to be live")
+        XCTAssertEqual(target.document, "don't ", "the correction has to be live")
         controller.press(.backspace)
-        XCTAssertEqual(target.document, "helo", "the undo has to be live")
+        XCTAssertEqual(target.document, "dont", "the undo has to be live")
 
         for _ in 0..<4 { controller.press(.backspace) }
         XCTAssertEqual(
@@ -53,11 +54,11 @@ final class UndoneAutocorrectBarTests: XCTestCase {
             "the word has to be fully retyped, past the hand-repair window")
 
         controller.shift = .off
-        for character in "helo" { controller.press(.character(String(character))) }
-        XCTAssertEqual(target.document, "helo")
+        for character in "dont" { controller.press(.character(String(character))) }
+        XCTAssertEqual(target.document, "dont")
 
         XCTAssertEqual(
-            controller.suggestions.first(where: \.isDefault)?.text, "helo",
+            controller.suggestions.first(where: \.isDefault)?.text, "dont",
             "the bar bolded "
                 + "\(controller.suggestions.first(where: \.isDefault)?.text ?? "nothing") "
                 + "for a spelling the user already undid this session")
@@ -67,16 +68,36 @@ final class UndoneAutocorrectBarTests: XCTestCase {
     /// so a build that simply disabled autocorrect, or one that always pins
     /// slot 0, fails this half.
     func testTheBarStillBoldsTheCorrectionWithoutAPriorUndo() {
-        let target = CursorTextTarget(before: "helo")
+        let target = CursorTextTarget(before: "dont")
         let controller = KeyboardController(target: target, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
 
         XCTAssertEqual(
-            controller.suggestions.first(where: \.isDefault)?.text.lowercased(), "hello",
+            controller.suggestions.first(where: \.isDefault)?.text.lowercased(), "don't",
             "without an undo the correction should still be offered as the default")
     }
 
     // MARK: Idle completion
+
+    func testIdleCompletionRespectsAStoredRejectionAfterTheLocalUndoSetClears() {
+        for prefix in ["sched", "sched,"] {
+            let target = MockTextTarget(text: prefix)
+            let controller = KeyboardController(target: target, language: .english)
+            controller.personal = PersonalLanguageModel(url: nil)
+            controller.suggestions = [
+                Suggestion(text: prefix, language: .english, isDefault: true),
+                Suggestion(text: "schedule", language: .english)
+            ]
+            XCTAssertEqual(controller.idleCompletion(for: prefix)?.text, "schedule")
+
+            controller.personal.recordRejectedCorrection(
+                original: "sched", replacement: "schedule", language: .english, permitted: true)
+
+            XCTAssertTrue(controller.undoneAutocorrectSpellings.isEmpty)
+            XCTAssertNil(controller.idleCompletion(for: prefix))
+        }
+    }
 
     /// `idleCompletion` picks the first suggestion that is not the literal
     /// keystrokes, with no idea that this exact prefix is the spelling
@@ -85,18 +106,19 @@ final class UndoneAutocorrectBarTests: XCTestCase {
     /// uses, so this needs no timer.
     func testIdleCompletionDoesNotReapplyAnUndoneSwap() {
         SharedStore.shared.completeOnIdle = true
-        let target = MockTextTarget(text: "helo")
+        let target = MockTextTarget(text: "dont")
         let controller = KeyboardController(target: target, language: .english)
-        controller.undoneAutocorrectSpellings.insert(SeedLanguageModel.fold("helo"))
+        controller.personal = PersonalLanguageModel(url: nil)
+        controller.undoneAutocorrectSpellings.insert(SeedLanguageModel.fold("dont"))
         controller.suggestions = [
-            Suggestion(text: "helo", language: .english, isDefault: true),
-            Suggestion(text: "hello", language: .english)
+            Suggestion(text: "dont", language: .english, isDefault: true),
+            Suggestion(text: "don't", language: .english)
         ]
 
         controller.performIdleTyping()
 
         XCTAssertEqual(
-            target.text, "helo",
+            target.text, "dont",
             "idle completion re-applied a swap the user had already undone this session")
     }
 
@@ -108,27 +130,15 @@ final class UndoneAutocorrectBarTests: XCTestCase {
 
     // MARK: How long "this session" lasts
 
-    /// **"This session" was the process, and a keyboard process outlives the
-    /// field the user was refusing a correction in.**
-    ///
-    /// Nothing ever removed from `undoneAutocorrectSpellings`, and iOS keeps one
-    /// controller alive across fields and across host apps — so a spelling undone
-    /// once in a search box was never corrected again anywhere, in any app, until
-    /// the extension happened to be torn down. `prepareForNewDocument()` is where
-    /// the rest of the per-field state is retired (`pendingAutocorrectUndo`,
-    /// `discardPendingCharacter`), and this belongs with them.
-    ///
-    /// The word is deleted back to an empty field before the switch on purpose:
-    /// that clears `deletedWordPrefix`, so the hand-repair rule cannot be what
-    /// suppresses the correction and only the undo ledger is left to answer.
-    func testAnUndoneCorrectionIsCommittedAgainInTheNextDocument() {
-        let first = CursorTextTarget(before: "helo")
+    func testAnUndoneCorrectionRemainsRefusedInTheNextDocument() {
+        let first = CursorTextTarget(before: "dont")
         let controller = KeyboardController(target: first, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
         controller.press(.space)
-        XCTAssertEqual(first.document, "hello ", "the correction has to be live")
+        XCTAssertEqual(first.document, "don't ", "the correction has to be live")
         controller.press(.backspace)
-        XCTAssertEqual(first.document, "helo", "the undo has to be live")
+        XCTAssertEqual(first.document, "dont", "the undo has to be live")
         for _ in 0..<4 { controller.press(.backspace) }
         XCTAssertEqual(
             first.document, "", "the hand-repair window has to be past, not merely stale")
@@ -137,12 +147,12 @@ final class UndoneAutocorrectBarTests: XCTestCase {
         controller.target = second
         controller.prepareForNewDocument()
         controller.shift = .off
-        for character in "helo" { controller.press(.character(String(character))) }
+        for character in "dont" { controller.press(.character(String(character))) }
         controller.press(.space)
 
         XCTAssertEqual(
-            second.document, "hello ",
-            "a refusal taken in one field followed the user into the next one: "
+            second.document, "dont ",
+            "the new document ignored a previously rejected correction: "
                 + "\(second.document)")
     }
 
@@ -150,22 +160,23 @@ final class UndoneAutocorrectBarTests: XCTestCase {
     /// point of the ledger. A build that answered the case above by emptying the
     /// set on every keystroke fails here.
     func testAnUndoneCorrectionIsStillRefusedInsideTheSameDocument() {
-        let target = CursorTextTarget(before: "helo")
+        let target = CursorTextTarget(before: "dont")
         let controller = KeyboardController(target: target, language: .english)
+        controller.personal = PersonalLanguageModel(url: nil)
         controller.refreshSuggestions()
         controller.press(.space)
-        XCTAssertEqual(target.document, "hello ")
+        XCTAssertEqual(target.document, "don't ")
         controller.press(.backspace)
-        XCTAssertEqual(target.document, "helo")
+        XCTAssertEqual(target.document, "dont")
         for _ in 0..<4 { controller.press(.backspace) }
         XCTAssertEqual(target.document, "")
 
         controller.shift = .off
-        for character in "helo" { controller.press(.character(String(character))) }
+        for character in "dont" { controller.press(.character(String(character))) }
         controller.press(.space)
 
         XCTAssertEqual(
-            target.document, "helo ",
+            target.document, "dont ",
             "space put back a swap the user had already taken off in this same field: "
                 + "\(target.document)")
     }

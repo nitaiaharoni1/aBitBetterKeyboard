@@ -88,7 +88,7 @@ extension KeyboardView {
             let gridWidth = geo.size.width * layout.geometry.reach.widthFraction
             let unit = KeyboardLayout.unitWidth(
                 totalWidth: gridWidth,
-                spacing: Theme.Metrics.keySpacing,
+                spacing: Theme.Metrics.horizontalKeySpacing,
                 sideInset: Theme.Metrics.sideInset,
                 columns: columns
             )
@@ -363,7 +363,7 @@ extension KeyboardView {
             for: row,
             totalWidth: availableWidth,
             unitWidth: unit,
-            spacing: Theme.Metrics.keySpacing
+            spacing: Theme.Metrics.horizontalKeySpacing
         )
         let leading = row.keys.first?.width.isPinned == true ? 1 : 0
         let trailing =
@@ -372,7 +372,7 @@ extension KeyboardView {
         let hebrewTopRowOffset: CGFloat =
             controller.language == .hebrew && row.id == 0 && row.keys.last?.cap == .backspace
             ? 4 : 0
-        let spacing = Theme.Metrics.keySpacing
+        let spacing = Theme.Metrics.horizontalKeySpacing
         let pinnedWidth =
             (leading == 1 ? widths.first ?? 0 : 0)
             + (trailing == 1 ? widths.last ?? 0 : 0)
