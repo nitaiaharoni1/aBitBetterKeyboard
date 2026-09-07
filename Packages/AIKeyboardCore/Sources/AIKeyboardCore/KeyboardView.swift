@@ -112,6 +112,10 @@ public struct KeyboardView: View {
         .onAppear {
             Feedback.prepare()
             controller.refreshCopyClip()
+            controller.startWatchingPasteboard()
+        }
+        .onDisappear {
+            controller.stopWatchingPasteboard()
         }
         // **The same `orientation` that sheds the action row below decides this**,
         // rather than a second read in the extension, because the two disagreeing

@@ -185,9 +185,7 @@ public struct KeySpec: Identifiable, Equatable, Sendable {
     /// place that has both.
     public func showsActionCaption(inRow rowID: Int, width: CGFloat) -> Bool {
         if let showsLabel { return showsLabel }
-        // The shipped action row keeps Emoji and Dictate as glyphs — two names
-        // people already know. CopyClip keeps its caption there, because the
-        // clipboard mark is not one.
+        if cap == .copyclip { return false }
         let byPosition =
             rowID != KeyboardLayout.RowID.cursor || (cap != .emoji && cap != .dictation)
         return byPosition && width >= KeyView.captionMinimumWidth

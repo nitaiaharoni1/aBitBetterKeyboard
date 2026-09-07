@@ -120,7 +120,7 @@ public struct CopyClipPanel: View {
     }
 
     private var emptyBody: String {
-        var lines = ["Copy text in any app. It will show up here."]
+        var lines = ["Copy text, then tap Paste here to save it."]
         if SharedStore.shared.storage == .processLocal {
             lines.append("Allow Full Access so CopyClip can see what you copy.")
         }
@@ -476,8 +476,8 @@ private struct CopyClipPendingCaptureRow: View {
                     .foregroundStyle(Theme.Keys.secondaryLabel)
             }
             Spacer(minLength: Theme.Space.sm)
-            CopyClipPasteControl { text in
-                controller.captureFromPasteControl(text)
+            CopyClipPasteControl { text, changeCount in
+                controller.captureFromPasteControl(text, changeCount: changeCount)
             }
             .fixedSize()
         }

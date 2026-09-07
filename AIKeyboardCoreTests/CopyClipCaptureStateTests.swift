@@ -130,7 +130,7 @@ final class CopyClipCaptureStateTests: XCTestCase {
     /// Reached as the protocol member, the old spelling is `nil`.
     @MainActor
     func testThePasteTargetAnswersTheOptionalRequirementIOSActuallyAsks() {
-        let target: any UIPasteConfigurationSupporting = PasteControlHost { _ in }
+        let target: any UIPasteConfigurationSupporting = PasteControlHost { _, _ in }
 
         XCTAssertEqual(
             target.canPaste?([NSItemProvider(object: "copied elsewhere" as NSString)]), true,
@@ -143,7 +143,7 @@ final class CopyClipCaptureStateTests: XCTestCase {
     /// go quiet on its own rather than offer a paste that can only be empty.
     @MainActor
     func testThePasteTargetRefusesAGenerationThatIsNotText() throws {
-        let target: any UIPasteConfigurationSupporting = PasteControlHost { _ in }
+        let target: any UIPasteConfigurationSupporting = PasteControlHost { _, _ in }
         let image = try XCTUnwrap(UIImage(systemName: "circle"))
 
         XCTAssertEqual(
@@ -158,7 +158,7 @@ final class CopyClipCaptureStateTests: XCTestCase {
     /// `UIResponder`.
     @MainActor
     func testThePasteTargetIsAResponderCarryingAPlainTextConfiguration() {
-        let host = PasteControlHost { _ in }
+        let host = PasteControlHost { _, _ in }
 
         XCTAssertTrue(
             PasteControlHost.isSubclass(of: UIResponder.self),

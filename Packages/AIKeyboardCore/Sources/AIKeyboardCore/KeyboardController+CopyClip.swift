@@ -111,8 +111,8 @@ extension KeyboardController {
     /// live accessor it calls, `changeCount`, is the same free counter
     /// `refreshCopyClip(_:)` already reads, so asking again here costs
     /// nothing and self-heals if the board moved again while the panel sat
-    /// open (there is deliberately no polling — see `refreshCopyClip(_:)`'s
-    /// history with `UIPasteboard.changedNotification`). `holdsText` is
+    /// open. `startWatchingPasteboard()` publishes new generations while the
+    /// keyboard is visible. `holdsText` is
     /// fixed `true` rather than re-asked: by the time this is read,
     /// `refreshCopyClip(.userAsked)` has already resolved the *known*
     /// non-text case by advancing the cursor past it, so any generation still
@@ -128,46 +128,10 @@ extension KeyboardController {
             holdsText: true)
     }
 
-    // MARK: Noticing a copy made while the panel is open
-
-    /// How often the open panel asks whether the pasteboard has moved.
-    ///
-    /// **Half a second, and the thing being read is not the thing that costs.**
-    /// This reads `UIPasteboard.changeCount`, an integer that says a generation
-    /// happened and nothing about what is in it — the same free counter
-    /// `refreshCopyClip(_:)` already calls "one integer read, never an alert".
-    /// Reading the *contents* is what raises "Allow Paste?", and nothing here
-    /// does that: the whole point is to put `UIPasteControl` on screen so the
-    /// user's own tap is the read.
-    ///
-    /// Deliberately slower than `ScreenContextChannel.pollInterval`'s 0.25s, and
-    /// unlike that one it is not the same trade. That timer ran for as long as
-    /// the keyboard was up, woke a chain of `RunLoop.main` sinks, and cost a
-    /// containermanagerd query per tick to learn about a page nothing could
-    /// write. This runs only while a panel the user deliberately opened is on
-    /// screen, and the user is looking straight at the thing it updates.
     static let copyclipWatchInterval = Duration.milliseconds(500)
 
-    /// Starts or stops the watch to match the overlay.
-    ///
-    /// **The panel could not see a copy made while it was open, and that is the
-    /// whole of both halves of the bug report it fixes.** The ordinary way to
-    /// copy something on iOS is to long-press it — which does not dismiss the
-    /// keyboard — so "copy the message, then look at CopyClip" leaves the panel
-    /// standing on the generation it was opened against. `copyclipCaptureState`
-    /// would have answered `.control` correctly at any moment it was asked; it
-    /// was never asked again, because nothing published. The clip was then never
-    /// offered and never kept, which reads as CopyClip not remembering.
-    ///
-    /// It reads as script-specific from the outside and is not: the ledger takes
-    /// Hebrew unchanged through `reconcile`, the JSON round trip, dedup and
-    /// search, verified end to end. What made it look like a Hebrew fault is that
-    /// long-press-to-copy is how you get a Hebrew message out of a chat app, and
-    /// that is exactly the gesture that leaves the keyboard up.
-    public func watchPasteboardWhileCopyClipIsOpen() {
-        copyclipWatchTask?.cancel()
-        copyclipWatchTask = nil
-        guard overlay.isCopyClip else { return }
+    public func startWatchingPasteboard() {
+        guard copyclipWatchTask == nil else { return }
         noticedPasteboardGeneration = PasteboardReader.changeCount
         copyclipWatchTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -176,12 +140,12 @@ extension KeyboardController {
                 } catch {
                     return
                 }
-                guard !Task.isCancelled, let self, self.overlay.isCopyClip else { return }
+                guard !Task.isCancelled, let self else { return }
                 let generation = PasteboardReader.changeCount
                 // Assigned only when it moved. `@Published` fires on assignment
                 // whether or not the value changed, so an unconditional write
                 // would re-run every observing `body` twice a second for as long
-                // as the panel is open — which is the cost this is supposed to be
+                // as the keyboard is visible — which is the cost this is supposed to be
                 // small enough to avoid.
                 guard generation != self.noticedPasteboardGeneration else { continue }
                 self.noticedPasteboardGeneration = generation
@@ -205,11 +169,11 @@ extension KeyboardController {
     /// already happened with the user's own gesture as consent. Advances the
     /// cursor the same way an ordinary reconcile does, so this generation is
     /// not offered again.
-    public func captureFromPasteControl(_ text: String) {
+    public func captureFromPasteControl(_ text: String, changeCount: Int? = nil) {
         Feedback.keyPress()
         let result = ClipboardHistory.reconcile(
             clips: clips,
-            changeCount: PasteboardReader.changeCount,
+            changeCount: changeCount ?? PasteboardReader.changeCount,
             lastChangeCount: lastChangeCount,
             rawText: text,
             now: Date()

@@ -20,7 +20,7 @@ import UIKit
 /// the panel the way a `CopyClipCard` does — it is a system control sitting
 /// in a custom list, and it looks like one.
 struct CopyClipPasteControl: UIViewRepresentable {
-    let onCapture: (String) -> Void
+    let onCapture: (String, Int) -> Void
 
     func makeUIView(context: Context) -> PasteControlHost {
         let configuration = UIPasteControl.Configuration()
@@ -81,9 +81,9 @@ struct CopyClipPasteControl: UIViewRepresentable {
 /// `pasteConfiguration`, and this says the same thing in the one form the
 /// panel actually needs, that a clip is text.
 final class PasteControlHost: UIView {
-    var onCapture: (String) -> Void
+    var onCapture: (String, Int) -> Void
 
-    init(onCapture: @escaping (String) -> Void) {
+    init(onCapture: @escaping (String, Int) -> Void) {
         self.onCapture = onCapture
         super.init(frame: .zero)
         // Set on the responder, not on the control: `UIPasteControl` has no
@@ -108,6 +108,7 @@ final class PasteControlHost: UIView {
     /// of the tap, rather than fetched by the app calling a pasteboard
     /// accessor of its own.
     override func paste(itemProviders: [NSItemProvider]) {
+        let changeCount = PasteboardReader.changeCount
         guard
             let provider = itemProviders.first(where: {
                 $0.canLoadObject(ofClass: NSString.self)
@@ -115,7 +116,7 @@ final class PasteControlHost: UIView {
         else { return }
         provider.loadObject(ofClass: NSString.self) { [onCapture] reading, _ in
             guard let text = reading as? String else { return }
-            DispatchQueue.main.async { onCapture(text) }
+            DispatchQueue.main.async { onCapture(text, changeCount) }
         }
     }
 }

@@ -629,11 +629,10 @@ public final class KeyboardController: ObservableObject {
     /// publishes nothing here. So a panel drawn before the copy stayed drawn:
     /// no Paste button, therefore no way to keep the clip, which is
     /// indistinguishable from CopyClip refusing to remember. See
-    /// `watchPasteboardWhileCopyClipIsOpen()`.
+    /// `startWatchingPasteboard()`.
     @Published var noticedPasteboardGeneration = 0
 
-    /// Polls `changeCount` for as long as the CopyClip panel is on screen. Nil
-    /// the rest of the time, which is most of the time.
+    /// Polls `changeCount` while the keyboard is visible, including outside CopyClip.
     var copyclipWatchTask: Task<Void, Never>?
 
     var idleTypingTask: Task<Void, Never>?

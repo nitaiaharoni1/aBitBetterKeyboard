@@ -147,8 +147,7 @@ extension KeyView {
         case .copyclip:
             // `ABC` / `אבג` promises the letters are coming back. CopyClip
             // never needs them, so the open key stays a clipboard. Filled
-            // while the panel is up; the word stays because the glyph alone
-            // is not a name people already know.
+            // while the panel is up.
             actionLabel(
                 icon: isCopyClipOpen ? "clipboard.fill" : "clipboard",
                 title: "CopyClip",
