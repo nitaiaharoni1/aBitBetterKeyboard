@@ -377,6 +377,11 @@ public final class KeyboardController: ObservableObject {
     /// timestamped handoff request the app consumes on launch.
     public var onOpenContainingApp: ((URL) -> Void)?
 
+    /// Called when suggestion work stops for memory pressure, so the extension
+    /// can cancel a cache warm still in flight. Without it the warm rebuilds the
+    /// word lists the stop has just released. Nil in the app preview.
+    public var onMemoryPressure: (() -> Void)?
+
     /// The shape of the keyboard right now.
     ///
     /// Published so the view redraws when the app changes it, and
@@ -678,6 +683,14 @@ public final class KeyboardController: ObservableObject {
     private nonisolated static let suggestionStartupReserveMB = 16.0
     nonisolated static let suggestionWarmReserveMB = 12.0
     nonisolated static let suggestionWorkReserveMB = 8.0
+    /// **Emoji glyphs are cached for the life of the process and nothing can
+    /// release them.** Drawing all 1,870 catalogue emoji once grew a process's
+    /// footprint by 12 MB that stayed after a second pass, after the font was
+    /// released and after idling (measured on macOS 26 with CoreText, 20 pt and
+    /// 30 pt glyphs alike). The grid is the one surface that draws them in bulk,
+    /// so it keeps this much headroom by giving up the word lists, which can be
+    /// rebuilt.
+    nonisolated static let emojiGlyphReserveMB = 16.0
     private static var suggestionMemoryRecoveryAfter: ContinuousClock.Instant?
     private static let suggestionMemoryLogger = Logger(
         subsystem: "com.nitai.aikeyboard", category: "suggestion-memory")
@@ -861,10 +874,21 @@ public final class KeyboardController: ObservableObject {
         guard isSystemKeyboard else { return }
         Self.suggestionMemoryRecoveryAfter = .now.advanced(by: .seconds(30))
         Self.suggestionMemoryLogger.notice("Suggestion work paused to preserve keyboard memory")
+        onMemoryPressure?()
         suspendSuggestionWork()
         cancelAIWork()
         refiner = nil
         Self.dropRebuildableCaches()
+    }
+
+    /// Makes room for emoji the grid is about to draw. See `emojiGlyphReserveMB`.
+    /// Called when the grid opens and each time a scroll reaches a new category.
+    public func reserveMemoryForEmojiGlyphs() {
+        guard isSystemKeyboard,
+            Self.suggestionMemoryRecoveryAfter.map({ .now >= $0 }) ?? true,
+            !Self.hasSuggestionMemoryHeadroom(reservingMB: Self.emojiGlyphReserveMB)
+        else { return }
+        stopSuggestionWorkForMemoryPressure()
     }
 
     nonisolated static func hasSuggestionMemoryHeadroom(reservingMB reserve: Double) -> Bool {

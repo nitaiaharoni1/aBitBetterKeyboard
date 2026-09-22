@@ -90,6 +90,7 @@ final class KeyboardViewController: UIInputViewController {
         controller.onOpenContainingApp = { [weak self] url in
             self?.openContainingApp(url)
         }
+        controller.onMemoryPressure = { [weak self] in self?.cacheWarmTask?.cancel() }
 
         // Inject a custom URL opener so `Link` elements inside the keyboard
         // (e.g. the "Open aBitBetterKeyboard" chip) route through `openContainingApp`

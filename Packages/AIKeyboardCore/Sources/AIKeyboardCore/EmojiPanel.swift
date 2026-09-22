@@ -352,7 +352,10 @@ public struct EmojiPanel: View {
                 let next = Self.selectedCategory(
                     current: selectedCategory, leading: lead.id,
                     holdingTap: Date() < holdTapUntil)
-                if next != selectedCategory { selectedCategory = next }
+                guard next != selectedCategory else { return }
+                selectedCategory = next
+                // A new category on screen is a run of emoji never drawn before.
+                controller.reserveMemoryForEmojiGlyphs()
             }
             .onChange(of: scrollTarget) { _, target in
                 guard let target else { return }

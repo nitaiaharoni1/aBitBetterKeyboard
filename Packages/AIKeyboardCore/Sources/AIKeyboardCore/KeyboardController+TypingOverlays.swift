@@ -200,6 +200,7 @@ extension KeyboardController {
         // shuffle seen from a different key.
         if newOverlay.isEmoji && !overlay.isEmoji {
             settleRecentEmoji()
+            reserveMemoryForEmojiGlyphs()
         }
         withAnimation(Theme.Motion.panel) { overlay = newOverlay }
     }
