@@ -18,6 +18,10 @@ ranking, so a macOS score would not be a score of the shipping engine. It passes
 an **empty in-memory `PersonalLanguageModel`**, so a run cannot inherit whatever
 the machine it runs on has been typing, and the shipped personal dictionary,
 because scoring with an empty one measures a keyboard nobody has.
+`PERSONAL_HISTORY=file` replays a typing history into that store first, one
+message per line; `harness/history.py OUT.txt` writes a seeded synthetic one. An
+empty store is the one state no phone is in, so measure a ranking change both
+ways.
 
 `score.py` reports three things and keeps them apart. **commit** is whether the
 bold slot — what the space bar inserts — is the right word, which for an

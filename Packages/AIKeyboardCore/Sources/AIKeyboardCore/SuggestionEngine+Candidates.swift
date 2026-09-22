@@ -149,16 +149,11 @@ extension SuggestionEngine {
         case irregular = 26
         /// The bundled seed list.
         case seed = 30
-        /// A word already committed in this field.
-        ///
-        /// **Above the seed list, because the field is a better prior than the
-        /// average message.** Completing `ele` to `electricity` while the sentence
-        /// already contains `elephant` is the seed list ignoring the only evidence
-        /// sitting in front of it. Below code-switch and learned: a word this
-        /// person always types, or a Latin work-word inside a Hebrew sentence, is
-        /// still a stronger claim than "it appeared once above".
+        /// A word already committed in this field. Scored in the seed's tier; see
+        /// `tier`.
         case document = 40
-        /// A word this user types often.
+        /// A word this user has committed at least `boostThreshold` times. Scored in
+        /// the seed's tier; see `tier`.
         case learned = 60
         /// Deterministic orthography: a dropped apostrophe, a Hebrew final form.
         case orthography = 70
@@ -170,6 +165,27 @@ extension SuggestionEngine {
         case typed = 100
 
         static func < (lhs: Source, rhs: Source) -> Bool { lhs.rawValue < rhs.rawValue }
+
+        /// The tier `score` charges, which is the raw value except for the three
+        /// sources that are all "a word somebody writes": the seed list, this
+        /// person's learned words and the words already in the field.
+        ///
+        /// **They share one tier so that frequency, the sentence and the personal
+        /// count decide between them, rather than provenance.** With `.learned` two
+        /// tiers above the seed, any word typed twice beat every common word for
+        /// every prefix it shared, with no regard for the sentence: over the frozen
+        /// 90 with a replayed history (`PERSONAL_HISTORY`), the intended word left
+        /// the bar in 12 of 78 judged entries it was offered in with an empty store.
+        /// `.document` a tier above had the same shape on a smaller scale —
+        /// `Thursday` in the field outranked `the` for `th`. Inside the shared tier
+        /// a learned or field word still wins whenever the seed has nothing strong
+        /// for that prefix, which is the case both sources exist for (`Zorblin`).
+        var tier: Int {
+            switch self {
+            case .learned, .document: return Source.seed.rawValue
+            default: return rawValue
+            }
+        }
     }
 
     /// How good a candidate is, high wins.
@@ -204,8 +220,16 @@ extension SuggestionEngine {
     /// confidence, while still leaving `לעבו` → `לעבודה` far ahead of anything
     /// Apple's dictionary offers for the glued form.
     static func score(_ candidate: Candidate) -> Double {
-        var total = Double(candidate.source.rawValue) * 100
-        if candidate.followsContext { total += 400 }
+        var total = Double(candidate.source.tier) * 100
+        // The word right before the caret is the strongest evidence there is; a
+        // word that only follows something earlier in the field is weaker, and at
+        // the same 400 every function word the sentence had ever been followed by
+        // tied with the one the last word actually predicts.
+        if candidate.followsImmediateContext {
+            total += 400
+        } else if candidate.followsContext {
+            total += 150
+        }
         if let rank = SeedLanguageModel.rank(of: candidate.text, in: candidate.language) {
             // Rank 0 is worth the full 300 and it decays; the exact curve does not
             // matter, only that common beats rare inside a tier.

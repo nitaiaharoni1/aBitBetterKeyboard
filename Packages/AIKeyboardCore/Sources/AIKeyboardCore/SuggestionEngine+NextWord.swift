@@ -120,7 +120,12 @@ extension SuggestionEngine {
         // Capitalised at the start of a message, because that is where the word is
         // going and the shift key has already decided the same thing.
         let atStart = context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        stampPersonalCounts(&out, personal: personal)
+        // The same sentence evidence a word in progress gets. Without it every
+        // source here ranked on frequency alone, so `the` and `של` beat the word
+        // the last one is actually followed by.
+        stampContext(
+            on: &out, previousWords: previousWords(in: context), fieldWords: documentWords(in: context),
+            typedLanguage: contextLanguage, personal: personal)
         return (out, rankedNextWords(out, contextLanguage: contextLanguage, atStart: atStart))
     }
 

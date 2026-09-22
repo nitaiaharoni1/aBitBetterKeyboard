@@ -214,7 +214,7 @@ extension SuggestionEngine {
     }
 
     @MainActor
-    private static func stampContext(
+    static func stampContext(
         on out: inout [Candidate], previousWords: [String], fieldWords: [String],
         typedLanguage: KeyboardLanguage, personal: PersonalLanguageModel
     ) {

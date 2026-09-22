@@ -265,7 +265,13 @@ extension SuggestionEngine {
         private mutating func hebrewWordInProgress(sameLengthSlip: Bool) -> Bool {
             guard typedLanguage.script == .hebrew, sameLengthSlip else { return false }
             if let hebrewContinuation { return hebrewContinuation }
-            let answer = TypoLexicon.hasContinuation(of: word, in: typedLanguage)
+            // `TypoLexicon` keeps only the top 30,000 forms, and a word in progress
+            // can sit just past that: `מצטער` is rank 30,624, so `מצטע` read as
+            // finished and the space bar committed `מצטט`. The conversational model
+            // has it, and its lookup is a binary search over a mapped file.
+            let answer =
+                TypoLexicon.hasContinuation(of: word, in: typedLanguage)
+                || !ConversationalHebrewModel.words(startingWith: word, limit: 1).isEmpty
             hebrewContinuation = answer
             return answer
         }

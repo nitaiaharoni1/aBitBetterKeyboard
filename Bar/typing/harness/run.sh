@@ -39,14 +39,17 @@ corpus="${TYPING_CORPUS:-$here/../corpus.json}"
 # Empty means "unset": main.swift falls back to `AutocorrectLevel.shippedDefault`,
 # so what ships is written down once, in Swift, and this script cannot drift from it.
 level="${AUTOCORRECT_LEVEL:-}"
+# `PERSONAL_HISTORY` is a text file replayed into the personal model before the
+# run, one message per line; unset keeps the empty store. See history.py.
+history="${PERSONAL_HISTORY:-}"
 # Absolute, always. `simctl spawn` runs the binary with the *device's* data
 # directory as its working directory, so a relative path given on the command
 # line is read or written somewhere inside the simulator and the run looks like
 # it did nothing. The defaults above are already absolute; this is for the two
 # paths that can arrive relative.
-for name in out corpus; do
+for name in out corpus history; do
     case "${!name}" in
-        /*) ;;
+        /* | "") ;;
         *) printf -v "$name" '%s' "$PWD/${!name}" ;;
     esac
 done
@@ -88,6 +91,8 @@ LANGUAGE_MODEL_JSON="$core/Resources/LanguageModel.json" \
     SIMCTL_CHILD_GROUPED_LEXICON_DIR="$core/Resources" \
     AUTOCORRECT_LEVEL="$level" \
     SIMCTL_CHILD_AUTOCORRECT_LEVEL="$level" \
+    PERSONAL_HISTORY="$history" \
+    SIMCTL_CHILD_PERSONAL_HISTORY="$history" \
     xcrun simctl spawn "$device" "$build/harness" "$corpus" "$out"
 
 echo "engine outputs: $out"

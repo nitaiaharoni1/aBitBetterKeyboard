@@ -128,6 +128,31 @@ func languages(forKeyboard keyboard: String) -> [KeyboardLanguage] {
     return [front, back]
 }
 
+/// Records every word of every line, each with the word before it on that line,
+/// through the same `record` the keyboard calls on commit. The language is read
+/// off each word's script, which is what a Hebrew/English user's two keyboards
+/// amount to.
+@MainActor
+func replayHistory(at path: String, into personal: PersonalLanguageModel) {
+    guard let text = try? String(contentsOfFile: path, encoding: .utf8) else {
+        FileHandle.standardError.write(Data("PERSONAL_HISTORY \(path) is unreadable\n".utf8))
+        exit(4)
+    }
+    var recorded = 0
+    for line in text.split(whereSeparator: \.isNewline) {
+        var previous: String?
+        for token in line.split(whereSeparator: \.isWhitespace) {
+            let word = SuggestionEngine.wordCore(String(token))
+            guard let language = SuggestionEngine.dominantLanguage(in: word) else { continue }
+            if personal.record(word: word, previous: previous, language: language, permitted: true) {
+                recorded += 1
+            }
+            previous = word
+        }
+    }
+    FileHandle.standardError.write(Data("personal history: \(recorded) words recorded\n".utf8))
+}
+
 let arguments = CommandLine.arguments
 guard arguments.count == 3 else {
     FileHandle.standardError.write(Data("usage: harness <corpus.json> <out.json>\n".utf8))
@@ -291,6 +316,14 @@ let records: [SlotRecord] = MainActor.assumeIsolated {
     // runs on has been typing, or two runs on two laptops disagree and neither is
     // the engine's fault.
     let personal = PersonalLanguageModel(url: nil)
+    // `PERSONAL_HISTORY` replays a text file into that empty store first, one line
+    // per message, so a run can also measure a keyboard that has been used. An empty
+    // store is the one condition no real phone is in, and the learned candidates
+    // it leaves out are what decide the bar after a week of typing. The file is
+    // part of the run's input, so two runs over the same file still agree.
+    if let path = ProcessInfo.processInfo.environment["PERSONAL_HISTORY"], !path.isEmpty {
+        replayHistory(at: path, into: personal)
+    }
     // **A warm-up per language, and the cost it absorbs is measured rather than
     // waved away.** The first call in a language pays for reading and folding
     // `LanguageModel.json` and for `UITextChecker` building that language's

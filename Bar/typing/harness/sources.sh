@@ -20,6 +20,13 @@ copy_engine_sources() {
         KeyProximity.swift TypoChannel.swift TypoLexicon.swift GroupedLexiconResource.swift \
         AutocorrectConfidence.swift; do
         cp "$core/$source" "$build/"
+        # A file the lint limits split in two keeps its extensions beside it as
+        # `Name+Part.swift`; they are the same type, so they come along. `Models`
+        # is the exception: its siblings are other models this engine never reads.
+        [ "$source" = Models.swift ] && continue
+        for part in "$core/${source%.swift}"+*.swift; do
+            [ -e "$part" ] && cp "$part" "$build/"
+        done
     done
     cp "$core/SuggestionSlotOrder.swift" "$build/"
     cp "$core/SuggestionEvaluation.swift" "$build/"

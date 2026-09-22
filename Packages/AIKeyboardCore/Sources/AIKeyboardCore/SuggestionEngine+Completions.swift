@@ -491,6 +491,11 @@ extension SuggestionEngine {
                         ordinal: index))
             }
             for (index, stem) in personalStems.enumerated() {
+                // The same gate as the seed stems above: a learned stem behind an
+                // invented clitic is a guess, and `מ` + a learned `וניתן` drew
+                // `מוניתן` in the bar ahead of `מונית`.
+                guard depth == 0 || readingIsSpelledOut(reading.prefix + stem, among: spelledOut)
+                else { continue }
                 out.append(
                     Candidate(
                         text: matchCaseUnlessVerbatim(
