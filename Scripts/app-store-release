@@ -43,7 +43,7 @@ expected = {
     "app.id": "6799612123",
     "app.bundleId": "com.nitai.aikeyboard",
     "app.platform": "ios",
-    "app.version": "1.0",
+    "app.version": "1.0.1",
     "app.build": "70",
     "release.price": "free",
     "release.availability": "worldwide",
@@ -84,7 +84,7 @@ if errors:
         print(f"FAIL  {path}: {error}", file=sys.stderr)
     raise SystemExit(1)
 
-print(f"PASS  {path} matches app 6799612123 version 1.0 build 70")
+print(f"PASS  {path} matches app 6799612123 version 1.0.1 build 70")
 PY
     then
         :
@@ -229,7 +229,7 @@ for target in AIKeyboard AIKeyboardExtension; do
     version="$(setting "$target" MARKETING_VERSION)"
     build="$(setting "$target" CURRENT_PROJECT_VERSION)"
     family="$(setting "$target" TARGETED_DEVICE_FAMILY)"
-    [ "$version" = "1.0" ] && pass "$target marketing version is 1.0" || fail "$target MARKETING_VERSION must be 1.0, found ${version:-missing}"
+    [ "$version" = "1.0.1" ] && pass "$target marketing version is 1.0.1" || fail "$target MARKETING_VERSION must be 1.0.1, found ${version:-missing}"
     [ "$build" = "70" ] && pass "$target build is 70" || fail "$target CURRENT_PROJECT_VERSION must be 70, found ${build:-missing}"
     [ "$family" = "1" ] && pass "$target is iPhone-only" || fail "$target TARGETED_DEVICE_FAMILY must be 1, found ${family:-missing}"
 done
