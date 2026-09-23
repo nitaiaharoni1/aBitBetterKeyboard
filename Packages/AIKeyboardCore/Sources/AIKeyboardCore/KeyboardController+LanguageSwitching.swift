@@ -117,7 +117,7 @@ extension KeyboardController {
     /// settles the touch**, which is a lift, another key, or nothing at all. A
     /// touch that turns into a slide types nothing; one that does not calls
     /// `press(.space)` on the way out, which is the ordinary path with the ordinary
-    /// double-space rule and the ordinary correction; one interrupted by another
+    /// correction; one interrupted by another
     /// key is paid inside `press`, before that key.
     ///
     /// This makes the controller order-dependent on four phases that a gesture

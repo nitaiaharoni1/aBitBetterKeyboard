@@ -152,18 +152,18 @@ extension CandidateCommitTests {
         XCTAssertNil(controller.revertibleEdit)
     }
 
+    /// A host that reports neither side of the caret cannot authorize the
+    /// delete. Nil after known text is the end of the message and may.
     func testBoundaryRepairRequiresAvailableAfterCaretContext() throws {
         let target = CursorTextTarget(before: "שלו ם")
-        target.afterContextIsAvailable = false
         let controller = KeyboardController(target: target, language: .hebrew)
         controller.refreshSuggestions()
-        XCTAssertFalse(controller.suggestions.contains { $0.commit != .contextual })
-
-        target.afterContextIsAvailable = true
-        controller.refreshSuggestions()
         let stale = try XCTUnwrap(controller.suggestions.first)
+        XCTAssertNotEqual(stale.commit, .contextual)
         target.afterContextIsAvailable = false
+        target.beforeContextIsAvailable = false
         controller.apply(stale)
+        target.beforeContextIsAvailable = true
 
         XCTAssertEqual(target.document, "שלו ם")
         XCTAssertNil(controller.revertibleEdit)

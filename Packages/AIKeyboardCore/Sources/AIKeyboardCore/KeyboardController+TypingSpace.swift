@@ -9,33 +9,10 @@ extension KeyboardController {
         }
         closeGroupedIfCurrentWord()
 
-        let now = Date()
-        if insertsPeriodForDoubleSpace(now: now) { return }
-        lastSpaceTapAt = nil
-        lastSpacePosition = nil
-        commitOrdinarySpace(at: now)
+        commitOrdinarySpace()
     }
 
-    private func insertsPeriodForDoubleSpace(now: Date) -> Bool {
-        guard let last = lastSpaceTapAt,
-            now.timeIntervalSince(last) < 0.6,
-            selection == nil,
-            lastSpacePosition == suggestionPosition,
-            contextBefore.hasSuffix(" "),
-            !contextBefore.hasSuffix("  ")
-        else { return false }
-        commitPendingPersonalToken()
-        let deleted = deleteBackwardReversibly(utf16Units: 1)
-        target?.insertText(deleted.unitsRemoved == 1 ? ". " : " ")
-        lastSpaceTapAt = nil
-        lastSpacePosition = nil
-        armShiftAtBoundary()
-        _ = consumeGroupedSkipLearn()
-        refreshSuggestions()
-        return true
-    }
-
-    private func commitOrdinarySpace(at now: Date) {
+    private func commitOrdinarySpace() {
         let original = currentWordPrefix
         let contextBeforeSwap = contextBefore
         let documentIdentifier = target?.documentIdentifier
@@ -60,10 +37,15 @@ extension KeyboardController {
                 documentIdentifier: documentIdentifier, learnedCommit: swapped.learnedCommit,
                 shouldLearn: !skipLearning)
         }
-        if autocapitalizationMode == .words { armShiftAtBoundary() }
+        // A `.words` field capitalises after every space; any other arms only
+        // where a sentence just ended. The double-space full stop used to be the
+        // one place `.sentences` armed on space, so typing `.` and then space
+        // left the next sentence lowercase; that shortcut is gone (two spaces are
+        // two spaces), and this is the boundary it stood in for.
+        if autocapitalizationMode == .words || caretBeginsACapitalizedRun(mode: autocapitalizationMode) {
+            armShiftAtBoundary()
+        }
         refreshSuggestions()
-        lastSpaceTapAt = now
-        lastSpacePosition = suggestionPosition
     }
 
     private func automaticSpaceSwap(
@@ -72,7 +54,7 @@ extension KeyboardController {
         guard store.storedAutocorrectLevel != .off,
             !isCorrectingWordByHand,
             selection == nil,
-            let after = target?.documentContextAfterInput,
+            let after = knownContextAfter,
             !Self.continuesWord(in: after),
             let candidate = suggestions.first(where: \.isDefault),
             candidate.commit == .contextual,

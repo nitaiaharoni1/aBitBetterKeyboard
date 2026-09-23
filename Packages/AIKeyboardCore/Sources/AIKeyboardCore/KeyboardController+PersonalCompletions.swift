@@ -50,7 +50,7 @@ extension KeyboardController {
             candidate = nil
         }
         guard let candidate,
-            let after = target?.documentContextAfterInput,
+            let after = knownContextAfter,
             !PersonalToken.continues(in: after, kind: candidate.kind)
         else {
             return stageNoPersonalToken(in: before)
@@ -73,7 +73,7 @@ extension KeyboardController {
         let added = before.dropFirst(draft.contextBefore.count)
         if draft.kind == .phone, before.hasPrefix(draft.contextBefore), !added.isEmpty,
             added.allSatisfy({ $0 == "." || $0.isWhitespace }),
-            let after = target?.documentContextAfterInput,
+            let after = knownContextAfter,
             !PersonalToken.continues(in: after, kind: .phone)
         {
             if added.contains(where: \.isWhitespace) { commitPendingPersonalToken() }
@@ -105,7 +105,7 @@ extension KeyboardController {
 
     func personalTokenSuggestions(in before: String) -> [Suggestion]? {
         guard selection == nil, before.last?.isWhitespace == false,
-            let after = target?.documentContextAfterInput,
+            let after = knownContextAfter,
             SecureField.permitsRead(
                 secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType)
         else { return nil }
@@ -168,7 +168,7 @@ extension KeyboardController {
         guard let kind, selection == nil,
             contextBefore.hasSuffix(expected),
             PersonalToken.prefix(in: contextBefore, kind: kind) == expected,
-            let after = target?.documentContextAfterInput,
+            let after = knownContextAfter,
             !PersonalToken.continues(in: after, kind: kind),
             SecureField.permitsRead(
                 secure: target?.isSecureTextEntry ?? nil, contentType: fieldContentType),

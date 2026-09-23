@@ -6,6 +6,26 @@ extension KeyboardController {
 
     public var contextBefore: String { target?.documentContextBeforeInput ?? "" }
     public var contextAfter: String { target?.documentContextAfterInput ?? "" }
+
+    /// What follows the caret, with a missing answer read as the end of the
+    /// document whenever the host did report the text before it.
+    ///
+    /// **`documentContextAfterInput` is nil at the end of a message in real
+    /// hosts, not only when the tail is hidden.** Every edit that needs to know
+    /// "does a word continue past the caret" used to read nil as "unknown, touch
+    /// nothing", so at the end of the text — where almost all typing happens — a
+    /// tapped candidate got no space, Space never autocorrected, and pause
+    /// completion and e-mail and phone completion never ran, while the in-app
+    /// playground (which answers `""`) showed all of it working. Reported from a
+    /// phone on build 70: a tapped completion left the caret against the word.
+    /// Nil stays nil only when the host reported neither side of the caret, which
+    /// is the genuinely blind case (a paste into some mail hosts reads that way
+    /// until the text is edited). `documentHasText` cannot stand in for it: it is
+    /// derived from these same two reads and says "empty" whenever both are nil.
+    var knownContextAfter: String? {
+        if let after = target?.documentContextAfterInput { return after }
+        return target?.documentContextBeforeInput != nil ? "" : nil
+    }
     public var selection: String? {
         guard let text = target?.selectedText, !text.isEmpty else { return nil }
         return text

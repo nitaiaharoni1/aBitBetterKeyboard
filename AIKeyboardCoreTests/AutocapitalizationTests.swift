@@ -60,16 +60,15 @@ final class AutocapitalizationTests: XCTestCase {
             "a none field capitalised a letter the way the sentence before it would have")
     }
 
-    /// **The same example, by the double-space full stop.** `insertSpace`'s
-    /// double-tap branch is the second site NIT-89 names; the unfixed build
-    /// arms shift there too, and just as unconditionally.
-    func testEndingASentenceWithADoubleSpaceDoesNotCapitalizeANoneField() {
+    /// **The same example, by a full stop and a space.** A space that ends a
+    /// sentence is the second site NIT-89 names (it was the double-space full
+    /// stop until that shortcut was removed); it must not arm a `.none` field.
+    func testEndingASentenceWithASpaceDoesNotCapitalizeANoneField() {
         let (controller, target) = keyboard()
         controller.prepareForNewDocument()
-        for character in "hi" { controller.press(.character(String(character))) }
+        for character in "hi." { controller.press(.character(String(character))) }
         controller.press(.space)
-        controller.press(.space)
-        XCTAssertEqual(target.text, "Hi. ", "the double space did not become a full stop")
+        XCTAssertEqual(target.text, "Hi. ")
 
         target.autocapitalizationType = UITextAutocapitalizationType.none
         controller.prepareForNewDocument()
@@ -78,6 +77,23 @@ final class AutocapitalizationTests: XCTestCase {
         XCTAssertEqual(
             target.text, "Hi. n",
             "a none field capitalised a letter the way the sentence before it would have")
+    }
+
+    /// A full stop and a space start a sentence. The double-space full stop was
+    /// the only space that armed shift in a `.sentences` field, so once it was
+    /// removed a sentence typed with the full-stop key would have stayed
+    /// lowercase; the unfixed build writes `Hi. there`.
+    func testASpaceAfterAFullStopCapitalizesTheNextSentence() {
+        let (controller, target) = keyboard()
+        controller.prepareForNewDocument()
+        for character in "hi." { controller.press(.character(String(character))) }
+        controller.press(.space)
+        for character in "to" { controller.press(.character(String(character))) }
+        XCTAssertEqual(target.text, "Hi. To")
+
+        controller.press(.space)
+        for character in "go" { controller.press(.character(String(character))) }
+        XCTAssertEqual(target.text, "Hi. To go", "a space inside a sentence armed shift")
     }
 
     // MARK: `.words` capitalises each word

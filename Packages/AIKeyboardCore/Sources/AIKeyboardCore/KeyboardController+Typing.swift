@@ -279,6 +279,7 @@ extension KeyboardController {
             learnWordJustCommitted()
         }
         let inserted = output.replacingOccurrences(of: "\n", with: "")
+        attachesMarkToTappedWord(inserted)
         target?.insertText(inserted)
         let word = currentWordPrefix
         if word.isEmpty {
@@ -566,11 +567,9 @@ extension KeyboardController {
     /// Arms or disarms shift for a word or sentence boundary, following the
     /// mode `KeyboardController.adoptFieldAutocapitalization` decided at focus.
     ///
-    /// Called from Return, the double-space full stop, and — only in a
-    /// `.words` field — an ordinary space; nowhere else touches shift
-    /// automatically. `.sentences` and its nil fallback keep the exact
-    /// expression Return and the double-space full stop already used, so a
-    /// host that stays silent about the trait sees no change.
+    /// Called from Return and from a space that starts a capitalised run (every
+    /// space in a `.words` field, one after a finished sentence otherwise);
+    /// nowhere else touches shift automatically.
     ///
     /// **Never touches a `.locked` shift.** Caps lock only ever comes from the
     /// user's own `toggleShift()`, and a boundary this keyboard crosses is not
@@ -604,10 +603,9 @@ extension KeyboardController {
     /// **Only the automatic arm asks this.** A `.on` the user set by hand comes
     /// from `toggleShift()` and is never re-decided — the same "decide at focus,
     /// do not fight them mid-field" rule `armShiftAtBoundary` guards `.locked`
-    /// under. `armShiftAtBoundary`'s own three call sites, Return, the
-    /// double-space full stop and a `.words` space, are boundaries by
-    /// construction and so do not ask; this is for the two places that arm with
-    /// no key having been pressed at all.
+    /// under. Return is a boundary by construction and does not ask; a space
+    /// asks it, and so do the two places that arm with no key having been
+    /// pressed at all.
     func caretBeginsACapitalizedRun(mode: UITextAutocapitalizationType) -> Bool {
         let before = contextBefore
         if mode == .words {

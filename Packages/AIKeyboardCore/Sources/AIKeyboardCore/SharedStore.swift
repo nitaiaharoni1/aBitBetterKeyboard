@@ -481,7 +481,7 @@ public final class SharedStore: ObservableObject {
     }
 
     /// Same cross-process rule as `storedAutocorrectLevel`: the toggle is in the app
-    /// and Return / double-space capitalise in the keyboard extension.
+    /// and Return / a sentence-ending space capitalise in the keyboard extension.
     public var storedAutocapitalise: Bool {
         if defaults.object(forKey: Key.autocapitalise) != nil {
             return defaults.bool(forKey: Key.autocapitalise)

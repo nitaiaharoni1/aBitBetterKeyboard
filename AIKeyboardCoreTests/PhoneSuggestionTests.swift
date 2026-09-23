@@ -120,9 +120,12 @@ final class PhoneSuggestionTests: XCTestCase {
         XCTAssertEqual(target.text, "054")
     }
 
+    /// A host reporting neither side of the caret. Nil after known text is the
+    /// end of the message, where a number is offered like anywhere else.
     func testUnavailableTailCannotOfferPhoneThroughOrdinarySuggestions() {
         let target = CursorTextTarget(before: "054")
         target.afterContextIsAvailable = false
+        target.beforeContextIsAvailable = false
         let controller = KeyboardController(target: target, language: .hebrew)
         controller.personal.recordPhoneNumber("0541236789", language: .hebrew, permitted: true)
         controller.refreshSuggestions()

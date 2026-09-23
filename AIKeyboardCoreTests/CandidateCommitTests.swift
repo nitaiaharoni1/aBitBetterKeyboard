@@ -48,34 +48,45 @@ final class CandidateCommitTests: XCTestCase {
         }
     }
 
-    func testAnUnavailableTailCannotAuthorizeAutocorrect() {
+    /// **A host that reports the text before the caret and nil after it is at the
+    /// end of the message.** Real hosts answer that way where almost all typing
+    /// happens, so reading nil as "unknown, touch nothing" switched autocorrect off
+    /// at the end of every message. See `knownContextAfter`.
+    func testAMissingTailAfterKnownTextAutocorrectsAtTheEnd() {
         let target = CursorTextTarget(before: "helo")
         target.afterContextIsAvailable = false
         let controller = KeyboardController(target: target, language: .english)
         controller.suggestions = [Suggestion(text: "hello", language: .english, isDefault: true)]
         controller.press(.space)
-        XCTAssertEqual(target.document, "helo ")
+        XCTAssertEqual(target.document, "hello ")
     }
 
-    func testATappedCorrectionWorksWithAnUnavailableTail() {
+    /// Reported from a phone on build 70: the tapped word was replaced and the
+    /// caret stayed against it, so the bar kept completing the same word instead
+    /// of moving on to the next one.
+    func testATappedCorrectionAtTheEndOfAMessageGetsItsSpace() {
         let target = CursorTextTarget(before: "היי הכל טוב\nמה קורנ?")
         target.afterContextIsAvailable = false
         let controller = KeyboardController(target: target, language: .hebrew)
 
         controller.apply(Suggestion(text: "קורה", language: .hebrew))
 
-        XCTAssertEqual(target.document, "היי הכל טוב\nמה קורה?")
+        XCTAssertEqual(target.document, "היי הכל טוב\nמה קורה? ")
     }
 
-    func testATappedCorrectionDoesNotMoveIntoAnUnavailableTail() {
+    /// **The price of reading nil as the end, pinned so it is a decision and not
+    /// a surprise.** A host that hides a tail that really is there gets the
+    /// space a message's end would, one space before its `?`. The alternative
+    /// was no space and no autocorrect at the end of every message in the hosts
+    /// that answer nil there.
+    func testAHiddenTailIsReadAsTheEndOfTheMessage() {
         let target = CursorTextTarget(before: "מה קורנ", after: "? אחר כך")
         target.afterContextIsAvailable = false
         let controller = KeyboardController(target: target, language: .hebrew)
 
         controller.apply(Suggestion(text: "קורה", language: .hebrew))
 
-        XCTAssertEqual(target.document, "מה קורה? אחר כך")
-        XCTAssertEqual(target.documentContextBeforeInput, "מה קורה")
+        XCTAssertEqual(target.document, "מה קורה ? אחר כך")
     }
 
     func testATappedSelectionReplacementWorksWithAnUnavailableTail() {
@@ -88,17 +99,52 @@ final class CandidateCommitTests: XCTestCase {
         XCTAssertEqual(target.document, "מה קורה?")
     }
 
-    func testATappedCorrectionWithAnUnavailableTailIsNotCorrectedAgainOnSpace() {
+    /// A tap finishes the word: the bar moves on to the next one, which is the
+    /// whole point of the space.
+    func testATappedWordAtTheEndOfAMessageMovesOnToTheNextWord() {
         let target = CursorTextTarget(before: "מה קורנ")
         target.afterContextIsAvailable = false
         let controller = KeyboardController(target: target, language: .hebrew)
+
         controller.apply(Suggestion(text: "קורה", language: .hebrew))
 
-        target.afterContextIsAvailable = true
-        controller.suggestions = [Suggestion(text: "קורא", language: .hebrew, isDefault: true)]
-        controller.press(.space)
-
         XCTAssertEqual(target.document, "מה קורה ")
+        XCTAssertEqual(controller.currentWordPrefix, "")
+        XCTAssertFalse(
+            controller.suggestions.contains { $0.text == "קורה" },
+            "got \(controller.suggestions.map(\.text)) — the bar is still on the tapped word")
+    }
+
+    /// The space a tap wrote gives way to a mark typed straight after it, as on
+    /// stock iOS: `hello` tapped then `,` is `hello,`.
+    func testAMarkTypedAfterATappedWordReplacesItsSpace() {
+        for mark in [",", ".", "?", "!"] {
+            let target = CursorTextTarget(before: "hel")
+            let controller = KeyboardController(target: target, language: .english)
+            controller.apply(Suggestion(text: "hello", language: .english))
+            XCTAssertEqual(target.document, "hello ")
+            controller.press(.character(mark))
+            XCTAssertEqual(target.document, "hello" + mark, "for \(mark)")
+        }
+    }
+
+    /// Only the tap's own space, and only straight after it. A space the user
+    /// pressed is theirs, and a letter in between means the mark is not
+    /// finishing the tapped word.
+    func testAMarkKeepsASpaceTheTapDidNotWrite() {
+        let pressed = CursorTextTarget(before: "hello")
+        let controller = KeyboardController(target: pressed, language: .english)
+        controller.suggestions = []
+        controller.press(.space)
+        controller.press(.character(","))
+        XCTAssertEqual(pressed.document, "hello ,")
+
+        let later = CursorTextTarget(before: "hel")
+        let tapped = KeyboardController(target: later, language: .english)
+        tapped.apply(Suggestion(text: "hello", language: .english))
+        tapped.press(.character("a"))
+        tapped.press(.character(","))
+        XCTAssertEqual(later.document, "hello a,")
     }
 
     func testTheBarDoesNotPromiseAutocorrectInsideAWord() {

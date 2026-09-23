@@ -453,8 +453,10 @@ public final class KeyboardController: ObservableObject {
     var dictationStreamAbandoned = false
 
     var dictationObservers = Set<AnyCancellable>()
-    var lastSpaceTapAt: Date?
-    var lastSpacePosition: SuggestionPosition?
+    /// Where the caret stood right after a tapped candidate wrote its own space.
+    /// A mark typed there replaces that space (`hello ,` → `hello,`); see
+    /// `attachesMarkToTappedWord`.
+    var tappedSpacePosition: SuggestionPosition?
     var spaceTouch = SpaceSwipe.Touch()
 
     /// The character key that is down and has not typed anything yet.
@@ -1146,8 +1148,8 @@ public final class KeyboardController: ObservableObject {
     /// `keyboardType`, and decides how `shift` starts and re-arms in this field.
     ///
     /// **`.none` never arms shift, `.allCharacters` locks it, and `.words` /
-    /// `.sentences` arm it exactly where Return and the double-space full stop
-    /// already did** — see `armShiftAtBoundary` in `KeyboardController+Typing`.
+    /// `.sentences` arm it at Return and at a space that ends a sentence** — see
+    /// `armShiftAtBoundary` in `KeyboardController+Typing`.
     /// This function only decides the mode a boundary event goes on to consult;
     /// it does not touch shift on an ordinary keystroke, which is what stops
     /// typing itself from fighting a shift the user just set by hand.
@@ -1227,8 +1229,7 @@ public final class KeyboardController: ObservableObject {
     /// contains right-to-left text keeps that content direction even when the keys
     /// are English. The real extension's UIKit identity is separate.
     public func prepareForNewDocument() {
-        lastSpaceTapAt = nil
-        lastSpacePosition = nil
+        tappedSpacePosition = nil
         cancelAIWork()
         cancelRefinement()
         // **Before anything reads the field.** A character key parks its letter

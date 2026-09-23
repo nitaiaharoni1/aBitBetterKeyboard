@@ -312,7 +312,9 @@ final class IdleTypingTests: XCTestCase {
         XCTAssertEqual(target.document, "say hel")
     }
 
-    func testIdleTypingDoesNotSplitAnExistingWordOrAssumeAnUnavailableTail() {
+    /// A word continuing past the caret is never completed into. An unreported
+    /// tail after known text is the end of the message, and completes there.
+    func testIdleTypingDoesNotSplitAnExistingWordButCompletesAtTheEnd() {
         SharedStore.shared.completeOnIdle = true
         SharedStore.shared.spaceOnIdle = true
         for after in ["lo", "'s", "7", ""] {
@@ -324,7 +326,7 @@ final class IdleTypingTests: XCTestCase {
                 Suggestion(text: "hello", language: .english)
             ]
             controller.performIdleTyping()
-            XCTAssertEqual(target.document, "hel" + after)
+            XCTAssertEqual(target.document, after.isEmpty ? "hello " : "hel" + after)
         }
     }
 

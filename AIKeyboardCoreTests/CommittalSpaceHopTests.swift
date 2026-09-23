@@ -16,60 +16,14 @@ import XCTest
 @MainActor
 final class CommittalSpaceHopTests: XCTestCase {
 
-    func testDoubleSpaceOnlyReplacesTheSpaceAtTheSameCaret() {
+    /// Two quick spaces are two spaces. The double-space full stop was removed
+    /// on request (2026-09-23): a space is never rewritten into punctuation.
+    func testDoubleSpaceIsTwoSpaces() {
         let target = CursorTextTarget(before: "hello")
         let controller = KeyboardController(target: target, language: .english)
         controller.insertSpace()
-        controller.insertSpace()
-        XCTAssertEqual(target.document, "hello. ")
-    }
-
-    func testDoubleSpaceDoesNotPunctuateAnotherDocument() {
-        let target = CursorTextTarget(before: "hello")
-        let controller = KeyboardController(target: target, language: .english)
-        controller.insertSpace()
-        target.documentIdentifier = UUID()
         controller.insertSpace()
         XCTAssertEqual(target.document, "hello  ")
-    }
-
-    func testDoubleSpaceDoesNotPunctuateAfterMovingTheCaretAwayAndBack() {
-        let target = CursorTextTarget(before: "hello")
-        let controller = KeyboardController(target: target, language: .english)
-        controller.insertSpace()
-        target.adjustTextPosition(byCharacterOffset: -1)
-        controller.refreshSuggestions(schedulingRefinement: false)
-        target.adjustTextPosition(byCharacterOffset: 1)
-        controller.insertSpace()
-        XCTAssertEqual(target.document, "hello  ")
-    }
-
-    func testDoubleSpaceDoesNotInsertAPeriodWhenDeletionIsRefused() {
-        let target = CursorTextTarget(before: "hello")
-        let controller = KeyboardController(target: target, language: .english)
-        controller.insertSpace()
-        target.backwardDeleteLimit = 0
-        controller.insertSpace()
-        XCTAssertEqual(target.document, "hello  ")
-    }
-
-    func testDoubleSpaceReplacesASelectionWithAnOrdinarySpace() {
-        let target = CursorTextTarget(before: "hello")
-        let controller = KeyboardController(target: target, language: .english)
-        controller.insertSpace()
-        let selected = CursorTextTarget(
-            before: "hello ", selecting: "world", documentIdentifier: target.documentIdentifier)
-        controller.target = selected
-        controller.insertSpace()
-        XCTAssertEqual(selected.document, "hello  ")
-    }
-
-    func testDoubleSpaceWorksWhenTheContextWindowBackfills() {
-        let target = CursorTextTarget(before: "earlier hello", window: 9)
-        let controller = KeyboardController(target: target, language: .english)
-        controller.insertSpace()
-        controller.insertSpace()
-        XCTAssertEqual(target.document, "earlier hello. ")
     }
 
     /// Taps `candidate` on `target` and returns the resulting document.

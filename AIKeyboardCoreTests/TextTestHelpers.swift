@@ -20,6 +20,9 @@ final class CursorTextTarget: TextTarget {
     private var selected: String?
     var documentIdentifier: UUID?
     var afterContextIsAvailable = true
+    /// Off together with `afterContextIsAvailable` models a host that reports
+    /// neither side of the caret, the one case `knownContextAfter` stays blind in.
+    var beforeContextIsAvailable = true
     var refusesForwardMovement = false
     var refusesInsertion = false
     var backwardDeleteLimit: Int? {
@@ -53,6 +56,7 @@ final class CursorTextTarget: TextTarget {
     }
 
     var documentContextBeforeInput: String? {
+        guard beforeContextIsAvailable else { return nil }
         guard let window else { return before }
         return String(before.suffix(window))
     }

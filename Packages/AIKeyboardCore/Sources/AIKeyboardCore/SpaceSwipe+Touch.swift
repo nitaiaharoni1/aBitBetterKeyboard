@@ -121,9 +121,8 @@ extension SpaceSwipe.Touch {
 /// user's eye mid-gesture, on every swipe: `sched` becomes `schedule ` becomes
 /// `sched` again, which is the behaviour that makes people switch autocorrect off,
 /// where the alternates repair swaps one character on lift under a popup that
-/// already covers it. The repair has three shapes, not one — a plain space, the
-/// double-space full stop that deleted a character before inserting `". "`, and
-/// the autocorrect commit — each needing state carried from the insert. And it
+/// already covers it. The repair has two shapes, not one — a plain space and the
+/// autocorrect commit — each needing state carried from the insert. And it
 /// does not remove the ordering question, it moves it: a character arriving
 /// between the insert and the repair makes the repair delete a letter the user
 /// typed, which is worse than a space landing late. Deferring keeps the failure

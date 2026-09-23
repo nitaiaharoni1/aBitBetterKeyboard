@@ -40,9 +40,8 @@ extension KeyboardController {
     ///   async tier's 300ms clock. Activation uses `false` because appearing over
     ///   an existing word is not a user typing pause.
     public func refreshSuggestions(schedulingRefinement: Bool = true) {
-        if let position = lastSpacePosition, position != suggestionPosition {
-            lastSpaceTapAt = nil
-            lastSpacePosition = nil
+        if let position = tappedSpacePosition, position != suggestionPosition {
+            tappedSpacePosition = nil
         }
         cancelAIWorkIfDocumentChanged()
         // Identity has first refusal for undo. A field switch may arrive here
@@ -135,7 +134,7 @@ extension KeyboardController {
         if store.storedAutocorrectLevel == .off || isCorrectingWordByHand
             || PersonalLanguageModel.normalizedPhonePrefix(prefix) != nil
             || undoneAutocorrectSpellings.contains(SeedLanguageModel.fold(prefix))
-            || target?.documentContextAfterInput == nil || Self.continuesWord(in: contextAfter)
+            || knownContextAfter == nil || Self.continuesWord(in: contextAfter)
         {
             return SuggestionEngine.markDefault(results, at: 0)
         }
@@ -461,7 +460,7 @@ extension KeyboardController {
     /// `insertSpace` already skips autocorrect, so the letters they kept stay.
     var idleTypingMayRun: Bool {
         guard overlay == .none, !isDictating, !isWorking, selection == nil else { return false }
-        guard let after = target?.documentContextAfterInput,
+        guard let after = knownContextAfter,
             !Self.continuesWord(in: after)
         else { return false }
         if grouped.isTyping, !store.storedCompleteOnIdle { return false }
@@ -510,7 +509,10 @@ extension KeyboardController {
         // is nil for both) nor a plain caret, and `insertCommittalSpace`'s hop
         // is only safe for the caret — see the branch below.
         let hadSelection = selection != nil
-        let after = target?.documentContextAfterInput
+        // A tapped next-word offer has no word in progress to split, so even a
+        // host that reports neither side of the caret gets its space: the empty
+        // field a first word is tapped into can answer that way.
+        let after = knownContextAfter ?? (currentWordPrefix.isEmpty ? "" : nil)
         let suffix =
             !hadSelection && !currentWordPrefix.isEmpty && Self.continuesWord(in: after ?? "")
             ? WordBoundary.continuation(in: after ?? "") : ""
@@ -549,11 +551,15 @@ extension KeyboardController {
             lastLearnedFolded = nil
             deletedWordPrefix = nil
         } else {
-            if let after {
-                insertCommittalSpace(after: String(after.dropFirst(suffix.count)))
-            }
+            let wroteSpace =
+                after.map { insertCommittalSpace(after: String($0.dropFirst(suffix.count))) } ?? false
             lastLearnedFolded = nil
             deletedWordPrefix = after == nil ? currentWordPrefix : nil
+            refreshSuggestions()
+            // Recorded after the refresh, so the refresh cannot retire it on the spot.
+            tappedSpacePosition = wroteSpace ? suggestionPosition : nil
+            reportInteraction(.suggestion)
+            return
         }
         refreshSuggestions()
         reportInteraction(.suggestion)
@@ -585,13 +591,35 @@ extension KeyboardController {
     /// plus the space that follows it", and a hop there would leave the undo
     /// eating a space the user pressed themselves rather than the one a tap
     /// would have inserted.
-    func insertCommittalSpace(after contextAfter: String) {
-        guard contextAfter.isEmpty || contextAfter.first?.isWhitespace == true else { return }
+    /// Returns whether it wrote a space, as opposed to hopping one or doing nothing.
+    @discardableResult
+    func insertCommittalSpace(after contextAfter: String) -> Bool {
+        guard contextAfter.isEmpty || contextAfter.first?.isWhitespace == true else { return false }
         guard contextAfter.first == " " else {
             target?.insertText(" ")
-            return
+            return true
         }
         target?.adjustTextPosition(byCharacterOffset: 1)
+        return false
+    }
+
+    /// Sentence marks that belong against the word before them.
+    static let marksThatAttachToTheWord: Set<String> = [".", ",", "?", "!", ":", ";"]
+
+    /// Take back the space a tapped candidate wrote when the very next key is a
+    /// mark, so `hello` tapped and then `,` reads `hello,` rather than `hello ,`.
+    ///
+    /// Stock iOS and Android's LatinIME both do this, and it is what makes the
+    /// tap's automatic space safe: without it every tap before a comma costs a
+    /// backspace. Only that space, and only while the caret has not moved since
+    /// the tap — a space the user pressed is theirs and stays.
+    func attachesMarkToTappedWord(_ mark: String) {
+        defer { tappedSpacePosition = nil }
+        guard Self.marksThatAttachToTheWord.contains(mark),
+            let position = tappedSpacePosition, position == suggestionPosition,
+            selection == nil, contextBefore.hasSuffix(" ")
+        else { return }
+        target?.deleteBackward()
     }
 
     /// Remember the word still under the cursor, and the pair it makes with the

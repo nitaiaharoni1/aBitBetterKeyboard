@@ -118,6 +118,9 @@ final class PersonalCompletionTests: XCTestCase {
         for after in [".org", "other", ""] {
             let target = CursorTextTarget(before: "alex@example", after: after)
             target.afterContextIsAvailable = !after.isEmpty
+            // Neither side reported is the blind host; nil after known text alone
+            // is the end of the message and is covered below.
+            target.beforeContextIsAvailable = !after.isEmpty
             let controller = KeyboardController(target: target, language: .english)
             controller.personal.record(
                 word: "alex@example.org", previous: nil,
@@ -127,6 +130,20 @@ final class PersonalCompletionTests: XCTestCase {
             controller.apply(Suggestion(text: "alex@example.org", language: .english))
             XCTAssertEqual(target.document, "alex@example" + after)
         }
+    }
+
+    /// Hosts report nil after the caret at the end of a message, which is where
+    /// an address is typed; that must not switch address completion off.
+    func testAnAddressCompletesAtTheEndOfAMessage() throws {
+        let target = CursorTextTarget(before: "alex@example")
+        target.afterContextIsAvailable = false
+        let controller = KeyboardController(target: target, language: .english)
+        controller.personal.record(
+            word: "alex@example.org", previous: nil, language: .english, permitted: true)
+        controller.refreshSuggestions()
+        let offer = try XCTUnwrap(controller.suggestions.first { $0.text == "alex@example.org" })
+        controller.apply(offer)
+        XCTAssertEqual(target.document, "alex@example.org ")
     }
 
     func testExplicitDictionaryEntriesUseTheSameCompletionPath() throws {
@@ -186,13 +203,13 @@ final class PersonalCompletionTests: XCTestCase {
         XCTAssertEqual(controller.personal.phoneNumbers(startingWith: "054", limit: 3), ["0541236789"])
     }
 
-    func testDoubleSpaceCommitsThePhoneBeforeReplacingItsBoundary() {
+    func testDoubleSpaceCommitsThePhoneAndKeepsBothSpaces() {
         let target = MockTextTarget()
         let controller = KeyboardController(target: target, language: .english)
         type("0541236789", on: controller)
         controller.press(.space)
         controller.press(.space)
-        XCTAssertEqual(target.text, "0541236789. ")
+        XCTAssertEqual(target.text, "0541236789  ")
         XCTAssertEqual(controller.personal.phoneNumbers(startingWith: "054", limit: 3), ["0541236789"])
     }
 

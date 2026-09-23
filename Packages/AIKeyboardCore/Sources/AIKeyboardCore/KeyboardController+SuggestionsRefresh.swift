@@ -8,7 +8,7 @@ extension KeyboardController {
 
         let typed = currentWordPrefix
         let selected = selectedWord
-        let availableAfter = target?.documentContextAfterInput
+        let availableAfter = knownContextAfter
         if installsTrailingBoundaryRepair(in: before, after: availableAfter) { return }
 
         let input = suggestionInput(before: before, typed: typed, selected: selected)

@@ -7,7 +7,7 @@ extension KeyboardController {
         Feedback.keyPress()
 
         let before = contextBefore
-        guard let after = target?.documentContextAfterInput else {
+        guard let after = knownContextAfter else {
             refreshSuggestions()
             return true
         }
