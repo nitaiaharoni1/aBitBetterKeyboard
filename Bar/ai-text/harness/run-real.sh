@@ -34,8 +34,8 @@ cp "$here/real.swift" "$build/main.swift"
 
 # Vertex is the cloud half for scoring only. The token belongs to this machine,
 # never to the app. Passed inline so the active gcloud config is left alone.
-VERTEX_PROJECT="${VERTEX_PROJECT:-handi-project}"
-VERTEX_ACCESS_TOKEN="${VERTEX_ACCESS_TOKEN:-$(gcloud auth print-access-token --account=nitai@handi.co.il 2>/dev/null)}"
+VERTEX_PROJECT="${VERTEX_PROJECT:-abitbetter-keyboard}"
+VERTEX_ACCESS_TOKEN="${VERTEX_ACCESS_TOKEN:-$(gcloud auth print-access-token --account=nitaiaharoni1@gmail.com 2>/dev/null)}"
 export VERTEX_PROJECT VERTEX_ACCESS_TOKEN
 
 xcrun -sdk macosx swiftc -O "$build"/*.swift -o "$build/harness"

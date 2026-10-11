@@ -213,7 +213,7 @@ def main():
 
     if run_judge:
         token = os.environ.get("VERTEX_ACCESS_TOKEN", "")
-        project = os.environ.get("VERTEX_PROJECT", "handi-project")
+        project = os.environ.get("VERTEX_PROJECT", "abitbetter-keyboard")
         if not token:
             sys.exit("VERTEX_ACCESS_TOKEN required for --judge")
         work = [

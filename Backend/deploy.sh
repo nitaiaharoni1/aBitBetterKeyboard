@@ -5,8 +5,8 @@ set -euo pipefail
 # only App Attest sessions. Secret values stay in Secret Manager and are never
 # passed on this command line or stored in Cloud Run's plain environment.
 
-PROJECT="${PROJECT:-${HANDI_PROJECT:-}}"
-GCLOUD_ACCOUNT="${GCLOUD_ACCOUNT:-nitai@handi.co.il}"
+PROJECT="${PROJECT:-abitbetter-keyboard}"
+GCLOUD_ACCOUNT="${GCLOUD_ACCOUNT:-nitaiaharoni1@gmail.com}"
 REGION="${REGION:-europe-west1}"
 SERVICE="${SERVICE:-aikeyboard-backend}"
 MODEL="${MODEL:-gemini-3.5-flash-lite}"
@@ -18,7 +18,7 @@ LOG_EXCLUSION_NAME="${LOG_EXCLUSION_NAME:-aikeyboard-cloud-run-requests}"
 RUNTIME_SERVICE_ACCOUNT="aikeyboard-backend-runtime@${PROJECT}.iam.gserviceaccount.com"
 
 if [ -z "$PROJECT" ]; then
-  echo "PROJECT or HANDI_PROJECT must name the Google Cloud project." >&2
+  echo "PROJECT must name the Google Cloud project." >&2
   exit 1
 fi
 if ! [[ "$SESSION_SECRET_VERSION" =~ ^[1-9][0-9]*$ ]]; then

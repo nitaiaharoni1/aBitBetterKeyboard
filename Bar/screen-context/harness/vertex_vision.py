@@ -71,7 +71,7 @@ BAR = HERE.parent
 # is the second run above, kept so the spread stays a measured number rather
 # than a memory.
 MODEL = os.environ.get("VERTEX_MODEL", "gemini-2.5-flash")
-PROJECT = os.environ.get("VERTEX_PROJECT", "handi-project")
+PROJECT = os.environ.get("VERTEX_PROJECT", "abitbetter-keyboard")
 THINKING_BUDGET = int(os.environ.get("VERTEX_THINKING_BUDGET", "512"))
 IMAGE_SCALE = int(os.environ.get("VERTEX_IMAGE_SCALE", "1"))
 IMAGE_FORMAT = os.environ.get("VERTEX_IMAGE_FORMAT", "png").lower()
@@ -176,7 +176,7 @@ def token():
     if override:
         return override
     return subprocess.run(
-        ["gcloud", "auth", "print-access-token", "--account=nitai@handi.co.il"],
+        ["gcloud", "auth", "print-access-token", "--account=nitaiaharoni1@gmail.com"],
         capture_output=True,
         text=True,
         check=True,

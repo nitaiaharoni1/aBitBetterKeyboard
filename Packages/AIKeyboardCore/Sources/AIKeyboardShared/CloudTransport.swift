@@ -225,11 +225,13 @@ public struct BackendTransport: CloudTransport {
     /// copying this address does not grant access to the model.
     ///
     /// Deployed 2026-08-10 to Cloud Run in `handi-project`, `europe-west1`, from
-    /// `Backend/deploy.sh`. Before that date this constant did not exist and
+    /// `Backend/deploy.sh`; moved 2026-10-11 to its own project,
+    /// `abitbetter-keyboard`. Builds before that point at the old address, which
+    /// stays up until they are gone. Before that date this constant did not exist and
     /// `configured()` returned nil on every stock install, so Hebrew Fix, Rewrite,
     /// Tone and Reply had nowhere to run and failed for the life of the install —
     /// see `KeyboardController.init`.
-    public static let bundledDefaultURL = "https://aikeyboard-backend-cq6zxsdx5a-ew.a.run.app"
+    public static let bundledDefaultURL = "https://aikeyboard-backend-v2npr6jrea-ew.a.run.app"
 
     /// The transport this process should use, or nil when there is nowhere to send.
     ///

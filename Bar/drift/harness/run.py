@@ -183,7 +183,7 @@ def vertex_token() -> str:
     if token := os.environ.get("VERTEX_ACCESS_TOKEN"):
         return token
     token = subprocess.run(
-        ["gcloud", "auth", "print-access-token", "--account=nitai@handi.co.il"],
+        ["gcloud", "auth", "print-access-token", "--account=nitaiaharoni1@gmail.com"],
         capture_output=True,
         text=True,
     ).stdout.strip()

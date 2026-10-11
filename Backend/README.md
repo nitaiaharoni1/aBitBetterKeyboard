@@ -133,7 +133,7 @@ way: both decode to the identical `AIEngineError.refused`.
 ```bash
 cd Backend
 gcloud auth login
-SERVICE_MODE=local-open PROJECT=handi-project node server.js
+SERVICE_MODE=local-open PROJECT=abitbetter-keyboard node server.js
 ```
 
 Whichever account `gcloud auth print-access-token` resolves to needs
@@ -169,12 +169,16 @@ port but always hand it a fake `vertexClient`.
 ## Deploying
 
 ```bash
-SESSION_SECRET_VERSION=3 PROJECT=handi-project REGION=europe-west1 ./deploy.sh
+SESSION_SECRET_VERSION=1 ./deploy.sh
 ```
 
-**Live since 2026-08-10** at
-`https://aikeyboard-backend-cq6zxsdx5a-ew.a.run.app`, in `handi-project`,
-`europe-west1`. That address is the one the app ships pointing at
+**Live since 2026-10-11** at
+`https://aikeyboard-backend-v2npr6jrea-ew.a.run.app`, in its own project
+`abitbetter-keyboard` (personal account, billed to the Handi billing account for
+its credits), `europe-west1`. From 2026-08-10 it ran in `handi-project` at
+`https://aikeyboard-backend-cq6zxsdx5a-ew.a.run.app`; builds that shipped with
+that address keep using it until they are replaced, so retire it only after
+that. The current address is the one the app ships pointing at
 (`BackendTransport.bundledDefaultURL`); the token is not in the bundle.
 `AppAttestation` fills it. Deploying it took two grants this
 README did not mention and `deploy.sh` does not make: `cloudbuild.googleapis.com`
@@ -204,12 +208,12 @@ Create the Secret Manager secret once, then add versions without putting the
 value in a shell variable, source file, or command argument:
 
 ```bash
-openssl rand -hex 32 | gcloud secrets create akeyboard-session-secret \
-  --project=handi-project --data-file=-
+openssl rand -hex 32 | gcloud secrets create aikeyboard-session-secret \
+  --project=abitbetter-keyboard --data-file=-
 
 # Later rotations add a version to the same secret.
-openssl rand -hex 32 | gcloud secrets versions add akeyboard-session-secret \
-  --project=handi-project --data-file=-
+openssl rand -hex 32 | gcloud secrets versions add aikeyboard-session-secret \
+  --project=abitbetter-keyboard --data-file=-
 ```
 
 Pass the new numeric version to `deploy.sh`. During a planned rotation, also

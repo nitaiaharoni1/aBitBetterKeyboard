@@ -41,7 +41,7 @@ half looks wrong, because it separates the three layers in one query:
 
 ```bash
 gcloud logging read 'resource.labels.service_name="aikeyboard-backend"' \
-  --project=handi-project --account=nitai@handi.co.il --limit=50
+  --project=abitbetter-keyboard --account=nitaiaharoni1@gmail.com --limit=50
 ```
 
 **Why it is first:** every cloud action in the product is dead without it. Fix,
