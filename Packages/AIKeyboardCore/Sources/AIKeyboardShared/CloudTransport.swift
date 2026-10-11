@@ -226,8 +226,8 @@ public struct BackendTransport: CloudTransport {
     ///
     /// Deployed 2026-08-10 to Cloud Run in `handi-project`, `europe-west1`, from
     /// `Backend/deploy.sh`; moved 2026-10-11 to its own project,
-    /// `abitbetter-keyboard`. Builds before that point at the old address, which
-    /// stays up until they are gone. Before that date this constant did not exist and
+    /// `abitbetter-keyboard` (build 72). The old address was deleted the same
+    /// day, so builds before 72 have no cloud backend. Before that date this constant did not exist and
     /// `configured()` returned nil on every stock install, so Hebrew Fix, Rewrite,
     /// Tone and Reply had nowhere to run and failed for the life of the install —
     /// see `KeyboardController.init`.

@@ -176,9 +176,9 @@ SESSION_SECRET_VERSION=1 ./deploy.sh
 `https://aikeyboard-backend-v2npr6jrea-ew.a.run.app`, in its own project
 `abitbetter-keyboard` (personal account, billed to the Handi billing account for
 its credits), `europe-west1`. From 2026-08-10 it ran in `handi-project` at
-`https://aikeyboard-backend-cq6zxsdx5a-ew.a.run.app`; builds that shipped with
-that address keep using it until they are replaced, so retire it only after
-that. The current address is the one the app ships pointing at
+`https://aikeyboard-backend-cq6zxsdx5a-ew.a.run.app`, deleted on 2026-10-11
+once build 72 shipped the new address, so builds before 72 have no cloud
+backend. The current address is the one the app ships pointing at
 (`BackendTransport.bundledDefaultURL`); the token is not in the bundle.
 `AppAttestation` fills it. Deploying it took two grants this
 README did not mention and `deploy.sh` does not make: `cloudbuild.googleapis.com`
